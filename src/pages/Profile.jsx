@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, CircleCheck, Clock3, LoaderCircle, LogOut, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import { api } from "../api.js";
-import { initials, useAuth } from "../auth.jsx";
+import { useAuth } from "../auth.jsx";
 import { findPrompt, getTrack } from "../data/prompts.js";
 import { Footer, promptIcon } from "../components/ui.jsx";
 import { navigate } from "../router.js";
@@ -84,7 +84,6 @@ export default function ProfilePage({ onStart }) {
   return (
     <main className="profile-page page-width">
       <header className="profile-hero">
-        <span className="profile-avatar">{initials(user)}</span>
         <div className="profile-identity">
           <h1>{user.displayName || "Your profile"}</h1>
           <p>{[user.headline, user.targetRole, user.experienceLevel].filter(Boolean).join(" · ") || user.email}</p>

@@ -145,7 +145,11 @@ textarea.inline-edit { font-weight: 400; line-height: 1.5; resize: none; }
 .react-flow__controls { overflow: hidden; border: 1px solid #e6e9ed !important; border-radius: 7px !important; background: #fff !important; box-shadow: 0 2px 7px rgba(28, 43, 62, .05) !important; }
 .react-flow__controls-button { width: 28px !important; height: 28px !important; border-bottom: 1px solid #eff0f3 !important; background: #fff !important; fill: #66728a !important; }
 .react-flow__controls-button:hover { background: #f5f6f9 !important; }
-.react-flow__minimap { overflow: hidden; border: 1px solid #e6e9ed; border-radius: 7px; background: #fff; box-shadow: 0 2px 7px rgba(28, 43, 62, .05); }
+/* The minimap stays compact so it doesn't cover the canvas, and grows while hovered. */
+.react-flow__minimap { margin: 12px; overflow: hidden; border: 1px solid #e6e9ed; border-radius: 7px; background: #fff; box-shadow: 0 2px 7px rgba(28, 43, 62, .05); opacity: .85; transition: opacity .15s, box-shadow .15s; }
+.react-flow__minimap-svg { display: block; width: 112px; height: 76px; transition: width .18s ease, height .18s ease; }
+.react-flow__minimap:hover { opacity: 1; box-shadow: 0 8px 24px rgba(28, 43, 62, .12); }
+.react-flow__minimap:hover .react-flow__minimap-svg { width: 240px; height: 164px; }
 
 .empty-canvas { position: absolute; top: 50%; left: 50%; z-index: 1; width: 290px; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
 .empty-canvas > * { pointer-events: auto; }
@@ -215,4 +219,27 @@ textarea.inline-edit { font-weight: 400; line-height: 1.5; resize: none; }
   .inspector { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; max-height: 55%; }
   .interviewer-panel { width: min(330px, calc(100vw - 40px)); }
   .react-flow__minimap { display: none; }
+}
+
+/* Keyboard shortcuts */
+kbd { min-width: 22px; padding: 2px 6px; display: inline-block; color: #3f4b60; border: 1px solid #d9dde4; border-bottom-width: 2px; border-radius: 5px; background: #fff; font: 600 11.5px/1.4 "DM Sans", sans-serif; text-align: center; }
+.shortcuts-action kbd { min-width: 18px; margin-left: 2px; padding: 0 5px; font-size: 11px; }
+.canvas-footer kbd { min-width: 16px; padding: 0 4px; font-size: 10.5px; }
+.shortcuts-dialog { width: min(860px, 100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e3e6eb; border-radius: 14px; background: #fff; box-shadow: 0 18px 70px rgba(22, 32, 48, .19); animation: modal-in .16s ease-out; }
+.shortcuts-header { padding: 18px 22px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #eef0f3; }
+.shortcuts-icon { width: 36px; height: 36px; display: grid; place-items: center; color: #5562c8; border: 1px solid #e2e4f4; border-radius: 9px; background: #f3f4fd; }
+.shortcuts-header h2 { margin: 0; flex: 1; color: #1f2a3d; font: 600 20px var(--serif); letter-spacing: -.4px; }
+.shortcuts-body { padding: 8px 22px 18px; overflow-y: auto; columns: 2 340px; column-gap: 36px; }
+.shortcut-group { padding-top: 14px; break-inside: avoid; }
+.shortcut-group h3 { margin: 0 0 6px; color: #6f7a8b; font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.shortcut-group dl { margin: 0; }
+.shortcut-row { padding: 8px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #f1f2f5; }
+.shortcut-row:last-child { border-bottom: 0; }
+.shortcut-row dt { color: #36425a; font-size: 14px; }
+.shortcut-row dd { margin: 0; flex: none; display: flex; align-items: center; gap: 4px; }
+.shortcut-row dd span { display: inline-flex; align-items: center; gap: 4px; }
+.shortcut-row dd i { color: #a0a8b3; font-size: 12px; font-style: normal; }
+.shortcuts-footer { padding: 12px 22px 16px; color: #7d8797; border-top: 1px solid #eef0f3; font-size: 13px; }
+@media (max-width: 760px) {
+  .shortcuts-action { display: none; }
 }

@@ -3,10 +3,11 @@ import {
   ArrowRight, ArrowUpRight, Bell, Check, CircleUser, Clock3, Crown, Database, Fingerprint, Flag, FileText, Globe2,
   HardDrive, Hash, Image, Layers2, Link2, ListOrdered, LockKeyhole, LogOut, Menu, MessageSquare, MonitorSmartphone,
   Network, RefreshCcw, Search, Server, Settings2, ShieldCheck, Sparkles, SquarePen, Waypoints, Zap, KeyRound, Lock,
+  ChevronDown, UserRound, X,
 } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
-import { initials, useAuth } from "../auth.jsx";
-import { navigate } from "../router.js";
+import { useAuth } from "../auth.jsx";
+import { navigate, useRoute } from "../router.js";
 
 export function Brand({ onClick, className = "" }) {
   return (
@@ -25,10 +26,7 @@ export function useEscape(onEscape) {
   }, [onEscape]);
 }
 
-export function UserMenu({ compact = false }) {
-  const { user, signOut } = useAuth();
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+function useDismiss(open, setOpen, ref) {
   useEffect(() => {
     if (!open) return undefined;
     const onDown = (event) => { if (!ref.current?.contains(event.target)) setOpen(false); };
@@ -36,18 +34,28 @@ export function UserMenu({ compact = false }) {
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
     return () => { window.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey); };
-  }, [open]);
+  }, [open, setOpen, ref]);
+}
+
+const firstName = (user) => (user.displayName || user.email.split("@")[0]).split(" ")[0];
+
+export function UserMenu({ compact = false }) {
+  const { user, signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useDismiss(open, setOpen, ref);
   if (!user) return null;
   return (
     <div className="user-menu" ref={ref}>
-      <button className={`avatar-button ${compact ? "" : "avatar-large"}`} onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open} aria-label="Account menu">
-        {initials(user)}
+      <button className={`account-button ${open ? "open" : ""}`} onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open} aria-label="Account menu">
+        <UserRound size={16} />
+        {!compact && <span className="account-name">{firstName(user)}</span>}
+        <ChevronDown size={14} className="account-chevron" />
       </button>
       {open && (
         <div className="user-menu-popover" role="menu">
           <div className="user-menu-identity"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></div>
-          <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & history</button>
-          <button role="menuitem" onClick={() => { setOpen(false); navigate("/library"); }}><Layers2 size={15} /> Practice library</button>
+          <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & practice history</button>
           <button role="menuitem" onClick={async () => { setOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
         </div>
       )}
@@ -56,41 +64,57 @@ export function UserMenu({ compact = false }) {
 }
 
 export function SiteHeader() {
-  const { status } = useAuth();
+  const { status, user, signOut } = useAuth();
+  const { path } = useRoute();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useDismiss(menuOpen, setMenuOpen, menuRef);
+  useEffect(() => { setMenuOpen(false); }, [path]);
+
+  const items = [
+    { label: "Library", path: "/library" },
+    ...(status === "signed-in" ? [{ label: "My rounds", path: "/profile" }] : []),
+  ];
+  const go = (item) => {
+    setMenuOpen(false);
+    navigate(item.path);
+  };
+  const links = items.map((item) => {
+    const active = item.path === path;
+    return (
+      <button key={item.label} className={`nav-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => go(item)}>
+        {item.label}
+      </button>
+    );
+  });
+
   return (
     <header className="site-header">
       <Brand onClick={() => navigate("/")} />
-      <nav className="main-nav" aria-label="Main navigation">
-        <button className="nav-link" onClick={() => navigate("/library")}>Practice</button>
-        <a className="nav-link" href="#how-it-works" onClick={(event) => { event.preventDefault(); goToSection("how-it-works"); }}>How it works</a>
-        <a className="nav-link" href="#topics" onClick={(event) => { event.preventDefault(); goToSection("topics"); }}>Topics</a>
-      </nav>
+      <nav className="main-nav" aria-label="Main navigation">{links}</nav>
       <div className="header-actions">
-        {status === "signed-in" ? (
-          <>
-            <button className="button button-dark button-small" onClick={() => navigate("/library")}>Practice <ArrowRight size={15} /></button>
-            <UserMenu />
-          </>
-        ) : status === "signed-out" ? (
-          <>
-            <button className="nav-link" onClick={() => navigate("/signin")}>Sign in</button>
-            <button className="button button-dark button-small" onClick={() => navigate("/signin")}>Start practicing <ArrowRight size={15} /></button>
-          </>
-        ) : null}
+        {status === "signed-in" && <UserMenu />}
+        {status === "signed-out" && <button className="button button-dark button-small" onClick={() => navigate("/signin")}>Sign in <ArrowRight size={15} /></button>}
       </div>
-      <button className="mobile-menu" onClick={() => navigate(status === "signed-in" ? "/profile" : "/signin")} aria-label="Account"><Menu size={21} /></button>
+      <div className="mobile-nav" ref={menuRef}>
+        <button className="mobile-menu" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-label="Menu">{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>
+        {menuOpen && (
+          <div className="mobile-menu-panel">
+            {links}
+            <div className="mobile-menu-divider" />
+            {status === "signed-in" ? (
+              <>
+                <span className="mobile-menu-identity">{user.email}</span>
+                <button className="nav-link" onClick={async () => { setMenuOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
+              </>
+            ) : (
+              <button className="button button-dark" onClick={() => navigate("/signin")}>Sign in <ArrowRight size={15} /></button>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
-}
-
-function goToSection(id) {
-  const scroll = () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-  if (window.location.hash.startsWith("#/") && window.location.hash !== "#/") {
-    navigate("/");
-    window.setTimeout(scroll, 60);
-  } else {
-    scroll();
-  }
 }
 
 export function Footer() {
@@ -108,12 +132,12 @@ export function PromptCard({ prompt, onStart, index = 0, compact = false, status
   const track = getTrack(prompt.track);
   const free = prompt.access === "free";
   return (
-    <article className={`prompt-card ${compact ? "prompt-compact" : ""}`} style={{ "--card-order": Math.min(index, 12) }}>
+    <article className={`prompt-card ${free ? "card-free" : "card-plus"} ${compact ? "prompt-compact" : ""}`} style={{ "--card-order": Math.min(index, 12) }}>
       <div className="prompt-card-top">
         <div className={`prompt-icon icon-${prompt.color}`}><Icon size={19} strokeWidth={1.8} /></div>
         <div className="prompt-card-badges">
           {status && <span className={`status-tag status-${status}`}>{status === "in_progress" ? "In progress" : "Completed"}</span>}
-          <span className={`access-tag ${free ? "access-free" : "access-plus"}`}>{free ? <Check size={10} /> : <LockKeyhole size={10} />}{free ? "FREE" : "PLUS"}</span>
+          <span className={`access-tag ${free ? "access-free" : "access-plus"}`}>{free ? <Check size={11} /> : <Crown size={11} />}{free ? "Free" : "Plus"}</span>
         </div>
       </div>
       <div className="prompt-meta"><span>{track.shortLabel}</span><span className="meta-separator">·</span><span>{prompt.difficulty}</span><span className="meta-time"><Clock3 size={13} /> {prompt.minutes} min</span></div>
@@ -121,7 +145,9 @@ export function PromptCard({ prompt, onStart, index = 0, compact = false, status
       <p className="prompt-description">{prompt.description}</p>
       <div className="prompt-card-bottom">
         <div className="topic-tags"><span>{prompt.category}</span>{prompt.considerations.slice(0, 1).map((tag) => <span key={tag}>{tag}</span>)}</div>
-        <button className="card-arrow" onClick={() => onStart(prompt.id)} aria-label={free ? `Start ${prompt.title}` : `View Plus details for ${prompt.title}`}><ArrowUpRight size={17} /></button>
+        {free
+          ? <button className="card-action card-start" onClick={() => onStart(prompt.id)} aria-label={`Start ${prompt.title}`}>Start <ArrowRight size={14} /></button>
+          : <button className="card-action card-locked" onClick={() => onStart(prompt.id)} aria-label={`View Plus details for ${prompt.title}`}><LockKeyhole size={13} /> Plus</button>}
       </div>
     </article>
   );

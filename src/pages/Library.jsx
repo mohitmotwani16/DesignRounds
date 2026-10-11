@@ -71,7 +71,7 @@ export default function LibraryPage({ onStart, initialTrack }) {
     const needle = search.trim().toLowerCase();
     return prompts.filter((prompt) => {
       if (needle) {
-        const haystack = `${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements.join(" ")} ${prompt.considerations.join(" ")}`.toLowerCase();
+        const haystack = `${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements.join(" ")} ${prompt.considerations.join(" ")} ${prompt.prerequisites.join(" ")}`.toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       if (selectedLevels.length && !selectedLevels.includes(prompt.difficulty)) return false;
@@ -251,7 +251,7 @@ export default function LibraryPage({ onStart, initialTrack }) {
           <div className="results-summary">
             <span><strong>{filtered.length}</strong> {filtered.length === 1 ? "round" : "rounds"}{activeTrack ? ` in ${activeTrack.shortLabel}` : ""}</span>
             {pills.map((pill) => <button key={pill.key} className="active-pill" onClick={pill.remove}>{pill.label}<X size={12} /></button>)}
-            <span className="access-legend"><i className="free-key-dot" />Free: canvas + one final review (planned) <i className="plus-key-dot" />Plus: more rounds + AI coaching (planned)</span>
+            <span className="access-legend"><i className="free-key-dot" />Free: canvas + one final review <i className="plus-key-dot" />Plus: more rounds + AI coaching</span>
           </div>
 
           {filtered.length > 0 ? (

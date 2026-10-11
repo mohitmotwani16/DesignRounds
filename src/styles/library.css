@@ -89,7 +89,20 @@
 
 /* Prompt cards (library and landing) */
 .prompt-card-badges { display: flex; align-items: center; gap: 6px; }
-.access-tag { padding: 4px 7px; font-size: 9.5px; letter-spacing: .5px; }
+.access-tag { padding: 4px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .2px; }
+.access-free { color: #2f6b45; border: 1px solid #cfe6d7; background: #ebf6ef; }
+.access-plus { color: #7a5a1c; border: 1px solid #ecd9ae; background: #fbf1da; }
+
+/* Free vs Plus cards */
+.prompt-card.card-plus { border-color: #efe4cc; background: linear-gradient(180deg, #fffaf0 0, #fff 96px); box-shadow: inset 0 3px 0 #dcb76a; }
+.prompt-card.card-plus:hover { border-color: #e4cf9f; box-shadow: inset 0 3px 0 #dcb76a, 0 6px 18px rgba(120, 90, 30, .07); }
+.prompt-card.card-free { box-shadow: inset 0 3px 0 #7fbf96; }
+.prompt-card.card-free:hover { box-shadow: inset 0 3px 0 #7fbf96, 0 6px 18px rgba(35, 49, 70, .05); }
+.card-action { height: 32px; padding: 0 12px; flex: none; display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
+.card-start { color: #fff; border: 1px solid #293449; background: #293449; }
+.card-start:hover { background: #1e293d; }
+.card-locked { color: #7a5a1c; border: 1px solid #ecd9ae; background: #fff8e8; }
+.card-locked:hover { border-color: #ddc285; background: #fbf0d6; }
 .status-tag { padding: 3px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
 .status-in_progress { color: #4652b8; background: #eef0fd; }
 .status-completed { color: #3f7d57; background: #ebf5ee; }

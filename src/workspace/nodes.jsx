@@ -6,6 +6,9 @@ import { getItem } from "./catalog.jsx";
 // Lets nodes commit inline edits through the workspace (so they join undo history).
 export const CanvasActions = createContext({ commitNodeData: () => {}, readOnly: false });
 
+// Dispatched on window with a node id to start renaming that node (Enter / F2).
+export const RENAME_EVENT = "designrounds:rename-node";
+
 const sides = [
   ["top", Position.Top],
   ["right", Position.Right],
@@ -26,6 +29,12 @@ function InlineLabel({ id, value, field = "label", className, multiline = false,
 
   useEffect(() => { if (!editing) setDraft(value); }, [value, editing]);
   useEffect(() => { if (editing) { inputRef.current?.focus(); inputRef.current?.select(); } }, [editing]);
+  useEffect(() => {
+    if (field !== "label" || readOnly) return undefined;
+    const onRename = (event) => { if (event.detail === id) setEditing(true); };
+    window.addEventListener(RENAME_EVENT, onRename);
+    return () => window.removeEventListener(RENAME_EVENT, onRename);
+  }, [id, field, readOnly]);
 
   function finish(save) {
     setEditing(false);

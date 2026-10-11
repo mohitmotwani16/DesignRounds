@@ -32,9 +32,3 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
-
-export function initials(user) {
-  const source = user?.displayName || user?.email || "?";
-  const parts = source.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
-  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?";
-}

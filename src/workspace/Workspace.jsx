@@ -4,7 +4,7 @@ import {
   ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow,
 } from "@xyflow/react";
 import {
-  ArrowLeft, ChevronDown, ChevronRight, CircleCheck, Command, FileText, Hand, LayoutPanelLeft, LoaderCircle, Magnet,
+  ArrowLeft, ChevronDown, ChevronRight, CircleCheck, Command, FileText, Keyboard, LayoutPanelLeft, LoaderCircle, Magnet,
   Map as MapIcon, MessageSquare, MousePointer2, Network, Plus, Redo2, RotateCcw, SquareDashed, StickyNote, Type, Undo2, Upload,
 } from "lucide-react";
 import { api } from "../api.js";
@@ -14,9 +14,9 @@ import { navigate } from "../router.js";
 import { getItem } from "./catalog.jsx";
 import { createNode, decorateEdge, hydrateDiagram, newId, serializeDiagram } from "./diagram.js";
 import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
-import { CanvasActions, nodeTypes } from "./nodes.jsx";
+import { CanvasActions, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
-import { InterviewerPanel, PromptModal } from "./Panels.jsx";
+import { InterviewerPanel, PromptModal, ShortcutsDialog } from "./Panels.jsx";
 
 const SAVE_DELAY_MS = 800;
 const RETRY_DELAY_MS = 5000;
@@ -61,9 +61,9 @@ function Workspace({ session, prompt }) {
   const [panelOpen, setPanelOpen] = useState(() => readPreference("designrounds:interviewer-open", "true") !== "false");
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
   const [showPrompt, setShowPrompt] = useState(() => initial.nodes.length === 0 && session.diagramVersion === 0);
-  const [tool, setTool] = useState("select");
   const [snap, setSnap] = useState(true);
   const [showMinimap, setShowMinimap] = useState(() => window.innerWidth > 760);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [focusEdgeLabel, setFocusEdgeLabel] = useState(0);
   const [legacy, setLegacy] = useState(() => (initial.nodes.length || session.diagramVersion > 0 ? null : readLegacyCanvas(prompt.id)));
   const reactFlow = useReactFlow();
@@ -310,23 +310,95 @@ function Workspace({ session, prompt }) {
     setFocusEdgeLabel((value) => value + 1);
   }, [setEdges, setNodes]);
 
+  const selectedNodes = nodes.filter((node) => node.selected);
+  const selectedEdges = edges.filter((edge) => edge.selected);
+  const selectionCount = selectedNodes.length + selectedEdges.length;
+  const singleNode = selectionCount === 1 ? selectedNodes[0] : null;
+  const singleEdge = selectionCount === 1 ? selectedEdges[0] : null;
+
   // ---- Keyboard shortcuts --------------------------------------------------
+  // The list shown to learners is in shortcuts.js.
+  const lastNudge = useRef(0);
+  const nudgeSelection = (dx, dy) => {
+    if (readOnlyRef.current || !nodesRef.current.some((node) => node.selected)) return;
+    // One undo step per burst of arrow presses.
+    if (Date.now() - lastNudge.current > 800) record();
+    lastNudge.current = Date.now();
+    setNodes((current) => current.map((node) => (node.selected ? { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } } : node)));
+  };
+  const selectAll = () => {
+    setNodes((current) => current.map((node) => (node.selected ? node : { ...node, selected: true })));
+    setEdges((current) => current.map((edge) => (edge.selected ? edge : { ...edge, selected: true })));
+  };
+  const focusComponentSearch = () => {
+    setPaletteOpen(true);
+    window.setTimeout(() => document.querySelector(".palette-search input")?.focus(), 30);
+  };
   const shortcuts = useRef({});
-  shortcuts.current = { undo, redo, duplicateSelection, copySelection, paste };
+  shortcuts.current = {
+    undo, redo, duplicateSelection, copySelection, paste, deleteSelection, clearSelection, nudgeSelection, selectAll,
+    focusComponentSearch, togglePanel, flush, addItem, reactFlow,
+    modalOpen: showPrompt || showShortcuts,
+    singleNodeId: singleNode?.id,
+  };
   useEffect(() => {
     const onKeyDown = (event) => {
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      const actions = shortcuts.current;
+      if (actions.modalOpen) return;
       const mod = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
-      const actions = shortcuts.current;
-      if (mod && key === "z") { event.preventDefault(); if (event.shiftKey) actions.redo(); else actions.undo(); }
-      else if (mod && key === "y") { event.preventDefault(); actions.redo(); }
-      else if (mod && key === "d") { event.preventDefault(); actions.duplicateSelection(); }
-      else if (mod && key === "c") actions.copySelection();
-      else if (mod && key === "v") { event.preventDefault(); actions.paste(); }
-      else if (!mod && !event.altKey && key === "v") setTool("select");
-      else if (!mod && !event.altKey && key === "h") setTool("pan");
+      const run = (action) => { event.preventDefault(); action(); };
+
+      if (mod) {
+        if (key === "z") run(event.shiftKey ? actions.redo : actions.undo);
+        else if (key === "y") run(actions.redo);
+        else if (key === "d") run(actions.duplicateSelection);
+        else if (key === "c") actions.copySelection();
+        else if (key === "x") run(() => { actions.copySelection(); actions.deleteSelection(); });
+        else if (key === "v") run(actions.paste);
+        else if (key === "a") run(actions.selectAll);
+        else if (key === "s") run(actions.flush);
+        return;
+      }
+      if (event.altKey) return;
+
+      const arrows = { arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0] };
+      if (arrows[key]) {
+        // A focused node is moved by React Flow itself; only record the undo step.
+        if (target instanceof HTMLElement && target.closest(".react-flow__node")) { actions.nudgeSelection(0, 0); return; }
+        const step = event.shiftKey ? 40 : 8;
+        run(() => actions.nudgeSelection(arrows[key][0] * step, arrows[key][1] * step));
+        return;
+      }
+      switch (event.key) {
+        case "?": run(() => setShowShortcuts(true)); break;
+        case "/": run(actions.focusComponentSearch); break;
+        case "Escape": actions.clearSelection(); break;
+        case "Enter":
+        case "F2":
+          if (actions.singleNodeId) run(() => window.dispatchEvent(new CustomEvent(RENAME_EVENT, { detail: actions.singleNodeId })));
+          break;
+        case "+":
+        case "=": run(() => actions.reactFlow.zoomIn({ duration: 150 })); break;
+        case "-":
+        case "_": run(() => actions.reactFlow.zoomOut({ duration: 150 })); break;
+        case "0": run(() => actions.reactFlow.zoomTo(1, { duration: 150 })); break;
+        default:
+          switch (key) {
+            case "f": run(() => actions.reactFlow.fitView({ padding: 0.25, duration: 250 })); break;
+            case "p": run(() => setShowPrompt(true)); break;
+            case "b": run(() => setPaletteOpen((value) => !value)); break;
+            case "i": run(actions.togglePanel); break;
+            case "m": run(() => setShowMinimap((value) => !value)); break;
+            case "s": run(() => actions.addItem(getItem("service"))); break;
+            case "g": run(() => actions.addItem(getItem("group"))); break;
+            case "t": run(() => actions.addItem(getItem("text"))); break;
+            case "n": run(() => actions.addItem(getItem("note"))); break;
+            default:
+          }
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -379,11 +451,6 @@ function Workspace({ session, prompt }) {
   }
 
   // ---- Derived view state --------------------------------------------------
-  const selectedNodes = nodes.filter((node) => node.selected);
-  const selectedEdges = edges.filter((edge) => edge.selected);
-  const selectionCount = selectedNodes.length + selectedEdges.length;
-  const singleNode = selectionCount === 1 ? selectedNodes[0] : null;
-  const singleEdge = selectionCount === 1 ? selectedEdges[0] : null;
 
   const outlineKey = nodes.map((node) => `${node.id}\u0001${node.data.kind}\u0001${node.data.label}`).join("\u0002");
   const outline = useMemo(() => nodesRef.current.map((node) => ({ id: node.id, kind: node.data.kind, label: node.data.label })), [outlineKey]);
@@ -418,21 +485,18 @@ function Workspace({ session, prompt }) {
 
       <div className="workspace-body">
         <aside className="tool-rail" aria-label="Canvas tools">
-          <button className={`rail-tool ${paletteOpen ? "active" : ""}`} title="Toggle component library" aria-label="Toggle component library" aria-pressed={paletteOpen} onClick={() => setPaletteOpen((value) => !value)}><LayoutPanelLeft size={17} /></button>
+          <button className={`rail-tool ${paletteOpen ? "active" : ""}`} title="Toggle component library (B)" aria-label="Toggle component library" aria-pressed={paletteOpen} onClick={() => setPaletteOpen((value) => !value)}><LayoutPanelLeft size={17} /></button>
           <span className="rail-separator" />
-          <button className={`rail-tool ${tool === "select" ? "active" : ""}`} title="Select (V) · drag on empty canvas to box-select" aria-label="Select tool" aria-pressed={tool === "select"} onClick={() => setTool("select")}><MousePointer2 size={17} /></button>
-          <button className={`rail-tool ${tool === "pan" ? "active" : ""}`} title="Pan (H) · or hold Space and drag" aria-label="Pan tool" aria-pressed={tool === "pan"} onClick={() => setTool("pan")}><Hand size={17} /></button>
-          <span className="rail-separator" />
-          <button className="rail-tool" title="Add a service" aria-label="Add a service" disabled={readOnly} onClick={() => addItem(getItem("service"))}><Plus size={19} /></button>
-          <button className="rail-tool" title="Add a zone / boundary" aria-label="Add a zone" disabled={readOnly} onClick={() => addItem(getItem("group"))}><SquareDashed size={17} /></button>
-          <button className="rail-tool" title="Add text" aria-label="Add text" disabled={readOnly} onClick={() => addItem(getItem("text"))}><Type size={17} /></button>
-          <button className="rail-tool" title="Add a decision note" aria-label="Add a decision note" disabled={readOnly} onClick={() => addItem(getItem("note"))}><StickyNote size={17} /></button>
+          <button className="rail-tool" title="Add a service (S)" aria-label="Add a service" disabled={readOnly} onClick={() => addItem(getItem("service"))}><Plus size={19} /></button>
+          <button className="rail-tool" title="Add a zone / boundary (G)" aria-label="Add a zone" disabled={readOnly} onClick={() => addItem(getItem("group"))}><SquareDashed size={17} /></button>
+          <button className="rail-tool" title="Add text (T)" aria-label="Add text" disabled={readOnly} onClick={() => addItem(getItem("text"))}><Type size={17} /></button>
+          <button className="rail-tool" title="Add a decision note (N)" aria-label="Add a decision note" disabled={readOnly} onClick={() => addItem(getItem("note"))}><StickyNote size={17} /></button>
           <span className="rail-separator" />
           <button className="rail-tool" title="Undo (Ctrl+Z)" aria-label="Undo" disabled={readOnly} onClick={undo}><Undo2 size={16} /></button>
           <button className="rail-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={readOnly} onClick={redo}><Redo2 size={16} /></button>
           <div className="rail-bottom">
             <button className={`rail-tool ${snap ? "active" : ""}`} title="Snap to grid" aria-label="Snap to grid" aria-pressed={snap} onClick={() => setSnap((value) => !value)}><Magnet size={16} /></button>
-            <button className={`rail-tool ${showMinimap ? "active" : ""}`} title="Minimap" aria-label="Toggle minimap" aria-pressed={showMinimap} onClick={() => setShowMinimap((value) => !value)}><MapIcon size={16} /></button>
+            <button className={`rail-tool ${showMinimap ? "active" : ""}`} title="Minimap (M)" aria-label="Toggle minimap" aria-pressed={showMinimap} onClick={() => setShowMinimap((value) => !value)}><MapIcon size={16} /></button>
           </div>
         </aside>
 
@@ -442,7 +506,8 @@ function Workspace({ session, prompt }) {
           <div className="canvas-topbar">
             <div className="canvas-topbar-left"><span className="canvas-breadcrumb">Design</span><ChevronRight size={13} /><span className="canvas-breadcrumb-current">{prompt.title}</span></div>
             <div className="canvas-topbar-actions">
-              <button className="topbar-action prompt-action" onClick={() => setShowPrompt(true)}><FileText size={14} /> Brief</button>
+              <button className="topbar-action prompt-action" onClick={() => setShowPrompt(true)} title="Open the brief (P)"><FileText size={14} /> Brief</button>
+              <button className="topbar-action shortcuts-action" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)"><Keyboard size={15} /> Shortcuts <kbd>?</kbd></button>
               <span className="canvas-action-divider" />
               <button className="topbar-action" onClick={() => reactFlow.fitView({ padding: 0.25, duration: 250 })}>Fit to view</button>
               {!panelOpen && <button className="topbar-action button-chat-reopen" onClick={togglePanel}><MessageSquare size={13} /> Interviewer</button>}
@@ -475,9 +540,9 @@ function Workspace({ session, prompt }) {
                 maxZoom={2.5}
                 snapToGrid={snap}
                 snapGrid={[8, 8]}
-                selectionOnDrag={tool === "select"}
+                selectionKeyCode="Shift"
                 selectionMode={SelectionMode.Partial}
-                panOnDrag={tool === "pan" ? true : [1, 2]}
+                panOnDrag
                 multiSelectionKeyCode={["Shift", "Meta", "Control"]}
                 deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
                 nodesDraggable={!readOnly}
@@ -514,14 +579,15 @@ function Workspace({ session, prompt }) {
             <div className="canvas-session-label"><span className="session-pulse" /> {nodes.length} components <span>·</span> {edges.length} connections</div>
           </div>
           <div className="canvas-footer">
-            <span><MousePointer2 size={13} /> Drag empty space to select · Space + drag to pan · Double-click to rename</span>
-            <span><Command size={12} /> Ctrl+Z undo · Ctrl+D duplicate · Ctrl+C / V copy &amp; paste</span>
+            <span><MousePointer2 size={13} /> Drag to move around · Shift + drag to select several · Double-click to rename</span>
+            <span><Command size={12} /> Press <kbd>?</kbd> for keyboard shortcuts</span>
           </div>
         </section>
 
         {panelOpen && <InterviewerPanel onClose={togglePanel} prompt={prompt} selectedName={singleNode?.data.label} />}
       </div>
-      {showPrompt && <PromptModal prompt={prompt} onClose={() => setShowPrompt(false)} />}
+      {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+      {showPrompt && <PromptModal prompt={prompt} fresh={nodes.length === 0} onClose={() => setShowPrompt(false)} />}
     </main>
   );
 }

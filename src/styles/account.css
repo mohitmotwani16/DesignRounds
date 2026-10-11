@@ -19,9 +19,12 @@ select.text-input { padding-right: 8px; cursor: pointer; }
 
 /* Header account menu */
 .user-menu { position: relative; }
-.avatar-button { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; color: #4652b8; border: 1px solid #dfe1f3; border-radius: 50%; background: #f1f2fc; font-size: 11px; font-weight: 700; cursor: pointer; }
-.avatar-button:hover { border-color: #c8ccef; }
-.avatar-large { width: 36px; height: 36px; font-size: 12px; }
+.account-button { height: 36px; padding: 0 10px 0 11px; display: inline-flex; align-items: center; gap: 7px; color: #36425a; border: 1px solid #e1e4e9; border-radius: 8px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s; }
+.account-button:hover, .account-button.open { border-color: #cdd2db; background: #f7f8fa; }
+.account-button > svg:first-child { color: #6b7790; }
+.account-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-chevron { color: #8f99a8; transition: transform .15s; }
+.account-button.open .account-chevron { transform: rotate(180deg); }
 .user-menu-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: 240px; padding: 6px; border: 1px solid #e3e6eb; border-radius: 10px; background: #fff; box-shadow: 0 14px 40px rgba(22, 32, 48, .14); animation: modal-in .12s ease-out; }
 .user-menu-identity { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid #eef0f3; margin-bottom: 4px; }
 .user-menu-identity strong { color: #253146; font-size: 13px; }
@@ -54,7 +57,6 @@ select.text-input { padding-right: 8px; cursor: pointer; }
 /* Profile */
 .profile-page { min-height: calc(100vh - 76px); padding-top: 30px; }
 .profile-hero { display: flex; align-items: center; gap: 18px; }
-.profile-avatar { width: 64px; height: 64px; flex: none; display: grid; place-items: center; color: #4652b8; border: 1px solid #dfe1f3; border-radius: 50%; background: #f1f2fc; font: 700 22px var(--serif); }
 .profile-identity { min-width: 0; }
 .profile-identity h1 { margin: 0; color: #253146; font: 600 28px/1.2 var(--serif); letter-spacing: -.9px; }
 .profile-identity p { margin: 5px 0 0; color: #6f7a8b; font-size: 14px; }
