@@ -21,6 +21,22 @@ The product should feel like a well-made engineering tool and a credible intervi
 7. **Trust through transparency:** Clearly distinguish AI-generated guidance from facts, disclose uncertainty, and let learners review how a score was reached.
 8. **Save work by default:** A browser refresh or interrupted practice session should not erase meaningful progress.
 
+### Freemium access and fair scoring
+
+Use a freemium model, with a meaningful no-cost practice path and paid access to the deeper coaching experience:
+
+- Make approximately **50–60% of the curated problem library** available on the free plan. Select representative prompts across every discipline and difficulty; do not make the free catalog a low-quality or beginner-only sampler. Show which prompts are included and which require a paid plan before a learner starts.
+- A free learner can read an available prompt and use the design canvas. Keep the canvas itself useful rather than disabling essential design actions to force an upgrade.
+- The free plan does not include interactive AI conversation during the design round: no AI clarification answers, follow-up questions, component critique, or on-demand hints. Clearly explain this limitation in the interviewer panel before the round.
+- After completing a free round, allow **one final rubric-based score/review for that attempt**. Make clear before starting that the final review is the only AI evaluation included in the free round. Do not silently start paid AI work or bill users without explicit consent.
+- The paid plan unlocks the complete prompt catalog and the contextual, two-way AI interviewer: ongoing design questions, learner-initiated clarification, decision-by-decision discussion, optional hints, and a detailed final review.
+- Define plan entitlements on the server and check them on every protected catalog, AI, review, and usage action. A hidden button or frontend-only paywall is not authorization.
+- Explain plan limits, billing cadence, renewal, cancellation, AI usage limits, and which content is locked before checkout. Do not imply that an upgrade guarantees an interview outcome.
+
+Scores must reflect the same disclosed rubric and observed evidence regardless of plan. **Never intentionally cap, suppress, or lower free-plan marks to pressure learners into purchasing.** Do not make reviews artificially vague or punitive as an upsell tactic. Monetize the additional coaching, breadth of practice, and convenience—not dishonest evaluation. Scores should show how requirements, architecture, data choices, reliability, scale, security, and trade-off reasoning affected the result; allow the learner to report an inaccurate review.
+
+**Prototype status:** The current catalog contains 38 rounds across four tracks, with 22 (about 58%) labeled free and the remaining 16 labeled Plus. Each track has free practice available. Locked rounds remain browsable, including their requirements and expected work, but cannot be started in the UI. This is a preview only: there is no sign-in, checkout, AI conversation, final review, or server-side entitlement check. All AI-related benefits above are planned behavior, not available features. Do not treat frontend labels or gates as access control.
+
 ## 2. Intended audience and jobs to be done
 
 ### Primary audience
@@ -43,7 +59,7 @@ The product should feel like a well-made engineering tool and a credible intervi
 ### Main journey
 
 1. **Discover:** The landing page explains the value quickly and offers a prominent “Start practicing” action.
-2. **Choose a round:** Browse or filter prompts by topic, difficulty, and estimated time.
+2. **Choose a round:** Browse by engineering discipline, then filter prompts by focus, difficulty, and estimated time. The free/paid availability of each prompt is visible before the learner opens it.
 3. **Prepare:** Read the prompt, learn the expected session format, and start when ready.
 4. **Clarify:** Ask or record functional and non-functional requirements before designing.
 5. **Design:** Add and connect components on a canvas; document key decisions and assumptions.
@@ -69,17 +85,83 @@ Recommended content order:
 
 Do not invent customer logos, testimonials, hiring outcomes, user counts, or accuracy claims. Add social proof only when it is real and approved for use.
 
-### Practice library
+### Practice library and discipline catalog
 
-Each prompt card should make the choice understandable at a glance:
+Organize the catalog into clear practice tracks; the track is the primary navigation and technical focus is a secondary filter. Start with at least these four disciplines:
 
-- Prompt title and a short scenario.
-- Difficulty and estimated duration.
-- Main topics, for example caching, feeds, storage, or messaging.
-- Whether the prompt is available, in progress, or completed.
-- A clear start or resume action.
+| Track | Scope | Representative rounds |
+|---|---|---|
+| **Software engineering (SDE)** | Application architecture, APIs, storage, traffic, and product behavior | URL shortener; chat; news feed; cloud file storage; API rate limiter; video streaming; ride-hailing; ticketing; notifications; web crawler; autocomplete; collaborative editor; paste sharing; payment processing; task scheduler; distributed cache; API gateway |
+| **Data engineering** | Ingestion, transformation, warehousing, streaming, data contracts, and observability | Customer warehouse with SCD Type 2; real-time analytics platform; reusable ETL/ELT framework; clickstream/event tracking at scale; data alerting; fraud detection data platform; data quality and observability framework |
+| **Machine learning & AI** | Training data, feature management, inference, retrieval, evaluation, and model operations | Recommendation system; feature store; distributed training platform; low-latency model serving; retrieval-augmented generation; real-time fraud scoring; ML model monitoring |
+| **Platform & infrastructure** | Developer platforms, control planes, resilience, networking, security, and operations | Internal developer platform; multi-region failover; service discovery; secrets management; safe deployment platform; metrics/observability platform; configuration control plane |
 
-Useful filters include topic, difficulty, estimated time, and completion status. Keep search and filters simple until the library is large enough to need more.
+Each round should be a versioned, curated content record—not just a title. Include:
+
+- **Discipline and focus:** Track, technical subtopic, level, expected duration, and free/paid availability.
+- **Scenario:** A specific user, company, or operational setting with enough detail to reason about constraints.
+- **Requirements:** Functional needs and measurable or explicitly open non-functional goals; note what the learner should clarify.
+- **Expected work:** A rough description of the architecture, data model, interfaces, workflows, failure handling, or trade-offs the learner is expected to produce. This is guidance, not a canonical answer to copy.
+- **Evaluation rubric:** Discipline-appropriate dimensions, examples of evidence, and important failure cases, versioned with the prompt.
+- **AI interviewer guidance:** Relevant follow-up areas and clarifications. Keep the expected answer private to the evaluator; never reveal it in the learner-facing brief.
+
+Make expectations concrete by discipline:
+
+- **SDE:** Identify requirements and load assumptions; draw services, clients, dependencies, and data stores; describe important APIs/data models; discuss scaling, consistency, availability, security, and trade-offs.
+- **Data engineering:** Show source-to-consumer flow; define event/table contracts, keys and time semantics; address batch vs. streaming, idempotency, backfills, late/duplicate data, lineage, quality, SLAs, and ownership as relevant. An SCD Type 2 warehouse brief should expect a business key, effective start/end dates, current-row indicator, change detection, and treatment of late corrections.
+- **ML & AI:** Cover data and label lineage, train/serve feature consistency, evaluation, model/artifact versions, inference latency, fallbacks, drift/quality monitoring, privacy, and retraining/rollback where relevant.
+- **Platform & infrastructure:** Separate control-plane and data-plane responsibilities where appropriate; cover identity, tenancy, rollout, failure modes, SLOs, observability, security, recovery, and operational ownership.
+
+Each prompt card should show track, title, short scenario, level, estimated duration, and availability. The prompt detail view should explain requirements, expected work, what is intentionally unspecified, and the relevant rubric dimensions. Filters should include track, subtopic, difficulty, duration, and free/paid availability; search should include the scenario and requirements, not just the title.
+
+Do not ship every item as an unstructured hard-coded frontend array long term. Keep a validated prompt schema and versioned catalog module so content can be reviewed and updated without changing session or AI logic.
+
+### Initial prompt set and expected learner work
+
+These are starting prompts, not prescribed solutions. Every round should let the learner ask clarifying questions, state assumptions, build a diagram/data flow, and defend trade-offs.
+
+| Track | Example prompt | Expected learner work |
+|---|---|---|
+| SDE | URL shortener | Define redirect/create APIs, key generation and storage, read caching, expiry, and growth assumptions. |
+| SDE | Chat system | Show connection and message-delivery paths; explain ordering, persistence, retries, and offline delivery. |
+| SDE | News feed | Compare fan-out approaches; diagram feed generation, ranking boundaries, and hot-account handling. |
+| SDE | Cloud file storage | Design metadata and blob paths, chunked/resumable uploads, sync, and conflict behavior. |
+| SDE | API rate limiter | Select and justify a limiting algorithm, counter/partition model, and failure behavior. |
+| SDE | Video streaming | Trace ingest through encoding and playback; explain manifests, CDN, and adaptive bitrate. |
+| SDE | Ride-hailing | Define location updates, geospatial matching, trip state, and regional scaling. |
+| SDE | High-demand ticketing platform | Model event discovery, seat inventory, short-lived reservations, checkout, and contention during a sale spike. |
+| SDE | Notification delivery service | Design preference-aware fan-out, prioritization, channel providers, idempotent retries, and delivery status. |
+| SDE | Distributed web crawler | Partition a crawl frontier, respect per-host policies, deduplicate URLs/content, and manage freshness and retries. |
+| SDE | Search autocomplete service | Serve low-latency prefix suggestions while balancing ranking quality, index freshness, and privacy. |
+| SDE | Collaborative document editor | Handle concurrent edits, reconnection, convergence, permissions, and revision history. |
+| SDE | Text snippet sharing service | Design snippet creation and retrieval, expiry, access control, caching, and abuse prevention. |
+| SDE | Payment processing platform | Define an idempotent payment state machine, processor integration, audit trail, and reconciliation. |
+| SDE | Distributed task scheduler | Schedule delayed and recurring work with worker leases, retries, recovery, and explicit delivery guarantees. |
+| SDE | Distributed caching service | Choose partitioning, replication, eviction and invalidation behavior; handle hot keys and node failure. |
+| SDE | Multi-tenant API gateway | Separate request routing from configuration management; cover authentication, tenant policies, rollout, and overload. |
+| Data engineering | Customer warehouse with SCD Type 2 | Model business keys and validity/current-row columns; explain change detection, idempotent loads, and late corrections. |
+| Data engineering | Real-time analytics platform | Diagram event ingestion, event-time windows, deduplication, aggregate serving, and replay. |
+| Data engineering | Reusable ETL/ELT framework | Define task/DAG contracts, connectors, orchestration, isolation, retries, backfills, and lineage. |
+| Data engineering | Clickstream/event tracking at scale | Design SDK buffering and ingestion, schema evolution, deduplication, and PII controls. |
+| Data engineering | Data alerting system | Define freshness/volume/quality rules, ownership, alert grouping, routing, and escalation. |
+| Data engineering | Fraud detection data platform | Enrich payment streams with historical/online features; explain latency, parity, and auditability. |
+| Data engineering | Data quality and observability framework | Define data contracts/tests, freshness and anomaly signals, lineage, incident triage, and ownership. |
+| ML & AI | Recommendation system | Separate candidate retrieval and ranking; cover cold start, offline training, and online experiments. |
+| ML & AI | Feature store | Design online/offline materialization, point-in-time joins, feature freshness, and training/serving parity. |
+| ML & AI | Distributed training platform | Model job submission, accelerator scheduling, checkpointing, artifacts, and experiment lineage. |
+| ML & AI | Low-latency model serving | Design model versioning, inference scaling, batching, canary release, rollback, and monitoring. |
+| ML & AI | Retrieval-augmented generation | Trace document ingestion/indexing to permission-aware retrieval, source-grounded answers, and evaluation. |
+| ML & AI | Real-time fraud scoring | Build a bounded-latency prediction flow with online features, fallbacks, thresholds, and review feedback. |
+| ML & AI | Model monitoring | Track service health, drift, delayed labels, model versions, affected cohorts, and response actions. |
+| Platform | Internal developer platform | Separate self-service control plane from workloads; define templates, service catalog, paved paths, and escape hatches. |
+| Platform | Multi-region failover | State RTO/RPO, replication and routing decisions, failover/failback, and recovery tests. |
+| Platform | Service discovery | Design registration, health, lookup caching, endpoint expiry, and control-plane failure behavior. |
+| Platform | Secrets management | Define identity-based access, secret delivery, rotation/revocation, and auditability. |
+| Platform | Safe deployment platform | Model immutable releases, staged rollout, health gates, pause/rollback, and ownership. |
+| Platform | Metrics and observability platform | Design telemetry intake/storage/query, cardinality limits, retention, alert routing, and ownership. |
+| Platform | Configuration control plane | Version and validate configuration, stage rollout, revert safely, and serve last-known-good state. |
+
+The expanded SDE topics were selected after reviewing the publicly available [Educative system-design interview course](https://www.educative.io/courses/grokking-the-system-design-interview) and [Exponent, now Aced](https://www.aced.io/), alongside common interview archetypes. The prompts and requirements above are independently written for DesignRounds; do not reproduce third-party lesson text, diagrams, or solutions.
 
 ### Practice workspace
 
@@ -151,17 +233,18 @@ If a numeric score is used, explain the rubric, show dimension-level results, an
 
 ### Essential for a credible first release
 
-1. **Prompt library:** A small, curated set of high-quality system design prompts with difficulty, topic, and expected duration.
+1. **Discipline-based prompt library:** Curated SDE, Data Engineering, ML & AI, and Platform & Infrastructure tracks with explicit prompt expectations and free/paid availability.
 2. **Guided session flow:** Prompt, requirements, design, interview, and review states.
 3. **Draw.io-style system-design canvas:** A component palette, drag-and-drop placement, selectable components, labeled directional connections, notes, and familiar editing controls.
 4. **Persistent conversational interviewer:** A right-side panel, visible by default and hideable/reopenable on demand, where the learner can both answer AI follow-ups and ask questions about the prompt, concepts, or selected parts of the design.
-5. **Incremental feedback:** Useful feedback at milestones or when requested, not an unsolicited stream of expensive evaluations after every mouse movement.
-6. **Structured end-of-session review:** Evidence-based strengths, gaps, rubric, and next steps.
+5. **Paid AI coaching:** Interactive questions, learner-initiated help, and in-round feedback are an explicit paid-plan benefit; no AI call is triggered by ordinary canvas edits.
+6. **Fair end-of-session review:** Free rounds may receive the single disclosed final rubric review; paid rounds may receive a more detailed report. Apply the same honest scoring rubric to both plans.
 7. **Autosave and resume:** Session state survives refreshes and can be reopened.
 8. **Authentication and ownership:** Users can access only their own saved sessions.
 9. **Responsive and accessible interface:** Keyboard support, readable contrast, sensible focus states, and usable narrow-screen layouts.
 10. **Clear privacy and AI disclosures:** Explain what data is sent to AI services, what is stored, and how a learner can delete it.
 11. **Operational safeguards:** Rate limits, request validation, error handling, and cost monitoring for AI usage.
+12. **Freemium entitlements:** Enforce a balanced free catalog, paid conversation access, and one final free review per completed attempt on the server.
 
 ### Strong follow-up features
 
@@ -176,6 +259,7 @@ If a numeric score is used, explain the rubric, show dimension-level results, an
 - Admin tools for curating prompts, rubrics, and model instructions.
 - Optional keyboard-first editing and copy/paste of diagram elements.
 - Feedback reporting so users can flag incorrect or unhelpful AI responses.
+- Checkout and subscription-management flows after validating willingness to pay and selecting a billing provider.
 
 ### Defer until validated
 
@@ -247,6 +331,26 @@ The system should be divided by responsibility so that each feature can be under
 
 These are logical boundaries, not a requirement to create a separate service for each. Start with a modular monolith: one deployable application with clear module interfaces. Split a module into a separate service only when scale, reliability, team ownership, or deployment needs justify the added operational cost.
 
+### Data storage: current implementation and future choice
+
+**Current implementation:** There is no server-side database. The 38 prompt definitions are shipped as JavaScript data in the frontend, and each learner's diagram is serialized to that browser's `localStorage`, keyed by prompt. There are no accounts, cloud-saved sessions, AI turns, reviews, or billing records. This is suitable for the prototype, not multi-device persistence or production authorization.
+
+**Recommended first backend:** When accounts and cross-device saving are required, start with one managed PostgreSQL database (Supabase Postgres is a candidate, not yet selected) behind the application API. Keep the product as a modular monolith; do not add Redis, a vector database, or microservices until measured needs justify them.
+
+| Product area | First storage choice | Reason and boundary |
+|---|---|---|
+| Identity | Managed auth provider; store the provider's user ID and app profile in PostgreSQL | Do not build password storage or duplicate credentials. Enforce ownership in the API and database policies. |
+| Prompt catalog and rubrics | Versioned source-controlled content initially; PostgreSQL tables if editorial workflows require database-backed publishing | Prompts are reviewed product content, not learner-generated records. Keep rubric and prompt versions attached to each attempt. |
+| Practice sessions and entitlements | PostgreSQL relational tables | Ownership, lifecycle, plan, usage allowance, and idempotency need transactions and constraints. Billing-provider events update entitlement records; do not store card data. |
+| Diagrams | PostgreSQL diagram-version rows with validated JSONB graph snapshots | Diagram data is structured, versioned, and naturally belongs to a session. Save checkpoints/version deltas only if snapshot size or write volume later warrants it. |
+| Conversation and final reviews | PostgreSQL turn and review records | Keep ordered, attributable session history and rubric evidence. Retain only what the privacy policy requires; do not store hidden evaluator material in client-visible records. |
+| Uploaded assets, if introduced | Managed object storage, with metadata and access references in PostgreSQL | Keep large binary objects out of relational rows; issue short-lived, authorized upload/download URLs. |
+| Search | PostgreSQL full-text search to start | It is sufficient for a curated catalog; add a dedicated search service only if relevance, language, or scale demands it. |
+| Cache, rate limits, and background work | No separate database initially; add a managed Redis-compatible cache/queue only for measured latency, shared rate-limit, or job-processing needs | A cache is disposable and never the source of truth. Durable AI/review jobs and usage checks must remain recoverable and idempotent. |
+| Logs and product analytics | A privacy-reviewed observability/analytics service with bounded retention | Keep operational telemetry separate from canonical session records; redact prompts, credentials, and personal data as appropriate. |
+
+This is a staged recommendation, not a claim that these future stores are already connected or that Supabase has been selected. Before launch, validate provider pricing, region, backups, retention, access controls, and commercial terms.
+
 ### Suggested request flow
 
 1. The web app requests a prompt or an authorized practice session from the application API.
@@ -262,19 +366,40 @@ These are logical boundaries, not a requirement to create a separate service for
 
 Use the conventions of the chosen framework. Keep endpoint names and payloads versionable, validated, and explicit.
 
-- `GET /api/prompts` — list prompts with supported filters.
-- `GET /api/prompts/{promptId}` — fetch prompt details.
-- `POST /api/sessions` — create a session for a prompt and mode.
-- `GET /api/sessions/{sessionId}` — load an owned session.
-- `PATCH /api/sessions/{sessionId}` — update session state or lifecycle.
-- `PUT /api/sessions/{sessionId}/diagram` — save a validated diagram version.
-- `POST /api/sessions/{sessionId}/turns` — submit an answer and request the next interviewer turn.
-- `POST /api/sessions/{sessionId}/feedback` — request a milestone review.
-- `POST /api/sessions/{sessionId}/complete` — finish and generate the final review.
-- `GET /api/sessions/{sessionId}/review` — retrieve the saved review.
-- `DELETE /api/sessions/{sessionId}` — delete a session and associated learner data as permitted by policy.
+- `GET /api/v1/tracks` — list discipline tracks and prompt counts for the caller's plan.
+- `GET /api/v1/prompts?track=&topic=&difficulty=&access=` — list only prompts the caller is entitled to see; return lock metadata for discoverable paid prompts without leaking hidden solution material.
+- `GET /api/v1/prompts/{promptId}` — fetch an entitled prompt's learner-facing brief, requirements, expected work, and rubric summary.
+- `GET /api/v1/me/entitlements` — return the authenticated user's effective plan and usage limits.
+- `POST /api/v1/sessions` — create a session for an entitled prompt and mode.
+- `GET /api/v1/sessions/{sessionId}` — load an owned session.
+- `PATCH /api/v1/sessions/{sessionId}` — update session state or lifecycle.
+- `PUT /api/v1/sessions/{sessionId}/diagram` — save a validated diagram version.
+- `POST /api/v1/sessions/{sessionId}/turns` — paid-plan conversational AI action: submit an answer, ask a question, request clarification, or ask for a hint and receive one contextual interviewer turn.
+- `POST /api/v1/sessions/{sessionId}/final-review` — complete a round and request the one permitted free-tier final report or a paid detailed report. Enforce attempt and entitlement limits server-side and make generation idempotent.
+- `GET /api/v1/sessions/{sessionId}/review` — retrieve a saved report the caller is entitled to access.
+- `DELETE /api/v1/sessions/{sessionId}` — delete a session and associated learner data as permitted by policy.
 
 Do not expose provider API keys or call a paid model directly from an untrusted browser client.
+
+The `turns` request should distinguish `answer`, `learner_question`, `clarification_request`, and `hint_request`. Include the session ID in the path; optionally include a selected node/edge ID, relevant diagram version, and a client idempotency key. The server loads the canonical prompt, diagram, recent relevant turns, account entitlements, and usage limits. It must not trust a client-supplied user ID, plan, rubric score, or complete AI context.
+
+Return a validated response containing the assistant turn ID and content, turn type, optional next question, related diagram references, saved conversation state, and bounded usage metadata. For free users, reject conversational turn requests with a clear upgrade-required response; do not fall through to an unmetered model call. For a final review, record attempt/report state before returning success so retries cannot create duplicate paid generations or bypass the free allowance.
+
+Example learner-initiated question:
+
+```json
+{
+  "turnType": "learner_question",
+  "message": "Would a queue help if the write service becomes overloaded?",
+  "context": {
+    "diagramVersion": 8,
+    "selectedNodeId": "write-service"
+  },
+  "idempotencyKey": "client-generated-request-id"
+}
+```
+
+The response should include a stable turn ID, a plain-text answer, optional follow-up question, diagram references, and bounded usage metadata. Return a machine-readable `UPGRADE_REQUIRED` error for a free-plan conversation request, `429 USAGE_LIMIT_REACHED` when a paid quota is exhausted, and an idempotent existing report for a repeated final-review request. The server-side entitlement check must run before any model call.
 
 ## 7. AI design and token efficiency
 
@@ -303,6 +428,7 @@ AI context should be built for the current task, not assembled as a full transcr
 - Deduplicate repeated requests where safe, and track latency, token usage, errors, and cost per task.
 - Make the AI response schema small and task-specific; reject invalid output and surface a useful retry/error state rather than silently accepting malformed feedback.
 - Never include credentials, unrelated personal information, or another user's data in model context.
+- Resolve plan entitlements and per-plan usage limits in application code before calling the model. The model must never decide whether a user is paid, whether a quota is exhausted, or what a review costs.
 
 ### Structured AI outputs
 
@@ -353,8 +479,9 @@ The application—not the model—should enforce allowed enum values, response s
 The following entities are a starting point. Use the project's chosen database conventions and avoid storing redundant derived data unless needed for performance.
 
 - **User:** Identity-provider reference, display preferences, timestamps.
-- **Prompt:** Title, scenario, functional requirements, non-functional requirements, topics, difficulty, expected duration, prompt version, publication state.
+- **Prompt:** Track, technical topic, title, scenario, functional requirements, non-functional requirements, expected learner work, access tier, difficulty, duration, prompt version, publication state.
 - **Rubric:** Versioned dimensions, descriptions, and evaluation guidance associated with a prompt or prompt version.
+- **PlanEntitlement:** User, effective tier, billing status and period, limits, and entitlement version; updated from trusted billing events.
 - **PracticeSession:** User, prompt and version, mode, status, timestamps, current stage, and relevant settings.
 - **DiagramVersion:** Session, version number, validated nodes and edges, viewport metadata, and creation time.
 - **ConversationTurn:** Session, role, content, timestamp, and optional references to a diagram version, selected component/edge, related requirement, or the question being answered.
@@ -413,6 +540,16 @@ The following entities are a starting point. Use the project's chosen database c
 - Consider private sharing, mentor review, additional practice modes, and voice only after user research supports them.
 - Separate services or add more complex infrastructure only when actual scale or reliability requirements justify it.
 
+### Initial deployment approach
+
+- Deploy the Vite frontend as static assets on Vercel's free Hobby plan only while the product is a personal, non-commercial project. Because the intended product is freemium, verify hosting terms before commercial launch and budget for a plan that permits that use (or choose a provider whose applicable plan does).
+- Connect the GitHub repository for preview deployments from feature branches and a production deployment from the chosen production branch. The current hash-based navigation needs no server rewrite.
+- Keep the first release frontend-only: no paid AI calls, managed database, or authentication service is required while canvas data is stored in the user's browser.
+- Clearly disclose that browser-local work does not sync to another device and can be removed by clearing browser storage.
+- Add shared persistence and identity only when needed. Before selecting a free-tier backend, compare current pricing, inactivity/sleep behavior, backup and recovery options, region, quotas, and data export.
+- When AI is enabled, use a server-side function or API, never expose model credentials to the browser, set per-user quotas and token budgets, and track cost separately from hosting. A free static host does not make model inference free.
+- Treat provider free tiers as an initial low-volume option, not an availability or long-term-cost guarantee; recheck terms and usage before accepting real user data or commercial traffic.
+
 ## 11. Quality plan
 
 ### Product and usability checks
@@ -426,6 +563,8 @@ The following entities are a starting point. Use the project's chosen database c
 
 - Unit tests for diagram validation, session state transitions, ownership rules, and rubric parsing.
 - API tests for authorization, input validation, rate limits, and expected errors.
+- Entitlement tests for the published free-catalog split, representative coverage across all tracks, paid-only interactive AI, and one idempotent final free report per attempt.
+- Rubric regression tests showing that a learner's plan does not alter marks for identical evidence and the same rubric version.
 - Integration tests for save/resume, diagram versioning, interviewer turn creation, and final review persistence.
 - AI contract tests using deterministic fixtures or a mocked provider; keep ordinary tests independent of paid live model calls.
 - Evaluation cases for prompt injection, irrelevant questions, repeated questions, malformed model output, and sparse learner input.
@@ -452,7 +591,7 @@ Do not optimize for conversation length, raw AI message count, or time-on-site i
 These choices affect architecture or user expectations and should be explicitly decided:
 
 1. **Audience and mode:** Interview prep only, or also general architecture learning and mentor-led sessions?
-2. **Business model:** Free, subscription, usage-based, or a combination? What usage limits are understandable and fair?
+2. **Paid plan details:** Keep the freemium access split described above; validate subscription pricing, renewal terms, AI quotas, and checkout provider with learners before charging.
 3. **AI provider and data terms:** Which provider and model meet quality, cost, latency, and privacy requirements?
 4. **Authentication:** Which identity provider and sign-in methods are needed for the first release?
 5. **Persistence and deployment:** Which application framework, database, hosting environment, and region fit the team?
