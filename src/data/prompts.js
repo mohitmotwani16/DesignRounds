@@ -31,6 +31,22 @@ export const tracks = [
     icon: "platform",
     color: "orange",
   },
+  {
+    id: "distributed-systems",
+    label: "Distributed systems",
+    shortLabel: "Distributed systems",
+    description: "Work through the building blocks: replication, consensus, ordering, and coordination.",
+    icon: "distributed",
+    color: "rose",
+  },
+  {
+    id: "frontend-mobile",
+    label: "Frontend & mobile",
+    shortLabel: "Frontend & mobile",
+    description: "Design client architectures that stay fast, offline-tolerant, and safe to ship.",
+    icon: "frontend",
+    color: "green",
+  },
 ];
 
 export const prompts = [
@@ -303,15 +319,152 @@ export const prompts = [
     considerations: ["Push vs pull", "Validation and rollout", "Last-known-good state"],
     expectedOutcome: "A configuration version and propagation model, validation and staged rollout flow, and resilient client behavior.",
   },
+  {
+    id: "key-value-store", title: "Design a distributed key-value store", description: "Store and serve keys across many nodes with tunable consistency.",
+    track: "distributed-systems", access: "free", category: "Replication", difficulty: "Advanced", minutes: 55, icon: "kv", color: "rose",
+    requirements: ["Clients can get, put, and delete values by key.", "The store survives the loss of individual nodes without losing acknowledged writes.", "Capacity grows by adding nodes without a full reshuffle."],
+    considerations: ["Consistent hashing", "Quorum reads and writes", "Conflict resolution"],
+    expectedOutcome: "A partitioning and replication scheme, read/write quorum choice, failure detection and repair, and the consistency guarantees clients get.",
+  },
+  {
+    id: "unique-id-generator", title: "Design a unique ID generator", description: "Issue unique, roughly sortable IDs at high rate across data centers.",
+    track: "distributed-systems", access: "free", category: "Coordination", difficulty: "Beginner", minutes: 30, icon: "id", color: "violet",
+    requirements: ["Every generated ID is unique across all generators.", "IDs are roughly ordered by creation time.", "Generation keeps working if a coordination service is briefly unavailable."],
+    considerations: ["Snowflake-style layout", "Clock skew", "Worker ID assignment"],
+    expectedOutcome: "An ID layout with justified bit allocation, worker identity assignment, clock-skew handling, and throughput limits.",
+  },
+  {
+    id: "distributed-message-queue", title: "Design a distributed message queue", description: "Build a durable, partitioned log that producers and consumers can rely on.",
+    track: "distributed-systems", access: "free", category: "Messaging", difficulty: "Advanced", minutes: 55, icon: "queue", color: "blue",
+    requirements: ["Producers append messages to named topics.", "Consumer groups read independently and can resume after failure.", "Acknowledged messages are not lost when a broker fails."],
+    considerations: ["Partitions and ordering", "Replication and ISR", "Consumer offsets"],
+    expectedOutcome: "A topic/partition model, replication and leader-election approach, offset management, retention, and delivery semantics.",
+  },
+  {
+    id: "distributed-lock-service", title: "Design a distributed lock service", description: "Let services coordinate exclusive access without deadlocks or split brain.",
+    track: "distributed-systems", access: "paid", category: "Coordination", difficulty: "Advanced", minutes: 45, icon: "lock", color: "orange",
+    requirements: ["Clients acquire and release named locks with a timeout.", "A crashed holder cannot keep a lock forever.", "Two clients never believe they hold the same lock at once."],
+    considerations: ["Leases and fencing tokens", "Consensus backing store", "Client failure detection"],
+    expectedOutcome: "A lease-based lock protocol with fencing tokens, the consensus layer behind it, and behavior under partitions and pauses.",
+  },
+  {
+    id: "leader-election", title: "Design leader election for a service cluster", description: "Keep exactly one active coordinator while nodes come and go.",
+    track: "distributed-systems", access: "paid", category: "Consensus", difficulty: "Advanced", minutes: 45, icon: "crown", color: "teal",
+    requirements: ["The cluster elects a single leader that followers can discover.", "A new leader is chosen promptly when the current one fails.", "A deposed leader cannot keep acting on stale authority."],
+    considerations: ["Raft-style terms", "Heartbeats and timeouts", "Split-brain prevention"],
+    expectedOutcome: "An election protocol, term/epoch handling, failure detection timings, and how stale leaders are fenced off.",
+  },
+  {
+    id: "geo-replicated-database", title: "Design a geo-replicated database", description: "Serve reads and writes from several regions with clear consistency trade-offs.",
+    track: "distributed-systems", access: "paid", category: "Replication", difficulty: "Advanced", minutes: 55, icon: "regions", color: "green",
+    requirements: ["Users in each region get low-latency reads.", "Writes from any region become visible elsewhere within a stated bound.", "A full region outage does not lose committed data."],
+    considerations: ["Single vs multi-leader", "Conflict resolution", "Cross-region latency"],
+    expectedOutcome: "A replication topology, write path and conflict policy, consistency guarantees per operation, and regional failover.",
+  },
+  {
+    id: "offline-first-sync", title: "Design offline-first mobile sync", description: "Let a notes app work offline and merge cleanly when it reconnects.",
+    track: "frontend-mobile", access: "free", category: "Sync", difficulty: "Intermediate", minutes: 45, icon: "sync", color: "green",
+    requirements: ["Users can create and edit notes with no connection.", "Changes sync across devices once online.", "Concurrent edits on two devices are resolved predictably."],
+    considerations: ["Local database", "Change log and cursors", "Conflict resolution"],
+    expectedOutcome: "A client storage model, sync protocol with change cursors, conflict strategy, and server-side APIs to support it.",
+  },
+  {
+    id: "image-feed-client", title: "Design an image-heavy feed client", description: "Keep an infinite photo feed smooth on slow networks and older phones.",
+    track: "frontend-mobile", access: "free", category: "Performance", difficulty: "Intermediate", minutes: 40, icon: "image", color: "rose",
+    requirements: ["The feed scrolls smoothly with thousands of items.", "Images load quickly at an appropriate resolution for the device.", "The app stays usable on flaky connections."],
+    considerations: ["List virtualization", "Image CDN and sizes", "Caching and prefetch"],
+    expectedOutcome: "A client rendering architecture, pagination API, image sizing and caching strategy, and offline/error states.",
+  },
+  {
+    id: "mobile-release-flags", title: "Design mobile release and feature flags", description: "Ship app changes safely when users update on their own schedule.",
+    track: "frontend-mobile", access: "free", category: "Release engineering", difficulty: "Beginner", minutes: 35, icon: "flag", color: "orange",
+    requirements: ["Features can be turned on for a subset of users.", "A bad feature can be disabled without a new app release.", "Old app versions keep working against newer backends."],
+    considerations: ["Remote config", "Staged rollout", "API versioning"],
+    expectedOutcome: "A flag evaluation and delivery design, rollout and kill-switch flow, and a compatibility strategy for old clients.",
+  },
+  {
+    id: "collaborative-whiteboard", title: "Design a collaborative whiteboard client", description: "Let many people draw on one canvas in real time without conflicts.",
+    track: "frontend-mobile", access: "paid", category: "Real-time", difficulty: "Advanced", minutes: 50, icon: "editor", color: "violet",
+    requirements: ["Participants see each other's strokes and cursors in near real time.", "The board converges to the same state for everyone.", "Large boards render without freezing the browser."],
+    considerations: ["CRDTs vs OT", "Rendering pipeline", "Presence and reconnection"],
+    expectedOutcome: "A shared-state model, transport and reconnection plan, rendering approach for large boards, and persistence.",
+  },
+  {
+    id: "micro-frontend-platform", title: "Design a micro-frontend platform", description: "Let many teams ship parts of one web app independently.",
+    track: "frontend-mobile", access: "paid", category: "Architecture", difficulty: "Advanced", minutes: 45, icon: "platform", color: "blue",
+    requirements: ["Teams deploy their sections without coordinating releases.", "Shared navigation, auth, and design system stay consistent.", "A broken section does not take down the whole app."],
+    considerations: ["Composition strategy", "Shared dependencies", "Isolation and fallbacks"],
+    expectedOutcome: "A composition model, deployment and versioning flow, shared-dependency strategy, and failure isolation.",
+  },
 ];
+
+// Concepts a learner should be comfortable with before attempting each round.
+const prerequisites = {
+  "url-shortener": ["HTTP redirects (301 vs 302)", "Hashing and base62 encoding", "Key-value stores", "Read-through caching"],
+  "chat-system": ["WebSockets and long-lived connections", "Message queues", "Ordering and idempotency", "Online presence basics"],
+  "news-feed": ["Fan-out on write vs read", "Caching hot data", "Social graph modeling", "Pagination with cursors"],
+  "file-storage": ["Object storage (blobs)", "Chunking and checksums", "Metadata databases", "Conflict resolution"],
+  "rate-limiter": ["Token bucket and sliding window", "Atomic counters (e.g. Redis INCR)", "API keys and quotas", "Fail-open vs fail-closed"],
+  "video-streaming": ["CDNs and edge caching", "Video transcoding", "HLS/DASH and adaptive bitrate", "Object storage"],
+  "ride-hailing": ["Geospatial indexing (geohash, quadtree)", "Real-time location updates", "State machines", "Regional sharding"],
+  "ticket-booking": ["Transactions and isolation levels", "Optimistic vs pessimistic locking", "Reservation TTLs", "Queueing under traffic spikes"],
+  "notification-service": ["Message queues and workers", "Retries with backoff", "Idempotency keys", "Push, email, and SMS providers"],
+  "web-crawler": ["BFS over a URL frontier", "robots.txt and politeness", "URL and content deduplication", "Distributed work queues"],
+  "autocomplete": ["Tries and prefix search", "Top-k ranking", "Caching at the edge", "Batch index rebuilding"],
+  "collaborative-editor": ["Operational transforms or CRDTs", "WebSockets", "Versioning and snapshots", "Access control basics"],
+  "paste-service": ["Unique ID generation", "Object vs database storage", "TTL-based expiry", "Basic abuse prevention"],
+  "payment-platform": ["Idempotency keys", "State machines", "Double-entry ledgers", "Reconciliation with external processors"],
+  "task-scheduler": ["Delayed and cron scheduling", "Leases and heartbeats", "At-least-once delivery", "Retries and dead-letter queues"],
+  "distributed-cache": ["Consistent hashing", "Eviction policies (LRU, LFU)", "Replication basics", "Cache invalidation strategies"],
+  "api-gateway": ["Reverse proxies and routing", "Authentication (API keys, JWT)", "Rate limiting", "Control plane vs data plane"],
+  "scd2-warehouse": ["Dimensional modeling (facts and dimensions)", "Slowly changing dimensions", "Business vs surrogate keys", "Idempotent batch loads"],
+  "realtime-analytics": ["Stream processing basics", "Event time vs processing time", "Windowed aggregation", "Columnar / OLAP stores"],
+  "etl-framework": ["DAG orchestration (e.g. Airflow)", "Incremental loads and backfills", "Idempotent tasks", "Data lineage"],
+  "clickstream": ["Event schemas and evolution", "Client-side batching", "Message logs (e.g. Kafka)", "PII handling"],
+  "data-alerting": ["Data freshness and volume checks", "Anomaly detection basics", "Alert routing and deduplication", "Ownership and on-call"],
+  "fraud-data-platform": ["Streaming enrichment", "Online vs offline features", "Low-latency key-value lookups", "Audit trails"],
+  "data-quality": ["Data contracts", "Data tests and expectations", "Lineage graphs", "Incident triage"],
+  "recommendation-engine": ["Candidate generation vs ranking", "Collaborative filtering", "Embeddings basics", "A/B testing"],
+  "feature-store": ["Online vs offline storage", "Point-in-time correct joins", "Batch and streaming materialization", "Training/serving skew"],
+  "training-platform": ["GPU scheduling basics", "Data vs model parallelism", "Checkpointing", "Experiment tracking"],
+  "model-serving": ["Model versioning", "Request batching", "Autoscaling", "Canary releases"],
+  "rag-search": ["Embeddings and vector search", "Document chunking", "Prompting LLMs", "Permission-aware retrieval"],
+  "online-fraud-model": ["Real-time feature lookups", "Latency budgets", "Decision thresholds", "Fallback behavior"],
+  "model-monitoring": ["Data and concept drift", "Delayed ground-truth labels", "Model versioning", "Alerting basics"],
+  "service-platform": ["CI/CD pipelines", "Containers and Kubernetes", "Service templates", "Self-service vs guardrails"],
+  "multi-region": ["RTO and RPO", "Synchronous vs asynchronous replication", "DNS and global load balancing", "Failover testing"],
+  "service-discovery": ["Service registries", "Health checks", "Client-side vs server-side load balancing", "TTLs and caching"],
+  "secrets-platform": ["Workload identity", "Encryption and KMS", "Secret rotation", "Audit logging"],
+  "deployment-platform": ["Immutable artifacts", "Canary and blue-green deploys", "Health signals and SLOs", "Rollback strategies"],
+  "metrics-platform": ["Time-series data", "Cardinality and labels", "Retention and downsampling", "Alerting rules"],
+  "config-control-plane": ["Configuration versioning", "Push vs pull propagation", "Schema validation", "Staged rollouts"],
+  "key-value-store": ["Consistent hashing", "Replication and quorums", "CAP and consistency models", "Gossip and failure detection"],
+  "unique-id-generator": ["Bit layouts (Snowflake IDs)", "Clock skew", "Worker ID assignment", "UUID trade-offs"],
+  "distributed-message-queue": ["Append-only logs", "Partitions and ordering", "Leader/follower replication", "Consumer offsets"],
+  "distributed-lock-service": ["Leases and TTLs", "Fencing tokens", "Consensus basics (Raft/Paxos)", "Process pauses and clock issues"],
+  "leader-election": ["Raft terms and voting", "Heartbeats and timeouts", "Split-brain", "Quorum math"],
+  "geo-replicated-database": ["Single- vs multi-leader replication", "Conflict resolution (LWW, CRDTs)", "Consistency models", "Cross-region latency"],
+  "offline-first-sync": ["Local databases on mobile", "Change logs and sync cursors", "Conflict resolution", "Reconnect and retry handling"],
+  "image-feed-client": ["List virtualization", "Responsive images and CDNs", "Client-side caching", "Cursor-based pagination"],
+  "mobile-release-flags": ["Feature flags and remote config", "Staged rollouts", "API versioning", "App store release cycles"],
+  "collaborative-whiteboard": ["CRDTs or operational transforms", "WebSockets and presence", "Canvas rendering performance", "Reconnection handling"],
+  "micro-frontend-platform": ["Module federation / composition", "Shared dependencies and versioning", "Independent deployments", "Error boundaries and isolation"],
+};
+for (const prompt of prompts) prompt.prerequisites = prerequisites[prompt.id] ?? [];
 
 export const categories = [
   { id: "all", label: "All practice areas" },
   ...tracks.map(({ id, shortLabel }) => ({ id, label: shortLabel })),
 ];
 
+export const topics = [...new Set(prompts.map((prompt) => prompt.category))].sort();
+
+export function findPrompt(id) {
+  return prompts.find((prompt) => prompt.id === id) ?? null;
+}
+
 export function getPrompt(id) {
-  return prompts.find((prompt) => prompt.id === id) ?? prompts[0];
+  return findPrompt(id) ?? prompts[0];
 }
 
 export function getTrack(id) {

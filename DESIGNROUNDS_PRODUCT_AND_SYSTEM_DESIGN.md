@@ -35,7 +35,7 @@ Use a freemium model, with a meaningful no-cost practice path and paid access to
 
 Scores must reflect the same disclosed rubric and observed evidence regardless of plan. **Never intentionally cap, suppress, or lower free-plan marks to pressure learners into purchasing.** Do not make reviews artificially vague or punitive as an upsell tactic. Monetize the additional coaching, breadth of practice, and convenience—not dishonest evaluation. Scores should show how requirements, architecture, data choices, reliability, scale, security, and trade-off reasoning affected the result; allow the learner to report an inaccurate review.
 
-**Prototype status:** The current catalog contains 38 rounds across four tracks, with 22 (about 58%) labeled free and the remaining 16 labeled Plus. Each track has free practice available. Locked rounds remain browsable, including their requirements and expected work, but cannot be started in the UI. This is a preview only: there is no sign-in, checkout, AI conversation, final review, or server-side entitlement check. All AI-related benefits above are planned behavior, not available features. Do not treat frontend labels or gates as access control.
+**Current status:** The catalog contains 49 rounds across six tracks (the original four plus Distributed systems and Frontend & mobile), with 28 (about 57%) labeled free and 21 labeled Plus. Each track has free practice available. Learners sign in with an emailed one-time code; browsing is public but starting a round requires an account. Starting a Plus round is rejected by the server for free accounts. Locked rounds remain browsable, including their requirements and expected work. There is no checkout, AI conversation, or final review yet; all AI-related benefits above are planned behavior.
 
 ## 2. Intended audience and jobs to be done
 
@@ -333,7 +333,7 @@ These are logical boundaries, not a requirement to create a separate service for
 
 ### Data storage: current implementation and future choice
 
-**Current implementation:** There is no server-side database. The 38 prompt definitions are shipped as JavaScript data in the frontend, and each learner's diagram is serialized to that browser's `localStorage`, keyed by prompt. There are no accounts, cloud-saved sessions, AI turns, reviews, or billing records. This is suitable for the prototype, not multi-device persistence or production authorization.
+**Current implementation:** An Express API (modular monolith with `identity` and `practice-session` modules) stores data in PostgreSQL. Local development uses PGlite, an embedded Postgres persisted to `.data/pglite`, so no database install is needed; setting `DATABASE_URL` points the same SQL at a hosted Postgres such as Neon or Supabase. Tables: `users` (profile and plan), `login_codes` (HMAC-hashed one-time codes), `auth_sessions` (hashed session tokens), `practice_sessions` (one attempt per prompt with the current diagram as validated JSONB and an optimistic-concurrency version), and `diagram_versions` (periodic checkpoints). Prompt definitions remain versioned source-controlled content shared by client and server.
 
 **Recommended first backend:** When accounts and cross-device saving are required, start with one managed PostgreSQL database (Supabase Postgres is a candidate, not yet selected) behind the application API. Keep the product as a modular monolith; do not add Redis, a vector database, or microservices until measured needs justify them.
 
