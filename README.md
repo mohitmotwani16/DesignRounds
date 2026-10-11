@@ -1,47 +1,71 @@
 # DesignRounds
 
-DesignRounds is an engineering-design practice experience built around a visual architecture canvas. The catalog is organized into Software Engineering (SDE), Data Engineering, Machine Learning & AI, and Platform & Infrastructure tracks. This first application slice includes the public landing page, a filterable practice library, and a canvas workspace with an interviewer panel marked **Coming soon**.
+DesignRounds is a practice portal for system design interviews. Learners pick a prompt, build a design on a draw.io-style canvas, and (soon) discuss it with an AI interviewer. See [DESIGNROUNDS_PRODUCT_AND_SYSTEM_DESIGN.md](DESIGNROUNDS_PRODUCT_AND_SYSTEM_DESIGN.md) for the product and system design.
+
+## What's in this version
+
+- **Practice library:** 49 rounds across six disciplines (SDE, Data engineering, ML & AI, Platform, Distributed systems, Frontend & mobile). 28 rounds (57%) are free. You can filter by discipline, access, level, time, and topic, and search the requirements text.
+- **Accounts:** passwordless email sign-in. You enter your email, then type the 6-digit code that was sent to it. Browsing the library is public, but starting or resuming a round requires signing in. New users set up a profile with name, target role, experience, and headline.
+- **Profile:** practice history with resume/complete/delete actions, profile editing, sign out (here or on all devices), and account deletion.
+- **Canvas:** 247 components (about 140 generic system-design blocks in 12 categories plus about 110 technology logos), zones/boundaries, text labels, and decision notes. Connections are labeled and can be sync/async and one-way/two-way. It also has an inspector panel, inline rename, undo/redo, copy/paste/duplicate, box selection, snap-to-grid, and a minimap.
+- **Saving:** designs autosave to the database. Saves use optimistic versioning, so a stale tab can't overwrite newer work, and periodic checkpoints are stored as diagram versions. A finished round becomes read-only and can be reopened.
+
+The AI interviewer, final review, and payments are not built yet. Plus rounds can be browsed but not started.
 
 ## Run locally
 
-1. Install Node.js 22 or newer. If an older system-wide Node version takes precedence over the WinGet LTS install in this terminal, run `. .\scripts\use-node-lts.ps1` once in PowerShell.
-2. In this directory, run `npm install`.
-3. Run `npm run dev`.
-4. Open the local URL printed by Vite.
+Requires Node.js 22 or newer. If an older Node is first on your PATH in PowerShell, run `. .\scripts\use-node-lts.ps1` once.
 
-The production build is `npm run build`; the generated static site is in `dist/`.
+```bash
+npm install
+npm run dev
+```
 
-## Freemium catalog preview
+This starts the API on http://localhost:8787 and the web app on http://localhost:5173 (open this one). Vite proxies `/api` to the API.
 
-The catalog currently contains 38 rounds across four engineering tracks. Twenty-two (about 58%) are labeled free, with free rounds represented in every track. Paid rounds remain visible with their prompt details, but starting one explains that paid access is planned and unavailable in this preview. This is informational UI only: the app has no accounts, checkout, or server-side entitlement enforcement.
+**No setup is needed for local development:**
 
-The SDE catalog has been expanded with independently written challenges covering ticket inventory, notifications, crawling, autocomplete, collaborative editing, payment processing, task scheduling, distributed caching, paste sharing, and API gateway design. Topic breadth was informed by publicly available system-design interview material from [Educative](https://www.educative.io/courses/grokking-the-system-design-interview) and [Exponent (now Aced)](https://www.aced.io/); prompt wording and requirements here are original, not copied from their lessons.
+- **Database:** an embedded Postgres ([PGlite](https://pglite.dev)) is created in `.data/pglite` on first run, and migrations in `server/migrations` are applied automatically. To reset all local data, stop the server and delete `.data/`.
+- **Email:** with no email provider configured, the sign-in code is printed in the API terminal and also shown on the sign-in screen (development only).
 
-The product plan is one final, rubric-based review for a free round and interactive AI coaching for paid members. Neither AI reviews nor AI conversations are implemented yet; scores must use the same evidence and rubric for every plan and must never be deliberately reduced to encourage an upgrade.
+## Configuration
 
-## Current data and privacy behavior
+Copy `.env.example` to `.env`; every setting is optional locally.
 
-Canvas layouts are saved in this browser's `localStorage`, per practice prompt. There is no account, server database, cross-device sync, AI connection, or server-side backup yet. Clearing browser data deletes locally saved canvas work. The interviewer composer is intentionally disabled until its AI service is implemented.
+| Setting | Purpose |
+|---|---|
+| `DATABASE_URL` | Use a hosted Postgres instead of the embedded one. Free tiers from [Neon](https://neon.tech) or [Supabase](https://supabase.com) work; paste the connection string and restart. The schema is created automatically. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Send real sign-in emails over SMTP. A Gmail account with an [app password](https://myaccount.google.com/apppasswords) works for development. |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Send email through [Resend](https://resend.com) instead. Without a verified domain, Resend only delivers to your own address. |
+| `AUTH_SECRET` | Secret for hashing sign-in codes. **Required in production.** |
+| `APP_ORIGIN`, `TRUST_PROXY`, `PORT` | Deployment settings for running behind a proxy or on a custom domain. |
 
-## Deploy the frontend to Vercel
+## Project layout
 
-This version is a static Vite application and needs no server, database, paid model, or environment variables. The simplest path is:
+```
+server/                 Express API (modular monolith)
+  index.js              app setup, security headers, error handling
+  db.js                 PGlite / Postgres adapter + migration runner
+  email.js              SMTP / Resend / console code delivery
+  modules/identity.js   email OTP sign-in, sessions, profile, account deletion
+  modules/practice.js   practice rounds, diagram saving, entitlement checks
+  migrations/           SQL migrations
+src/
+  pages/                landing, library, sign-in, onboarding, profile
+  workspace/            canvas, component catalog, nodes, inspector, panels
+  data/prompts.js       versioned prompt catalog (shared by client and server)
+```
 
-1. Push the repository to GitHub.
-2. In Vercel, import `mohitmotwani16/DesignRounds` and select the `feature/initial-app` branch for a preview deployment (or `main` if deploying that branch).
-3. Keep the detected Vite defaults: install `npm install`, build `npm run build`, output directory `dist`.
-4. Deploy and test the landing page, practice library, workspace, and browser-local canvas save.
+## Security notes
 
-Vercel's Hobby plan is intended for personal, non-commercial projects. Since DesignRounds is planned as a freemium product, do not assume the Hobby plan is suitable for its commercial launch; verify the current terms and budget for an eligible plan such as Vercel Pro, or choose a host whose free plan explicitly allows the intended commercial use. See [Vercel's Hobby plan](https://vercel.com/docs/plans/hobby) and [Vite deployment guide](https://vercel.com/docs/frameworks/frontend/vite). A custom domain may have a separate registration cost.
+- Sign-in codes are 6 digits, expire after 10 minutes, allow 5 attempts, and are stored only as an HMAC. Requests are rate-limited per email and per IP.
+- Sessions use a random token in an `httpOnly`, `SameSite=Lax` cookie. Only the token's SHA-256 hash is stored.
+- State-changing API requests must be JSON and come from the same origin.
+- Every practice-round query is scoped to the signed-in user. Plan access (free vs. Plus) is enforced on the server.
+- Diagrams are validated and size-limited on the server before they're stored.
 
-Vercel can create preview deployments from Git branches and production deployments from the configured production branch. No `vercel.json` is needed for the current hash-based navigation and static asset build.
+## Build and deploy
 
-## Keep future hosting costs controlled
+`npm run build` outputs the frontend to `dist/`. `npm start` runs the API, which also serves `dist/` when it exists, so a single Node process can host the whole app.
 
-- Keep the public marketing pages and application frontend static.
-- Do not add a database or authentication service until multi-device persistence and accounts are needed.
-- When shared persistence is required, compare managed Postgres/Auth offerings (for example Supabase) against Vercel's current data products and their free-tier limits, backups, region options, and inactivity policies.
-- When AI is introduced, call the provider only from a server-side endpoint or function. Keep provider keys out of the browser bundle, set strict rate and token limits, and show usage/cost controls. Free hosting does not imply free AI inference.
-- Recheck provider prices and terms before selecting a production database, AI provider, or commercial deployment.
-
-The app is not yet production-ready for accounts or cloud-saved user data. Those require server-side authorization, data validation, privacy/retention behavior, monitoring, and recovery plans before launch.
+The app now needs a server and a database, so a static-only host is no longer enough. Options include a Node host such as Render, Railway, or Fly.io with a hosted Postgres (`DATABASE_URL`). Set `NODE_ENV=production`, `AUTH_SECRET`, and an email provider. Free tiers are fine for development, but check their sleep/inactivity behavior, backups, and commercial-use terms before real users rely on them. Don't use the embedded PGlite database in production.
