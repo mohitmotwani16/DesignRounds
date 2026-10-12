@@ -1,0 +1,345 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, RefreshCw, Sparkles, Target } from "lucide-react";
+import { api } from "../api.js";
+import { useAuth } from "../auth.jsx";
+
+const POLL_MS = 4000;
+const POLL_LIMIT_MS = 6 * 60_000;
+
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function allowanceText(allowance) {
+  if (!allowance) return "";
+  const plan = allowance.plan === "plus" ? "Plus" : "Free plan";
+  const monthLeft = Math.max(0, allowance.month.limit - allowance.month.used);
+  return `${plan}: ${allowance.round.used} of ${plural(allowance.round.limit, "review")} used for this round · ${monthLeft} left this month`;
+}
+
+// Final AI review of a finished round: request (with a visible credit cost), progress,
+// and the result. What the server returns already reflects the learner's plan.
+export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor }) {
+  const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [requestError, setRequestError] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const pendingRequest = useRef(null);
+  const plan = useAuth().user?.plan;
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api.listReviews(sessionId);
+      setData(result);
+      setLoadError(null);
+      return result;
+    } catch (error) {
+      setLoadError(error);
+      return null;
+    }
+  }, [sessionId]);
+
+  // Reloads when the plan changes, since the server shapes reviews per plan.
+  useEffect(() => { load(); }, [load, roundFinished, plan]);
+
+  // A pending review (e.g. started before a refresh) is polled until it settles.
+  const hasPending = data?.reviews.some((review) => review.status === "pending");
+  useEffect(() => {
+    if (!hasPending || busy) return undefined;
+    const started = Date.now();
+    const timer = window.setInterval(async () => {
+      const result = await load();
+      if (!result?.reviews.some((review) => review.status === "pending") || Date.now() - started > POLL_LIMIT_MS) window.clearInterval(timer);
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasPending, busy, load]);
+
+  async function requestReview() {
+    setBusy(true);
+    setRequestError(null);
+    // The same id is reused if the request is retried, so it can never be charged twice.
+    pendingRequest.current ??= crypto.randomUUID();
+    try {
+      const result = await api.requestReview(sessionId, pendingRequest.current);
+      pendingRequest.current = null;
+      setSelectedId(result.review.id);
+      await load();
+    } catch (error) {
+      if (error.status === 0) {
+        setRequestError({ message: "Connection lost while generating. We'll show the review here as soon as it's ready.", retry: true });
+      } else {
+        pendingRequest.current = null;
+        setRequestError({ message: error.message, retry: error.status >= 500 });
+      }
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loadError && !data) {
+    return <div className="review-body"><div className="review-card review-error"><AlertTriangle size={16} /><p>{loadError.message}</p><button className="button button-outline button-small" onClick={load}>Try again</button></div></div>;
+  }
+  if (!data) return <div className="review-body review-loading"><LoaderCircle size={18} className="spin" /></div>;
+
+  const succeeded = data.reviews.filter((review) => review.status === "succeeded");
+  const current = succeeded.find((review) => review.id === selectedId) || succeeded[0];
+  const generating = busy || hasPending;
+  const { allowance } = data;
+  const canRequest = roundFinished && data.aiAvailable && allowance.remaining > 0 && !generating;
+
+  return (
+    <div className="review-body">
+      {!roundFinished && (
+        <div className="review-card review-intro">
+          <span className="review-kicker"><Target size={13} /> FINAL REVIEW</span>
+          <h3>Finish the round to get your review.</h3>
+          <p>You'll get a score across six rubric dimensions, with feedback tied to the components and notes in your design. Explain your choices in each component's “Why this choice?” note: reasoning counts.</p>
+          <small>{allowanceText(allowance)}</small>
+        </div>
+      )}
+
+      {roundFinished && !current && !generating && (
+        <div className="review-card review-intro">
+          <span className="review-kicker"><Sparkles size={13} /> READY FOR REVIEW</span>
+          <h3>Get feedback on your design.</h3>
+          <p>{allowance.plan === "plus"
+            ? "Your review includes scores, evidence, and specific improvements for every dimension."
+            : "Your free review includes your overall score, every dimension's score, and your top strength and risk. Plus adds detailed evidence, improvements, and follow-up questions."}</p>
+          <ReviewButton canRequest={canRequest} onClick={requestReview} label="Get my review" allowance={allowance} aiAvailable={data.aiAvailable} />
+        </div>
+      )}
+
+      {generating && (
+        <div className="review-card review-progress" role="status">
+          <LoaderCircle size={18} className="spin" />
+          <div><strong>Reviewing your design…</strong><p>This usually takes 20–60 seconds. You can keep this tab open or come back later.</p></div>
+        </div>
+      )}
+
+      {requestError && !generating && (
+        <div className="review-card review-error" role="alert">
+          <AlertTriangle size={16} />
+          <p>{requestError.message}</p>
+          {requestError.retry && <button className="button button-outline button-small" onClick={requestReview}><RefreshCw size={13} /> Try again</button>}
+        </div>
+      )}
+
+      {current && (
+        <>
+          {succeeded.length > 1 && (
+            <label className="review-history">
+              <span>Review</span>
+              <select value={current.id} onChange={(event) => setSelectedId(event.target.value)}>
+                {succeeded.map((review, index) => (
+                  <option key={review.id} value={review.id}>#{succeeded.length - index} · {new Date(review.completedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <ReviewResult review={current} onFocusNode={onFocusNode} labelFor={labelFor} />
+          {roundFinished && !generating && allowance.remaining > 0 && (
+            <div className="review-again">
+              <p>Changed your design since this review? Reopen the round, improve it, finish again, then ask for a new review.</p>
+              <ReviewButton canRequest={canRequest} onClick={requestReview} label="Review my latest design" allowance={allowance} aiAvailable={data.aiAvailable} outline />
+            </div>
+          )}
+        </>
+      )}
+
+      {(roundFinished || succeeded.length > 0) && <p className="review-allowance">{allowanceText(allowance)}</p>}
+    </div>
+  );
+}
+
+function ReviewButton({ canRequest, onClick, label, allowance, aiAvailable, outline = false }) {
+  let note = `Uses 1 of your ${plural(allowance.round.limit, "review")} for this round. If generation fails, it's not counted.`;
+  if (!aiAvailable) note = "AI reviews are unavailable right now.";
+  else if (allowance.round.used >= allowance.round.limit) note = "You've used this round's reviews.";
+  else if (allowance.month.used >= allowance.month.limit) note = `You've used this month's reviews. They reset on ${new Date(allowance.month.resetsAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`;
+  return (
+    <div className="review-request">
+      <button className={`button ${outline ? "button-outline" : "button-dark"} button-small`} disabled={!canRequest} onClick={onClick}><Sparkles size={14} /> {label}</button>
+      <small>{note}</small>
+    </div>
+  );
+}
+
+function NodeChips({ ids, onFocusNode, labelFor }) {
+  if (!ids?.length) return null;
+  return (
+    <div className="review-node-chips">
+      {ids.map((id) => <button key={id} onClick={() => onFocusNode(id)} title="Show on canvas">{labelFor(id)}</button>)}
+    </div>
+  );
+}
+
+function ReviewResult({ review, onFocusNode, labelFor }) {
+  const full = review.access === "full";
+  const [open, setOpen] = useState(null);
+  const locked = review.locked;
+  return (
+    <article className="review-result" aria-label="Design review">
+      {review.sample && <div className="review-sample">Sample review: no AI provider is configured on this server.</div>}
+
+      <header className={`review-score rating-${review.overall.rating}`}>
+        <div className="review-score-number"><strong>{review.overall.score}</strong><span>/100</span></div>
+        <div>
+          <span className="review-rating-pill">{review.overall.ratingLabel}</span>
+          <p>{review.summary}</p>
+        </div>
+      </header>
+
+      <section className="review-section">
+        <h4>Rubric</h4>
+        <ul className="review-dimensions">
+          {review.dimensions.map((dimension) => {
+            const expanded = open === dimension.id;
+            return (
+              <li key={dimension.id} className={`rating-${dimension.rating}`}>
+                <button className="review-dimension-row" aria-expanded={full ? expanded : undefined} disabled={!full} onClick={() => setOpen(expanded ? null : dimension.id)}>
+                  <span className="review-dimension-name">{dimension.name}</span>
+                  <span className="review-dimension-score">{dimension.score}/10</span>
+                  {full && <ChevronDown size={14} className={expanded ? "rotated" : ""} />}
+                  <span className="review-bar"><span style={{ width: `${dimension.score * 10}%` }} /></span>
+                </button>
+                {full && expanded && (
+                  <div className="review-dimension-detail">
+                    <ul>{dimension.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+                    <p><strong>Improve:</strong> {dimension.improvement}</p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {!full && <p className="review-locked-line"><LockKeyhole size={12} /> Evidence and an improvement for each dimension are part of Plus.</p>}
+      </section>
+
+      {review.reasoning && <ReasoningSection reasoning={review.reasoning} full={full} lockedCount={locked?.decisions} onFocusNode={onFocusNode} labelFor={labelFor} />}
+
+      <section className="review-section">
+        <h4><CircleCheck size={14} /> {full ? "Strengths" : "Top strength"}</h4>
+        {review.strengths.map((strength) => (
+          <div key={strength.point} className="review-point">
+            <strong>{strength.point}</strong>
+            <p>{strength.detail}</p>
+            <NodeChips ids={strength.nodeIds} onFocusNode={onFocusNode} labelFor={labelFor} />
+          </div>
+        ))}
+      </section>
+
+      {review.risks.length > 0 && (
+        <section className="review-section">
+          <h4><Flag size={14} /> {full ? "Risks and gaps" : "Top risk"}</h4>
+          {review.risks.map((risk) => (
+            <div key={risk.point} className="review-point">
+              <span className={`review-severity severity-${risk.severity}`}>{risk.severity}</span>
+              <strong>{risk.point}</strong>
+              <p>{risk.whyItMatters}</p>
+              <NodeChips ids={risk.nodeIds} onFocusNode={onFocusNode} labelFor={labelFor} />
+            </div>
+          ))}
+        </section>
+      )}
+
+      {full && (
+        <>
+          <section className="review-section">
+            <h4><Target size={14} /> Next steps</h4>
+            <ol className="review-list">{review.nextSteps.map((step) => <li key={step}>{step}</li>)}</ol>
+          </section>
+          <section className="review-section">
+            <h4><HelpCircle size={14} /> Questions to think about</h4>
+            <ul className="review-list">{review.followUpQuestions.map((question) => <li key={question}>{question}</li>)}</ul>
+          </section>
+          {review.assumptions.length > 0 && (
+            <section className="review-section review-assumptions">
+              <h4>Assumptions the reviewer made</h4>
+              <ul className="review-list">{review.assumptions.map((item) => <li key={item}>{item}</li>)}</ul>
+            </section>
+          )}
+        </>
+      )}
+
+      {!full && locked && (
+        <div className="review-card review-upsell">
+          <span className="review-kicker"><LockKeyhole size={12} /> INCLUDED WITH PLUS</span>
+          <ul>
+            {locked.decisions > 0 && <li>Analysis of your {plural(locked.decisions, "key decision")}: justified, needed, right-sized</li>}
+            {locked.risks > 0 && <li>{plural(locked.risks, "more risk")} with why each matters</li>}
+            {locked.strengths > 0 && <li>{plural(locked.strengths, "more strength")}</li>}
+            {locked.nextSteps > 0 && <li>{plural(locked.nextSteps, "prioritised next step")}</li>}
+            {locked.followUpQuestions > 0 && <li>{plural(locked.followUpQuestions, "interviewer follow-up question")}</li>}
+            <li>Evidence and an improvement for every dimension</li>
+          </ul>
+          <small>Your scores are the same on every plan. Plus adds the detailed coaching.</small>
+        </div>
+      )}
+
+      <p className="review-disclaimer">AI-generated feedback. It can be wrong, so check important technical claims.</p>
+    </article>
+  );
+}
+
+const decisionLabels = {
+  explanation: { "well-justified": "Well justified", "partly-justified": "Partly justified", unexplained: "Not explained", incorrect: "Reasoning incorrect" },
+  necessity: { essential: "Essential", helpful: "Helpful", premature: "Premature", unnecessary: "Not needed" },
+  sizing: { "right-sized": "Right-sized", "over-engineered": "Over-engineered", "under-engineered": "Under-engineered" },
+};
+const goodValues = new Set(["well-justified", "essential", "helpful", "right-sized"]);
+const badValues = new Set(["unexplained", "incorrect", "unnecessary", "over-engineered", "under-engineered"]);
+const tone = (value) => (goodValues.has(value) ? "good" : badValues.has(value) ? "bad" : "mixed");
+
+function coverageText(coverage) {
+  const parts = [`You explained ${coverage.explainedComponents} of ${plural(coverage.components, "component")}`];
+  if (coverage.decisionNotes) parts.push(plural(coverage.decisionNotes, "decision note"));
+  if (coverage.connections) parts.push(`${coverage.labelledConnections} of ${plural(coverage.connections, "connection")} labelled`);
+  return parts.join(" · ");
+}
+
+// How well the learner explained and justified their choices. The coverage counts are
+// shown on every plan; the decision-by-decision analysis is part of Plus.
+function ReasoningSection({ reasoning, full, lockedCount, onFocusNode, labelFor }) {
+  const [open, setOpen] = useState(null);
+  return (
+    <section className="review-section">
+      <h4><Brain size={14} /> Your reasoning</h4>
+      <p className="review-coverage">{coverageText(reasoning.coverage)}</p>
+      {full ? (
+        <>
+          <p className="review-reasoning-summary">{reasoning.summary}</p>
+          <ul className="review-decisions">
+            {reasoning.decisions.map((decision, index) => {
+              const expanded = open === index;
+              return (
+                <li key={decision.choice + index}>
+                  <button className="review-decision-row" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : index)}>
+                    <strong>{decision.choice}</strong>
+                    <ChevronDown size={14} className={expanded ? "rotated" : ""} />
+                    <span className="review-decision-tags">
+                      {["explanation", "necessity", "sizing"].map((key) => (
+                        <span key={key} className={`review-tag tag-${tone(decision[key])}`}>{decisionLabels[key][decision[key]]}</span>
+                      ))}
+                    </span>
+                  </button>
+                  {expanded && (
+                    <div className="review-decision-detail">
+                      <p>{decision.assessment}</p>
+                      <p><strong>Alternatives:</strong> {decision.alternatives}</p>
+                      <p className="review-probe"><strong>An interviewer would ask:</strong> {decision.probe}</p>
+                      <NodeChips ids={decision.nodeIds} onFocusNode={onFocusNode} labelFor={labelFor} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : (
+        <p className="review-locked-line"><LockKeyhole size={12} /> Plus analyses {lockedCount ? `each of your ${plural(lockedCount, "key decision")}` : "your key decisions"}: whether it was justified, actually needed, and right-sized for the problem, with the questions an interviewer would ask.</p>
+      )}
+    </section>
+  );
+}

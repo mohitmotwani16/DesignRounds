@@ -1,6 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "@xyflow/react/dist/style.css";
+import "./theme.js";
+import "./styles/theme.css";
 import "./styles.css";
 import "./styles/library.css";
 import "./styles/workspace.css";

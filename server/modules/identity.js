@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import express from "express";
 import { z } from "zod";
 import { query, queryOne } from "../db.js";
+import { devToolsEnabled } from "../flags.js";
 import { deliveryMode, sendLoginCode } from "../email.js";
 import { HttpError, createLimiter, parse, route } from "../http.js";
 
@@ -51,6 +52,7 @@ export function toPublicUser(row) {
     targetRole: row.target_role,
     experienceLevel: row.experience_level,
     plan: row.plan,
+    devTools: devToolsEnabled,
     onboarded: Boolean(row.onboarded_at),
     createdAt: row.created_at,
   };

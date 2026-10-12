@@ -22,7 +22,25 @@ export async function connect() {
       max: Number(process.env.DATABASE_POOL_SIZE || 5),
       ssl: /localhost|127\.0\.0\.1/.test(url) || process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
     });
-    client = { query: (sql, params) => pool.query(sql, params), exec: (sql) => pool.query(sql), close: () => pool.end() };
+    client = {
+      query: (sql, params) => pool.query(sql, params),
+      exec: (sql) => pool.query(sql),
+      close: () => pool.end(),
+      transaction: async (fn) => {
+        const connection = await pool.connect();
+        try {
+          await connection.query("begin");
+          const result = await fn(connection);
+          await connection.query("commit");
+          return result;
+        } catch (error) {
+          await connection.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          connection.release();
+        }
+      },
+    };
     driverName = "postgres";
   } else {
     const { PGlite } = await import("@electric-sql/pglite");
@@ -35,7 +53,12 @@ export async function connect() {
     } catch (error) {
       throw new Error(`Could not open the local database in ${dataDir}. If it was interrupted while being created, delete that folder to start fresh. (${error.message})`);
     }
-    client = { query: (sql, params) => db.query(sql, params), exec: (sql) => db.exec(sql), close: () => db.close() };
+    client = {
+      query: (sql, params) => db.query(sql, params),
+      exec: (sql) => db.exec(sql),
+      close: () => db.close(),
+      transaction: (fn) => db.transaction((tx) => fn(tx)),
+    };
     driverName = `pglite (${path.relative(process.cwd(), dataDir) || dataDir})`;
   }
   await migrate();
@@ -54,6 +77,15 @@ export async function query(sql, params = []) {
 export async function queryOne(sql, params = []) {
   const rows = await query(sql, params);
   return rows[0] ?? null;
+}
+
+// Runs `fn` inside one transaction on a single connection. `fn` receives the
+// same `query` / `queryOne` helpers, bound to that connection.
+export function transaction(fn) {
+  return client.transaction((connection) => fn({
+    query: async (sql, params = []) => (await connection.query(sql, params)).rows,
+    queryOne: async (sql, params = []) => (await connection.query(sql, params)).rows[0] ?? null,
+  }));
 }
 
 async function migrate() {

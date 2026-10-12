@@ -28,14 +28,31 @@ Use a freemium model, with a meaningful no-cost practice path and paid access to
 - Make approximately **50–60% of the curated problem library** available on the free plan. Select representative prompts across every discipline and difficulty; do not make the free catalog a low-quality or beginner-only sampler. Show which prompts are included and which require a paid plan before a learner starts.
 - A free learner can read an available prompt and use the design canvas. Keep the canvas itself useful rather than disabling essential design actions to force an upgrade.
 - The free plan does not include interactive AI conversation during the design round: no AI clarification answers, follow-up questions, component critique, or on-demand hints. Clearly explain this limitation in the interviewer panel before the round.
-- After completing a free round, allow **one final rubric-based score/review for that attempt**. Make clear before starting that the final review is the only AI evaluation included in the free round. Do not silently start paid AI work or bill users without explicit consent.
+- After completing a free round, allow **one final rubric-based score/review for that attempt**, within a small monthly review allowance. Make clear before starting that the final review is the only AI evaluation included in the free round. Do not silently start paid AI work or bill users without explicit consent.
+- Free reviews show the overall score, every rubric dimension's score and rating, a summary, and the top strength and top risk. Plus reviews add a decision-by-decision analysis of the learner's reasoning (whether each key choice was justified and correct, actually needed, and right-sized for the problem, with alternatives and the question an interviewer would ask), evidence and an improvement for every dimension, all strengths and risks, prioritised next steps, and interviewer follow-up questions. The same complete review is generated and stored for both plans; only what is shown differs, so upgrading unlocks the full detail of past reviews.
 - The paid plan unlocks the complete prompt catalog and the contextual, two-way AI interviewer: ongoing design questions, learner-initiated clarification, decision-by-decision discussion, optional hints, and a detailed final review.
 - Define plan entitlements on the server and check them on every protected catalog, AI, review, and usage action. A hidden button or frontend-only paywall is not authorization.
 - Explain plan limits, billing cadence, renewal, cancellation, AI usage limits, and which content is locked before checkout. Do not imply that an upgrade guarantees an interview outcome.
 
 Scores must reflect the same disclosed rubric and observed evidence regardless of plan. **Never intentionally cap, suppress, or lower free-plan marks to pressure learners into purchasing.** Do not make reviews artificially vague or punitive as an upsell tactic. Monetize the additional coaching, breadth of practice, and convenience—not dishonest evaluation. Scores should show how requirements, architecture, data choices, reliability, scale, security, and trade-off reasoning affected the result; allow the learner to report an inaccurate review.
 
-**Current status:** The catalog contains 49 rounds across six tracks (the original four plus Distributed systems and Frontend & mobile), with 28 (about 57%) labeled free and 21 labeled Plus. Each track has free practice available. Learners sign in with an emailed one-time code; browsing is public but starting a round requires an account. Starting a Plus round is rejected by the server for free accounts. Locked rounds remain browsable, including their requirements and expected work. There is no checkout, AI conversation, or final review yet; all AI-related benefits above are planned behavior.
+### AI allowances
+
+Allowances are entitlements enforced on the server before any model call (`server/modules/plans.js`):
+
+| | Free | Plus |
+|---|---|---|
+| Interviewer replies per round | 0 | 40 (including up to 3 hints) |
+| Interviewer replies per month | 0 | 800 |
+| Final reviews per round | 1 | 3 |
+| Final reviews per calendar month (UTC) | 5 | 60 |
+
+- A credit is reserved in the same transaction that creates the pending review, consumed when the review is saved, and released if generation fails or is abandoned, so failures never cost the learner.
+- Requesting a review of an unchanged design returns the existing review without spending a credit. Retried requests carry the same request id and are never charged twice.
+- Monthly usage survives deleting a round, so deletion can't be used to win back credits.
+- A design needs at least three components and two connections before it can be reviewed.
+
+**Current status:** The catalog contains 49 rounds across six tracks (the original four plus Distributed systems and Frontend & mobile), with 28 (about 57%) labeled free and 21 labeled Plus. Each track has free practice available. Learners sign in with an emailed one-time code; browsing is public but starting a round requires an account. Starting a Plus round is rejected by the server for free accounts. Locked rounds remain browsable, including their requirements and expected work. The AI final review and the live interviewer (Plus) are implemented with the allowances above. The interviewer answers questions, gives hints (3 per round), and asks proactive questions only for significant, unexplained canvas changes after the canvas has been quiet, with cooldowns and at most one open question; its transcript feeds the final review. There is no checkout yet.
 
 ## 2. Intended audience and jobs to be done
 
@@ -204,6 +221,9 @@ The AI interviewer should conduct a contextual back-and-forth conversation:
 
 - Start with a focused opening question and ask **one main question at a time**, while allowing the learner to interrupt with clarification questions or follow-ups.
 - Proactively ask the learner to explain significant choices visible in the canvas, for example: “Why did you put a cache here?”, “What trade-off led you to this database?”, or “How would this queue affect delivery guarantees?”
+- Trigger proactive questions only for significant additions (data stores, caches, queues, load balancers, gateways and similar, not every element) and for major changes such as several components added or core connections rewired. Wait until the canvas has been quiet for a short time and evaluate the pending changes together.
+- Don't ask about a choice the learner has already explained, whether in the conversation before or just after adding it, or in the component's “why” note. A real interviewer doesn't re-ask what the candidate just said.
+- Keep at most one open interviewer question, leave a cooldown between unprompted questions, and never interrupt while the learner is typing.
 - Listen to and address questions the learner asks. Answer in the context of the prompt, requirements, current design, and interview stage; clarify the prompt when asked instead of treating every learner message as an answer to the current question.
 - Use the selected component or connection, current and prior diagram versions, stated requirements, learner explanations, and relevant recent conversation as context. Identify what its question refers to so the learner can connect discussion to the design.
 - Follow the learner's reasoning with useful probes about scale, read/write patterns, consistency, latency, failure modes, security, or operational trade-offs when relevant—not a rigid checklist unrelated to their design.
@@ -405,6 +425,29 @@ The response should include a stable turn ID, a plain-text answer, optional foll
 
 AI context should be built for the current task, not assembled as a full transcript and full application dump on every request. The model should receive only the minimum relevant context required to produce a reliable result.
 
+### Providers and models
+
+AI calls go through one server module (`server/modules/ai/`) with interchangeable providers selected by configuration:
+
+- **Production target:** Claude Sonnet 5.5 (`claude-sonnet-5-5`) at low effort for interviewer turns and medium effort for final reviews, called through the official Anthropic SDK. This provider is added when paid API access is set up.
+- **Development:** Google Gemini's free tier through its OpenAI-compatible endpoint (`AI_PROVIDER=openai-compat`). Free-tier traffic may be used by the provider to improve its products, so it is used with test data only, never real learners. Any other OpenAI-compatible API (for example Groq) can be swapped in with `AI_BASE_URL` and `AI_MODEL`.
+- **Tests and offline work:** a `fake` provider returns clearly labelled, schema-valid sample output. It is refused in production; without a configured provider, production runs with AI disabled.
+
+Prompts tuned on one model don't transfer perfectly, so prompt templates are versioned and must be checked against the production model on a small evaluation set before launch.
+
+### Prompt layers and reference content
+
+Every AI request is assembled from four layers, each versioned and recorded with stored results:
+
+1. **Shared policy** (`server/modules/ai/prompts/policy.js`): role, tone, what the AI must and must not do, and the rule that learner text is data, never instructions.
+2. **Task instructions**: per task (final review now, interviewer next).
+3. **Interviewer guide** (`server/content/guides/<track>.md`): curated notes for the specific prompt covering scope and scale, core components, key trade-offs, common mistakes, deep-dive questions, and what a strong answer looks like. Guides calibrate depth and consistency; they are not a checklist, and valid alternatives earn credit. They live under `server/` so they never reach the browser bundle.
+4. **Live context**: the compact diagram summary and, for the interviewer, recent turns and the selected component.
+
+No orchestration framework is used: each task is a single schema-constrained call, and the curated guides replace retrieval because the catalog is small and known in advance.
+
+Prompt changes are checked with `npm run ai:eval`, which runs the review prompt against `server/content/eval/review-cases.js` (weak, medium, and strong designs plus a prompt-injection case) and fails on scores outside expected ranges, missing key risks, leaked component ids, invalid references, or unstable scores across repeats. Add a case whenever a learner reports an inaccurate review, and rerun the eval against the production model before launch.
+
 ### Task-specific context
 
 | AI task | Include | Usually exclude |
@@ -473,6 +516,14 @@ The application—not the model—should enforce allowed enum values, response s
 - Evaluate prompt changes against a small, maintained test set of representative sessions.
 - Track feedback quality and failure modes; do not use model confidence claims as proof of correctness.
 - State clearly when an answer is AI-generated and encourage verification of consequential technical claims.
+
+### Analytics
+
+Read-only SQL views (migration `003_analytics.sql`) expose ids and metrics only, never design or review text: `analytics_reviews`, `analytics_review_dimensions`, `analytics_review_decisions`, `analytics_ai_usage_daily`, `analytics_prompt_funnel`, and `analytics_users_daily`. Reviews record the plan in effect when they were requested. The embedded local database (PGlite) allows one process at a time, so analytics against shared data should use the hosted Postgres (`DATABASE_URL`) with a read-only role.
+
+### Developer tools
+
+In development, the account menu offers a one-click Free/Plus switch for testing plan-dependent behaviour. It is controlled by configuration rather than code: on by default outside production, disabled with `DEV_TOOLS=false`, and never available in production, where its routes are not mounted.
 
 ## 8. Data model
 
@@ -592,11 +643,11 @@ These choices affect architecture or user expectations and should be explicitly 
 
 1. **Audience and mode:** Interview prep only, or also general architecture learning and mentor-led sessions?
 2. **Paid plan details:** Keep the freemium access split described above; validate subscription pricing, renewal terms, AI quotas, and checkout provider with learners before charging.
-3. **AI provider and data terms:** Which provider and model meet quality, cost, latency, and privacy requirements?
+3. **AI provider and data terms:** *Decided:* Claude Sonnet 5.5 in production; Gemini free tier for development with test data only (see §7, Providers and models).
 4. **Authentication:** Which identity provider and sign-in methods are needed for the first release?
 5. **Persistence and deployment:** Which application framework, database, hosting environment, and region fit the team?
 6. **Retention:** How long are conversations, diagrams, and usage records stored, and what does deletion mean?
-7. **Scoring:** Should the first release use descriptive rubric ratings only, or include a numeric score? Descriptive ratings are recommended until scoring is validated.
+7. **Scoring:** *Decided:* a numeric score (0–100 overall, 0–10 per dimension) together with descriptive ratings (Strong, Solid, Developing, Needs work). The overall score is computed in application code from weighted dimension scores, never taken from the model.
 8. **Mobile scope:** Should mobile support full diagram editing at launch, or prioritize prompt, chat, and review?
 
 ## 14. MVP definition of done
