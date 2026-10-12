@@ -84,6 +84,7 @@ export default function ProfilePage({ onStart }) {
   return (
     <main className="profile-page page-width">
       <header className="profile-hero">
+        <span className="profile-avatar" aria-hidden="true">{initials(user.displayName || user.email)}</span>
         <div className="profile-identity">
           <h1>{user.displayName || "Your profile"}</h1>
           <p>{[user.headline, user.targetRole, user.experienceLevel].filter(Boolean).join(" · ") || user.email}</p>
@@ -181,4 +182,9 @@ export default function ProfilePage({ onStart }) {
       <Footer />
     </main>
   );
+}
+
+function initials(name) {
+  const parts = name.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?";
 }

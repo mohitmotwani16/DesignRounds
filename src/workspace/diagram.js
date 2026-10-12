@@ -33,8 +33,9 @@ export function decorateEdge(edge) {
     markerEnd: marker,
     markerStart: edge.data?.bidirectional ? marker : undefined,
     style: { stroke: EDGE_COLOR, strokeWidth: 1.6, strokeDasharray: async ? "6 5" : undefined },
-    labelStyle: { fill: "#4e5a6c", fontSize: 11, fontWeight: 500 },
-    labelBgStyle: { fill: "#ffffff" },
+    // CSS variables so edge labels follow the colour theme (see src/styles/theme.css).
+    labelStyle: { fill: "var(--fg-4e5a6c)", fontSize: 11, fontWeight: 500 },
+    labelBgStyle: { fill: "var(--bg-ffffff)" },
     labelBgPadding: [6, 3],
     labelBgBorderRadius: 4,
   };

@@ -9,7 +9,7 @@ const CHECKPOINT_INTERVAL_MS = 5 * 60_000;
 const MAX_NODES = 400;
 const MAX_EDGES = 800;
 
-const promptById = new Map(prompts.map((prompt) => [prompt.id, prompt]));
+export const promptById = new Map(prompts.map((prompt) => [prompt.id, prompt]));
 
 // Entitlements are decided here, never by the client.
 export function canStartPrompt(user, prompt) {
@@ -81,7 +81,7 @@ function toSummary(row) {
   };
 }
 
-async function ownedSession(req) {
+export async function ownedSession(req) {
   const sessionId = parse(uuid, req.params.sessionId);
   // Ownership is part of the lookup, so another user's id behaves like a missing one.
   const row = await queryOne("select * from practice_sessions where id = $1 and user_id = $2", [sessionId, req.user.id]);

@@ -12,7 +12,10 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "node server/index.js",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "ai:check": "node scripts/ai-check.js",
+    "ai:eval": "node scripts/ai-eval.js",
+    "theme": "node scripts/theme-tokens.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.2.17",

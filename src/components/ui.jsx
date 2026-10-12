@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, ArrowUpRight, Bell, Check, CircleUser, Clock3, Crown, Database, Fingerprint, Flag, FileText, Globe2,
+  ArrowRight, ArrowUpRight, Bell, Check, CircleUser, Clock3, Crown, Database, Fingerprint, Flag, FileText, FlaskConical, Globe2,
   HardDrive, Hash, Image, Layers2, Link2, ListOrdered, LockKeyhole, LogOut, Menu, MessageSquare, MonitorSmartphone,
   Network, RefreshCcw, Search, Server, Settings2, ShieldCheck, Sparkles, SquarePen, Waypoints, Zap, KeyRound, Lock,
   ChevronDown, UserRound, X,
 } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
+import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { THEMES, setTheme, useTheme } from "../theme.js";
 import { navigate, useRoute } from "../router.js";
 
 export function Brand({ onClick, className = "" }) {
@@ -40,7 +42,7 @@ function useDismiss(open, setOpen, ref) {
 const firstName = (user) => (user.displayName || user.email.split("@")[0]).split(" ")[0];
 
 export function UserMenu({ compact = false }) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, setUser } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useDismiss(open, setOpen, ref);
@@ -56,9 +58,31 @@ export function UserMenu({ compact = false }) {
         <div className="user-menu-popover" role="menu">
           <div className="user-menu-identity"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></div>
           <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & practice history</button>
+          {user.devTools && (
+            <button role="menuitem" className="dev-menu-item" onClick={async () => {
+              setOpen(false);
+              try { setUser((await api.devSetPlan(user.plan === "plus" ? "free" : "plus")).user); } catch (error) { window.alert(error.message); }
+            }}><FlaskConical size={15} /> Dev: switch to {user.plan === "plus" ? "Free" : "Plus"} <span className="dev-plan-pill">{user.plan}</span></button>
+          )}
+          <ThemePicker />
           <button role="menuitem" onClick={async () => { setOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Theme choice, shown in the account menu and the footer.
+export function ThemePicker({ compact = false }) {
+  const { choice } = useTheme();
+  return (
+    <div className={`theme-picker ${compact ? "compact" : ""}`} role="radiogroup" aria-label="Colour theme">
+      {!compact && <span>Theme</span>}
+      <div>
+        {THEMES.map(([id, label]) => (
+          <button key={id} type="button" role="radio" aria-checked={choice === id} className={choice === id ? "active" : ""} onClick={() => setTheme(id)}>{label}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -123,6 +147,7 @@ export function Footer() {
       <Brand className="footer-brand" onClick={() => { navigate("/"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
       <span>Thoughtful practice for systems that matter.</span>
       <span>© 2026 DesignRounds</span>
+      <ThemePicker compact />
     </footer>
   );
 }

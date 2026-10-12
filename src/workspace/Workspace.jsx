@@ -16,7 +16,10 @@ import { createNode, decorateEdge, hydrateDiagram, newId, serializeDiagram } fro
 import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
 import { CanvasActions, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
-import { InterviewerPanel, PromptModal, ShortcutsDialog } from "./Panels.jsx";
+import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
+import { useInterview } from "./useInterview.js";
+import { useAuth } from "../auth.jsx";
+import { useTheme } from "../theme.js";
 
 const SAVE_DELAY_MS = 800;
 const RETRY_DELAY_MS = 5000;
@@ -59,6 +62,7 @@ function Workspace({ session, prompt }) {
   const [status, setStatus] = useState(session.status);
   const [saveState, setSaveState] = useState("saved");
   const [panelOpen, setPanelOpen] = useState(() => readPreference("designrounds:interviewer-open", "true") !== "false");
+  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" ? "review" : "interviewer"));
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
   const [showPrompt, setShowPrompt] = useState(() => initial.nodes.length === 0 && session.diagramVersion === 0);
   const [snap, setSnap] = useState(true);
@@ -67,6 +71,8 @@ function Workspace({ session, prompt }) {
   const [focusEdgeLabel, setFocusEdgeLabel] = useState(0);
   const [legacy, setLegacy] = useState(() => (initial.nodes.length || session.diagramVersion > 0 ? null : readLegacyCanvas(prompt.id)));
   const reactFlow = useReactFlow();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const canvasRef = useRef(null);
   const readOnly = status !== "in_progress";
 
@@ -136,6 +142,12 @@ function Workspace({ session, prompt }) {
       if (ref.queued) { ref.queued = false; flush(); }
     }
   }, [session.id]);
+
+  // Resolves once the latest edits are saved, so the AI sees what the learner sees.
+  const settleSave = useCallback(async () => {
+    await flush();
+    for (let waited = 0; save.current.inFlight && waited < 3000; waited += 100) await new Promise((resolve) => setTimeout(resolve, 100));
+  }, [flush]);
 
   useEffect(() => {
     if (readOnly) return undefined;
@@ -252,9 +264,24 @@ function Workspace({ session, prompt }) {
     reactFlow.setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom: Math.max(reactFlow.getZoom(), 1), duration: 300 });
   }, [reactFlow, setNodes]);
 
+  // The details panel opens on a click (press and release without moving), not on the
+  // press that starts a drag. Selections made without the pointer (keyboard, outline,
+  // newly added components) open it straight away; see the effect below.
+  const [inspectedId, setInspectedId] = useState(null);
+  const pointerDown = useRef(false);
+  const [boxSelecting, setBoxSelecting] = useState(false);
+  useEffect(() => {
+    const release = () => { pointerDown.current = false; setBoxSelecting(false); };
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    return () => { window.removeEventListener("pointerup", release); window.removeEventListener("pointercancel", release); };
+  }, []);
+  const onNodeClick = useCallback((_event, node) => setInspectedId(node.id), []);
+
   // Dragging a zone carries the components that sit inside it.
   const groupDrag = useRef(null);
   const onNodeDragStart = useCallback((_event, node, dragged) => {
+    setInspectedId(null);
     record();
     groupDrag.current = null;
     if (node.type !== "groupNode" || dragged.length !== 1) return;
@@ -311,9 +338,13 @@ function Workspace({ session, prompt }) {
   }, [setEdges, setNodes]);
 
   const selectedNodes = nodes.filter((node) => node.selected);
+  const selectedComponent = selectedNodes.length === 1 && selectedNodes[0].type === "systemNode" ? selectedNodes[0] : null;
   const selectedEdges = edges.filter((edge) => edge.selected);
   const selectionCount = selectedNodes.length + selectedEdges.length;
   const singleNode = selectionCount === 1 ? selectedNodes[0] : null;
+  useEffect(() => {
+    if (singleNode && !pointerDown.current) setInspectedId(singleNode.id);
+  }, [singleNode?.id]);
   const singleEdge = selectionCount === 1 ? selectedEdges[0] : null;
 
   // ---- Keyboard shortcuts --------------------------------------------------
@@ -411,12 +442,14 @@ function Workspace({ session, prompt }) {
   }
 
   async function finishRound() {
-    if (!window.confirm("Finish this round? Your design will be saved and become read-only. You can reopen it later from your profile.")) return;
+    if (!window.confirm("Finish this round? Your design will be saved and become read-only, and you can then request its review. You can reopen it later to keep editing.")) return;
     await flush();
     try {
       await api.updateSession(session.id, { status: "completed" });
       setStatus("completed");
       clearSelection();
+      setPanelTab("review");
+      setPanelOpen(true);
     } catch (error) {
       window.alert(error.message);
     }
@@ -449,6 +482,23 @@ function Workspace({ session, prompt }) {
       return !open;
     });
   }
+
+  // ---- Interviewer -------------------------------------------------------------
+  const plan = useAuth().user?.plan;
+  const [detachedId, setDetachedId] = useState(null);
+  const attached = selectedComponent && selectedComponent.id !== detachedId ? { id: selectedComponent.id, label: selectedComponent.data.label || "Component" } : null;
+  const selectedIdRef = useRef(null);
+  selectedIdRef.current = attached?.id ?? null;
+  // Structural changes only: moving things around never wakes the interviewer.
+  const structureKey = nodes.map((node) => `${node.id}:${node.data.kind}:${node.data.note ? 1 : 0}`).join(",") + "|" + edges.map((edge) => `${edge.source}>${edge.target}`).join(",");
+  const [unread, setUnread] = useState(0);
+  const panelView = useRef({ panelOpen, panelTab });
+  panelView.current = { panelOpen, panelTab };
+  const onProactiveTurn = useCallback(() => {
+    if (!panelView.current.panelOpen || panelView.current.panelTab !== "interviewer") setUnread((count) => count + 1);
+  }, []);
+  const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn });
+  useEffect(() => { if (panelOpen && panelTab === "interviewer") setUnread(0); }, [panelOpen, panelTab]);
 
   // ---- Derived view state --------------------------------------------------
 
@@ -510,10 +560,10 @@ function Workspace({ session, prompt }) {
               <button className="topbar-action shortcuts-action" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)"><Keyboard size={15} /> Shortcuts <kbd>?</kbd></button>
               <span className="canvas-action-divider" />
               <button className="topbar-action" onClick={() => reactFlow.fitView({ padding: 0.25, duration: 250 })}>Fit to view</button>
-              {!panelOpen && <button className="topbar-action button-chat-reopen" onClick={togglePanel}><MessageSquare size={13} /> Interviewer</button>}
+              {!panelOpen && <button className="topbar-action button-chat-reopen" onClick={togglePanel}><MessageSquare size={13} /> {panelTab === "review" ? "Review" : "Interviewer"}{unread > 0 && <span className="tab-badge">{unread}</span>}</button>}
             </div>
           </div>
-          <div className="canvas-content" ref={canvasRef}>
+          <div className="canvas-content" ref={canvasRef} onPointerDownCapture={() => { pointerDown.current = true; }}>
             <CanvasActions.Provider value={canvasActions}>
               <ReactFlow
                 nodes={nodes}
@@ -523,7 +573,10 @@ function Workspace({ session, prompt }) {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onBeforeDelete={onBeforeDelete}
+                onNodeClick={onNodeClick}
                 onNodeDragStart={onNodeDragStart}
+                onSelectionStart={() => setBoxSelecting(true)}
+                nodeClickDistance={4}
                 onNodeDrag={onNodeDrag}
                 onNodeDragStop={onNodeDragStop}
                 onEdgeDoubleClick={onEdgeDoubleClick}
@@ -550,10 +603,11 @@ function Workspace({ session, prompt }) {
                 elevateNodesOnSelect={false}
                 onlyRenderVisibleElements={nodes.length > 150}
                 proOptions={{ hideAttribution: true }}
+                colorMode={isDark ? "dark" : "light"}
               >
-                <Background variant={BackgroundVariant.Dots} color="#cfd6e0" gap={18} size={1.3} />
+                <Background variant={BackgroundVariant.Dots} color={isDark ? "#363c49" : "#cfd6e0"} gap={18} size={1.3} />
                 <Controls showInteractive={false} position="bottom-left" />
-                {showMinimap && <MiniMap position="bottom-right" zoomable pannable nodeStrokeWidth={0} nodeColor={(node) => minimapColors[node.data.color || getItem(node.data.kind)?.color] || minimapColors.slate} maskColor="rgba(248,249,251,0.72)" />}
+                {showMinimap && <MiniMap position="bottom-right" zoomable pannable nodeStrokeWidth={0} nodeColor={(node) => minimapColors[node.data.color || getItem(node.data.kind)?.color] || minimapColors.slate} maskColor={isDark ? "rgba(20,23,29,0.72)" : "rgba(248,249,251,0.72)"} />}
               </ReactFlow>
             </CanvasActions.Provider>
 
@@ -566,7 +620,7 @@ function Workspace({ session, prompt }) {
               </div>
             )}
 
-            {singleNode && (
+            {singleNode && inspectedId === singleNode.id && (
               <NodeInspector id={singleNode.id} type={singleNode.type} data={singleNode.data} readOnly={readOnly}
                 onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection} />
             )}
@@ -574,7 +628,7 @@ function Workspace({ session, prompt }) {
               <EdgeInspector edge={singleEdge} sourceLabel={labelFor(singleEdge.source)} targetLabel={labelFor(singleEdge.target)} readOnly={readOnly} focusLabel={focusEdgeLabel}
                 onBegin={record} onChange={updateEdge} onReverse={() => reverseEdge(singleEdge.id)} onDelete={deleteSelection} onClose={clearSelection} />
             )}
-            {selectionCount > 1 && <MultiInspector count={selectionCount} readOnly={readOnly} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection} />}
+            {selectionCount > 1 && !boxSelecting && <MultiInspector count={selectionCount} readOnly={readOnly} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection} />}
 
             <div className="canvas-session-label"><span className="session-pulse" /> {nodes.length} components <span>·</span> {edges.length} connections</div>
           </div>
@@ -584,7 +638,10 @@ function Workspace({ session, prompt }) {
           </div>
         </section>
 
-        {panelOpen && <InterviewerPanel onClose={togglePanel} prompt={prompt} selectedName={singleNode?.data.label} />}
+        {panelOpen && (
+          <SidePanel tab={panelTab} onTab={setPanelTab} onClose={togglePanel} interview={interview} unread={unread}
+            selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} />
+        )}
       </div>
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
       {showPrompt && <PromptModal prompt={prompt} fresh={nodes.length === 0} onClose={() => setShowPrompt(false)} />}

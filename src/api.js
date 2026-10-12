@@ -39,4 +39,10 @@ export const api = {
   saveDiagram: (id, version, diagram) => request("PUT", `/sessions/${id}/diagram`, { version, diagram }),
   updateSession: (id, fields) => request("PATCH", `/sessions/${id}`, fields),
   deleteSession: (id) => request("DELETE", `/sessions/${id}`),
+  devSetPlan: (plan) => request("POST", "/dev/plan", { plan }),
+  listReviews: (id) => request("GET", `/sessions/${id}/reviews`),
+  requestReview: (id, requestId) => request("POST", `/sessions/${id}/reviews`, { requestId }),
+  getInterview: (id) => request("GET", `/sessions/${id}/interview`),
+  sendInterviewMessage: (id, body) => request("POST", `/sessions/${id}/interview/messages`, body),
+  interviewCheck: (id, body) => request("POST", `/sessions/${id}/interview/check`, body),
 };

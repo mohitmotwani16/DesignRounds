@@ -1,27 +1,33 @@
-import { memo, useState } from "react";
-import { ArrowRight, Check, Clock3, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Send, Sparkles, X } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Check, ClipboardCheck, Clock3, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Sparkles, X } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
 import { shortcutGroups } from "./shortcuts.js";
 import { useEscape } from "../components/ui.jsx";
+import { InterviewerPanel } from "./InterviewerPanel.jsx";
+import { ReviewPanel } from "./ReviewPanel.jsx";
 
-export const InterviewerPanel = memo(function InterviewerPanel({ onClose, prompt, selectedName }) {
+// Right-hand panel: the interviewer conversation and the round's final review.
+export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor }) {
+  const tabs = [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
   return (
-    <aside className="interviewer-panel">
-      <div className="interviewer-header"><div className="interviewer-title-icon"><MessageSquare size={15} /></div><div className="interviewer-title-text"><strong>Interviewer</strong><span>YOUR DESIGN PARTNER</span></div><span className="coming-pill"><span /> COMING SOON</span><button className="panel-close" onClick={onClose} title="Hide interviewer" aria-label="Hide interviewer"><X size={17} /></button></div>
-      <div className="interviewer-body">
-        <div className="interviewer-intro"><div className="intro-symbol"><MessageSquare size={18} /></div><span className="conversation-label">THE CONVERSATION</span><h3>Think it through.<br />Out loud.</h3><p>Your interviewer will ask about your design choices and help you explore the trade-offs.</p></div>
-        <div className="conversation-rule"><span>YOUR ROUND</span><span>{prompt.title}</span></div>
-        <div className="conversation-placeholder">
-          <div className="placeholder-avatar"><Sparkles size={15} /></div>
-          <div className="placeholder-copy"><span>DESIGNROUNDS INTERVIEWER</span><p>“Why did you choose this approach? What alternatives did you consider?”</p><small>Questions will be grounded in the design you build.</small></div>
+    <aside className={`interviewer-panel ${tab === "review" ? "panel-wide" : ""}`}>
+      <div className="interviewer-header side-panel-header">
+        <div className="side-panel-tabs" role="tablist" aria-label="Side panel">
+          {tabs.map(([id, label, Icon]) => (
+            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>
+              <Icon size={14} /> {label}
+              {id === "interviewer" && unread > 0 && tab !== "interviewer" && <span className="tab-badge" aria-label={`${unread} new`}>{unread}</span>}
+            </button>
+          ))}
         </div>
-        {selectedName && <div className="selected-context"><span className="selected-context-dot" /><span>Selected in your design</span><strong>{selectedName}</strong></div>}
-        <div className="coming-card"><div className="coming-card-top"><Sparkles size={15} /><span>IN DEVELOPMENT</span></div><p>The interviewer is getting ready. For now, build your design and capture your reasoning in each component's “Why this choice?” note.</p></div>
+        <button className="panel-close" onClick={onClose} title="Hide panel (I)" aria-label="Hide panel"><X size={17} /></button>
       </div>
-      <div className="interviewer-compose"><div className="compose-box"><textarea aria-label="Message to interviewer" placeholder="The conversation starts here…" disabled rows={2} /><div className="compose-bottom"><span>AI interviewer coming soon</span><button disabled aria-label="Send message"><Send size={15} /></button></div></div><div className="panel-privacy"><LockKeyhole size={11} /> Your design saves to your account; chat isn't active yet.</div></div>
+      {tab === "review"
+        ? <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} />
+        : <InterviewerPanel interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} />}
     </aside>
   );
-});
+}
 
 export function PromptModal({ prompt, onClose, fresh = false }) {
   const [tab, setTab] = useState("brief");
