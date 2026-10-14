@@ -26,7 +26,7 @@
     "@xyflow/react": "12.3.6",
     "cookie-parser": "1.4.7",
     "express": "4.22.3",
-    "lucide-react": "0.468.0",
+    "lucide-react": "1.55.0",
     "nodemailer": "10.0.12",
     "pg": "8.13.1",
     "react": "18.3.1",
