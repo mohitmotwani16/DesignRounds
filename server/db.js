@@ -6,6 +6,10 @@ import { isProduction } from "./flags.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.join(here, "migrations");
 
+// Postgres major version embedded by the pinned @electric-sql/pglite (0.4.x); keep in
+// step with production (Supabase runs 17).
+const PGLITE_PG_MAJOR = "17";
+
 let client;
 let driverName;
 
@@ -68,6 +72,11 @@ export async function connect({ url = process.env.DATABASE_URL, migrate: runMigr
       db = new PGlite(dataDir);
       await db.waitReady;
     } catch (error) {
+      // PGlite can't open a data directory written by another Postgres major version.
+      const createdBy = await readFile(path.join(dataDir, "PG_VERSION"), "utf8").then((text) => text.trim(), () => null);
+      if (createdBy && createdBy !== PGLITE_PG_MAJOR) {
+        throw new Error(`The local database in ${dataDir} was created by Postgres ${createdBy}, but this version of the app embeds Postgres ${PGLITE_PG_MAJOR}. Rename or delete that folder to start a fresh local database (local development data only).`);
+      }
       throw new Error(`Could not open the local database in ${dataDir}. If it was interrupted while being created, delete that folder to start fresh. (${error.message})`);
     }
     client = {

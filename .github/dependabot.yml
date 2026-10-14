@@ -5,10 +5,35 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Let releases settle before proposing them (fast-follow fixes, yanked or compromised
+    # versions). Security updates are not delayed by this.
+    cooldown:
+      default-days: 14
+      semver-major-days: 30
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Local/CI database must match production's Postgres major (Supabase: 17).
+      # pglite 0.5.x embeds Postgres 18; move together with the production database.
+      - dependency-name: "@electric-sql/pglite"
+        versions: [">=0.5.0"]
+      # Breaking majors that need a deliberate, tested migration (not a bot merge):
+      #   express 5 (routing syntax), vite 8 + @vitejs/plugin-react (move together),
+      #   lucide-react 1.x and simple-icons (renamed/removed icons).
+      - dependency-name: express
+        update-types: [version-update:semver-major]
+      - dependency-name: vite
+        update-types: [version-update:semver-major]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: [version-update:semver-major]
+      - dependency-name: lucide-react
+        update-types: [version-update:semver-major]
+      - dependency-name: simple-icons
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 14

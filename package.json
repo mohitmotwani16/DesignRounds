@@ -21,9 +21,9 @@
     "theme": "node scripts/theme-tokens.mjs"
   },
   "dependencies": {
-    "@electric-sql/pglite": "0.2.17",
+    "@electric-sql/pglite": "0.4.6",
     "@vercel/functions": "3.9.9",
-    "@xyflow/react": "12.3.6",
+    "@xyflow/react": "12.12.0",
     "cookie-parser": "1.4.7",
     "express": "4.22.3",
     "lucide-react": "0.468.0",
