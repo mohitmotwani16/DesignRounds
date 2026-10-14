@@ -1,7 +1,7 @@
 import express from "express";
 import { z } from "zod";
 import { query, queryOne, transaction } from "../db.js";
-import { HttpError, createLimiter, parse, route } from "../http.js";
+import { HttpError, afterResponse, createLimiter, parse, route } from "../http.js";
 import { aiConfig } from "./ai/config.js";
 import { isSignificantKind } from "./ai/components.js";
 import { clean, describeDiagram, nameComponents } from "./ai/context.js";
@@ -25,7 +25,7 @@ const KEEP_VERBATIM = 12;
 const QUESTION_KINDS = new Set(["opening", "question", "probe", "hint"]);
 const MONTH_START = "(date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')";
 
-const messageLimiter = createLimiter({ windowMs: 60_000, max: 12 });
+const messageLimiter = createLimiter({ name: "interview-message", windowMs: 60_000, max: 12 });
 const messageBody = z.object({
   requestId: z.string().uuid(),
   intent: z.enum(["message", "hint"]).default("message"),
@@ -220,7 +220,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (re
   const hint = body.intent === "hint";
   const content = body.content.trim();
   if (!hint && !content) throw new HttpError(400, "INVALID_REQUEST", "Write a message first.");
-  if (!messageLimiter(req.user.id)) throw new HttpError(429, "RATE_LIMITED", "You're sending messages very quickly. Wait a moment and try again.");
+  if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "You're sending messages very quickly. Wait a moment and try again.");
 
   let reserved;
   try {
@@ -275,7 +275,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (re
     state: presentState(result.state),
     allowance: await readAllowance(db, req.user, session.id, result.state),
   });
-  maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message));
+  afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
 }));
 
 // Called by the workspace after the canvas has been quiet for a while. The server

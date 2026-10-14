@@ -1,3 +1,5 @@
+import { isProduction } from "../../flags.js";
+
 // AI provider and per-task settings, resolved once from the environment.
 //
 //   AI_PROVIDER=openai-compat  any OpenAI-compatible chat API (default: Google Gemini)
@@ -11,7 +13,6 @@ const DEFAULT_MODEL = "gemini-3.8-flash";
 const PROVIDERS = new Set(["openai-compat", "fake", "none"]);
 
 const env = process.env;
-const isProduction = env.NODE_ENV === "production";
 
 const provider = env.AI_PROVIDER || (env.AI_API_KEY ? "openai-compat" : isProduction ? "none" : "fake");
 if (!PROVIDERS.has(provider)) throw new Error(`AI_PROVIDER must be one of: ${[...PROVIDERS].join(", ")}.`);

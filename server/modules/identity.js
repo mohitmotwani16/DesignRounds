@@ -2,25 +2,25 @@ import crypto from "node:crypto";
 import express from "express";
 import { z } from "zod";
 import { query, queryOne } from "../db.js";
-import { devToolsEnabled } from "../flags.js";
+import { devToolsEnabled, isProduction } from "../flags.js";
 import { deliveryMode, sendLoginCode } from "../email.js";
 import { HttpError, createLimiter, parse, route } from "../http.js";
 
-const COOKIE_NAME = "dr_session";
 const SESSION_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
 const MAX_CODE_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 45;
 const MAX_CODES_PER_EMAIL_PER_HOUR = 6;
 
-const isProduction = process.env.NODE_ENV === "production";
+// "__Host-" makes browsers reject the cookie unless it is Secure, host-only and path=/.
+const COOKIE_NAME = isProduction ? "__Host-dr_session" : "dr_session";
 const codeSecret = process.env.AUTH_SECRET || (() => {
   if (isProduction) throw new Error("AUTH_SECRET must be set in production.");
   return crypto.randomBytes(32).toString("hex");
 })();
 
-const ipCodeLimiter = createLimiter({ windowMs: 15 * 60_000, max: 20 });
-const ipVerifyLimiter = createLimiter({ windowMs: 15 * 60_000, max: 40 });
+const ipCodeLimiter = createLimiter({ name: "ip-code", windowMs: 15 * 60_000, max: 20 });
+const ipVerifyLimiter = createLimiter({ name: "ip-verify", windowMs: 15 * 60_000, max: 40 });
 
 const emailSchema = z.string().trim().toLowerCase().max(254).email();
 const requestCodeBody = z.object({ email: emailSchema });
@@ -92,7 +92,7 @@ export const identityRouter = express.Router();
 
 identityRouter.post("/auth/request-code", route(async (req, res) => {
   const { email } = parse(requestCodeBody, req.body);
-  if (!ipCodeLimiter(req.ip)) throw new HttpError(429, "RATE_LIMITED", "Too many code requests. Try again in a few minutes.");
+  if (!(await ipCodeLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many code requests. Try again in a few minutes.");
   if (deliveryMode() === "unconfigured") throw new HttpError(503, "EMAIL_UNAVAILABLE", "Email sign-in is temporarily unavailable.");
 
   const recent = await queryOne(
@@ -130,7 +130,7 @@ identityRouter.post("/auth/request-code", route(async (req, res) => {
 
 identityRouter.post("/auth/verify-code", route(async (req, res) => {
   const { email, code } = parse(verifyCodeBody, req.body);
-  if (!ipVerifyLimiter(req.ip)) throw new HttpError(429, "RATE_LIMITED", "Too many attempts. Try again in a few minutes.");
+  if (!(await ipVerifyLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many attempts. Try again in a few minutes.");
 
   const invalid = () => new HttpError(400, "INVALID_CODE", "That code is incorrect or has expired.");
   const pending = await queryOne(

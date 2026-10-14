@@ -83,7 +83,9 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 
 ```
 server/                 Express API (modular monolith)
-  index.js              app setup, security headers, error handling
+  app.js                Express app: security headers, routing, error handling
+  index.js              long-running server (local / any Node host)
+  flags.js              environment flags (production, dev tools)
   db.js                 PGlite / Postgres adapter + migration runner
   email.js              SMTP / Resend / console code delivery
   modules/identity.js   email OTP sign-in, sessions, profile, account deletion
@@ -94,7 +96,8 @@ server/                 Express API (modular monolith)
   content/guides/       private per-prompt interviewer guides (never sent to the browser)
   content/eval/         AI evaluation cases
   migrations/           SQL migrations, including analytics views
-scripts/                ai-check, ai-eval, Node LTS helper
+api/index.js            Vercel Function entry (serves server/app.js)
+scripts/                migrate, smoke test, ai-check, ai-eval, Node LTS helper
 src/
   pages/                landing, library, sign-in, onboarding, profile
   workspace/            canvas, component catalog, nodes, inspector, panels
@@ -112,6 +115,48 @@ src/
 
 ## Build and deploy
 
-`npm run build` outputs the frontend to `dist/`. `npm start` runs the API, which also serves `dist/` when it exists, so a single Node process can host the whole app.
+Production runs at **https://designrounds.in** on free tiers:
 
-The app now needs a server and a database, so a static-only host is no longer enough. Options include a Node host such as Render, Railway, or Fly.io with a hosted Postgres (`DATABASE_URL`). Set `NODE_ENV=production`, `AUTH_SECRET`, an email provider, and a paid AI provider (free tiers can't serve real users). Free tiers are fine for development, but check their sleep/inactivity behavior, backups, and commercial-use terms before real users rely on them. Don't use the embedded PGlite database in production.
+```
+Browser ──► Vercel edge/CDN (bom1) ──► static frontend (dist/)
+                 │
+                 └─ /api/* ──► Vercel Function api/index.js (Express app, Mumbai)
+                                   ├─► Supabase Postgres (ap-south-1, transaction pooler)
+                                   ├─► Resend (sign-in email from designrounds.in)
+                                   └─► AI provider (OpenAI-compatible API)
+Vercel Cron (daily) ──► /api/v1/internal/maintenance
+```
+
+- **One codebase, two hosts.** `server/app.js` builds the Express app. `server/index.js` listens on a port (local, or any Node host), and `api/index.js` serves the same app as a Vercel Function. Static files go through Vercel's CDN with long-lived caching for hashed assets.
+- **Releases.** A push to `main` deploys to production. Pull requests and other branches get preview deployments backed by a separate staging database. CI (`.github/workflows/ci.yml`) runs a dependency audit, the build, and `npm run test:smoke` on every push and pull request.
+- **Migrations** run once per deploy, before the build (`vercel-build` → `scripts/migrate.js`), under an advisory lock. A failed migration fails the deploy, and the previous release keeps serving. The new code goes live after its migrations, so each migration must work with the code that is already running: add things first, and remove old columns in a later release.
+- **State lives in Postgres**, not in the process. That includes sessions, AI credits, and rate limits (the `rate_limits` table), so any number of function instances behave as one.
+- **Supabase's Data API can't reach the data.** Migration 005 enables row-level security with no policies, and revokes table grants from `anon`/`authenticated`. The app connects as the owner role, which bypasses RLS.
+- **Maintenance:** a daily cron removes expired sign-in codes, sessions, and rate-limit windows. It authenticates with `CRON_SECRET`, and also keeps the free Supabase project from pausing when idle.
+- **Security headers:** strict CSP (no inline scripts, which is why the pre-paint theme script lives in `public/theme-init.js`), HSTS, frame denial, and a restrictive permissions policy. They're set in `vercel.json`.
+- **Health:** `GET /api/health` (liveness) and `GET /api/health/ready` (database round trip). Both report the deployed commit.
+
+### Environment variables (Vercel → Settings → Environment Variables)
+
+| Variable | Production | Preview |
+|---|---|---|
+| `DATABASE_URL` | Supabase prod, transaction pooler (`:6543`) | Supabase staging, transaction pooler |
+| `MIGRATION_DATABASE_URL` | Supabase prod, session pooler (`:5432`) | Supabase staging, session pooler |
+| `AUTH_SECRET` | random 32 bytes (hex) | a different random value |
+| `CRON_SECRET` | random 32 bytes (hex) | – |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Resend key; `DesignRounds <no-reply@designrounds.in>` | same |
+| `AI_API_KEY`, `AI_MODEL` (`AI_BASE_URL`) | AI provider | same, or unset to disable AI |
+| `APP_ORIGIN` | `https://designrounds.in` | – |
+
+Do **not** set `NODE_ENV` in Vercel: it makes the build skip dev dependencies. Vercel deployments always run in production mode anyway (see `server/flags.js`).
+
+### Running elsewhere
+
+`npm run build && npm run db:migrate && npm start` runs everything in one Node process, with the API also serving `dist/`. That works on any Node host. Set `TRUST_PROXY` when it runs behind a proxy.
+
+### Free-tier limits to keep in mind
+
+- Vercel Hobby is for personal, non-commercial projects. Move to Pro before charging users.
+- Supabase Free has 500 MB of database storage and no point-in-time recovery. Take periodic `pg_dump` backups.
+- Resend Free sends 100 emails/day (3,000/month), which caps daily sign-ins.
+- Free AI tiers rate-limit, and some providers may use requests to improve their models. Switch to a paid provider before real users depend on it.

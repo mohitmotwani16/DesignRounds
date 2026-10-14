@@ -20,7 +20,7 @@ const MIN_CONNECTIONS = 2;
 // so only reviews orphaned by a crash or restart are swept.
 const STALE_PENDING = "6 minutes";
 
-const reviewLimiter = createLimiter({ windowMs: 60 * 60_000, max: 15 });
+const reviewLimiter = createLimiter({ name: "review", windowMs: 60 * 60_000, max: 15 });
 const requestBody = z.object({ requestId: z.string().uuid() }).strict();
 const db = { query, queryOne };
 
@@ -202,7 +202,7 @@ ${transcript}`);
   );
   if (existing) return res.json({ review: present(existing, full), reused: true, allowance: await readAllowance(db, req.user, session.id) });
 
-  if (!reviewLimiter(req.user.id)) throw new HttpError(429, "RATE_LIMITED", "Too many review requests. Try again later.");
+  if (!(await reviewLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "Too many review requests. Try again later.");
 
   // Reserve the credit and create the pending review in one transaction. Locking the
   // user's row serialises concurrent requests from one learner so limits can't be overrun.
