@@ -3,7 +3,8 @@ import { ArrowRight, Check, CircleCheck, Clock3, LoaderCircle, LogOut, RotateCcw
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { findPrompt, getTrack } from "../data/prompts.js";
-import { Footer, promptIcon } from "../components/ui.jsx";
+import { promptIcon } from "../components/ui.jsx";
+import { SiteFooter } from "../components/site.jsx";
 import { navigate } from "../router.js";
 import { ProfileFields, profileValues } from "./Onboarding.jsx";
 import { relativeTime } from "./Library.jsx";
@@ -123,7 +124,7 @@ export default function ProfilePage({ onStart }) {
                     <span className={`prompt-icon icon-${prompt?.color || "slate"}`}><Icon size={16} /></span>
                     <div className="history-copy">
                       <strong>{session.promptTitle}</strong>
-                      <span>{prompt ? getTrack(prompt.track).shortLabel : "Retired prompt"} · {session.componentCount} components · <Clock3 size={11} /> {relativeTime(session.updatedAt)}</span>
+                      <span>{prompt ? getTrack(prompt.track).shortLabel : "Retired round"} · {session.componentCount} components · <Clock3 size={11} /> {relativeTime(session.updatedAt)}</span>
                     </div>
                     <span className={`status-tag status-${session.status}`}>{session.status === "in_progress" ? "In progress" : "Completed"}</span>
                     <div className="history-actions">
@@ -179,7 +180,7 @@ export default function ProfilePage({ onStart }) {
           </section>
         </div>
       </div>
-      <Footer />
+      <SiteFooter />
     </main>
   );
 }

@@ -27,7 +27,7 @@ This starts the API on http://localhost:8787 and the web app on http://localhost
 
 **No setup is needed for local development:**
 
-- **Database:** an embedded Postgres ([PGlite](https://pglite.dev)) is created in `.data/pglite` on first run, and migrations in `server/migrations` are applied automatically. To reset all local data, stop the server and delete `.data/`.
+- **Database:** an embedded Postgres ([PGlite](https://pglite.dev), Postgres 17 like production) is created in `.data/pglite` on first run, and migrations in `server/migrations` are applied automatically. To reset all local data, stop the server and delete `.data/`. If the project lives in a synced folder such as OneDrive, set `PGLITE_DIR` in `.env` to a folder outside it (for example `%LOCALAPPDATA%\designrounds\pglite`); sync tools lock and corrupt live database files.
 - **Email:** with no email provider configured, the sign-in code is printed in the API terminal and also shown on the sign-in screen (development only).
 - **AI:** with no AI key, a built-in fake provider returns clearly labelled sample reviews, so every screen works offline. Add a free Gemini key (below) for real reviews.
 - **Plans:** the account menu has a **Dev: switch to Plus / Free** item for testing plan-dependent features. It never exists in production; set `DEV_TOOLS=false` to hide it locally.
@@ -89,6 +89,7 @@ server/                 Express API (modular monolith)
   db.js                 PGlite / Postgres adapter + migration runner
   email.js              SMTP / Resend / console code delivery
   modules/identity.js   email OTP sign-in, sessions, profile, account deletion
+  modules/catalog.js    public prompt catalog: search, filters, facets, cursor pagination (CDN-cached)
   modules/practice.js   practice rounds, diagram saving, entitlement checks
   modules/reviews.js    AI review requests, credits and caps, plan-based presentation
   modules/plans.js      per-plan AI allowances
@@ -99,9 +100,12 @@ server/                 Express API (modular monolith)
 api/index.js            Vercel Function entry (serves server/app.js)
 scripts/                migrate, smoke test, ai-check, ai-eval, Node LTS helper
 src/
-  pages/                landing, library, sign-in, onboarding, profile
+  pages/                landing, library (infinite scroll), sign-in, onboarding, profile
+  components/site.jsx   site header, footer, round cards (marketing + library)
+  styles/site.css       design tokens (light / dark / mono) and site styles
   workspace/            canvas, component catalog, nodes, inspector, panels
   data/prompts.js       versioned prompt catalog (shared by client and server)
+  data/plans.js         per-plan AI allowances (shared; enforced on the server)
 ```
 
 ## Security notes

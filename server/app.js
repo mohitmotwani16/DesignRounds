@@ -11,6 +11,7 @@ import { practiceRouter } from "./modules/practice.js";
 import { reviewsRouter } from "./modules/reviews.js";
 import { interviewsRouter } from "./modules/interviews.js";
 import { maintenanceRouter } from "./modules/maintenance.js";
+import { catalogRouter } from "./modules/catalog.js";
 import { devRouter, devToolsEnabled } from "./modules/dev.js";
 import { guideFor } from "./modules/ai/guides.js";
 import { prompts } from "../src/data/prompts.js";
@@ -53,6 +54,8 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
       res.status(503).json({ ok: false, release, database: "down" });
     }
   });
+  // Public catalog: no cookies or session lookup, so it never touches the database.
+  api.use("/v1", catalogRouter);
   api.use(express.json({ limit: "600kb" }));
   api.use(cookieParser());
   api.use(sameOriginWrites);

@@ -149,8 +149,8 @@ function present(row, full) {
 function limitMessage(kind, allowance) {
   if (kind === "round") {
     return allowance.plan === "plus"
-      ? `You've used all ${allowance.round.limit} reviews for this round. Start a new round of this prompt to be reviewed again.`
-      : "You've used this round's free review. Start a new round of this prompt to be reviewed again, or upgrade to Plus for more reviews per round.";
+      ? `You've used all ${allowance.round.limit} reviews for this round. Start a new round of this design to be reviewed again.`
+      : "You've used this round's free review. Start a new round of this design to be reviewed again, or upgrade to Plus for more reviews per round.";
   }
   const resets = new Date(allowance.month.resetsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
   return `You've used all ${allowance.month.limit} reviews included this month. Your allowance resets on ${resets}.`;
@@ -182,7 +182,7 @@ reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
   if (!aiConfig.enabled) throw toHttpError(new AiError("DISABLED"));
   if (session.status !== "completed") throw new HttpError(409, "ROUND_NOT_FINISHED", "Finish the round to get its review.");
   const prompt = promptById.get(session.prompt_id);
-  if (!prompt) throw new HttpError(404, "NOT_FOUND", "This prompt is no longer available.");
+  if (!prompt) throw new HttpError(404, "NOT_FOUND", "This design round is no longer available.");
   const design = describeDiagram(session.diagram);
   if (design.componentCount < MIN_COMPONENTS || design.edgeCount < MIN_CONNECTIONS) {
     throw new HttpError(422, "DESIGN_TOO_SMALL", `Add at least ${MIN_COMPONENTS} components and ${MIN_CONNECTIONS} connections so there's enough to review. No credit was used.`);

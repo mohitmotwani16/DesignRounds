@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowRight, LoaderCircle, UserRound } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Brand } from "../components/ui.jsx";
+import { Logo } from "../components/site.jsx";
 import { navigate, safeNext } from "../router.js";
 
 export const roleOptions = ["Software engineer", "Data engineer", "ML / AI engineer", "Platform / SRE", "Frontend / mobile engineer", "Engineering manager", "Student", "Other"];
@@ -68,8 +68,8 @@ export default function OnboardingPage({ next }) {
   }
 
   return (
-    <main className="auth-page">
-      <div className="auth-topbar"><Brand onClick={() => navigate("/")} /></div>
+    <main className="auth-page site">
+      <div className="auth-topbar"><Logo onClick={() => navigate("/")} /></div>
       <section className="auth-card auth-card-wide" aria-labelledby="welcome-title">
         <span className="auth-icon"><UserRound size={20} /></span>
         <form onSubmit={submit}>
@@ -77,7 +77,7 @@ export default function OnboardingPage({ next }) {
           <p className="auth-lede">Signed in as <strong>{user?.email}</strong>. Tell us a little about you. Your role and experience will help the interviewer pitch questions at the right level once it launches.</p>
           <ProfileFields values={values} onChange={setValues} />
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="button button-dark auth-submit" disabled={busy || !values.displayName.trim()}>{busy && <LoaderCircle size={16} className="spin" />}Continue <ArrowRight size={15} /></button>
+          <button className="btn btn-primary btn-lg auth-submit" disabled={busy || !values.displayName.trim()}>{busy && <LoaderCircle size={16} className="spin" />}Continue <ArrowRight size={15} /></button>
         </form>
       </section>
     </main>

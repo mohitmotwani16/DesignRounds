@@ -6,7 +6,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, { signal } = {}) {
   let response;
   try {
     response = await fetch(`/api/v1${path}`, {
@@ -14,8 +14,10 @@ async function request(method, path, body) {
       credentials: "same-origin",
       headers: body === undefined ? {} : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
-  } catch {
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
     throw new ApiError(0, "NETWORK", "Can't reach DesignRounds. Check your connection and that the API server is running.");
   }
   const payload = await response.json().catch(() => ({}));
@@ -28,7 +30,18 @@ async function request(method, path, body) {
   return payload;
 }
 
+const query = (params) => {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    const text = Array.isArray(value) ? value.join(",") : value;
+    if (text !== undefined && text !== null && text !== "" && text !== "all") search.set(key, text);
+  }
+  const string = search.toString();
+  return string ? `?${string}` : "";
+};
+
 export const api = {
+  catalog: (params, options) => request("GET", `/catalog/prompts${query(params)}`, undefined, options),
   me: () => request("GET", "/me"),
   requestCode: (email) => request("POST", "/auth/request-code", { email }),
   verifyCode: (email, code) => request("POST", "/auth/verify-code", { email, code }),
