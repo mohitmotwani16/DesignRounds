@@ -1,5 +1,5 @@
 // Applies pending database migrations, then exits. Runs on every Vercel deploy before
-// the frontend build ("vercel-build"), so a failing migration fails the deploy and the
+// the frontend build ("build:deploy"), so a failing migration fails the deploy and the
 // previous release keeps serving. Usable by hand too: `npm run db:migrate`.
 //
 // Uses MIGRATION_DATABASE_URL when set (e.g. a session-mode or direct connection),

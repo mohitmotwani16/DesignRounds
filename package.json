@@ -11,7 +11,7 @@
     "dev:api": "node --watch-path=server --watch-path=src/data server/index.js",
     "dev:web": "vite",
     "build": "vite build",
-    "vercel-build": "node scripts/migrate.js && vite build",
+    "build:deploy": "node scripts/migrate.js && vite build",
     "start": "node server/index.js",
     "db:migrate": "node scripts/migrate.js",
     "test:smoke": "node scripts/smoke.js",
