@@ -61,7 +61,7 @@ export default function LandingPage({ onStart, section }) {
           <article className="step reveal" style={{ transitionDelay: "0ms" }}>
             <div className="step-art">
               <div className="mini-card">
-                <h5>Design a URL shortener</h5>
+                <strong className="mini-title">Design a URL shortener</strong>
                 <p>Turn long links into short, shareable URLs.</p>
                 <div className="mini-req">
                   <span><Check size={13} /> Redirects in under 50 ms</span>

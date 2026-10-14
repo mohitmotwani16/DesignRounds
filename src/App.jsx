@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
-import { findPrompt } from "./data/prompts.js";
+import { findPrompt, prompts } from "./data/prompts.js";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
 import { navigate, safeNext, useRoute } from "./router.js";
@@ -71,14 +71,35 @@ function Routes() {
   let page;
   if (path === "/library") page = <LibraryPage onStart={startPrompt} initialTrack={params.get("track")} />;
   else if (path === "/profile") page = <ProfilePage onStart={startPrompt} />;
-  else page = <LandingPage onStart={startPrompt} section={params.get("s")} />;
+  else if (path === "/") page = <LandingPage onStart={startPrompt} section={params.get("s")} />;
+  else page = <NotFound />;
 
   return (
     <div className="site-shell site">
       <SiteNav />
       {page}
-      {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} onClose={() => setLockedPromptId(null)} />}
+      {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} alternative={freeAlternative(lockedPromptId)} onStart={startPrompt} onClose={() => setLockedPromptId(null)} />}
     </div>
+  );
+}
+
+// A free round from the same discipline (falling back to any free round).
+function freeAlternative(promptId) {
+  const locked = findPrompt(promptId);
+  return prompts.find((prompt) => prompt.access === "free" && prompt.track === locked?.track) ?? prompts.find((prompt) => prompt.access === "free");
+}
+
+function NotFound() {
+  return (
+    <main className="not-found wrap">
+      <span className="kicker">404</span>
+      <h1>This page doesn't exist.</h1>
+      <p>The link may be out of date, or the address may have a typo.</p>
+      <div className="hero-ctas">
+        <button className="btn btn-primary btn-lg" onClick={() => navigate("/")}>Go to the home page</button>
+        <button className="btn btn-ghost btn-lg" onClick={() => navigate("/library")}>Browse all designs</button>
+      </div>
+    </main>
   );
 }
 

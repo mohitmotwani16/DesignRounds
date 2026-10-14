@@ -14,7 +14,13 @@ function Field({ label, value, onChange, onBegin, placeholder, multiline, maxLen
   );
 }
 
-export const NodeInspector = memo(function NodeInspector({ id, type, data, readOnly, onBegin, onChange, onDuplicate, onDelete, onClose }) {
+const ASK_TITLES = {
+  available: "Ask the interviewer about this component",
+  plus: "The live interviewer is part of Plus",
+  finished: "The interview ends when the round is finished",
+};
+
+export const NodeInspector = memo(function NodeInspector({ id, type, data, readOnly, onBegin, onChange, onDuplicate, onDelete, onClose, ask = "plus", onAsk }) {
   const item = getItem(data.kind);
   const Icon = item?.icon || Server;
   const color = data.color || item?.color || "blue";
@@ -53,7 +59,7 @@ export const NodeInspector = memo(function NodeInspector({ id, type, data, readO
         )}
       </div>
       <div className="inspector-actions">
-        <button className="inspector-ask" disabled title="The AI interviewer is coming soon"><MessageSquare size={14} /> Ask the interviewer about this</button>
+        <button className="inspector-ask" disabled={ask !== "available"} title={ASK_TITLES[ask]} onClick={onAsk}><MessageSquare size={14} /> Ask the interviewer about this</button>
         {!readOnly && (
           <div className="inspector-row">
             <button className="button button-outline button-small" onClick={onDuplicate}><Copy size={13} /> Duplicate</button>

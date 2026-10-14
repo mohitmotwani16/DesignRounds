@@ -106,20 +106,26 @@ export function trackIcon(icon) {
   return icons[icon] || Network;
 }
 
-export function LockedPromptDialog({ prompt, onClose }) {
+// Shown when a Plus round is opened without Plus. Never a dead end: it offers a free
+// round from the same discipline.
+export function LockedPromptDialog({ prompt, alternative, onClose, onStart }) {
   const track = getTrack(prompt.track);
   useEscape(onClose);
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="locked-dialog" role="dialog" aria-modal="true" aria-labelledby="locked-dialog-title">
-        <div className="locked-dialog-icon"><LockKeyhole size={20} /></div>
-        <span className="modal-kicker">PLUS PRACTICE ROUND · {track.shortLabel.toUpperCase()}</span>
+    <div className="lock-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className={`lock-modal tone-${track.color}`} role="dialog" aria-modal="true" aria-labelledby="locked-dialog-title">
+        <button className="lock-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <span className="lock-badge"><Crown size={13} /> Plus round · {track.shortLabel}</span>
         <h2 id="locked-dialog-title">{prompt.title}</h2>
-        <p>{prompt.description}</p>
-        <div className="locked-dialog-requirements"><h3>Requirements to consider</h3><ul>{prompt.requirements.map((requirement) => <li key={requirement}><Check size={12} />{requirement}</li>)}</ul></div>
-        <p className="locked-dialog-outcome"><strong>What you would practice:</strong> {prompt.expectedOutcome}</p>
-        <div className="locked-dialog-note"><Sparkles size={15} /><span>Plus rounds and conversational AI coaching are planned. Checkout isn't available yet, so this round can't be started.</span></div>
-        <button className="button button-dark locked-dialog-close" onClick={onClose}>Back to practice library <ArrowRight size={14} /></button>
+        <p className="lock-lede">{prompt.description}</p>
+        <h3>Requirements to consider</h3>
+        <ul>{prompt.requirements.map((requirement) => <li key={requirement}><Check size={15} />{requirement}</li>)}</ul>
+        <p className="lock-outcome"><strong>What you'd practice:</strong> {prompt.expectedOutcome}</p>
+        <div className="lock-note"><Sparkles size={16} /><span>Plus is coming soon, with every round, the live AI interviewer, and full coaching. Until then, this round can't be started.</span></div>
+        <div className="lock-actions">
+          {alternative && <button className="btn btn-primary btn-lg" onClick={() => { onClose(); onStart(alternative.id); }}>Try “{alternative.title.replace(/^Design (a |an )?/i, "")}” free <ArrowRight size={16} /></button>}
+          <button className="btn btn-ghost btn-lg" onClick={onClose}>Back to the library</button>
+        </div>
       </section>
     </div>
   );

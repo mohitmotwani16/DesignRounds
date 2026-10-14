@@ -43,6 +43,7 @@ const query = (params) => {
 export const api = {
   catalog: (params, options) => request("GET", `/catalog/prompts${query(params)}`, undefined, options),
   me: () => request("GET", "/me"),
+  session: () => request("GET", "/session"),
   requestCode: (email) => request("POST", "/auth/request-code", { email }),
   verifyCode: (email, code) => request("POST", "/auth/verify-code", { email, code }),
   signOut: () => request("POST", "/auth/sign-out", {}),

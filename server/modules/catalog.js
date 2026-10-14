@@ -27,10 +27,14 @@ const SORTS = {
   title: (a, b) => a.title.localeCompare(b.title),
 };
 
-// Built once: what a card needs, plus a lower-cased search haystack.
+// Search text: lower-case, punctuation (hyphens, slashes, ...) as spaces, so
+// "exactly-once", "exactly once" and "read/write" all match the same way.
+const normalize = (text) => ` ${text.toLowerCase().replace(/[^a-z0-9+#]+/g, " ").trim()} `;
+
+// Built once: what a card needs, plus a normalized search haystack.
 const catalog = prompts.map((prompt, order) => ({
   order,
-  haystack: `${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements.join(" ")} ${prompt.considerations.join(" ")} ${prompt.prerequisites?.join(" ") ?? ""}`.toLowerCase(),
+  haystack: normalize(`${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements.join(" ")} ${prompt.considerations.join(" ")} ${prompt.prerequisites?.join(" ") ?? ""} ${prompt.expectedOutcome ?? ""}`),
   card: {
     id: prompt.id,
     title: prompt.title,
@@ -85,7 +89,7 @@ function matches(entry, filters, skip) {
 }
 
 export function searchCatalog(input) {
-  const filters = { ...input, words: input.q.toLowerCase().split(/\s+/).filter(Boolean) };
+  const filters = { ...input, words: normalize(input.q).split(" ").filter(Boolean) };
   const results = catalog.filter((entry) => matches(entry, filters))
     .sort((a, b) => SORTS[filters.sort](a.card, b.card) || a.order - b.order);
   const offset = Math.min(decodeCursor(input.cursor), results.length);

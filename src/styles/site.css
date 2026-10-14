@@ -223,7 +223,7 @@
 .foot { margin-top: 0; border-top: 1px solid var(--line); background: var(--bg); }
 .foot-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 40px; padding: 56px 0 40px; }
 .foot-brand p { max-width: 280px; margin: 14px 0 0; color: var(--ink-3); font-size: 14px; line-height: 1.6; }
-.foot h4 { margin: 4px 0 14px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.foot h2 { margin: 4px 0 14px; color: var(--ink); font-size: 13px; font-weight: 600; }
 .foot ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
 .foot li button { padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 14px; cursor: pointer; text-align: left; }
 .foot li button:hover { color: var(--ink); }
@@ -364,7 +364,7 @@
 
 /* Mini illustrations used in step and bento cards. */
 .mini-card { width: 78%; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-md); font-size: 12.5px; }
-.mini-card h5 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; }
+.mini-card .mini-title { display: block; margin: 0 0 4px; font-size: 13.5px; font-weight: 600; }
 .mini-card p { margin: 0 0 10px; color: var(--ink-3); line-height: 1.45; }
 .mini-req { display: grid; gap: 6px; }
 .mini-req span { display: flex; align-items: center; gap: 7px; color: var(--ink-2); }
@@ -628,3 +628,28 @@
 .auth-page.site .form-error { color: var(--danger); }
 .auth-page.site .dev-code-note { color: var(--ink-2); background: var(--accent-soft); border-color: var(--accent-line); }
 @media (max-width: 640px) { .lib-search kbd { display: none; } }
+
+/* ---------------------------------------------------------------- 404 */
+.not-found { min-height: calc(100vh - 64px); display: grid; align-content: center; justify-items: center; gap: 4px; padding-block: 80px; text-align: center; }
+.not-found h1 { margin: 14px 0 0; font-size: clamp(34px, 5vw, 56px); line-height: 1.05; font-weight: 600; letter-spacing: -0.045em; }
+.not-found p { margin: 14px 0 0; color: var(--ink-3); font-size: 17px; }
+.not-found .hero-ctas { margin-top: 30px; }
+
+/* ---------------------------------------------------------------- Plus (locked) dialog */
+.lock-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(10, 10, 14, 0.5); backdrop-filter: blur(4px); animation: fade 0.2s forwards; }
+.lock-modal { position: relative; width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; padding: 32px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg); color: var(--ink); animation: rise 0.35s var(--ease) both; }
+.lock-close { position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--ink-3); cursor: pointer; }
+.lock-close:hover { background: var(--bg-sunken); color: var(--ink); }
+.lock-badge { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--plus-soft); color: var(--plus); font-size: 12.5px; font-weight: 600; }
+.lock-modal h2 { margin: 14px 0 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+.lock-lede { margin: 8px 0 0; color: var(--ink-3); font-size: 15.5px; line-height: 1.6; }
+.lock-modal h3 { margin: 24px 0 10px; color: var(--ink-3); font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.lock-modal ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.lock-modal li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+.lock-modal li svg { margin-top: 3px; color: var(--tone); }
+.lock-outcome { margin: 20px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.6; }
+.lock-note { margin-top: 20px; display: flex; gap: 10px; padding: 14px 16px; border: 1px solid var(--plus-line); border-radius: 12px; background: var(--plus-soft); color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+.lock-note svg { flex: none; margin-top: 2px; color: var(--plus); }
+.lock-actions { margin-top: 24px; display: grid; gap: 10px; }
+.lock-actions .btn { width: 100%; white-space: normal; text-align: center; }
+@media (max-width: 520px) { .lock-modal { padding: 26px 20px; } }

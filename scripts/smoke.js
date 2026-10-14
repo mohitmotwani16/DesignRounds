@@ -89,6 +89,9 @@ try {
 
   await step("anonymous requests are rejected", async () => {
     assert.equal((await call("GET", "/api/v1/me")).status, 401);
+    const anonymous = await call("GET", "/api/v1/session");
+    assert.equal(anonymous.status, 200);
+    assert.equal(anonymous.body.user, null);
   });
 
   await step("cross-site and non-JSON writes are rejected", async () => {
@@ -108,6 +111,7 @@ try {
     assert.equal(verified.status, 200);
     assert.ok(cookie.startsWith("dr_session="));
     assert.equal((await call("GET", "/api/v1/me")).body.user.email, email);
+    assert.equal((await call("GET", "/api/v1/session")).body.user.email, email);
     assert.equal((await call("GET", "/api/v1/nope")).status, 404);
   });
 

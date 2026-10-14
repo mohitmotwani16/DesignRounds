@@ -184,6 +184,12 @@ identityRouter.post("/auth/sign-out-everywhere", requireUser, route(async (req, 
   res.json({ ok: true });
 }));
 
+// Who is signed in, if anyone. Unlike /me, a visitor without a session is a normal
+// answer (user: null), not an error, so page loads don't log failed requests.
+identityRouter.get("/session", (req, res) => {
+  res.json({ user: req.user ? toPublicUser(req.user) : null });
+});
+
 identityRouter.get("/me", requireUser, (req, res) => {
   res.json({ user: toPublicUser(req.user) });
 });
