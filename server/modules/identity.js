@@ -116,7 +116,7 @@ identityRouter.post("/auth/request-code", route(async (req, res) => {
     [email, hashCode(email, code), CODE_TTL_MINUTES, req.ip]
   );
   try {
-    await sendLoginCode(email, code);
+    await sendLoginCode(email, code, { expiresInMinutes: CODE_TTL_MINUTES });
   } catch (error) {
     console.error("[email] failed to send sign-in code:", error.message);
     throw new HttpError(502, "EMAIL_FAILED", "We couldn't send the email. Check the address and try again.");

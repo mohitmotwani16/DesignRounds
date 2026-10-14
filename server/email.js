@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import { loginCodeEmail } from "./emails/login-code.js";
 import { isProduction } from "./flags.js";
 
 // Sends sign-in codes. Configure one provider:
@@ -15,14 +17,10 @@ export function deliveryMode() {
   return isProduction ? "unconfigured" : "console";
 }
 
-export async function sendLoginCode(email, code) {
-  const subject = `${code} is your DesignRounds sign-in code`;
-  const text = `Your DesignRounds sign-in code is ${code}.\n\nIt expires in 10 minutes. If you didn't request it, you can ignore this email.`;
-  const html = `<div style="font-family:system-ui,sans-serif;color:#1d2635;max-width:420px">
-    <p style="font-size:15px">Your DesignRounds sign-in code is:</p>
-    <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:12px 0">${code}</p>
-    <p style="font-size:13px;color:#727d8d">It expires in 10 minutes. If you didn't request it, you can ignore this email.</p>
-  </div>`;
+export async function sendLoginCode(email, code, { expiresInMinutes }) {
+  const { subject, text, html } = loginCodeEmail({ email, code, expiresInMinutes });
+  // A unique reference per message stops Gmail threading every code into one conversation.
+  const headers = { "X-Entity-Ref-ID": crypto.randomUUID() };
 
   const mode = deliveryMode();
   if (mode === "smtp") {
@@ -36,14 +34,14 @@ export async function sendLoginCode(email, code) {
         auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
       });
     }
-    await smtpTransport.sendMail({ from: from(), to: email, subject, text, html });
+    await smtpTransport.sendMail({ from: from(), to: email, subject, text, html, headers });
     return;
   }
   if (mode === "resend") {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: from(), to: [email], subject, text, html }),
+      body: JSON.stringify({ from: from(), to: [email], subject, text, html, headers }),
     });
     if (!response.ok) throw new Error(`Resend rejected the email (${response.status}): ${await response.text()}`);
     return;
