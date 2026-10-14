@@ -5,9 +5,11 @@ import {
 } from "lucide-react";
 import { prompts, tracks } from "../data/prompts.js";
 import { aiLimits } from "../data/plans.js";
-import { RoundCard, SiteFooter, useReveal } from "../components/site.jsx";
+import { LevelMeter, RoundCard, SiteFooter, useReveal } from "../components/site.jsx";
 import { trackIcon } from "../components/ui.jsx";
-import { navigate } from "../router.js";
+import { Link, useRoute } from "../router.js";
+import { GUIDES } from "../content/guides.js";
+import { roundPath, trackPath } from "../seo.js";
 
 // "Design a URL shortener" -> "URL shortener"
 const shortTitle = (title) => title.replace(/^Design (a |an )?/i, "").replace(/^./, (char) => char.toUpperCase());
@@ -18,17 +20,22 @@ const ROUND_LENGTH = `${Math.min(...minutes)}–${Math.max(...minutes)}m`;
 const freeRounds = prompts.filter((prompt) => prompt.access === "free");
 const FIRST_ROUND = freeRounds.find((prompt) => prompt.id === "url-shortener") ?? freeRounds[0];
 
-export default function LandingPage({ onStart, section }) {
+export default function LandingPage({ onStart }) {
   const ref = useRef(null);
   useReveal(ref);
 
-  // "/?s=pricing" deep-links to a section; wait a tick so the page has laid out.
+  // "/#pricing" links to a section: a fresh page load jumps there, an in-page click
+  // scrolls smoothly. Waits a tick so the page has laid out.
+  const { hash } = useRoute();
+  const firstScroll = useRef(true);
   useEffect(() => {
+    const section = hash;
     if (!section) return undefined;
-    // Arriving from a link jumps straight there; in-page clicks scroll smoothly (goToSection).
-    const timer = window.setTimeout(() => document.getElementById(section)?.scrollIntoView({ block: "start" }), 60);
+    const behavior = firstScroll.current ? "auto" : "smooth";
+    firstScroll.current = false;
+    const timer = window.setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior, block: "start" }), 60);
     return () => window.clearTimeout(timer);
-  }, [section]);
+  }, [hash]);
 
   const popular = [...prompts.filter((prompt) => prompt.popular), ...prompts].filter((prompt, index, list) => list.indexOf(prompt) === index).slice(0, 3);
 
@@ -192,20 +199,20 @@ export default function LandingPage({ onStart, section }) {
             <span className="kicker">Six disciplines</span>
             <h2>Practice for the role <span className="serif-accent">you actually want.</span></h2>
           </div>
-          <button className="btn btn-ghost" onClick={() => navigate("/library")}>Browse all designs <ArrowRight size={15} className="nudge" /></button>
+          <Link className="btn btn-ghost" to="/library">Browse all designs <ArrowRight size={15} className="nudge" /></Link>
         </div>
         <div className="tracks">
           {tracks.map((track) => {
             const Icon = trackIcon(track.icon);
             const list = prompts.filter((prompt) => prompt.track === track.id);
             return (
-              <button key={track.id} className={`track tone-${track.color} reveal`} onClick={() => navigate(`/library?track=${track.id}`)}>
+              <Link key={track.id} className={`track tone-${track.color} reveal`} to={trackPath(track.id)}>
                 <div className="track-top"><span className="track-ico"><Icon size={19} /></span></div>
                 <h3>{track.label}</h3>
                 <p>{track.description}</p>
                 <ul>{list.slice(0, 3).map((prompt) => <li key={prompt.id}>{shortTitle(prompt.title)}</li>)}</ul>
                 <span className="track-go">Explore {track.shortLabel} <ArrowRight size={14} /></span>
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -223,6 +230,8 @@ export default function LandingPage({ onStart, section }) {
         </div>
       </section>
 
+      <QuestionIndex />
+
       <Pricing onStart={onStart} />
       <Faq />
 
@@ -231,7 +240,7 @@ export default function LandingPage({ onStart, section }) {
         <p>Pick a design, sketch your architecture, and find out where it bends before an interviewer does.</p>
         <div className="hero-ctas">
           <button className="btn btn-primary btn-lg" onClick={() => onStart(FIRST_ROUND.id)}>Start a free round <ArrowRight size={17} className="nudge" /></button>
-          <button className="btn btn-ghost btn-lg" onClick={() => navigate("/library")}>Explore the library</button>
+          <Link className="btn btn-ghost btn-lg" to="/library">Explore the library</Link>
         </div>
       </section>
       <SiteFooter />
@@ -242,16 +251,16 @@ export default function LandingPage({ onStart, section }) {
 function Hero({ onStart }) {
   return (
     <section className="hero wrap">
-      <button className="pill rise" style={{ "--d": 0 }} onClick={() => navigate("/library")}>
+      <Link className="pill rise" style={{ "--d": 0 }} to="/library">
         <span className="pill-tag">New</span> A live AI interviewer that asks <em style={{ fontFamily: "var(--font-serif)", fontSize: 15 }}>why</em> <ArrowRight size={13} />
-      </button>
+      </Link>
       <h1 className="rise" style={{ "--d": 1 }}>Practice system design the way it's <em>actually</em> tested.</h1>
       <p className="hero-sub rise" style={{ "--d": 2 }}>
         Real interview design problems, a canvas built for architecture, and an AI interviewer that pushes back. Then a rubric-based review tells you exactly what to fix.
       </p>
       <div className="hero-ctas rise" style={{ "--d": 3 }}>
         <button className="btn btn-primary btn-lg" onClick={() => onStart(FIRST_ROUND.id)}>Start a free round <ArrowRight size={17} className="nudge" /></button>
-        <button className="btn btn-ghost btn-lg" onClick={() => navigate("/library")}>Browse all designs</button>
+        <Link className="btn btn-ghost btn-lg" to="/library">Browse all designs</Link>
       </div>
       <div className="hero-checks rise" style={{ "--d": 4 }}>
         <span><Check size={15} /> Free to start</span>
@@ -379,7 +388,7 @@ function Pricing({ onStart }) {
             <li><Check size={16} /> {plus.reviewsPerRound} reviews per round, up to {plus.reviewsPerMonth} a month</li>
             <li><Check size={16} /> Full coaching: every decision analyzed, every risk, next steps, and follow-up questions</li>
           </ul>
-          <button className="btn btn-primary btn-lg" onClick={() => navigate("/library")}>Explore the library <ArrowRight size={16} className="nudge" /></button>
+          <Link className="btn btn-primary btn-lg" to="/library">Explore the library <ArrowRight size={16} className="nudge" /></Link>
         </article>
       </div>
     </section>
@@ -414,3 +423,32 @@ function Faq() {
   );
 }
 
+// Internal links to the most-asked questions and the guides: helps learners find a
+// starting point, and gives search engines a path into every important page.
+const POPULAR_QUESTIONS = ["url-shortener", "chat-system", "news-feed", "rate-limiter", "notification-service", "autocomplete", "file-storage", "ticket-booking", "key-value-store", "recommendation-engine", "realtime-analytics", "offline-first-sync"];
+
+function QuestionIndex() {
+  const questions = POPULAR_QUESTIONS.map((id) => prompts.find((prompt) => prompt.id === id)).filter(Boolean);
+  return (
+    <section className="wrap section-tight" id="questions">
+      <div className="qi reveal">
+        <div className="qi-head">
+          <span className="kicker">Practice by question</span>
+          <h2>Common system design interview questions</h2>
+          <p>Each question has its own page with the brief, the scale to design for, the follow-up questions interviewers ask and the mistakes to avoid.</p>
+          <ul className="qi-guides">
+            {GUIDES.map((guide) => <li key={guide.slug}><Link to={guide.path}>{guide.short} <ArrowRight size={14} /></Link></li>)}
+          </ul>
+        </div>
+        <ul className="qi-list">
+          {questions.map((prompt) => (
+            <li key={prompt.id}>
+              <Link to={roundPath(prompt.id)}>{prompt.title}</Link>
+              <LevelMeter level={prompt.difficulty} />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}

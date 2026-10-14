@@ -78,10 +78,23 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   });
   app.use("/api", api);
 
-  // A long-running server also serves the built frontend. On Vercel the CDN serves it.
+  // A long-running server also serves the built frontend, mirroring vercel.json: clean
+  // URLs for prerendered pages, the app shell for signed-in routes, and a real 404.
+  // On Vercel the CDN serves all of this.
   if (serveFrontend && existsSync(distDir)) {
-    app.use(express.static(distDir, { index: false, maxAge: "1h" }));
-    app.get("*", (_req, res) => res.sendFile(path.join(distDir, "index.html")));
+    // Clean URLs, like Vercel's cleanUrls: /library serves library.html, even though a
+    // library/ folder (the discipline pages) also exists.
+    app.use((req, res, next) => {
+      if (req.method !== "GET" || path.extname(req.path) || req.path === "/") return next();
+      const file = path.join(distDir, `${req.path.replace(/\/+$/, "")}.html`);
+      if (!file.startsWith(distDir) || !existsSync(file)) return next();
+      res.sendFile(file);
+    });
+    app.use(express.static(distDir, { redirect: false, maxAge: "1h" }));
+    app.get(/^\/(signin|welcome|profile|start\/.+|workspace\/.+)$/, (_req, res) => {
+      res.set("X-Robots-Tag", "noindex, nofollow").sendFile(path.join(distDir, "app.html"));
+    });
+    app.use((_req, res) => res.status(404).sendFile(path.join(distDir, "404.html")));
   }
 
   const missingGuides = prompts.filter((prompt) => !guideFor(prompt.id)).map((prompt) => prompt.id);

@@ -10,9 +10,12 @@ export const THEMES = [
   ["mono", "Monochrome"],
 ];
 const KEY = "designrounds:theme";
-const darkQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+// No window during build-time prerendering: everything below degrades to defaults.
+const browser = typeof window !== "undefined";
+const darkQuery = browser ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
 
 function readChoice() {
+  if (!browser) return "system";
   try {
     const value = window.localStorage.getItem(KEY);
     return THEMES.some(([id]) => id === value) ? value : "system";
@@ -25,6 +28,7 @@ const resolve = (choice) => (choice === "system" ? (darkQuery?.matches ? "dark" 
 
 function apply(choice) {
   const theme = resolve(choice);
+  if (!browser) return theme;
   document.documentElement.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#1a1d24" : "#f8f9fb");
   return theme;

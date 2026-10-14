@@ -5,6 +5,9 @@ import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { RoundCard, RoundCardSkeleton, SiteFooter } from "../components/site.jsx";
 import { promptIcon, trackIcon } from "../components/ui.jsx";
+import { searchCatalog } from "../data/catalog-search.js";
+import { Link, navigate } from "../router.js";
+import { TRACK_SEO, trackPath } from "../seo.js";
 
 const PAGE_SIZE = 12;
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
@@ -36,9 +39,14 @@ function useDebounced(value, delay) {
 
 // Loads the catalog page by page. A change of query resets the list (and aborts any
 // request still in flight); loadMore appends the next page.
+//
+// The first page for the initial query is computed locally from the bundled catalog,
+// so the list renders immediately (and is present in prerendered HTML); later pages
+// and new queries come from the API.
 function useCatalog(query) {
   const key = JSON.stringify(query);
-  const [state, setState] = useState({ key, items: [], total: null, facets: null, nextCursor: null, status: "loading", error: null });
+  const [state, setState] = useState(() => ({ key, ...searchCatalog({ ...query, limit: PAGE_SIZE }), status: "idle", error: null }));
+  const seededKey = useRef(key);
   const controller = useRef(null);
 
   const fetchPage = useCallback(async (cursor) => {
@@ -66,9 +74,10 @@ function useCatalog(query) {
   }, [key]);
 
   useEffect(() => {
+    if (key === seededKey.current) { seededKey.current = null; return undefined; }
     fetchPage(null);
     return () => controller.current?.abort();
-  }, [fetchPage]);
+  }, [fetchPage, key]);
 
   const loadMore = useCallback(() => {
     if (state.status === "idle" && state.nextCursor) fetchPage(state.nextCursor);
@@ -78,10 +87,10 @@ function useCatalog(query) {
   return { ...state, loadMore, retry };
 }
 
-export default function LibraryPage({ onStart, initialTrack }) {
+export default function LibraryPage({ onStart, track: routeTrack }) {
   const { status: authStatus } = useAuth();
   const [search, setSearch] = useState("");
-  const [track, setTrack] = useState(() => validTrack(initialTrack));
+  const track = validTrack(routeTrack);
   const [levels, setLevels] = useState([]);
   const [durations, setDurations] = useState([]);
   const [selectedTopics, setSelectedTopics] = useState([]);
@@ -97,13 +106,6 @@ export default function LibraryPage({ onStart, initialTrack }) {
 
   const query = useMemo(() => ({ q, track, level: levels, duration: durations, topic: selectedTopics, access, sort }), [q, track, levels, durations, selectedTopics, access, sort]);
   const catalog = useCatalog(query);
-
-  useEffect(() => { setTrack(validTrack(initialTrack)); }, [initialTrack]);
-
-  // Keep the discipline in the address so the view can be shared and survives reloads.
-  useEffect(() => {
-    window.history.replaceState(null, "", `#/library${track !== "all" ? `?track=${track}` : ""}`);
-  }, [track]);
 
   useEffect(() => {
     if (authStatus !== "signed-in") { setSessions([]); return undefined; }
@@ -167,7 +169,7 @@ export default function LibraryPage({ onStart, initialTrack }) {
   function resetAll() {
     clearFilters();
     setSearch("");
-    setTrack("all");
+    navigate("/library");
   }
 
   const pills = [
@@ -184,8 +186,10 @@ export default function LibraryPage({ onStart, initialTrack }) {
     <main className="library">
       <section className="lib-hero wrap">
         <span className="kicker">{activeTrack ? activeTrack.label : "Practice library"}</span>
-        <h1>{activeTrack ? <>Practice {activeTrack.shortLabel}.</> : <>Find your next <span className="serif-accent">design round.</span></>}</h1>
-        <p>{activeTrack ? activeTrack.description : "Interview-grade design rounds across six disciplines. Filter by level, time, or topic, or search for a system, requirement, or concept."}</p>
+        <h1>{activeTrack ? TRACK_SEO[activeTrack.id].h1 : <>System design interview questions <span className="serif-accent">to practice.</span></>}</h1>
+        {activeTrack
+          ? TRACK_SEO[activeTrack.id].intro.map((paragraph) => <p key={paragraph.slice(0, 24)}>{paragraph}</p>)
+          : <p>Interview-grade design rounds across six disciplines, each with a realistic brief, the scale to design for and a rubric-based review. Filter by level, time or topic, or search for a system, requirement or concept.</p>}
         <label className="lib-search">
           <Search size={20} />
           <span className="sr-only">Search practice rounds</span>
@@ -197,15 +201,15 @@ export default function LibraryPage({ onStart, initialTrack }) {
       <div className="lib-tabs-bar">
         <div className="wrap">
           <div className="lib-tabs" role="toolbar" aria-label="Discipline">
-            <button className="lib-tab tone-slate" aria-pressed={track === "all"} onClick={() => setTrack("all")}>
+            <Link className="lib-tab tone-slate" to="/library" aria-current={track === "all" ? "page" : undefined}>
               <i><LayoutGrid size={13} /></i>All<small>{trackCounts.all ?? "–"}</small>
-            </button>
+            </Link>
             {tracks.map((item) => {
               const Icon = trackIcon(item.icon);
               return (
-                <button key={item.id} className={`lib-tab tone-${item.color}`} aria-pressed={track === item.id} onClick={() => setTrack(item.id)}>
+                <Link key={item.id} className={`lib-tab tone-${item.color}`} to={trackPath(item.id)} aria-current={track === item.id ? "page" : undefined}>
                   <i><Icon size={13} /></i>{item.shortLabel}<small>{trackCounts[item.id] ?? 0}</small>
-                </button>
+                </Link>
               );
             })}
           </div>
