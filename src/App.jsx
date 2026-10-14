@@ -2,34 +2,42 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
-import { findPrompt, prompts } from "./data/prompts.js";
+import { findPrompt, prompts, tracks } from "./data/prompts.js";
+import { guideBySlug } from "./content/guides.js";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
-import { navigate, safeNext, useRoute } from "./router.js";
+import { Link, navigate, safeNext, useRoute } from "./router.js";
+import { applyMeta, routeMeta } from "./seo.js";
+import AboutPage from "./pages/About.jsx";
+import GuidePage from "./pages/Guide.jsx";
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
 import OnboardingPage from "./pages/Onboarding.jsx";
 import ProfilePage from "./pages/Profile.jsx";
+import RoundPage from "./pages/RoundPage.jsx";
 import SignInPage from "./pages/SignIn.jsx";
 
 const WorkspaceRoute = lazy(() => import("./workspace/Workspace.jsx"));
 const loadingScreen = <FullPageMessage title="Loading…"><LoaderCircle size={18} className="spin" /></FullPageMessage>;
 
-export default function App() {
+// `authStatus` lets the prerenderer render public pages as a signed-out visitor.
+export default function App({ authStatus }) {
   return (
-    <AuthProvider>
+    <AuthProvider initialStatus={authStatus}>
       <Routes />
     </AuthProvider>
   );
 }
 
 function Routes() {
-  const { path, params, raw } = useRoute();
+  const { path, params, raw, hash } = useRoute();
   const auth = useAuth();
   const [lockedPromptId, setLockedPromptId] = useState(null);
 
-  // Section deep links ("/?s=pricing") scroll themselves; every other route starts at the top.
-  useEffect(() => { if (!params.get("s")) window.scrollTo(0, 0); }, [path]);
+  // Title, description, canonical and structured data follow the route.
+  useEffect(() => { applyMeta(routeMeta(path)); }, [path]);
+  // A new page starts at the top; "/#section" links scroll themselves (Landing).
+  useEffect(() => { if (!hash) window.scrollTo(0, 0); }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Practicing requires an account; browsing the catalog does not.
   const startPrompt = useCallback((promptId) => {
@@ -68,19 +76,32 @@ function Routes() {
   if (path.startsWith("/workspace/")) return <Suspense fallback={loadingScreen}><WorkspaceRoute sessionId={path.slice("/workspace/".length)} /></Suspense>;
   if (path === "/workspace") return <Redirect to="/library" />;
 
-  let page;
-  if (path === "/library") page = <LibraryPage onStart={startPrompt} initialTrack={params.get("track")} />;
-  else if (path === "/profile") page = <ProfilePage onStart={startPrompt} />;
-  else if (path === "/") page = <LandingPage onStart={startPrompt} section={params.get("s")} />;
-  else page = <NotFound />;
-
   return (
     <div className="site-shell site">
       <SiteNav />
-      {page}
+      <Page path={path} onStart={startPrompt} />
       {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} alternative={freeAlternative(lockedPromptId)} onStart={startPrompt} onClose={() => setLockedPromptId(null)} />}
     </div>
   );
+}
+
+// Public pages (all prerendered) plus the profile.
+function Page({ path, onStart }) {
+  if (path === "/") return <LandingPage onStart={onStart} />;
+  if (path === "/library") return <LibraryPage key="all" onStart={onStart} track="all" />;
+  if (path === "/profile") return <ProfilePage onStart={onStart} />;
+  if (path === "/about") return <AboutPage />;
+
+  const track = /^\/library\/([a-z-]+)$/.exec(path)?.[1];
+  if (track && tracks.some((item) => item.id === track)) return <LibraryPage key={track} onStart={onStart} track={track} />;
+
+  const round = /^\/system-design\/([a-z0-9-]+)$/.exec(path)?.[1];
+  if (round && findPrompt(round)) return <RoundPage key={round} id={round} onStart={onStart} />;
+
+  const guide = /^\/guide\/([a-z0-9-]+)$/.exec(path)?.[1];
+  if (guide && guideBySlug(guide)) return <GuidePage key={guide} guide={guideBySlug(guide)} />;
+
+  return <NotFound />;
 }
 
 // A free round from the same discipline (falling back to any free round).
@@ -89,15 +110,15 @@ function freeAlternative(promptId) {
   return prompts.find((prompt) => prompt.access === "free" && prompt.track === locked?.track) ?? prompts.find((prompt) => prompt.access === "free");
 }
 
-function NotFound() {
+export function NotFound() {
   return (
     <main className="not-found wrap">
       <span className="kicker">404</span>
       <h1>This page doesn't exist.</h1>
       <p>The link may be out of date, or the address may have a typo.</p>
       <div className="hero-ctas">
-        <button className="btn btn-primary btn-lg" onClick={() => navigate("/")}>Go to the home page</button>
-        <button className="btn btn-ghost btn-lg" onClick={() => navigate("/library")}>Browse all designs</button>
+        <Link className="btn btn-primary btn-lg" to="/">Go to the home page</Link>
+        <Link className="btn btn-ghost btn-lg" to="/library">Browse all designs</Link>
       </div>
     </main>
   );

@@ -108,6 +108,16 @@ src/
   data/plans.js         per-plan AI allowances (shared; enforced on the server)
 ```
 
+## Search engines and AI assistants (SEO)
+
+Public pages are real URLs, prerendered to static HTML on every build, so search engines and link previews see full content without running JavaScript.
+
+- **URLs:** `/`, `/library`, `/library/<discipline>`, `/system-design/<round>`, `/guide/<slug>`, `/about`. Signed-in areas (`/signin`, `/welcome`, `/profile`, `/start/*`, `/workspace/*`) use the app shell (`app.html`) and are `noindex`. Old `#/` links are redirected in the browser.
+- **Build:** `npm run build` runs the client build, an SSR build of `src/entry-server.jsx`, then `scripts/prerender.mjs`, which writes one `.html` per public page plus `404.html`, `app.html`, `sitemap.xml`, `robots.txt` and `llms.txt`. Vercel serves them with `cleanUrls`; unknown URLs get a real 404.
+- **Metadata:** titles, descriptions, canonical URLs, Open Graph tags and JSON-LD live in `src/seo.js` (one source for prerendering and client-side navigation). The share image is `public/og.png`.
+- **Content:** round pages combine the brief with three public sections of the interviewer guide (scope and scale, common mistakes, deep-dive questions) via `scripts/guide-excerpts.js`. The other guide sections stay server-only. Long-form guides live in `src/content/guides.js`.
+- **Checks:** `npm run check:build` (also in CI) fails on private guide text in the build, sitemap URLs without pages, missing, duplicate or over-long titles and descriptions, wrong canonicals, missing or extra `<h1>`, or invalid JSON-LD.
+
 ## Security notes
 
 - Sign-in codes are 6 digits, expire after 10 minutes, allow 5 attempts, and are stored only as an HMAC. Requests are rate-limited per email and per IP.

@@ -1,34 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, Crown, Layers2, LockKeyhole, LogOut, Menu, X } from "lucide-react";
 import { getTrack, tracks } from "../data/prompts.js";
+import { GUIDES } from "../content/guides.js";
 import { useAuth } from "../auth.jsx";
-import { navigate, useRoute } from "../router.js";
+import { Link, navigate, useRoute } from "../router.js";
+import { roundPath, trackPath } from "../seo.js";
 import { ThemePicker, UserMenu, promptIcon } from "./ui.jsx";
 
-// Landing-page sections reachable from the header. With hash routing, a section link
-// is the route "/?s=<id>"; the landing page scrolls to it.
+// Landing-page sections linked from the header and footer, as /#<id> anchors.
 export const SECTIONS = [
   { id: "how", label: "How it works" },
   { id: "pricing", label: "Pricing" },
   { id: "faq", label: "FAQ" },
 ];
 
-export function goToSection(id) {
-  const element = document.getElementById(id);
-  if (element && window.location.hash.replace(/^#/, "").split("?")[0] === "/") {
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.history.replaceState(null, "", `#/?s=${id}`);
-  } else {
-    navigate(`/?s=${id}`);
-  }
-}
-
-export function Logo({ onClick }) {
+export function Logo() {
   return (
-    <button className="logo" onClick={onClick} aria-label="DesignRounds home">
+    <Link className="logo" to="/" aria-label="DesignRounds home">
       <span className="logo-mark"><Layers2 strokeWidth={2.4} /></span>
       <span>design<b>rounds</b></span>
-    </button>
+    </Link>
   );
 }
 
@@ -56,27 +47,28 @@ export function SiteNav() {
   }, [open]);
 
   const signedIn = status === "signed-in";
-  const go = (to) => { setOpen(false); navigate(to); };
-  const section = (id) => { setOpen(false); goToSection(id); };
+  const close = () => setOpen(false);
+  const current = (match) => (match ? "page" : undefined);
   const links = (
     <>
-      <button className="nav-link-btn" aria-current={path === "/library" ? "page" : undefined} onClick={() => go("/library")}>Library</button>
-      {signedIn && <button className="nav-link-btn" aria-current={path === "/profile" ? "page" : undefined} onClick={() => go("/profile")}>My rounds</button>}
-      {SECTIONS.map((item) => <button key={item.id} className="nav-link-btn" onClick={() => section(item.id)}>{item.label}</button>)}
+      <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
+      <Link className="nav-link-btn" to="/guide/system-design-interview" onClick={close} aria-current={current(path.startsWith("/guide/"))}>Guides</Link>
+      {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>My rounds</Link>}
+      {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
     </>
   );
 
   return (
     <header className={`nav ${scrolled || open ? "scrolled" : ""}`}>
       <div className="wrap nav-inner" ref={sheetRef}>
-        <Logo onClick={() => go("/")} />
+        <Logo />
         <nav className="nav-links" aria-label="Main">{links}</nav>
         <div className="nav-actions">
           {signedIn && <UserMenu />}
           {status === "signed-out" && (
             <>
-              <button className="btn btn-quiet btn-sm" onClick={() => go("/signin")}>Sign in</button>
-              <button className="btn btn-primary btn-sm" onClick={() => go("/library")}>Start practicing <ArrowRight size={15} className="nudge" /></button>
+              <Link className="btn btn-quiet btn-sm" to="/signin">Sign in</Link>
+              <Link className="btn btn-primary btn-sm" to="/library">Start practicing <ArrowRight size={15} className="nudge" /></Link>
             </>
           )}
         </div>
@@ -89,12 +81,12 @@ export function SiteNav() {
             {signedIn ? (
               <>
                 <span className="nav-sheet-identity">{user.email}</span>
-                <button className="btn btn-ghost" onClick={async () => { setOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
+                <button className="btn btn-ghost" onClick={async () => { close(); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
               </>
             ) : (
               <>
-                <button className="btn btn-primary" onClick={() => go("/library")}>Start practicing <ArrowRight size={15} /></button>
-                <button className="btn btn-ghost" onClick={() => go("/signin")}>Sign in</button>
+                <Link className="btn btn-primary" to="/library" onClick={close}>Start practicing <ArrowRight size={15} /></Link>
+                <Link className="btn btn-ghost" to="/signin" onClick={close}>Sign in</Link>
               </>
             )}
           </div>
@@ -105,33 +97,33 @@ export function SiteNav() {
 }
 
 export function SiteFooter() {
-  const top = () => { navigate("/"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   return (
     <footer className="foot">
       <div className="wrap">
         <div className="foot-grid">
           <div className="foot-brand">
-            <Logo onClick={top} />
-            <p>Practice system design the way interviews actually go: design it, explain it, defend it.</p>
+            <Logo />
+            <p>System design interview practice the way interviews actually go: design it, explain it, defend it.</p>
           </div>
           <div>
             <h2>Product</h2>
             <ul>
-              <li><button onClick={() => navigate("/library")}>Practice library</button></li>
-              {SECTIONS.map((item) => <li key={item.id}><button onClick={() => goToSection(item.id)}>{item.label}</button></li>)}
+              <li><Link to="/library">Practice library</Link></li>
+              {SECTIONS.map((item) => <li key={item.id}><Link to={`/#${item.id}`}>{item.label}</Link></li>)}
+              <li><Link to="/about">About</Link></li>
             </ul>
           </div>
           <div>
             <h2>Disciplines</h2>
             <ul>
-              {tracks.slice(0, 6).map((track) => <li key={track.id}><button onClick={() => navigate(`/library?track=${track.id}`)}>{track.shortLabel}</button></li>)}
+              {tracks.map((track) => <li key={track.id}><Link to={trackPath(track.id)}>{track.shortLabel}</Link></li>)}
             </ul>
           </div>
           <div>
-            <h2>Account</h2>
+            <h2>Guides</h2>
             <ul>
-              <li><button onClick={() => navigate("/signin")}>Sign in</button></li>
-              <li><button onClick={() => navigate("/profile")}>My rounds</button></li>
+              {GUIDES.map((guide) => <li key={guide.slug}><Link to={guide.path}>{guide.short}</Link></li>)}
+              <li><Link to="/signin">Sign in</Link></li>
             </ul>
           </div>
         </div>
@@ -150,8 +142,8 @@ export function LevelMeter({ level }) {
   return <span className="level" data-level={LEVEL[level] || 1}><i aria-hidden="true"><b /><b /><b /></i>{level}</span>;
 }
 
-// A practice round in the catalog. The whole card is clickable through its title
-// button (one tab stop, a real accessible name); the trailing chip is decorative.
+// A practice round in the catalog. The title links to the round's page (and the
+// link covers the card); the chip starts the round directly.
 export function RoundCard({ round, onStart, status, index = 0 }) {
   const Icon = promptIcon(round.icon);
   const track = getTrack(round.track);
@@ -167,17 +159,17 @@ export function RoundCard({ round, onStart, status, index = 0 }) {
         </span>
       </div>
       <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>{round.category}</span></div>
-      <h3><button onClick={() => onStart(round.id)}>{round.title}</button></h3>
+      <h3><Link to={roundPath(round.id)}>{round.title}</Link></h3>
       <p>{round.description}</p>
       <div className="round-foot">
         <span className="round-facts">
           <LevelMeter level={round.difficulty} />
           <span><Clock3 size={13} /> {round.minutes} min</span>
         </span>
-        <span className={`round-go ${free ? "" : "locked"}`} aria-hidden="true">
+        <button className={`round-go ${free ? "" : "locked"}`} onClick={() => onStart(round.id)} aria-label={`${free ? (status === "in_progress" ? "Resume" : "Start") : "Plus round"}: ${round.title}`}>
           {free ? (status === "in_progress" ? "Resume" : "Start") : <><LockKeyhole size={12} /> Plus</>}
           {free && <ArrowRight size={13} className="nudge" />}
-        </span>
+        </button>
       </div>
     </article>
   );

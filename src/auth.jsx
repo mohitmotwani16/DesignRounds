@@ -3,8 +3,8 @@ import { api } from "./api.js";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [state, setState] = useState({ status: "loading", user: null, error: null });
+export function AuthProvider({ children, initialStatus = "loading" }) {
+  const [state, setState] = useState({ status: initialStatus, user: null, error: null });
 
   const refresh = useCallback(async () => {
     try {
