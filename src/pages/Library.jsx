@@ -189,7 +189,7 @@ export default function LibraryPage({ onStart, initialTrack }) {
         <label className="lib-search">
           <Search size={20} />
           <span className="sr-only">Search practice rounds</span>
-          <input ref={searchRef} type="search" placeholder="Search “rate limiter”, “Kafka”, “exactly-once”…" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <input ref={searchRef} type="search" placeholder="Search “rate limiter”, “idempotency”, “websocket”…" value={search} onChange={(event) => setSearch(event.target.value)} />
           {search ? <button type="button" className="clear" onClick={() => { setSearch(""); searchRef.current?.focus(); }} aria-label="Clear search"><X size={15} /></button> : <kbd>Ctrl K</kbd>}
         </label>
       </section>

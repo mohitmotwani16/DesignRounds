@@ -55,6 +55,14 @@ export default function WorkspaceRoute({ sessionId }) {
   );
 }
 
+// Per-tab flags (sessionStorage); storage can be unavailable, which just means "unset".
+function readSessionFlag(key) {
+  try { return window.sessionStorage.getItem(key); } catch { return null; }
+}
+function writeSessionFlag(key, value) {
+  try { window.sessionStorage.setItem(key, value); } catch { /* preference only */ }
+}
+
 function Workspace({ session, prompt }) {
   const initial = useMemo(() => hydrateDiagram(session.diagram), [session]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
@@ -62,10 +70,14 @@ function Workspace({ session, prompt }) {
   const [status, setStatus] = useState(session.status);
   const [saveState, setSaveState] = useState("saved");
   const [panelOpen, setPanelOpen] = useState(() => readPreference("designrounds:interviewer-open", "true") !== "false");
-  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" ? "review" : "interviewer"));
+  const plan = useAuth().user?.plan;
+  // Free plans can't use the live interviewer, so they start on the Review tab.
+  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" || plan !== "plus" ? "review" : "interviewer"));
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
   const [showPrompt, setShowPrompt] = useState(() => initial.nodes.length === 0 && session.diagramVersion === 0);
   const [snap, setSnap] = useState(true);
+  // Designing on a phone is cramped; say so once per visit (dismissible).
+  const [smallScreenNotice, setSmallScreenNotice] = useState(() => window.innerWidth < 760 && readSessionFlag("designrounds:small-screen-dismissed") !== "1");
   const [showMinimap, setShowMinimap] = useState(() => window.innerWidth > 760);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [focusEdgeLabel, setFocusEdgeLabel] = useState(0);
@@ -484,7 +496,15 @@ function Workspace({ session, prompt }) {
   }
 
   // ---- Interviewer -------------------------------------------------------------
-  const plan = useAuth().user?.plan;
+  // Opens the conversation with the selected component attached and the composer focused.
+  function askAboutSelection() {
+    setDetachedId(null);
+    setPanelTab("interviewer");
+    setPanelOpen(true);
+    writePreference("designrounds:interviewer-open", "true");
+    window.setTimeout(() => document.querySelector(".compose-box textarea")?.focus(), 80);
+  }
+
   const [detachedId, setDetachedId] = useState(null);
   const attached = selectedComponent && selectedComponent.id !== detachedId ? { id: selectedComponent.id, label: selectedComponent.data.label || "Component" } : null;
   const selectedIdRef = useRef(null);
@@ -531,6 +551,7 @@ function Workspace({ session, prompt }) {
       {saveState === "conflict" && <div className="workspace-banner error">This design was changed in another tab or the round was finished elsewhere, so recent edits weren't saved. <button onClick={() => window.location.reload()}>Reload latest</button></div>}
       {saveState === "signed-out" && <div className="workspace-banner error">Your session ended, so changes aren't being saved. <button onClick={() => navigate(`/signin?next=${encodeURIComponent(`/workspace/${session.id}`)}`)}>Sign in again</button></div>}
       {readOnly && <div className="workspace-banner">This round is completed and read-only. <button onClick={reopenRound}>Reopen to keep editing</button></div>}
+      {smallScreenNotice && <div className="workspace-banner info">Designing works best on a laptop or tablet. Your work saves automatically, so you can switch devices anytime. <button onClick={() => { setSmallScreenNotice(false); writeSessionFlag("designrounds:small-screen-dismissed", "1"); }}>Got it</button></div>}
       {legacy && !readOnly && <div className="workspace-banner info"><Upload size={14} /> We found a design for this round saved in this browser before accounts existed. <button onClick={importLegacy}>Import it</button><button className="banner-dismiss" onClick={() => setLegacy(null)}>Dismiss</button></div>}
 
       <div className="workspace-body">
@@ -602,7 +623,6 @@ function Workspace({ session, prompt }) {
                 nodesConnectable={!readOnly}
                 elevateNodesOnSelect={false}
                 onlyRenderVisibleElements={nodes.length > 150}
-                proOptions={{ hideAttribution: true }}
                 colorMode={isDark ? "dark" : "light"}
               >
                 <Background variant={BackgroundVariant.Dots} color={isDark ? "#363c49" : "#cfd6e0"} gap={18} size={1.3} />
@@ -622,7 +642,8 @@ function Workspace({ session, prompt }) {
 
             {singleNode && inspectedId === singleNode.id && (
               <NodeInspector id={singleNode.id} type={singleNode.type} data={singleNode.data} readOnly={readOnly}
-                onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection} />
+                onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection}
+                ask={plan !== "plus" ? "plus" : status !== "in_progress" ? "finished" : "available"} onAsk={askAboutSelection} />
             )}
             {singleEdge && (
               <EdgeInspector edge={singleEdge} sourceLabel={labelFor(singleEdge.source)} targetLabel={labelFor(singleEdge.target)} readOnly={readOnly} focusLabel={focusEdgeLabel}

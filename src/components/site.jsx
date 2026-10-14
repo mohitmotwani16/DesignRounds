@@ -115,20 +115,20 @@ export function SiteFooter() {
             <p>Practice system design the way interviews actually go: design it, explain it, defend it.</p>
           </div>
           <div>
-            <h4>Product</h4>
+            <h2>Product</h2>
             <ul>
               <li><button onClick={() => navigate("/library")}>Practice library</button></li>
               {SECTIONS.map((item) => <li key={item.id}><button onClick={() => goToSection(item.id)}>{item.label}</button></li>)}
             </ul>
           </div>
           <div>
-            <h4>Disciplines</h4>
+            <h2>Disciplines</h2>
             <ul>
               {tracks.slice(0, 6).map((track) => <li key={track.id}><button onClick={() => navigate(`/library?track=${track.id}`)}>{track.shortLabel}</button></li>)}
             </ul>
           </div>
           <div>
-            <h4>Account</h4>
+            <h2>Account</h2>
             <ul>
               <li><button onClick={() => navigate("/signin")}>Sign in</button></li>
               <li><button onClick={() => navigate("/profile")}>My rounds</button></li>

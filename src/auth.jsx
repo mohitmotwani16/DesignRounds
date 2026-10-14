@@ -8,10 +8,10 @@ export function AuthProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const { user } = await api.me();
-      setState({ status: "signed-in", user, error: null });
+      const { user } = await api.session();
+      setState({ status: user ? "signed-in" : "signed-out", user, error: null });
     } catch (error) {
-      setState({ status: "signed-out", user: null, error: error.status === 401 ? null : error });
+      setState({ status: "signed-out", user: null, error });
     }
   }, []);
 
