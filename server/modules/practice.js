@@ -1,20 +1,17 @@
 import express from "express";
 import { z } from "zod";
-import { prompts } from "../../src/data/prompts.js";
 import { query, queryOne } from "../db.js";
 import { HttpError, parse, route } from "../http.js";
 import { requireUser } from "./identity.js";
+import { briefFor, canAccessRound, promptById } from "./rounds.js";
 
 const CHECKPOINT_INTERVAL_MS = 5 * 60_000;
 const MAX_NODES = 400;
 const MAX_EDGES = 800;
 
-export const promptById = new Map(prompts.map((prompt) => [prompt.id, prompt]));
-
-// Entitlements are decided here, never by the client.
-export function canStartPrompt(user, prompt) {
-  return prompt.access === "free" || user.plan === "plus";
-}
+// Rounds (including Plus briefs) and entitlements live in rounds.js.
+export { promptById };
+export const canStartPrompt = canAccessRound;
 
 const finite = z.number().finite().min(-1e6).max(1e6);
 const id = z.string().min(1).max(80);
@@ -114,7 +111,7 @@ practiceRouter.post("/sessions", route(async (req, res) => {
     "select * from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress'",
     [req.user.id, promptId]
   );
-  if (existing) return res.json({ session: { ...toSummary(existing), diagram: existing.diagram }, resumed: true });
+  if (existing) return res.json({ session: { ...toSummary(existing), diagram: existing.diagram, brief: briefFor(prompt) }, resumed: true });
 
   const created = await queryOne(
     `insert into practice_sessions (user_id, prompt_id, prompt_version) values ($1, $2, $3)
@@ -122,12 +119,14 @@ practiceRouter.post("/sessions", route(async (req, res) => {
      returning *`,
     [req.user.id, promptId, prompt.version ?? 1]
   );
-  res.status(201).json({ session: { ...toSummary(created), diagram: created.diagram }, resumed: false });
+  res.status(201).json({ session: { ...toSummary(created), diagram: created.diagram, brief: briefFor(prompt) }, resumed: false });
 }));
 
 practiceRouter.get("/sessions/:sessionId", route(async (req, res) => {
   const row = await ownedSession(req);
-  res.json({ session: { ...toSummary(row), diagram: row.diagram } });
+  // The owner keeps their round's brief even if their plan changes later.
+  const prompt = promptById.get(row.prompt_id);
+  res.json({ session: { ...toSummary(row), diagram: row.diagram, brief: prompt ? briefFor(prompt) : null } });
 }));
 
 practiceRouter.put("/sessions/:sessionId/diagram", route(async (req, res) => {

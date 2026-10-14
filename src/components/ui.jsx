@@ -118,10 +118,9 @@ export function LockedPromptDialog({ prompt, alternative, onClose, onStart }) {
         <span className="lock-badge"><Crown size={13} /> Plus round · {track.shortLabel}</span>
         <h2 id="locked-dialog-title">{prompt.title}</h2>
         <p className="lock-lede">{prompt.description}</p>
-        <h3>Requirements to consider</h3>
-        <ul>{prompt.requirements.map((requirement) => <li key={requirement}><Check size={15} />{requirement}</li>)}</ul>
-        <p className="lock-outcome"><strong>What you'd practice:</strong> {prompt.expectedOutcome}</p>
-        <div className="lock-note"><Sparkles size={16} /><span>Plus is coming soon, with every round, the live AI interviewer, and full coaching. Until then, this round can't be started.</span></div>
+        <h3>Concepts this round covers</h3>
+        <ul>{[...prompt.considerations, prompt.category].map((item) => <li key={item}><Check size={15} />{item}</li>)}</ul>
+        <div className="lock-note"><Sparkles size={16} /><span>The brief, scale and interviewer notes for this round are for Plus members. Plus is coming soon, with every round, the live AI interviewer, and full coaching.</span></div>
         <div className="lock-actions">
           {alternative && <button className="btn btn-primary btn-lg" onClick={() => { onClose(); onStart(alternative.id); }}>Try “{alternative.title.replace(/^Design (a |an )?/i, "")}” free <ArrowRight size={16} /></button>}
           <button className="btn btn-ghost btn-lg" onClick={onClose}>Back to the library</button>

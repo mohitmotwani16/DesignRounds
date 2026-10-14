@@ -759,3 +759,13 @@
 
 /* Discipline hub intro: two paragraphs. */
 .lib-hero p + p { margin-top: 10px; }
+
+/* Plus round: locked preview */
+.rp-locked { margin-top: 8px; padding: 28px !important; border: 1px solid var(--plus-line); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--plus-soft), transparent 75%); }
+.rp-locked-icon { width: 44px; height: 44px; margin-bottom: 14px; display: grid; place-items: center; border-radius: 12px; background: var(--plus-soft); color: var(--plus); }
+.rp-main .rp-locked h2 { margin-bottom: 8px; }
+.rp-locked-actions { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+.rp-main .rp-locked-actions a { text-decoration: none; }
+.rp-main .rp-locked-actions .btn-primary { color: var(--accent-ink); }
+.rp-main .rp-locked-actions .btn-ghost { color: var(--ink); }
+.rp-locked-loading { display: flex; align-items: center; gap: 10px; color: var(--ink-3); }

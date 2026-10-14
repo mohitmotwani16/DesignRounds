@@ -7,7 +7,7 @@
 import "../server/env.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { prompts } from "../src/data/prompts.js";
+import { fullPrompts as prompts } from "../server/modules/rounds.js";
 import { reviewCases } from "../server/content/eval/review-cases.js";
 import { describeAi } from "../server/modules/ai/config.js";
 import { describeDiagram } from "../server/modules/ai/context.js";

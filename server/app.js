@@ -12,6 +12,7 @@ import { reviewsRouter } from "./modules/reviews.js";
 import { interviewsRouter } from "./modules/interviews.js";
 import { maintenanceRouter } from "./modules/maintenance.js";
 import { catalogRouter } from "./modules/catalog.js";
+import { roundsRouter } from "./modules/rounds.js";
 import { devRouter, devToolsEnabled } from "./modules/dev.js";
 import { guideFor } from "./modules/ai/guides.js";
 import { prompts } from "../src/data/prompts.js";
@@ -61,6 +62,8 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use(sameOriginWrites);
   api.use("/v1", maintenanceRouter);
   api.use(loadUser);
+  // Before the routers that require sign-in: round content answers visitors too.
+  api.use("/v1", roundsRouter);
   api.use("/v1", identityRouter);
   api.use("/v1", practiceRouter);
   api.use("/v1", reviewsRouter);
