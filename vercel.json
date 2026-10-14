@@ -19,23 +19,23 @@
     },
     {
       "source": "/signin",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/welcome",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/profile",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/start/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/workspace/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     }
   ],
   "crons": [
@@ -142,7 +142,7 @@
       ]
     },
     {
-      "source": "/app.html",
+      "source": "/app",
       "headers": [
         {
           "key": "X-Robots-Tag",
