@@ -74,6 +74,19 @@ try {
     assert.equal((await call("GET", "/api/v1/catalog/prompts?limit=500")).status, 400);
   });
 
+  // The fake AI provider never builds the JSON Schema sent to real providers, so check
+  // the conversion directly: a validation-library upgrade must not break real AI calls.
+  await step("AI output schemas convert for real providers", async () => {
+    const { toJsonSchema } = await import("../server/modules/ai/schema.js");
+    const { reviewTask } = await import("../server/modules/ai/tasks/review.js");
+    const { interviewerTask, interviewSummaryTask } = await import("../server/modules/ai/tasks/interviewer.js");
+    for (const task of [reviewTask, interviewerTask, interviewSummaryTask]) {
+      const schema = toJsonSchema(task.output);
+      assert.equal(schema.type, "object", `${task.name} output must be a JSON object schema`);
+      assert.ok(Object.keys(schema.properties ?? {}).length > 0, `${task.name} schema has properties`);
+    }
+  });
+
   await step("anonymous requests are rejected", async () => {
     assert.equal((await call("GET", "/api/v1/me")).status, 401);
   });
