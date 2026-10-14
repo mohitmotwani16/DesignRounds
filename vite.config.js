@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { guideExcerptsPlugin } from "./scripts/guide-excerpts.js";
+import { guideExcerptsPlugin } from "./server/content/guide-excerpts.js";
 
 export default defineConfig({
   plugins: [react(), guideExcerptsPlugin()],

@@ -59,7 +59,7 @@ export function PromptModal({ prompt, onClose, fresh = false }) {
 
         {tab === "brief" ? (
           <div className="modal-content">
-            {prompt.prerequisites.length > 0 && (
+            {prompt.prerequisites?.length > 0 && (
               <section className="prereq-block" aria-labelledby="prereq-title">
                 <div className="prereq-head">
                   <GraduationCap size={18} />
@@ -73,7 +73,7 @@ export function PromptModal({ prompt, onClose, fresh = false }) {
             )}
             <h3 className="modal-section-title">Requirements to consider</h3>
             <ol className="requirement-list">
-              {prompt.requirements.map((requirement, index) => <li key={requirement}><span>{index + 1}</span>{requirement}</li>)}
+              {(prompt.requirements ?? []).map((requirement, index) => <li key={requirement}><span>{index + 1}</span>{requirement}</li>)}
             </ol>
             <div className="expected-outcome">
               <span>What you're practicing</span>

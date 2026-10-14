@@ -81,23 +81,17 @@ export const prompts = [
   {
     id: "rate-limiter", title: "Design an API rate limiter", description: "Protect a public API without slowing down well-behaved clients.",
     track: "software-engineering", access: "paid", category: "Reliability", difficulty: "Intermediate", minutes: 40, icon: "shield", color: "teal",
-    requirements: ["Requests are limited by user or API key.", "Different customers may have different quotas.", "The limiter adds predictable, low latency."],
     considerations: ["Token bucket", "Distributed counters", "Fail-open or closed"],
-    expectedOutcome: "A chosen limiting algorithm, key and counter model, distributed consistency trade-offs, and overload behavior.",
   },
   {
     id: "video-streaming", title: "Design video streaming", description: "Stream adaptive-quality video to a global audience.",
     track: "software-engineering", access: "paid", category: "Media", difficulty: "Advanced", minutes: 55, icon: "video", color: "rose",
-    requirements: ["Creators can upload video content.", "Viewers can stream across a range of network speeds.", "Popular content is served close to viewers."],
     considerations: ["Transcoding", "CDN delivery", "Adaptive bitrate"],
-    expectedOutcome: "An ingest-to-playback path covering transcoding, manifests, object storage, CDN delivery, and cost drivers.",
   },
   {
     id: "ride-hailing", title: "Design a ride-hailing service", description: "Match riders with nearby drivers and track trips in real time.",
     track: "software-engineering", access: "paid", category: "Geospatial", difficulty: "Advanced", minutes: 55, icon: "map", color: "green",
-    requirements: ["Riders request trips and receive a nearby driver match.", "Drivers can update their location while available.", "Both parties can follow trip status changes."],
     considerations: ["Geospatial indexing", "Matching fairness", "Trip state machine"],
-    expectedOutcome: "A location update and matching design, trip state model, and approach to regional traffic spikes.",
   },
   {
     id: "ticket-booking", title: "Design a high-demand ticketing platform", description: "Sell limited-inventory tickets fairly when a popular event goes on sale.",
@@ -116,9 +110,7 @@ export const prompts = [
   {
     id: "web-crawler", title: "Design a distributed web crawler", description: "Discover and fetch public pages continuously while respecting site policies.",
     track: "software-engineering", access: "paid", category: "Search", difficulty: "Advanced", minutes: 50, icon: "crawler", color: "blue",
-    requirements: ["The system discovers links and schedules pages for fetching.", "A host is not overwhelmed by concurrent requests.", "Duplicate or changed pages are handled efficiently."],
     considerations: ["Frontier partitioning", "Politeness and robots rules", "Deduplication"],
-    expectedOutcome: "A crawl frontier and worker design, per-host scheduling, URL/content deduplication, and a strategy for retries and freshness.",
   },
   {
     id: "autocomplete", title: "Design a search autocomplete service", description: "Suggest useful completions quickly as users type into a search box.",
@@ -130,9 +122,7 @@ export const prompts = [
   {
     id: "collaborative-editor", title: "Design a collaborative document editor", description: "Let multiple people edit and comment on the same document in real time.",
     track: "software-engineering", access: "paid", category: "Collaboration", difficulty: "Advanced", minutes: 55, icon: "editor", color: "green",
-    requirements: ["Several collaborators can edit a document concurrently.", "Edits eventually converge and survive reconnects.", "Users can view permissions and recover earlier versions."],
     considerations: ["Conflict-free editing", "Presence and reconnects", "Version history"],
-    expectedOutcome: "A real-time operation flow, a justified conflict-resolution strategy, durable revision history, and authorization boundaries.",
   },
   {
     id: "paste-service", title: "Design a text snippet sharing service", description: "Create and share short text snippets with optional expiry and access controls.",
@@ -144,9 +134,7 @@ export const prompts = [
   {
     id: "payment-platform", title: "Design a payment processing platform", description: "Accept payment requests reliably without charging a customer twice.",
     track: "software-engineering", access: "paid", category: "Transactions", difficulty: "Advanced", minutes: 55, icon: "payment", color: "teal",
-    requirements: ["Merchants can initiate and query payment attempts.", "Retries and timeouts do not create duplicate charges.", "Payment state can be reconciled with external processors."],
     considerations: ["Idempotency keys", "State transitions", "Reconciliation and audit"],
-    expectedOutcome: "A payment state machine, idempotent API and ledger boundaries, processor integration flow, and reconciliation strategy.",
   },
   {
     id: "task-scheduler", title: "Design a distributed task scheduler", description: "Schedule one-off and recurring jobs across a fleet of workers.",
@@ -165,9 +153,7 @@ export const prompts = [
   {
     id: "api-gateway", title: "Design a multi-tenant API gateway", description: "Route external API traffic safely to independently operated backend services.",
     track: "software-engineering", access: "paid", category: "Networking", difficulty: "Advanced", minutes: 50, icon: "gateway", color: "violet",
-    requirements: ["Requests are authenticated and routed to the correct service.", "Tenants can have isolated policies and traffic limits.", "Configuration changes can roll out without interrupting healthy traffic."],
     considerations: ["Control plane vs data plane", "Policy evaluation", "Safe configuration rollout"],
-    expectedOutcome: "A gateway request path and configuration control plane, tenant isolation model, and approach to overload, rollout, and failure.",
   },
 
   {
@@ -201,23 +187,17 @@ export const prompts = [
   {
     id: "data-alerting", title: "Design a data alerting system", description: "Notify the right owner when pipelines, data freshness, or business metrics go wrong.",
     track: "data-engineering", access: "paid", category: "Observability", difficulty: "Intermediate", minutes: 40, icon: "alert", color: "rose",
-    requirements: ["Teams can define freshness, volume, and metric-based conditions.", "Alerts identify an owner and relevant supporting evidence.", "Repeated failures do not create a noisy notification storm."],
     considerations: ["Rule evaluation", "Alert grouping", "Escalation policy"],
-    expectedOutcome: "A rule-evaluation and notification flow with ownership, deduplication, escalation, and actionable alert payloads.",
   },
   {
     id: "fraud-data-platform", title: "Design a fraud detection data platform", description: "Join streaming payments with historical signals for fast, explainable fraud decisions.",
     track: "data-engineering", access: "paid", category: "Data + ML", difficulty: "Advanced", minutes: 55, icon: "fraud", color: "teal",
-    requirements: ["Payment events are enriched with recent and historical customer signals.", "Risk decisions arrive within a strict checkout latency budget.", "Investigators can trace which data and rules influenced a decision."],
     considerations: ["Online/offline feature parity", "Feature freshness", "Decision audit trail"],
-    expectedOutcome: "A streaming enrichment and feature-serving design that balances latency, consistency, explainability, and auditability.",
   },
   {
     id: "data-quality", title: "Design a data quality & observability framework", description: "Help teams detect, diagnose, and prevent incorrect or stale data.",
     track: "data-engineering", access: "paid", category: "Governance", difficulty: "Intermediate", minutes: 45, icon: "quality", color: "green",
-    requirements: ["Teams can declare expectations for datasets and pipeline runs.", "The system detects freshness, volume, schema, and value anomalies.", "Owners can trace an incident to affected downstream data products."],
     considerations: ["Contracts and expectations", "Lineage", "Anomaly detection"],
-    expectedOutcome: "A dataset contract and test lifecycle, metadata/lineage model, incident workflow, and a practical signal-to-noise strategy.",
   },
 
   {
@@ -251,23 +231,17 @@ export const prompts = [
   {
     id: "rag-search", title: "Design a retrieval-augmented generation system", description: "Answer questions from a changing document collection with traceable sources.",
     track: "machine-learning", access: "paid", category: "Generative AI", difficulty: "Advanced", minutes: 50, icon: "search", color: "rose",
-    requirements: ["Documents are ingested, chunked, and updated over time.", "Answers retrieve relevant evidence and cite source documents.", "Access permissions apply to both retrieval and generated answers."],
     considerations: ["Chunking and embedding", "Hybrid retrieval", "Grounding and access control"],
-    expectedOutcome: "A document ingestion and indexing pipeline, permission-aware retrieval flow, and quality/grounding evaluation loop.",
   },
   {
     id: "online-fraud-model", title: "Design real-time fraud scoring", description: "Score transactions in milliseconds and route uncertain cases for review.",
     track: "machine-learning", access: "paid", category: "Fraud & risk", difficulty: "Advanced", minutes: 50, icon: "fraud", color: "green",
-    requirements: ["A transaction receives a risk decision before authorization times out.", "Fresh account and device signals inform the prediction.", "The business can tune thresholds and review outcomes."],
     considerations: ["Feature freshness", "Fallback policy", "Human review loop"],
-    expectedOutcome: "A synchronous scoring path, online feature lookup, model fallback and threshold policy, and feedback capture loop.",
   },
   {
     id: "model-monitoring", title: "Design an ML model monitoring system", description: "Notice when a production model becomes slow, biased, or less useful.",
     track: "machine-learning", access: "paid", category: "Model quality", difficulty: "Intermediate", minutes: 40, icon: "monitor", color: "blue",
-    requirements: ["The system collects prediction and eventual outcome signals.", "Teams can detect drift and service regressions.", "Alerts link a change to the affected model version and cohort."],
     considerations: ["Delayed ground truth", "Drift metrics", "Privacy-preserving telemetry"],
-    expectedOutcome: "A monitoring data model, delayed-label evaluation strategy, model/version segmentation, and operator response path.",
   },
 
   {
@@ -301,23 +275,17 @@ export const prompts = [
   {
     id: "deployment-platform", title: "Design a safe deployment platform", description: "Roll out changes across hundreds of services with fast, safe rollback.",
     track: "platform-infrastructure", access: "paid", category: "Release engineering", difficulty: "Intermediate", minutes: 45, icon: "deploy", color: "orange",
-    requirements: ["Teams can deploy an immutable release to selected environments.", "Progressive rollout can pause or roll back on unhealthy signals.", "Deployment history and ownership are easy to inspect."],
     considerations: ["Canary analysis", "Artifact provenance", "Rollback safety"],
-    expectedOutcome: "A release control plane, artifact and environment model, rollout state machine, and health-gated rollback strategy.",
   },
   {
     id: "metrics-platform", title: "Design a metrics and observability platform", description: "Collect useful signals from services without making telemetry unbounded.",
     track: "platform-infrastructure", access: "paid", category: "Observability", difficulty: "Advanced", minutes: 50, icon: "monitor", color: "green",
-    requirements: ["Teams can query service health across environments.", "High-cardinality and bursty telemetry remain manageable.", "Alerts stay connected to service ownership and runbooks."],
     considerations: ["Cardinality control", "Retention tiers", "Alert routing"],
-    expectedOutcome: "A telemetry ingestion and storage design, query/retention model, cardinality safeguards, and alert-to-owner workflow.",
   },
   {
     id: "config-control-plane", title: "Design a configuration control plane", description: "Deliver safe, auditable configuration changes to a large service fleet.",
     track: "platform-infrastructure", access: "paid", category: "Control planes", difficulty: "Advanced", minutes: 45, icon: "config", color: "teal",
-    requirements: ["Operators can publish versioned configuration to selected services.", "Invalid or risky changes can be validated and rolled back.", "Services continue with a safe configuration during control-plane outages."],
     considerations: ["Push vs pull", "Validation and rollout", "Last-known-good state"],
-    expectedOutcome: "A configuration version and propagation model, validation and staged rollout flow, and resilient client behavior.",
   },
   {
     id: "key-value-store", title: "Design a distributed key-value store", description: "Store and serve keys across many nodes with tunable consistency.",
@@ -343,23 +311,17 @@ export const prompts = [
   {
     id: "distributed-lock-service", title: "Design a distributed lock service", description: "Let services coordinate exclusive access without deadlocks or split brain.",
     track: "distributed-systems", access: "paid", category: "Coordination", difficulty: "Advanced", minutes: 45, icon: "lock", color: "orange",
-    requirements: ["Clients acquire and release named locks with a timeout.", "A crashed holder cannot keep a lock forever.", "Two clients never believe they hold the same lock at once."],
     considerations: ["Leases and fencing tokens", "Consensus backing store", "Client failure detection"],
-    expectedOutcome: "A lease-based lock protocol with fencing tokens, the consensus layer behind it, and behavior under partitions and pauses.",
   },
   {
     id: "leader-election", title: "Design leader election for a service cluster", description: "Keep exactly one active coordinator while nodes come and go.",
     track: "distributed-systems", access: "paid", category: "Consensus", difficulty: "Advanced", minutes: 45, icon: "crown", color: "teal",
-    requirements: ["The cluster elects a single leader that followers can discover.", "A new leader is chosen promptly when the current one fails.", "A deposed leader cannot keep acting on stale authority."],
     considerations: ["Raft-style terms", "Heartbeats and timeouts", "Split-brain prevention"],
-    expectedOutcome: "An election protocol, term/epoch handling, failure detection timings, and how stale leaders are fenced off.",
   },
   {
     id: "geo-replicated-database", title: "Design a geo-replicated database", description: "Serve reads and writes from several regions with clear consistency trade-offs.",
     track: "distributed-systems", access: "paid", category: "Replication", difficulty: "Advanced", minutes: 55, icon: "regions", color: "green",
-    requirements: ["Users in each region get low-latency reads.", "Writes from any region become visible elsewhere within a stated bound.", "A full region outage does not lose committed data."],
     considerations: ["Single vs multi-leader", "Conflict resolution", "Cross-region latency"],
-    expectedOutcome: "A replication topology, write path and conflict policy, consistency guarantees per operation, and regional failover.",
   },
   {
     id: "offline-first-sync", title: "Design offline-first mobile sync", description: "Let a notes app work offline and merge cleanly when it reconnects.",
@@ -385,16 +347,12 @@ export const prompts = [
   {
     id: "collaborative-whiteboard", title: "Design a collaborative whiteboard client", description: "Let many people draw on one canvas in real time without conflicts.",
     track: "frontend-mobile", access: "paid", category: "Real-time", difficulty: "Advanced", minutes: 50, icon: "editor", color: "violet",
-    requirements: ["Participants see each other's strokes and cursors in near real time.", "The board converges to the same state for everyone.", "Large boards render without freezing the browser."],
     considerations: ["CRDTs vs OT", "Rendering pipeline", "Presence and reconnection"],
-    expectedOutcome: "A shared-state model, transport and reconnection plan, rendering approach for large boards, and persistence.",
   },
   {
     id: "micro-frontend-platform", title: "Design a micro-frontend platform", description: "Let many teams ship parts of one web app independently.",
     track: "frontend-mobile", access: "paid", category: "Architecture", difficulty: "Advanced", minutes: 45, icon: "platform", color: "blue",
-    requirements: ["Teams deploy their sections without coordinating releases.", "Shared navigation, auth, and design system stay consistent.", "A broken section does not take down the whole app."],
     considerations: ["Composition strategy", "Shared dependencies", "Isolation and fallbacks"],
-    expectedOutcome: "A composition model, deployment and versioning flow, shared-dependency strategy, and failure isolation.",
   },
 ];
 
@@ -404,51 +362,30 @@ const prerequisites = {
   "chat-system": ["WebSockets and long-lived connections", "Message queues", "Ordering and idempotency", "Online presence basics"],
   "news-feed": ["Fan-out on write vs read", "Caching hot data", "Social graph modeling", "Pagination with cursors"],
   "file-storage": ["Object storage (blobs)", "Chunking and checksums", "Metadata databases", "Conflict resolution"],
-  "rate-limiter": ["Token bucket and sliding window", "Atomic counters (e.g. Redis INCR)", "API keys and quotas", "Fail-open vs fail-closed"],
-  "video-streaming": ["CDNs and edge caching", "Video transcoding", "HLS/DASH and adaptive bitrate", "Object storage"],
-  "ride-hailing": ["Geospatial indexing (geohash, quadtree)", "Real-time location updates", "State machines", "Regional sharding"],
   "ticket-booking": ["Transactions and isolation levels", "Optimistic vs pessimistic locking", "Reservation TTLs", "Queueing under traffic spikes"],
   "notification-service": ["Message queues and workers", "Retries with backoff", "Idempotency keys", "Push, email, and SMS providers"],
-  "web-crawler": ["BFS over a URL frontier", "robots.txt and politeness", "URL and content deduplication", "Distributed work queues"],
   "autocomplete": ["Tries and prefix search", "Top-k ranking", "Caching at the edge", "Batch index rebuilding"],
-  "collaborative-editor": ["Operational transforms or CRDTs", "WebSockets", "Versioning and snapshots", "Access control basics"],
   "paste-service": ["Unique ID generation", "Object vs database storage", "TTL-based expiry", "Basic abuse prevention"],
-  "payment-platform": ["Idempotency keys", "State machines", "Double-entry ledgers", "Reconciliation with external processors"],
   "task-scheduler": ["Delayed and cron scheduling", "Leases and heartbeats", "At-least-once delivery", "Retries and dead-letter queues"],
   "distributed-cache": ["Consistent hashing", "Eviction policies (LRU, LFU)", "Replication basics", "Cache invalidation strategies"],
-  "api-gateway": ["Reverse proxies and routing", "Authentication (API keys, JWT)", "Rate limiting", "Control plane vs data plane"],
   "scd2-warehouse": ["Dimensional modeling (facts and dimensions)", "Slowly changing dimensions", "Business vs surrogate keys", "Idempotent batch loads"],
   "realtime-analytics": ["Stream processing basics", "Event time vs processing time", "Windowed aggregation", "Columnar / OLAP stores"],
   "etl-framework": ["DAG orchestration (e.g. Airflow)", "Incremental loads and backfills", "Idempotent tasks", "Data lineage"],
   "clickstream": ["Event schemas and evolution", "Client-side batching", "Message logs (e.g. Kafka)", "PII handling"],
-  "data-alerting": ["Data freshness and volume checks", "Anomaly detection basics", "Alert routing and deduplication", "Ownership and on-call"],
-  "fraud-data-platform": ["Streaming enrichment", "Online vs offline features", "Low-latency key-value lookups", "Audit trails"],
-  "data-quality": ["Data contracts", "Data tests and expectations", "Lineage graphs", "Incident triage"],
   "recommendation-engine": ["Candidate generation vs ranking", "Collaborative filtering", "Embeddings basics", "A/B testing"],
   "feature-store": ["Online vs offline storage", "Point-in-time correct joins", "Batch and streaming materialization", "Training/serving skew"],
   "training-platform": ["GPU scheduling basics", "Data vs model parallelism", "Checkpointing", "Experiment tracking"],
   "model-serving": ["Model versioning", "Request batching", "Autoscaling", "Canary releases"],
-  "rag-search": ["Embeddings and vector search", "Document chunking", "Prompting LLMs", "Permission-aware retrieval"],
-  "online-fraud-model": ["Real-time feature lookups", "Latency budgets", "Decision thresholds", "Fallback behavior"],
-  "model-monitoring": ["Data and concept drift", "Delayed ground-truth labels", "Model versioning", "Alerting basics"],
   "service-platform": ["CI/CD pipelines", "Containers and Kubernetes", "Service templates", "Self-service vs guardrails"],
   "multi-region": ["RTO and RPO", "Synchronous vs asynchronous replication", "DNS and global load balancing", "Failover testing"],
   "service-discovery": ["Service registries", "Health checks", "Client-side vs server-side load balancing", "TTLs and caching"],
   "secrets-platform": ["Workload identity", "Encryption and KMS", "Secret rotation", "Audit logging"],
-  "deployment-platform": ["Immutable artifacts", "Canary and blue-green deploys", "Health signals and SLOs", "Rollback strategies"],
-  "metrics-platform": ["Time-series data", "Cardinality and labels", "Retention and downsampling", "Alerting rules"],
-  "config-control-plane": ["Configuration versioning", "Push vs pull propagation", "Schema validation", "Staged rollouts"],
   "key-value-store": ["Consistent hashing", "Replication and quorums", "CAP and consistency models", "Gossip and failure detection"],
   "unique-id-generator": ["Bit layouts (Snowflake IDs)", "Clock skew", "Worker ID assignment", "UUID trade-offs"],
   "distributed-message-queue": ["Append-only logs", "Partitions and ordering", "Leader/follower replication", "Consumer offsets"],
-  "distributed-lock-service": ["Leases and TTLs", "Fencing tokens", "Consensus basics (Raft/Paxos)", "Process pauses and clock issues"],
-  "leader-election": ["Raft terms and voting", "Heartbeats and timeouts", "Split-brain", "Quorum math"],
-  "geo-replicated-database": ["Single- vs multi-leader replication", "Conflict resolution (LWW, CRDTs)", "Consistency models", "Cross-region latency"],
   "offline-first-sync": ["Local databases on mobile", "Change logs and sync cursors", "Conflict resolution", "Reconnect and retry handling"],
   "image-feed-client": ["List virtualization", "Responsive images and CDNs", "Client-side caching", "Cursor-based pagination"],
   "mobile-release-flags": ["Feature flags and remote config", "Staged rollouts", "API versioning", "App store release cycles"],
-  "collaborative-whiteboard": ["CRDTs or operational transforms", "WebSockets and presence", "Canvas rendering performance", "Reconnection handling"],
-  "micro-frontend-platform": ["Module federation / composition", "Shared dependencies and versioning", "Independent deployments", "Error boundaries and isolation"],
 };
 for (const prompt of prompts) prompt.prerequisites = prerequisites[prompt.id] ?? [];
 

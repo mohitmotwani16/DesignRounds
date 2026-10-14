@@ -26,7 +26,7 @@ const normalize = (text) => ` ${text.toLowerCase().replace(/[^a-z0-9+#]+/g, " ")
 // What a card needs, plus a normalized search haystack. Built once.
 const catalog = prompts.map((prompt, order) => ({
   order,
-  haystack: normalize(`${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements.join(" ")} ${prompt.considerations.join(" ")} ${prompt.prerequisites?.join(" ") ?? ""} ${prompt.expectedOutcome ?? ""}`),
+  haystack: normalize(`${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements?.join(" ") ?? ""} ${prompt.considerations.join(" ")} ${prompt.prerequisites?.join(" ") ?? ""} ${prompt.expectedOutcome ?? ""}`),
   card: {
     id: prompt.id,
     title: prompt.title,

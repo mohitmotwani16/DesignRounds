@@ -87,6 +87,17 @@ try {
     }
   });
 
+  await step("Plus round content is locked to Plus", async () => {
+    const plusRound = prompts.find((entry) => entry.access === "paid");
+    const freeRound = prompts.find((entry) => entry.access === "free");
+    assert.equal(plusRound.requirements, undefined, "the public catalog must not carry Plus briefs");
+    assert.equal((await call("GET", `/api/v1/rounds/${plusRound.id}`)).status, 401);
+    const open = await call("GET", `/api/v1/rounds/${freeRound.id}`);
+    assert.equal(open.status, 200);
+    assert.ok(open.body.round.requirements.length > 0);
+    assert.equal((await call("GET", "/api/v1/rounds/nope")).status, 404);
+  });
+
   await step("anonymous requests are rejected", async () => {
     assert.equal((await call("GET", "/api/v1/me")).status, 401);
     const anonymous = await call("GET", "/api/v1/session");
@@ -117,6 +128,21 @@ try {
 
   await step("resend cooldown is enforced", async () => {
     assert.equal((await call("POST", "/api/v1/auth/request-code", { email })).status, 429);
+  });
+
+  await step("Plus round content needs Plus", async () => {
+    const plusRound = prompts.find((entry) => entry.access === "paid");
+    assert.equal((await call("GET", `/api/v1/rounds/${plusRound.id}`)).status, 403, "a Free member is refused");
+    assert.equal((await call("POST", "/api/v1/sessions", { promptId: plusRound.id })).status, 403, "and can't start it");
+    assert.equal((await call("POST", "/api/v1/dev/plan", { plan: "plus" })).status, 200);
+    const unlocked = await call("GET", `/api/v1/rounds/${plusRound.id}`);
+    assert.equal(unlocked.status, 200);
+    assert.ok(unlocked.body.round.requirements.length > 0 && unlocked.body.round.guide.questions.length > 0);
+    const started = await call("POST", "/api/v1/sessions", { promptId: plusRound.id });
+    assert.equal(started.status, 201);
+    assert.ok(started.body.session.brief.requirements.length > 0, "the session carries the brief");
+    assert.equal((await call("DELETE", `/api/v1/sessions/${started.body.session.id}`)).status, 200);
+    assert.equal((await call("POST", "/api/v1/dev/plan", { plan: "free" })).status, 200);
   });
 
   await step("profile update", async () => {

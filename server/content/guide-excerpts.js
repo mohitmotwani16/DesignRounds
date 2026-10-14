@@ -6,13 +6,16 @@
 // questions". "Core components", "Key decisions and trade-offs" and "What strong
 // looks like" never leave the server.
 //
-// Exposed to the frontend as the virtual module "virtual:guide-excerpts" (see
-// vite.config.js), so the excerpts are always built from the current guides.
+// Free rounds' excerpts are bundled into the frontend as the virtual module
+// "virtual:guide-excerpts" (see vite.config.js), so they are always built from the
+// current guides. Plus rounds' excerpts are never bundled: the API serves them to
+// Plus members (server/modules/rounds.js).
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { prompts } from "../../src/data/prompts.js";
 
-const guidesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "server", "content", "guides");
+const guidesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "guides");
 export const PUBLIC_SECTIONS = { scale: "Scope and scale", mistakes: "Common mistakes", questions: "Deep-dive questions" };
 
 function section(text, heading) {
@@ -52,7 +55,9 @@ export function guideExcerptsPlugin() {
     load(source) {
       if (source !== resolved) return null;
       for (const file of readdirSync(guidesDir)) this.addWatchFile(path.join(guidesDir, file));
-      return `export default ${JSON.stringify(loadGuideExcerpts())};`;
+      const free = new Set(prompts.filter((prompt) => prompt.access === "free").map((prompt) => prompt.id));
+      const excerpts = Object.fromEntries(Object.entries(loadGuideExcerpts()).filter(([id]) => free.has(id)));
+      return `export default ${JSON.stringify(excerpts)};`;
     },
   };
 }

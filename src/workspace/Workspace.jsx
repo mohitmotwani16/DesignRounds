@@ -46,7 +46,9 @@ export default function WorkspaceRoute({ sessionId }) {
       </FullPageMessage>
     );
   }
-  const prompt = findPrompt(state.session.promptId);
+  // The detailed brief arrives with the session (Plus rounds' briefs exist only there).
+  const base = findPrompt(state.session.promptId);
+  const prompt = base && { ...base, ...(state.session.brief ?? {}) };
   if (!prompt) return <FullPageMessage title="This design round is no longer available" action={<button className="button button-dark" onClick={() => navigate("/profile")}>Back to profile</button>} />;
   return (
     <ReactFlowProvider>

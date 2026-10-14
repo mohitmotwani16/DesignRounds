@@ -159,7 +159,9 @@ export function routeMeta(path) {
     const prompt = findPrompt(roundMatch[1]);
     if (!prompt) return { ...base, notFound: true };
     const track = getTrack(prompt.track);
-    const description = clamp(`${prompt.description} Practice this ${prompt.difficulty.toLowerCase()} ${track.shortLabel} system design interview question: requirements, scale, interview questions and common mistakes.`);
+    const description = clamp(prompt.access === "free"
+      ? `${prompt.description} Practice this ${prompt.difficulty.toLowerCase()} ${track.shortLabel} system design interview question: requirements, scale, interview questions and common mistakes.`
+      : `${prompt.description} A ${prompt.difficulty.toLowerCase()} ${track.shortLabel} system design interview question, part of DesignRounds Plus. Covers ${prompt.considerations.join(", ").toLowerCase()}.`);
     return {
       ...base,
       title: fitTitle(`${prompt.title} — System Design Interview Question`, `${prompt.title} | System Design Interview`, `${prompt.title} | System Design`, prompt.title),

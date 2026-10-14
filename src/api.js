@@ -41,6 +41,7 @@ const query = (params) => {
 };
 
 export const api = {
+  round: (id) => request("GET", `/rounds/${encodeURIComponent(id)}`),
   catalog: (params, options) => request("GET", `/catalog/prompts${query(params)}`, undefined, options),
   me: () => request("GET", "/me"),
   session: () => request("GET", "/session"),
