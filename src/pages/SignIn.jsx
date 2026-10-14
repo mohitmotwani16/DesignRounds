@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Layers2, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { Brand } from "../components/ui.jsx";
+import { Logo } from "../components/site.jsx";
 import { navigate, safeNext } from "../router.js";
 
 export default function SignInPage({ next }) {
@@ -64,8 +64,8 @@ export default function SignInPage({ next }) {
   }, [code]);
 
   return (
-    <main className="auth-page">
-      <div className="auth-topbar"><Brand onClick={() => navigate("/")} /></div>
+    <main className="auth-page site">
+      <div className="auth-topbar"><Logo onClick={() => navigate("/")} /></div>
       <section className="auth-card" aria-labelledby="auth-title">
         <span className="auth-icon">{step === "email" ? <Mail size={20} /> : <ShieldCheck size={20} />}</span>
         {step === "email" ? (
@@ -75,7 +75,7 @@ export default function SignInPage({ next }) {
             <label className="field-label" htmlFor="signin-email">Email address</label>
             <input id="signin-email" className="text-input" type="email" autoComplete="email" inputMode="email" required autoFocus placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="button button-dark auth-submit" disabled={busy || !email}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Email me a code <ArrowRight size={15} /></button>
+            <button className="btn btn-primary btn-lg auth-submit" disabled={busy || !email}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Email me a code <ArrowRight size={15} /></button>
           </form>
         ) : (
           <form onSubmit={verify}>
@@ -95,7 +95,7 @@ export default function SignInPage({ next }) {
               onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
             />
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="button button-dark auth-submit" disabled={busy || code.length !== 6}>{busy ? <LoaderCircle size={16} className="spin" /> : <Check size={15} />}Verify and continue</button>
+            <button className="btn btn-primary btn-lg auth-submit" disabled={busy || code.length !== 6}>{busy ? <LoaderCircle size={16} className="spin" /> : <Check size={15} />}Verify and continue</button>
             <div className="auth-secondary">
               <button type="button" className="text-button" onClick={() => { setStep("email"); setError(""); }}><ArrowLeft size={13} /> Use a different email</button>
               <button type="button" className="text-button" disabled={cooldown > 0 || busy} onClick={sendCode}>{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}</button>

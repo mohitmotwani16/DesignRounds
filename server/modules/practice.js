@@ -107,7 +107,7 @@ practiceRouter.get("/sessions", route(async (req, res) => {
 practiceRouter.post("/sessions", route(async (req, res) => {
   const { promptId } = parse(createBody, req.body);
   const prompt = promptById.get(promptId);
-  if (!prompt) throw new HttpError(404, "NOT_FOUND", "Unknown practice prompt.");
+  if (!prompt) throw new HttpError(404, "NOT_FOUND", "Unknown design round.");
   if (!canStartPrompt(req.user, prompt)) throw new HttpError(403, "PLAN_REQUIRED", "This round is part of the Plus plan.");
 
   const existing = await queryOne(
@@ -163,7 +163,7 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
       "select id from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress' and id <> $3",
       [req.user.id, row.prompt_id, row.id]
     );
-    if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this prompt.");
+    if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this design.");
   }
   const updated = await queryOne(
     `update practice_sessions
@@ -172,7 +172,7 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
     [status, row.id, req.user.id]
   ).catch((error) => {
     // A concurrent reopen of another round for this prompt won the unique index.
-    if (error.code === "23505") throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this prompt.");
+    if (error.code === "23505") throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this design.");
     throw error;
   });
   res.json({ session: toSummary(updated) });

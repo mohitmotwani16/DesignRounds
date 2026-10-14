@@ -83,7 +83,7 @@ export function PromptModal({ prompt, onClose, fresh = false }) {
           </div>
         ) : (
           <div className="modal-content approach-content">
-            <p className="approach-intro">There isn't one right answer. These areas usually shape a strong design for this prompt:</p>
+            <p className="approach-intro">There isn't one right answer. These areas usually shape a strong design for this round:</p>
             <div className="consideration-list">
               {prompt.considerations.map((item, index) => <div key={item}><span>{String(index + 1).padStart(2, "0")}</span>{item}</div>)}
             </div>

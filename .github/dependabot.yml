@@ -11,6 +11,9 @@ updates:
       default-days: 14
       semver-major-days: 30
     groups:
+      # react and react-dom must always move together (a mismatch breaks the build).
+      react:
+        patterns: ["react", "react-dom"]
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
@@ -30,6 +33,15 @@ updates:
       - dependency-name: lucide-react
         update-types: [version-update:semver-major]
       - dependency-name: simple-icons
+        update-types: [version-update:semver-major]
+      # zod 4 changed the internals server/modules/ai/schema.js reads to build the JSON
+      # Schema sent to AI providers; upgrading needs that converter migrated first.
+      - dependency-name: zod
+        update-types: [version-update:semver-major]
+      # React 19 is a deliberate migration (React Flow, rendering behaviour), not a bot merge.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
         update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /

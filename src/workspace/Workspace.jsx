@@ -47,7 +47,7 @@ export default function WorkspaceRoute({ sessionId }) {
     );
   }
   const prompt = findPrompt(state.session.promptId);
-  if (!prompt) return <FullPageMessage title="This prompt is no longer available" action={<button className="button button-dark" onClick={() => navigate("/profile")}>Back to profile</button>} />;
+  if (!prompt) return <FullPageMessage title="This design round is no longer available" action={<button className="button button-dark" onClick={() => navigate("/profile")}>Back to profile</button>} />;
   return (
     <ReactFlowProvider>
       <Workspace key={state.session.id} session={state.session} prompt={prompt} />
@@ -531,7 +531,7 @@ function Workspace({ session, prompt }) {
       {saveState === "conflict" && <div className="workspace-banner error">This design was changed in another tab or the round was finished elsewhere, so recent edits weren't saved. <button onClick={() => window.location.reload()}>Reload latest</button></div>}
       {saveState === "signed-out" && <div className="workspace-banner error">Your session ended, so changes aren't being saved. <button onClick={() => navigate(`/signin?next=${encodeURIComponent(`/workspace/${session.id}`)}`)}>Sign in again</button></div>}
       {readOnly && <div className="workspace-banner">This round is completed and read-only. <button onClick={reopenRound}>Reopen to keep editing</button></div>}
-      {legacy && !readOnly && <div className="workspace-banner info"><Upload size={14} /> We found a design for this prompt saved in this browser before accounts existed. <button onClick={importLegacy}>Import it</button><button className="banner-dismiss" onClick={() => setLegacy(null)}>Dismiss</button></div>}
+      {legacy && !readOnly && <div className="workspace-banner info"><Upload size={14} /> We found a design for this round saved in this browser before accounts existed. <button onClick={importLegacy}>Import it</button><button className="banner-dismiss" onClick={() => setLegacy(null)}>Dismiss</button></div>}
 
       <div className="workspace-body">
         <aside className="tool-rail" aria-label="Canvas tools">

@@ -1,4 +1,4 @@
-import { readdir, readFile, mkdir } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isProduction } from "./flags.js";
@@ -67,6 +67,11 @@ export async function connect({ url = process.env.DATABASE_URL, migrate: runMigr
     const { PGlite } = await import("@electric-sql/pglite");
     const dataDir = process.env.PGLITE_DIR || path.resolve(here, "..", ".data", "pglite");
     await mkdir(dataDir, { recursive: true });
+    // PGlite's filesystem honours the write bit, and a read-only folder (e.g. one that
+    // OneDrive has marked read-only after syncing it) fails with an opaque error.
+    if (((await stat(dataDir)).mode & 0o200) === 0) {
+      throw new Error(`The local database folder ${dataDir} is read-only. Clear the flag and restart: on Windows run  attrib -R "${dataDir}" /S /D  (or set PGLITE_DIR to a folder outside OneDrive).`);
+    }
     let db;
     try {
       db = new PGlite(dataDir);

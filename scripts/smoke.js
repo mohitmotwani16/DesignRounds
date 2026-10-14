@@ -49,6 +49,44 @@ try {
     assert.equal(ready.body.database, "up");
   });
 
+  await step("catalog pages, filters, and facets", async () => {
+    const first = await call("GET", "/api/v1/catalog/prompts?limit=12");
+    assert.equal(first.status, 200);
+    assert.equal(first.body.items.length, 12);
+    assert.equal(first.body.total, prompts.length);
+    assert.match(first.headers.get("cache-control"), /s-maxage/);
+    const second = await call("GET", `/api/v1/catalog/prompts?limit=12&cursor=${first.body.nextCursor}`);
+    assert.notEqual(second.body.items[0].id, first.body.items[0].id, "the next page continues after the first");
+    let seen = 0;
+    for (let cursor = ""; ; ) {
+      const page = await call("GET", `/api/v1/catalog/prompts?limit=24${cursor ? `&cursor=${cursor}` : ""}`);
+      seen += page.body.items.length;
+      if (!page.body.nextCursor) break;
+      cursor = page.body.nextCursor;
+    }
+    assert.equal(seen, prompts.length, "paging visits every prompt exactly once");
+    const free = await call("GET", "/api/v1/catalog/prompts?access=free&level=Beginner");
+    assert.ok(free.body.items.every((item) => item.access === "free" && item.difficulty === "Beginner"));
+    assert.equal(free.body.facets.tracks.all, free.body.total);
+    const search = await call("GET", "/api/v1/catalog/prompts?q=url%20shortener");
+    assert.equal(search.body.items[0].id, "url-shortener");
+    assert.equal((await call("GET", "/api/v1/catalog/prompts?track=nope")).status, 400);
+    assert.equal((await call("GET", "/api/v1/catalog/prompts?limit=500")).status, 400);
+  });
+
+  // The fake AI provider never builds the JSON Schema sent to real providers, so check
+  // the conversion directly: a validation-library upgrade must not break real AI calls.
+  await step("AI output schemas convert for real providers", async () => {
+    const { toJsonSchema } = await import("../server/modules/ai/schema.js");
+    const { reviewTask } = await import("../server/modules/ai/tasks/review.js");
+    const { interviewerTask, interviewSummaryTask } = await import("../server/modules/ai/tasks/interviewer.js");
+    for (const task of [reviewTask, interviewerTask, interviewSummaryTask]) {
+      const schema = toJsonSchema(task.output);
+      assert.equal(schema.type, "object", `${task.name} output must be a JSON object schema`);
+      assert.ok(Object.keys(schema.properties ?? {}).length > 0, `${task.name} schema has properties`);
+    }
+  });
+
   await step("anonymous requests are rejected", async () => {
     assert.equal((await call("GET", "/api/v1/me")).status, 401);
   });

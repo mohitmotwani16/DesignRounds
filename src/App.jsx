@@ -3,7 +3,8 @@ import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { findPrompt } from "./data/prompts.js";
-import { FullPageMessage, LockedPromptDialog, SiteHeader } from "./components/ui.jsx";
+import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
+import { SiteNav } from "./components/site.jsx";
 import { navigate, safeNext, useRoute } from "./router.js";
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
@@ -27,7 +28,8 @@ function Routes() {
   const auth = useAuth();
   const [lockedPromptId, setLockedPromptId] = useState(null);
 
-  useEffect(() => { window.scrollTo(0, 0); }, [path]);
+  // Section deep links ("/?s=pricing") scroll themselves; every other route starts at the top.
+  useEffect(() => { if (!params.get("s")) window.scrollTo(0, 0); }, [path]);
 
   // Practicing requires an account; browsing the catalog does not.
   const startPrompt = useCallback((promptId) => {
@@ -69,11 +71,11 @@ function Routes() {
   let page;
   if (path === "/library") page = <LibraryPage onStart={startPrompt} initialTrack={params.get("track")} />;
   else if (path === "/profile") page = <ProfilePage onStart={startPrompt} />;
-  else page = <LandingPage onStart={startPrompt} />;
+  else page = <LandingPage onStart={startPrompt} section={params.get("s")} />;
 
   return (
-    <div className="site-shell">
-      <SiteHeader />
+    <div className="site-shell site">
+      <SiteNav />
       {page}
       {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} onClose={() => setLockedPromptId(null)} />}
     </div>
@@ -97,7 +99,7 @@ function StartRound({ promptId }) {
   }, [promptId]);
 
   if (error) {
-    const title = error.code === "PLAN_REQUIRED" ? "This is a Plus round" : error.code === "NOT_FOUND" ? "Prompt not found" : "Couldn't start the round";
+    const title = error.code === "PLAN_REQUIRED" ? "This is a Plus round" : error.code === "NOT_FOUND" ? "Design round not found" : "Couldn't start the round";
     return <FullPageMessage title={title} action={<button className="button button-dark" onClick={() => navigate("/library")}>Back to library</button>}>{error.message}</FullPageMessage>;
   }
   return <FullPageMessage title="Preparing your round…"><LoaderCircle size={18} className="spin" /></FullPageMessage>;
