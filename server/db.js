@@ -1,6 +1,7 @@
 import { readdir, readFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isProduction } from "./flags.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.join(here, "migrations");
@@ -12,16 +13,32 @@ let driverName;
 // Local development uses PGlite (embedded Postgres persisted to .data/), so no
 // database install is required. Setting DATABASE_URL switches to a real Postgres
 // server such as Neon or Supabase, with identical SQL.
-export async function connect() {
+//
+// `migrate: false` skips the migration check; serverless deployments apply migrations
+// once per deploy (scripts/migrate.js) instead of on every cold start.
+export async function connect({ url = process.env.DATABASE_URL, migrate: runMigrations = true } = {}) {
   if (client) return client;
-  const url = process.env.DATABASE_URL;
+  if (!url && isProduction) throw new Error("DATABASE_URL must be set in production; the embedded database is for local development only.");
   if (url) {
     const { default: pg } = await import("pg");
     const pool = new pg.Pool({
       connectionString: url,
+      // Small per-instance pools: on serverless every warm instance holds its own, and
+      // the provider's pooler (e.g. Supabase Supavisor) multiplexes them onto Postgres.
       max: Number(process.env.DATABASE_POOL_SIZE || 5),
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+      application_name: "designrounds",
       ssl: /localhost|127\.0\.0\.1/.test(url) || process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
     });
+    // An idle client dropped by the server must not crash the process.
+    pool.on("error", (error) => console.error("[db] idle client error:", error.message));
+    // On Vercel, keeps a suspending instance alive just long enough to close idle
+    // connections instead of leaking them on the database side. A no-op elsewhere.
+    if (process.env.VERCEL) {
+      const { attachDatabasePool } = await import("@vercel/functions");
+      attachDatabasePool(pool);
+    }
     client = {
       query: (sql, params) => pool.query(sql, params),
       exec: (sql) => pool.query(sql),
@@ -61,7 +78,7 @@ export async function connect() {
     };
     driverName = `pglite (${path.relative(process.cwd(), dataDir) || dataDir})`;
   }
-  await migrate();
+  if (runMigrations) await migrate();
   return client;
 }
 
@@ -88,19 +105,40 @@ export function transaction(fn) {
   }));
 }
 
-async function migrate() {
+// Arbitrary constant identifying the migration lock.
+const MIGRATION_LOCK_ID = 7_340_201;
+
+// Applies pending migrations in order, each in its own transaction on one connection.
+// A transaction-scoped advisory lock serialises concurrent runners (parallel deploys or
+// cold starts), and each runner re-checks under the lock, so a migration is never
+// applied twice. Transaction-scoped locks also work through transaction-mode poolers.
+// Returns the names of the migrations this call applied.
+export async function migrate() {
   await client.exec(`create table if not exists schema_migrations (
     name text primary key,
     applied_at timestamptz not null default now()
   )`);
   const applied = new Set((await client.query("select name from schema_migrations")).rows.map((row) => row.name));
   const files = (await readdir(migrationsDir)).filter((file) => file.endsWith(".sql")).sort();
-  for (const file of files) {
-    if (applied.has(file)) continue;
+  const done = [];
+  for (const file of files.filter((name) => !applied.has(name))) {
     const sql = await readFile(path.join(migrationsDir, file), "utf8");
-    await client.exec(`begin;\n${sql}\ninsert into schema_migrations (name) values ('${file.replace(/'/g, "''")}');\ncommit;`);
-    console.log(`[db] applied migration ${file}`);
+    const ran = await client.transaction(async (conn) => {
+      await conn.query(`select pg_advisory_xact_lock(${MIGRATION_LOCK_ID})`);
+      if ((await conn.query("select 1 from schema_migrations where name = $1", [file])).rows.length) return false;
+      // Multi-statement SQL: PGlite needs exec(); node-postgres runs it via a parameterless query().
+      await (conn.exec ? conn.exec(sql) : conn.query(sql));
+      await conn.query("insert into schema_migrations (name) values ($1)", [file]);
+      return true;
+    }).catch((error) => {
+      throw new Error(`Migration ${file} failed: ${error.message}`);
+    });
+    if (ran) {
+      done.push(file);
+      console.log(`[db] applied migration ${file}`);
+    }
   }
+  return done;
 }
 
 export async function close() {

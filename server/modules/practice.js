@@ -170,7 +170,11 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
         set status = $1::text, completed_at = case when $1::text = 'completed' then now() else null end, updated_at = now()
       where id = $2 and user_id = $3 returning *`,
     [status, row.id, req.user.id]
-  );
+  ).catch((error) => {
+    // A concurrent reopen of another round for this prompt won the unique index.
+    if (error.code === "23505") throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this prompt.");
+    throw error;
+  });
   res.json({ session: toSummary(updated) });
 }));
 

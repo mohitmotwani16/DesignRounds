@@ -1,3 +1,5 @@
+import { isProduction } from "./flags.js";
+
 // Sends sign-in codes. Configure one provider:
 //   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS  (e.g. a Gmail app password)
 //   RESEND_API_KEY                                  (resend.com HTTP API)
@@ -10,7 +12,7 @@ let smtpTransport;
 export function deliveryMode() {
   if (process.env.SMTP_HOST) return "smtp";
   if (process.env.RESEND_API_KEY) return "resend";
-  return process.env.NODE_ENV === "production" ? "unconfigured" : "console";
+  return isProduction ? "unconfigured" : "console";
 }
 
 export async function sendLoginCode(email, code) {

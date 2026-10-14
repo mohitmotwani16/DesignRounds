@@ -1,3 +1,6 @@
+import { waitUntil } from "@vercel/functions";
+import { queryOne } from "./db.js";
+
 export class HttpError extends Error {
   constructor(status, code, message, details) {
     super(message);
@@ -19,23 +22,27 @@ export function parse(schema, value) {
   return result.data;
 }
 
-// Small in-memory fixed-window limiter. Good enough for a single process; move to
-// a shared store (e.g. Redis) only when running several API instances.
-export function createLimiter({ windowMs, max }) {
-  const hits = new Map();
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of hits) if (entry.resetAt <= now) hits.delete(key);
-  }, windowMs).unref();
-  return function check(key) {
-    const now = Date.now();
-    const entry = hits.get(key);
-    if (!entry || entry.resetAt <= now) {
-      hits.set(key, { count: 1, resetAt: now + windowMs });
-      return true;
-    }
-    entry.count += 1;
-    return entry.count <= max;
+// Runs work after the response has been sent. Serverless platforms freeze an instance
+// once its response is done, so the work is registered with the platform to keep the
+// instance alive until it settles; a long-running server just lets it run.
+export function afterResponse(promise) {
+  waitUntil(promise);
+}
+
+// Fixed-window limiter backed by the rate_limits table, so a limit holds across every
+// API instance. One atomic upsert per check: it starts a new window when the old one
+// has expired, otherwise counts the hit. Resolves to true while under `max`.
+export function createLimiter({ name, windowMs, max }) {
+  return async function check(subject) {
+    const row = await queryOne(
+      `insert into rate_limits (key, count, reset_at) values ($1, 1, now() + make_interval(secs => $2::double precision))
+       on conflict (key) do update set
+         count = case when rate_limits.reset_at <= now() then 1 else rate_limits.count + 1 end,
+         reset_at = case when rate_limits.reset_at <= now() then excluded.reset_at else rate_limits.reset_at end
+       returning count`,
+      [`${name}:${subject}`, windowMs / 1000]
+    );
+    return row.count <= max;
   };
 }
 

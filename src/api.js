@@ -20,7 +20,10 @@ async function request(method, path, body) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, payload.error?.code || "HTTP_ERROR", payload.error?.message || `Request failed (${response.status}).`);
+    // Gateway errors from the hosting platform (e.g. a timeout) carry no JSON body.
+    const unavailable = !payload.error && [502, 503, 504].includes(response.status);
+    const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
+    throw new ApiError(response.status, payload.error?.code || (unavailable ? "UNAVAILABLE" : "HTTP_ERROR"), payload.error?.message || fallback);
   }
   return payload;
 }

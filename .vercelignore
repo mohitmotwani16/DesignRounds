@@ -1,0 +1,7 @@
+# Never upload local state or secrets when deploying from a working copy.
+.env
+.env.*
+.data/
+node_modules/
+dist/
+*.log
