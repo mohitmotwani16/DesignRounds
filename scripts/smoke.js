@@ -103,6 +103,13 @@ try {
     const anonymous = await call("GET", "/api/v1/session");
     assert.equal(anonymous.status, 200);
     assert.equal(anonymous.body.user, null);
+    assert.equal(anonymous.body.googleAuth, false);
+  });
+
+  await step("google sign-in redirects when unconfigured", async () => {
+    const response = await fetch(`${base}/api/v1/auth/google?next=/library`, { redirect: "manual" });
+    assert.equal(response.status, 302);
+    assert.match(response.headers.get("location") || "", /error=google_unconfigured/);
   });
 
   await step("cross-site and non-JSON writes are rejected", async () => {

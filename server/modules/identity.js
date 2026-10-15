@@ -11,16 +11,29 @@ const CODE_TTL_MINUTES = 10;
 const MAX_CODE_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 45;
 const MAX_CODES_PER_EMAIL_PER_HOUR = 6;
+const OAUTH_STATE_TTL_MS = 10 * 60_000;
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
 // "__Host-" makes browsers reject the cookie unless it is Secure, host-only and path=/.
 const COOKIE_NAME = isProduction ? "__Host-dr_session" : "dr_session";
+const OAUTH_COOKIE = isProduction ? "__Host-dr_oauth" : "dr_oauth";
 const codeSecret = process.env.AUTH_SECRET || (() => {
   if (isProduction) throw new Error("AUTH_SECRET must be set in production.");
   return crypto.randomBytes(32).toString("hex");
 })();
 
+const googleClientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
+const googleClientSecret = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
+if (Boolean(googleClientId) !== Boolean(googleClientSecret)) {
+  throw new Error("Set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or neither.");
+}
+const googleAuthEnabled = Boolean(googleClientId && googleClientSecret);
+
 const ipCodeLimiter = createLimiter({ name: "ip-code", windowMs: 15 * 60_000, max: 20 });
 const ipVerifyLimiter = createLimiter({ name: "ip-verify", windowMs: 15 * 60_000, max: 40 });
+const ipGoogleLimiter = createLimiter({ name: "ip-google", windowMs: 15 * 60_000, max: 30 });
 
 const emailSchema = z.string().trim().toLowerCase().max(254).email();
 const requestCodeBody = z.object({ email: emailSchema });
@@ -43,6 +56,48 @@ function safeEqual(a, b) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
+// Only allow in-app destinations after sign-in (mirrors the client helper).
+function safeNextPath(value, fallback = "/library") {
+  return value && typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : fallback;
+}
+
+// Build the OAuth redirect URI from the request host (Vite proxies with the
+// browser Host, so local callbacks stay on :5173; Vercel uses the deployment host).
+function googleRedirectUri(req) {
+  return `${req.protocol}://${req.get("host")}/api/v1/auth/google/callback`;
+}
+
+function oauthCookieOptions() {
+  return { httpOnly: true, sameSite: "lax", secure: isProduction, path: "/", maxAge: OAUTH_STATE_TTL_MS };
+}
+
+function signOAuthState(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", codeSecret).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+function readOAuthState(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const [body, sig] = raw.split(".");
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", codeSecret).update(body).digest("base64url");
+  if (!safeEqual(sig, expected)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (!payload?.nonce || !payload?.redirectUri || !payload?.exp || Date.now() > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function signInErrorRedirect(path, code) {
+  const url = new URL(path, "http://local.invalid");
+  url.searchParams.set("error", code);
+  return `${url.pathname}${url.search}`;
+}
+
 export function toPublicUser(row) {
   return {
     id: row.id,
@@ -60,6 +115,49 @@ export function toPublicUser(row) {
 
 function cookieOptions() {
   return { httpOnly: true, sameSite: "lax", secure: isProduction, path: "/", maxAge: SESSION_DAYS * 86_400_000 };
+}
+
+async function createSession(res, user, userAgent) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  await query(
+    `insert into auth_sessions (user_id, token_hash, user_agent, expires_at)
+     values ($1, $2, $3, now() + make_interval(days => $4::int))`,
+    [user.id, hashToken(token), (userAgent || "").slice(0, 300), SESSION_DAYS]
+  );
+  res.cookie(COOKIE_NAME, token, cookieOptions());
+}
+
+async function upsertGoogleUser({ sub, email, name }) {
+  const bySub = await queryOne("select * from users where google_sub = $1", [sub]);
+  if (bySub) {
+    return queryOne(
+      `update users set last_login_at = now(), updated_at = now() where id = $1 returning *`,
+      [bySub.id]
+    );
+  }
+
+  const byEmail = await queryOne("select * from users where email = $1", [email]);
+  if (byEmail) {
+    if (byEmail.google_sub && byEmail.google_sub !== sub) {
+      throw new HttpError(409, "GOOGLE_LINK_CONFLICT", "This email is already linked to a different Google account.");
+    }
+    return queryOne(
+      `update users set
+         google_sub = $2,
+         display_name = coalesce(display_name, $3),
+         last_login_at = now(),
+         updated_at = now()
+       where id = $1 returning *`,
+      [byEmail.id, sub, name || null]
+    );
+  }
+
+  return queryOne(
+    `insert into users (email, google_sub, display_name, last_login_at)
+     values ($1, $2, $3, now())
+     returning *`,
+    [email, sub, name || null]
+  );
 }
 
 // Resolves the signed-in user from the session cookie, if any.
@@ -162,14 +260,114 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
      returning *`,
     [email]
   );
-  const token = crypto.randomBytes(32).toString("base64url");
-  await query(
-    `insert into auth_sessions (user_id, token_hash, user_agent, expires_at)
-     values ($1, $2, $3, now() + make_interval(days => $4::int))`,
-    [user.id, hashToken(token), (req.get("user-agent") || "").slice(0, 300), SESSION_DAYS]
-  );
-  res.cookie(COOKIE_NAME, token, cookieOptions());
+  await createSession(res, user, req.get("user-agent"));
   res.json({ user: toPublicUser(user) });
+}));
+
+identityRouter.get("/auth/google", route(async (req, res) => {
+  const next = safeNextPath(req.query.next);
+  if (!googleAuthEnabled) {
+    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "google_unconfigured"));
+  }
+  if (!(await ipGoogleLimiter(req.ip))) {
+    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "rate_limited"));
+  }
+
+  const nonce = crypto.randomBytes(24).toString("base64url");
+  const redirectUri = googleRedirectUri(req);
+  res.cookie(OAUTH_COOKIE, signOAuthState({
+    nonce,
+    next,
+    redirectUri,
+    exp: Date.now() + OAUTH_STATE_TTL_MS,
+  }), oauthCookieOptions());
+
+  const params = new URLSearchParams({
+    client_id: googleClientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    state: nonce,
+    prompt: "select_account",
+  });
+  res.redirect(`${GOOGLE_AUTH_URL}?${params}`);
+}));
+
+identityRouter.get("/auth/google/callback", route(async (req, res) => {
+  const clearOAuth = () => res.clearCookie(OAUTH_COOKIE, { ...oauthCookieOptions(), maxAge: undefined });
+  const fail = (code, next = "/library") => {
+    clearOAuth();
+    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, code));
+  };
+
+  const saved = readOAuthState(req.cookies?.[OAUTH_COOKIE]);
+  if (!saved) return fail("google_state");
+  const next = safeNextPath(saved.next);
+
+  if (!googleAuthEnabled) return fail("google_unconfigured", next);
+  if (req.query.error) {
+    return fail(req.query.error === "access_denied" ? "google_cancelled" : "google_failed", next);
+  }
+  if (typeof req.query.state !== "string" || !safeEqual(req.query.state, saved.nonce)) {
+    return fail("google_state", next);
+  }
+  if (typeof req.query.code !== "string" || !req.query.code) return fail("google_failed", next);
+  if (!(await ipGoogleLimiter(req.ip))) return fail("rate_limited", next);
+
+  let profile;
+  try {
+    const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: req.query.code,
+        client_id: googleClientId,
+        client_secret: googleClientSecret,
+        redirect_uri: saved.redirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+    const tokens = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !tokens.access_token) {
+      console.error("[auth] google token exchange failed:", tokens.error || tokenResponse.status);
+      return fail("google_failed", next);
+    }
+
+    const infoResponse = await fetch(GOOGLE_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    profile = await infoResponse.json().catch(() => ({}));
+    if (!infoResponse.ok) {
+      console.error("[auth] google userinfo failed:", profile.error || infoResponse.status);
+      return fail("google_failed", next);
+    }
+  } catch (error) {
+    console.error("[auth] google callback error:", error.message);
+    return fail("google_failed", next);
+  }
+
+  const email = typeof profile.email === "string" ? profile.email.trim().toLowerCase() : "";
+  const sub = typeof profile.sub === "string" ? profile.sub : "";
+  if (!sub || !email || !profile.email_verified) return fail("google_unverified", next);
+
+  const parsedEmail = emailSchema.safeParse(email);
+  if (!parsedEmail.success) return fail("google_failed", next);
+
+  const name = typeof profile.name === "string" ? profile.name.trim().slice(0, 60) : "";
+  let user;
+  try {
+    user = await upsertGoogleUser({ sub, email: parsedEmail.data, name: name || null });
+  } catch (error) {
+    if (error instanceof HttpError && error.code === "GOOGLE_LINK_CONFLICT") {
+      return fail("google_link_conflict", next);
+    }
+    throw error;
+  }
+
+  await createSession(res, user, req.get("user-agent"));
+  clearOAuth();
+  const destination = user.onboarded_at ? next : `/welcome?next=${encodeURIComponent(next)}`;
+  res.redirect(destination);
 }));
 
 identityRouter.post("/auth/sign-out", route(async (req, res) => {
@@ -187,7 +385,7 @@ identityRouter.post("/auth/sign-out-everywhere", requireUser, route(async (req, 
 // Who is signed in, if anyone. Unlike /me, a visitor without a session is a normal
 // answer (user: null), not an error, so page loads don't log failed requests.
 identityRouter.get("/session", (req, res) => {
-  res.json({ user: req.user ? toPublicUser(req.user) : null });
+  res.json({ user: req.user ? toPublicUser(req.user) : null, googleAuth: googleAuthEnabled });
 });
 
 identityRouter.get("/me", requireUser, (req, res) => {
