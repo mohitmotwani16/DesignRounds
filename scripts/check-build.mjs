@@ -80,6 +80,10 @@ for (const [description, routes] of descriptions) if (routes.length > 1) fail(`d
 for (const file of ["404.html", "app.html", "robots.txt", "llms.txt", "og.png", "favicon.svg"]) {
   if (!existsSync(path.join(dist, file))) fail(`missing dist/${file}`);
 }
+// IndexNow key file: public/<key>.txt containing exactly the key.
+const indexNowKey = readdirSync(dist).find((name) => /^[0-9a-f]{32}\.txt$/.test(name));
+if (!indexNowKey) fail("missing IndexNow key file (dist/<32 hex>.txt)");
+else if (readFileSync(path.join(dist, indexNowKey), "utf8").trim() !== indexNowKey.slice(0, -4)) fail("IndexNow key file content does not match its name");
 if (existsSync(path.join(dist, "404.html")) && !/<meta name="robots" content="noindex"/.test(readFileSync(path.join(dist, "404.html"), "utf8"))) fail("404.html is indexable");
 if (existsSync(path.join(dist, "app.html")) && !/noindex/.test(readFileSync(path.join(dist, "app.html"), "utf8"))) fail("app.html is indexable");
 

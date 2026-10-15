@@ -8,3 +8,4 @@ npm-debug.log*
 .data/
 node_modules
 dist-ssr/
+.indexnow-state.json
