@@ -112,6 +112,7 @@ export function SiteFooter() {
               {SECTIONS.map((item) => <li key={item.id}><Link to={`/#${item.id}`}>{item.label}</Link></li>)}
               <li><Link to="/about">About</Link></li>
               <li><Link to="/privacy">Privacy</Link></li>
+              <li><Link to="/terms">Terms</Link></li>
             </ul>
           </div>
           <div>

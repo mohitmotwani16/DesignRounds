@@ -10,6 +10,7 @@ import { Link, navigate, safeNext, useRoute } from "./router.js";
 import { applyMeta, routeMeta } from "./seo.js";
 import AboutPage from "./pages/About.jsx";
 import PrivacyPage from "./pages/Privacy.jsx";
+import TermsPage from "./pages/Terms.jsx";
 import GuidePage from "./pages/Guide.jsx";
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
@@ -93,6 +94,7 @@ function Page({ path, onStart }) {
   if (path === "/profile") return <ProfilePage onStart={onStart} />;
   if (path === "/about") return <AboutPage />;
   if (path === "/privacy") return <PrivacyPage />;
+  if (path === "/terms") return <TermsPage />;
 
   const track = /^\/library\/([a-z-]+)$/.exec(path)?.[1];
   if (track && tracks.some((item) => item.id === track)) return <LibraryPage key={track} onStart={onStart} track={track} />;

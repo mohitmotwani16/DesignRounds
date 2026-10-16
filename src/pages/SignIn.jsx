@@ -137,7 +137,7 @@ export default function SignInPage({ next, error: initialError }) {
           </form>
         )}
       </section>
-      <p className="auth-footnote">Signing in keeps your designs saved to your account so you can resume on any device. See our <Link to="/privacy">Privacy Policy</Link>.</p>
+      <p className="auth-footnote">Signing in keeps your designs saved to your account so you can resume on any device. By continuing, you agree to our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>
     </main>
   );
 }

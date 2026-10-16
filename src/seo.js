@@ -98,6 +98,7 @@ export function publicPaths() {
     ...GUIDES.map((guide) => guide.path),
     "/about",
     "/privacy",
+    "/terms",
   ];
 }
 
@@ -230,6 +231,14 @@ export function routeMeta(path) {
       ...base,
       title: `Privacy Policy | ${SITE.name}`,
       description: "What DesignRounds collects, why, who processes it, and how to delete your data. No ads, no third-party tracking.",
+    };
+  }
+
+  if (path === "/terms") {
+    return {
+      ...base,
+      title: `Terms of Service | ${SITE.name}`,
+      description: "The terms for using DesignRounds: your account, acceptable use, ownership of your designs, AI feedback, plans and liability.",
     };
   }
 
