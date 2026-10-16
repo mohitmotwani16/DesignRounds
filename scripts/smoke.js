@@ -110,6 +110,10 @@ try {
     const response = await fetch(`${base}/api/v1/auth/google?next=/library`, { redirect: "manual" });
     assert.equal(response.status, 302);
     assert.match(response.headers.get("location") || "", /error=google_unconfigured/);
+
+    // "/\evil.com" is protocol-relative in browsers and must fall back to the library.
+    const sneaky = await fetch(`${base}/api/v1/auth/google?next=${encodeURIComponent("/\\evil.com")}`, { redirect: "manual" });
+    assert.match(sneaky.headers.get("location") || "", /next=%2Flibrary&/);
   });
 
   await step("cross-site and non-JSON writes are rejected", async () => {

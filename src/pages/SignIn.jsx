@@ -27,7 +27,7 @@ function GoogleMark() {
 }
 
 export default function SignInPage({ next, error: initialError }) {
-  const { setUser } = useAuth();
+  const { setUser, googleAuth } = useAuth();
   const [step, setStep] = useState("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -93,11 +93,17 @@ export default function SignInPage({ next, error: initialError }) {
         {step === "email" ? (
           <>
             <h1 id="auth-title">Sign in to practice</h1>
-            <p className="auth-lede">Continue with Google, or use a one-time email code. New here? Either option creates your account.</p>
-            <a className="btn btn-google btn-lg auth-submit" href={googleHref}>
-              <GoogleMark /> Continue with Google
-            </a>
-            <div className="auth-divider" role="separator" aria-label="or"><span>or use email</span></div>
+            {googleAuth ? (
+              <>
+                <p className="auth-lede">Continue with Google, or use a one-time email code. New here? Either option creates your account.</p>
+                <a className="btn btn-google btn-lg auth-submit" href={googleHref}>
+                  <GoogleMark /> Continue with Google
+                </a>
+                <div className="auth-divider" role="separator" aria-label="or"><span>or use email</span></div>
+              </>
+            ) : (
+              <p className="auth-lede">Enter your email and we'll send you a 6-digit code. No password needed. New here? This also creates your account.</p>
+            )}
             <form onSubmit={sendCode}>
               <label className="field-label" htmlFor="signin-email">Email address</label>
               <input id="signin-email" className="text-input" type="email" autoComplete="email" inputMode="email" required placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />

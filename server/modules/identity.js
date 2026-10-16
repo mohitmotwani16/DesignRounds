@@ -57,8 +57,9 @@ function safeEqual(a, b) {
 }
 
 // Only allow in-app destinations after sign-in (mirrors the client helper).
+// Browsers treat "\" as "/", so "/\evil.com" would be a protocol-relative redirect.
 function safeNextPath(value, fallback = "/library") {
-  return value && typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : fallback;
+  return typeof value === "string" && /^\/(?![/\\])[^\\\u0000-\u001f]*$/.test(value) ? value : fallback;
 }
 
 // Build the OAuth redirect URI from the request host (Vite proxies with the
