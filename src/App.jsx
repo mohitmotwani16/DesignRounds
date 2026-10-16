@@ -54,7 +54,7 @@ function Routes() {
     if (auth.status === "signed-in") {
       return <Redirect to={params.get("next") || "/library"} />;
     }
-    return <SignInPage next={params.get("next")} />;
+    return <SignInPage next={params.get("next")} error={params.get("error")} />;
   }
 
   const needsAuth = path === "/welcome" || path === "/profile" || path.startsWith("/workspace/") || path.startsWith("/start/");

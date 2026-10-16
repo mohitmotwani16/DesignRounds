@@ -79,7 +79,8 @@ if (typeof window !== "undefined") {
   if (target) window.history.replaceState(null, "", target);
 }
 
-// Only allow in-app destinations after sign-in.
+// Only allow in-app destinations after sign-in. Browsers treat "\" as "/",
+// so "/\evil.com" would leave the site.
 export function safeNext(value, fallback = "/library") {
-  return value && value.startsWith("/") && !value.startsWith("//") ? value : fallback;
+  return typeof value === "string" && /^\/(?![/\\])[^\\\u0000-\u001f]*$/.test(value) ? value : fallback;
 }
