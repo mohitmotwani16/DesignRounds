@@ -97,6 +97,7 @@ export function publicPaths() {
     ...prompts.map((prompt) => roundPath(prompt.id)),
     ...GUIDES.map((guide) => guide.path),
     "/about",
+    "/privacy",
   ];
 }
 
@@ -221,6 +222,14 @@ export function routeMeta(path) {
       title: "About DesignRounds — What It Is, Who It's For, and Pricing",
       description: "DesignRounds is a system design interview practice platform: realistic prompts, an architecture canvas, an AI interviewer and rubric-based reviews. Free to start.",
       jsonLd: [{ "@context": "https://schema.org", "@type": "AboutPage", name: "About DesignRounds", url: absolute(path), about: organization }],
+    };
+  }
+
+  if (path === "/privacy") {
+    return {
+      ...base,
+      title: `Privacy Policy | ${SITE.name}`,
+      description: "What DesignRounds collects, why, who processes it, and how to delete your data. No ads, no third-party tracking.",
     };
   }
 
