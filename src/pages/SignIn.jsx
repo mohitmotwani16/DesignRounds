@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Layers2, LoaderCircle, Mail, ShieldCheck 
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Logo } from "../components/site.jsx";
-import { navigate, safeNext } from "../router.js";
+import { Link, navigate, safeNext } from "../router.js";
 
 const GOOGLE_ERRORS = {
   google_unconfigured: "Google sign-in isn't set up yet. Use email, or add Google OAuth credentials to .env.",
@@ -137,7 +137,7 @@ export default function SignInPage({ next, error: initialError }) {
           </form>
         )}
       </section>
-      <p className="auth-footnote">Signing in keeps your designs saved to your account so you can resume on any device.</p>
+      <p className="auth-footnote">Signing in keeps your designs saved to your account so you can resume on any device. By continuing, you agree to our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>
     </main>
   );
 }
