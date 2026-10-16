@@ -58,6 +58,27 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     }
   }, [sessionId, settleSave, selectedIdRef]);
 
+  // A voice answer. The recording keeps its request id across retries, so a retry
+  // after a lost response can't save it twice. The blob is dropped once it's sent.
+  const sendAudio = useCallback(async (recording) => {
+    if (pendingRef.current) return false;
+    pendingRef.current = true;
+    setPending(true);
+    setSendError(null);
+    try {
+      const data = await blobToBase64(recording.blob);
+      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data });
+      appendTurns(result.turns);
+      return true;
+    } catch (error) {
+      setSendError({ message: error.message, intent: "audio", recording, retryable: error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY" });
+      return false;
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  }, [sessionId]);
+
   // Proactive look at the canvas after it has been quiet for a while.
   const enabled = data.status === "ready" && data.access === "full" && data.aiAvailable && roundActive;
   const firstKey = useRef(structureKey);
@@ -83,5 +104,14 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     return () => window.clearTimeout(timer);
   }, [enabled, structureKey, sessionId, settleSave, selectedIdRef, onProactiveTurn]);
 
-  return { ...data, pending, sendError, clearError: () => setSendError(null), send, typingRef, reload: load };
+  return { ...data, pending, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(",") + 1));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }

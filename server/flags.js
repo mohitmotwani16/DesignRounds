@@ -15,3 +15,8 @@ export const deploymentEnv = vercelEnv || (isProduction ? "production" : "develo
 // development and can be turned off with DEV_TOOLS=false. They are always off in
 // production, where their routes are not mounted at all.
 export const devToolsEnabled = !isProduction && process.env.DEV_TOOLS !== "false";
+
+// Voice answers in the live interview. Recordings are saved but not yet transcribed,
+// so the interviewer can't respond to them; on in development, and opt-in elsewhere
+// with VOICE_ANSWERS=true until transcription ships.
+export const voiceAnswersEnabled = process.env.VOICE_ANSWERS ? process.env.VOICE_ANSWERS === "true" : !isProduction;

@@ -1,6 +1,7 @@
 import express from "express";
 import { z } from "zod";
 import { query, queryOne, transaction } from "../db.js";
+import { voiceAnswersEnabled } from "../flags.js";
 import { HttpError, afterResponse, createLimiter, parse, route } from "../http.js";
 import { aiConfig } from "./ai/config.js";
 import { isSignificantKind } from "./ai/components.js";
@@ -34,11 +35,40 @@ const messageBody = z.object({
 }).strict();
 const checkBody = z.object({ selectedNodeId: z.string().max(80).nullable().optional() }).strict();
 
+// Voice answers: up to two minutes, sent as base64 JSON (the API only accepts JSON
+// writes). 2 MB covers two minutes of AAC from Safari; Opus from other browsers is
+// far smaller.
+const AUDIO_MAX_MS = 120_000;
+const AUDIO_MIN_MS = 1_000;
+const AUDIO_MAX_BYTES = 2 * 1024 * 1024;
+const AUDIO_MIN_BYTES = 512;
+const audioBody = z.object({
+  requestId: z.string().uuid(),
+  mimeType: z.string().max(100),
+  durationMs: z.number().int().min(AUDIO_MIN_MS).max(AUDIO_MAX_MS + 2_000),
+  data: z.string().max(Math.ceil(AUDIO_MAX_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+}).strict();
+
+// Container formats MediaRecorder produces, recognised by their first bytes so the
+// declared type can't smuggle in something else.
+const AUDIO_FORMATS = {
+  "audio/webm": (bytes) => bytes.readUInt32BE(0) === 0x1a45dfa3,
+  "audio/ogg": (bytes) => bytes.toString("latin1", 0, 4) === "OggS",
+  "audio/mp4": (bytes) => bytes.toString("latin1", 4, 8) === "ftyp",
+  "audio/wav": (bytes) => bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WAVE",
+};
+
 const db = { query, queryOne };
 
 function presentTurn(row) {
-  return { id: row.id, seq: row.seq, role: row.role, kind: row.kind, trigger: row.trigger, content: row.content, nodeIds: row.node_ids ?? [], createdAt: row.created_at };
+  const turn = { id: row.id, seq: row.seq, role: row.role, kind: row.kind, trigger: row.trigger, content: row.content, nodeIds: row.node_ids ?? [], createdAt: row.created_at };
+  // Only the duration is ever returned for a recording: the audio itself is never sent back.
+  if (row.kind === "audio") turn.audio = { durationMs: row.audio_duration_ms ?? null };
+  return turn;
 }
+
+const TURNS_WITH_AUDIO = `select t.*, a.duration_ms as audio_duration_ms
+  from interview_turns t left join interview_audio a on a.turn_id = t.id`;
 
 function presentState(state) {
   return { stage: state.stage, hintsUsed: state.hints_used };
@@ -167,7 +197,7 @@ export async function interviewTranscript(sessionId) {
   const state = await queryOne("select summary, summarized_through from interview_state where session_id = $1", [sessionId]);
   if (!state) return "";
   const turns = await query("select role, kind, content from interview_turns where session_id = $1 and seq > $2 order by seq desc limit 40", [sessionId, state.summarized_through]);
-  const lines = turns.reverse().map((turn) => `${turn.role === "learner" ? "Learner" : "Interviewer"}: ${clean(turn.content, 800)}`);
+  const lines = turns.reverse().map((turn) => `${turn.role === "learner" ? "Learner" : "Interviewer"}: ${turn.kind === "audio" && !turn.content ? "(voice answer, not transcribed)" : clean(turn.content, 800)}`);
   return [state.summary ? `Earlier: ${clean(state.summary, 3000)}` : "", ...lines].filter(Boolean).join("\n").slice(0, 12_000);
 }
 
@@ -176,7 +206,7 @@ interviewsRouter.use(requireUser);
 
 interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) => {
   const session = await ownedSession(req);
-  if (!hasInterviewer(req.user)) return res.json({ access: "locked", turns: [], aiAvailable: aiConfig.enabled });
+  if (!hasInterviewer(req.user)) return res.json({ access: "locked", turns: [], aiAvailable: aiConfig.enabled, voice: false });
 
   // The first visit to an active round opens the interview (a fixed message, no model call).
   if (session.status === "in_progress") {
@@ -192,10 +222,11 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
     });
   }
   const state = await queryOne("select * from interview_state where session_id = $1", [session.id]);
-  const turns = await query("select * from interview_turns where session_id = $1 order by seq limit 400", [session.id]);
+  const turns = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [session.id]);
   res.json({
     access: "full",
     aiAvailable: aiConfig.enabled,
+    voice: voiceAnswersEnabled,
     turns: turns.map(presentTurn),
     state: state ? presentState(state) : null,
     allowance: await readAllowance(db, req.user, session.id, state),
@@ -276,6 +307,57 @@ interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (re
     allowance: await readAllowance(db, req.user, session.id, result.state),
   });
   afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
+}));
+
+// A voice answer: stored as a learner turn plus its recording. For now nothing reads
+// the recording (no model call, no interviewer reply, no credit); transcription will.
+interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, res) => {
+  if (!voiceAnswersEnabled) throw new HttpError(404, "NOT_FOUND", "No such endpoint.");
+  const body = parse(audioBody, req.body);
+  const session = await ownedSession(req);
+  if (!hasInterviewer(req.user)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
+
+  const replay = await queryOne(`${TURNS_WITH_AUDIO} where t.user_id = $1 and t.request_id = $2`, [req.user.id, body.requestId]);
+  if (replay) {
+    if (replay.session_id !== session.id || replay.kind !== "audio") throw new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used.");
+    return res.json({ turns: [presentTurn(replay)], replayed: true });
+  }
+
+  if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", "This round is finished, so the interview has ended. Your review is in the Review tab.");
+  const mimeType = body.mimeType.split(";")[0].trim().toLowerCase();
+  const bytes = Buffer.from(body.data, "base64");
+  if (!AUDIO_FORMATS[mimeType] || bytes.length < AUDIO_MIN_BYTES || !AUDIO_FORMATS[mimeType](bytes)) {
+    throw new HttpError(400, "INVALID_AUDIO", "That recording couldn't be read. Try recording again.");
+  }
+  if (bytes.length > AUDIO_MAX_BYTES) throw new HttpError(413, "PAYLOAD_TOO_LARGE", "That recording is too large to send.");
+  if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "You're sending messages very quickly. Wait a moment and try again.");
+
+  let turn;
+  try {
+    turn = await transaction(async (conn) => {
+      await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
+      const state = await ensureState(conn, session);
+      // Keeps the thread in order: a voice answer can't land in the middle of a reply.
+      if (state.pending_since && Date.now() - new Date(state.pending_since).getTime() < PENDING_MS) {
+        throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
+      }
+      const saved = await conn.queryOne(
+        `insert into interview_turns (session_id, user_id, seq, role, kind, content, request_id, diagram_version)
+         values ($1, $2, $3, 'learner', 'audio', '', $4, $5) returning *`,
+        [session.id, req.user.id, await nextSeq(conn, session.id), body.requestId, session.diagram_version]
+      );
+      const durationMs = Math.min(body.durationMs, AUDIO_MAX_MS);
+      await conn.query(
+        "insert into interview_audio (turn_id, user_id, mime_type, duration_ms, size_bytes, data) values ($1, $2, $3, $4, $5, $6)",
+        [saved.id, req.user.id, mimeType, durationMs, bytes.length, bytes]
+      );
+      return { ...saved, audio_duration_ms: durationMs };
+    });
+  } catch (error) {
+    if (error.code === "23505") throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
+    throw error;
+  }
+  res.status(201).json({ turns: [presentTurn(turn)] });
 }));
 
 // Called by the workspace after the canvas has been quiet for a while. The server

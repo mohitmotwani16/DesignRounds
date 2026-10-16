@@ -42,7 +42,9 @@ const system = `${policy}\n\n${instructions}`;
 function formatTurns(turns) {
   if (!turns.length) return "(no messages yet)";
   return turns.map((turn) => (turn.role === "learner"
-    ? `Learner${turn.kind === "hint_request" ? " (asked for a hint)" : ""}: ${clean(turn.content, 2000)}`
+    ? turn.kind === "audio"
+      ? `Learner (voice answer): ${clean(turn.content, 2000) || "(not transcribed; you can't hear it, so don't respond to its content)"}`
+      : `Learner${turn.kind === "hint_request" ? " (asked for a hint)" : ""}: ${clean(turn.content, 2000)}`
     : `Interviewer (${turn.kind}): ${clean(turn.content, 1500)}`)).join("\n");
 }
 

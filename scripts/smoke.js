@@ -13,7 +13,7 @@ Object.assign(process.env, { PGLITE_DIR: dataDir, AI_PROVIDER: "fake", CRON_SECR
 for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", "NODE_ENV", "VERCEL", "VERCEL_ENV"]) delete process.env[key];
 
 const { createApp } = await import("../server/app.js");
-const { close } = await import("../server/db.js");
+const { close, query } = await import("../server/db.js");
 const { prompts } = await import("../src/data/prompts.js");
 
 const app = await createApp({ serveFrontend: false });
@@ -160,6 +160,49 @@ try {
     const updated = await call("PATCH", "/api/v1/me", { displayName: "Smoke Test", targetRole: "Backend engineer" });
     assert.equal(updated.status, 200);
     assert.equal(updated.body.user.onboarded, true);
+  });
+
+  await step("voice answers are stored but never served back", async () => {
+    const prompt = prompts.find((entry) => entry.access === "free");
+    const round = (await call("POST", "/api/v1/sessions", { promptId: prompt.id })).body.session;
+    const webm = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), crypto.getRandomValues(Buffer.alloc(4000))]);
+    const audio = (overrides = {}) => ({ requestId: crypto.randomUUID(), mimeType: "audio/webm;codecs=opus", durationMs: 4200, data: webm.toString("base64"), ...overrides });
+    const url = `/api/v1/sessions/${round.id}/interview/audio`;
+
+    assert.equal((await call("POST", url, audio())).status, 403, "the interviewer, and so voice, is Plus-only");
+    assert.equal((await call("POST", "/api/v1/dev/plan", { plan: "plus" })).status, 200);
+    const opened = await call("GET", `/api/v1/sessions/${round.id}/interview`);
+    assert.equal(opened.body.voice, true);
+
+    const body = audio();
+    const sent = await call("POST", url, body);
+    assert.equal(sent.status, 201, JSON.stringify(sent.body));
+    const [turn] = sent.body.turns;
+    assert.deepEqual([turn.role, turn.kind, turn.content, turn.audio], ["learner", "audio", "", { durationMs: 4200 }]);
+    const replay = await call("POST", url, body);
+    assert.equal(replay.body.replayed, true);
+    assert.equal(replay.body.turns[0].id, turn.id, "a retried upload is saved once");
+
+    const thread = await call("GET", `/api/v1/sessions/${round.id}/interview`);
+    assert.deepEqual(thread.body.turns.find((entry) => entry.id === turn.id).audio, { durationMs: 4200 });
+    assert.ok(!JSON.stringify(thread.body).includes(body.data.slice(0, 40)), "the recording is never returned");
+    const [stored] = await query("select mime_type, size_bytes, octet_length(data) as bytes from interview_audio where turn_id = $1", [turn.id]);
+    assert.deepEqual([stored.mime_type, stored.size_bytes, Number(stored.bytes)], ["audio/webm", webm.length, webm.length]);
+
+    const long = Buffer.concat([webm, Buffer.alloc(1024 * 1024)]).toString("base64");
+    assert.equal((await call("POST", url, audio({ data: long, durationMs: 115_000 }))).status, 201, "a near-limit recording is over the general 600kb body limit but accepted");
+
+    const ogg = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(4000)]).toString("base64");
+    assert.equal((await call("POST", url, audio({ data: ogg }))).body.error.code, "INVALID_AUDIO", "declared type must match the bytes");
+    assert.equal((await call("POST", url, audio({ mimeType: "video/mp4" }))).status, 400);
+    assert.equal((await call("POST", url, audio({ durationMs: 10 * 60_000 }))).status, 400, "longer than the limit");
+
+    const reply = await call("POST", `/api/v1/sessions/${round.id}/interview/messages`, { requestId: crypto.randomUUID(), content: "I'd shard by user id." });
+    assert.equal(reply.status, 201, "text still works after a voice answer");
+
+    assert.equal((await call("DELETE", `/api/v1/sessions/${round.id}`)).status, 200);
+    assert.equal((await query("select 1 from interview_audio where turn_id = $1", [turn.id])).length, 0, "deleting the round deletes the recording");
+    assert.equal((await call("POST", "/api/v1/dev/plan", { plan: "free" })).status, 200);
   });
 
   let session;

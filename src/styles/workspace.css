@@ -372,5 +372,20 @@ kbd { min-width: 22px; padding: 2px 6px; display: inline-block; color: var(--fg-
 .interview-error { margin-bottom: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; color: var(--fg-a14242); border: 1px solid var(--bd-f1d4d4); border-radius: 8px; background: var(--bg-fdf6f6); font-size: 12.5px; }
 .interview-error span { flex: 1; }
 .interview-error button { display: inline-flex; align-items: center; gap: 4px; color: var(--fg-a14242); border: 0; background: transparent; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+/* Voice answers: the recording bar replaces the text box; a sent answer is a duration-only bubble. */
+.compose-box .voice-secondary:not(:disabled) { color: var(--fg-6b7686); background: var(--bg-eeeff5); }
+.recording-bar { align-items: center; }
+.recording-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--bg-d64545); animation: recording-pulse 1.4s infinite ease-in-out; }
+@keyframes recording-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.82); } }
+@media (prefers-reduced-motion: reduce) { .recording-dot { animation: none; } }
+.recording-status { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 4px; color: var(--fg-8a93a1); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recording-status strong { color: var(--fg-3f4b5f); font-size: 14px; font-weight: 600; }
+.recording-status strong.near-limit { color: var(--fg-c43c3c); }
+.recording-status em { margin-left: 8px; overflow: hidden; font-style: normal; text-overflow: ellipsis; }
+.voice-note { min-width: 190px; padding: 10px 14px 10px 10px; display: flex; align-items: center; gap: 10px; color: var(--fg-ffffff); border-radius: 12px 4px 12px 12px; background: var(--bg-4f5bc4); }
+.voice-note-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .18); }
+.voice-note-wave { height: 22px; flex: 1; display: flex; align-items: center; gap: 2px; }
+.voice-note-wave i { width: 3px; min-height: 3px; flex: none; border-radius: 2px; background: currentColor; opacity: .7; }
+.voice-note-time { flex: none; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .interview-ended { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .interview-ended p { margin: 0; color: var(--fg-6b7686); font-size: 13px; }
