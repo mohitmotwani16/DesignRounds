@@ -8,10 +8,11 @@ import { AiError, toHttpError } from "./ai/errors.js";
 import { bandFor, overallScore, rubric } from "./ai/rubric.js";
 import { runTask } from "./ai/run.js";
 import { guideFor } from "./ai/guides.js";
+import { communicationTask, communicationTemplateVersion } from "./ai/tasks/communication.js";
 import { reviewTask, reviewTemplateVersion } from "./ai/tasks/review.js";
 import { requireUser } from "./identity.js";
-import { interviewTranscript } from "./interviews.js";
-import { hasFullFeedback, limitsFor } from "./plans.js";
+import { communicationInput, interviewTranscript } from "./interviews.js";
+import { hasFullFeedback, limitsFor, planFor } from "./plans.js";
 import { ownedSession, promptById } from "./practice.js";
 
 const MIN_COMPONENTS = 3;
@@ -38,7 +39,7 @@ async function readAllowance(conn, user, sessionId) {
   );
   const round = { used: Number(row.round_used), limit: limits.reviewsPerRound };
   const month = { used: Number(row.month_used), limit: limits.reviewsPerMonth, resetsAt: row.month_resets_at };
-  return { plan: user.plan, round, month, remaining: Math.max(0, Math.min(round.limit - round.used, month.limit - month.used)) };
+  return { plan: planFor(user), round, month, remaining: Math.max(0, Math.min(round.limit - round.used, month.limit - month.used)) };
 }
 
 // Fails reviews left pending by a crash or restart and gives their credits back.
@@ -221,7 +222,7 @@ ${transcript}`);
       return conn.queryOne(
         `insert into ai_reviews (session_id, user_id, credit_id, request_id, diagram_version, diagram_hash, prompt_id, prompt_version, rubric_version, template_version, provider, model, plan)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning *`,
-        [session.id, req.user.id, credit.id, requestId, session.diagram_version, diagramHash, session.prompt_id, session.prompt_version, rubric.version, templateVersion, aiConfig.vendor, aiConfig.model, req.user.plan]
+        [session.id, req.user.id, credit.id, requestId, session.diagram_version, diagramHash, session.prompt_id, session.prompt_version, rubric.version, templateVersion, aiConfig.vendor, aiConfig.model, planFor(req.user)]
       );
     });
   } catch (error) {
@@ -230,15 +231,24 @@ ${transcript}`);
   }
 
   // Generation continues even if the learner disconnects; the result is stored and
-  // shows up on their next read.
+  // shows up on their next read. Communication feedback runs alongside and is optional:
+  // if it fails, the design review still stands.
+  const conversation = await communicationInput(session.id);
+  const communication = conversation
+    ? runTask(communicationTask, { prompt, ...conversation }, { userId: req.user.id, sessionId: session.id })
+      .then(({ data }) => ({ ...data, stats: conversation.stats, version: communicationTemplateVersion }))
+      .catch((error) => { console.error("[ai] communication feedback failed:", error.code || error.message); return null; })
+    : Promise.resolve(null);
   let output;
   try {
     output = await runTask(reviewTask, { prompt, design, guide, transcript }, { userId: req.user.id, sessionId: session.id });
   } catch (error) {
+    await communication;
     await settle(pending, { status: "failed", errorCode: error instanceof AiError ? error.code : "INTERNAL" });
     if (error instanceof AiError) throw toHttpError(error);
     throw error;
   }
-  const saved = await settle(pending, { status: "succeeded", result: normalize(output.data, design), model: output.model });
+  const result = { ...normalize(output.data, design), communication: await communication };
+  const saved = await settle(pending, { status: "succeeded", result, model: output.model });
   res.status(201).json({ review: present(saved, full), reused: false, allowance: await readAllowance(db, req.user, session.id) });
 }));

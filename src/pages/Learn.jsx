@@ -182,7 +182,7 @@ function wordCount(body) {
 
 export function LearnTopicPage({ slug }) {
   const meta = topicMeta(slug);
-  const body = useTopic(slug);
+  const { body, loadError, retry } = useTopic(slug);
   const category = categoryById(meta.category);
   const { previous, next } = neighbours(slug);
 
@@ -216,7 +216,12 @@ export function LearnTopicPage({ slug }) {
             </p>
           </header>
 
-          {!body ? (
+          {loadError ? (
+            <div className="learn-load-error" role="alert">
+              <p>Article content couldn't be loaded. Reload the page to try again.</p>
+              <button className="btn btn-ghost" onClick={retry}>Reload page</button>
+            </div>
+          ) : !body ? (
             <p className="learn-loading"><LoaderCircle size={16} className="spin" /> Loading…</p>
           ) : (
             <>

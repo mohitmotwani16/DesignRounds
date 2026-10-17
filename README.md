@@ -12,11 +12,14 @@ DesignRounds is a practice portal for system design interviews. Learners pick a 
 
 - **AI final review:** after finishing a round, learners request a rubric-based review: an overall score out of 100, six scored dimensions, strengths, risks, next steps, and (Plus) a decision-by-decision analysis of whether each choice was justified, needed, and right-sized. Reviews are capped per round and per month by plan. Free users see scores and the top strength and risk; Plus users see everything.
 
-The AI interviewer conversation and payments are not built yet. Plus rounds can be browsed but not started on a free account (use the dev plan switch to test them).
+- **Community handbook:** signed-in learners can draft and preview articles before submitting them. Admins review submissions, exchange feedback with authors, and publish approved work to the Learn handbook.
+- **Memberships:** admins can grant Free or Plus from `/admin` after a learner has signed in once. Plus access requires an expiry date and is active through that date in UTC; existing Plus accounts are backfilled through 2028-01-01.
+
+The AI interviewer and payments are not built yet. Plus rounds can be browsed but not started on a Free account (use the dev plan switch to test them).
 
 ## Run locally
 
-Requires Node.js 22 or newer. If an older Node is first on your PATH in PowerShell, run `. .\scripts\use-node-lts.ps1` once.
+Requires Node.js 24.x. If an older Node is first on your PATH in PowerShell, run `. .\scripts\use-node-lts.ps1` once.
 
 ```bash
 npm install
@@ -97,9 +100,13 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `DATABASE_URL` | Use a hosted Postgres instead of the embedded one. Free tiers from [Neon](https://neon.tech) or [Supabase](https://supabase.com) work; paste the connection string and restart. The schema is created automatically. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Send real sign-in emails over SMTP. A Gmail account with an [app password](https://myaccount.google.com/apppasswords) works for development. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Send email through [Resend](https://resend.com) instead. Without a verified domain, Resend only delivers to your own address. |
+| `ADMIN_EMAILS` | Comma-separated bootstrap admins. Existing admins can manage other admins and grant dated Plus access from `/admin`. |
+| `VERCEL_DEPLOY_HOOK_URL` | Optional production deploy hook used to rebuild prerendered handbook pages after publication changes. |
 | `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | AI provider for reviews (see above). Unset means the fake provider in development and AI disabled in production. |
 | `AI_REVIEW_EFFORT`, `AI_REVIEW_MAX_TOKENS`, `AI_REVIEW_TIMEOUT_MS` | Optional tuning for review generation. |
 | `DEV_TOOLS` | Set to `false` to hide developer tools such as the plan switch. Always off in production. |
+| `VOICE_ANSWERS` | Voice answers in the live interviewer (record up to 2 minutes). On in development, off in production unless set to `true`. |
+| `GROQ_API_KEY` | Speech-to-text for voice answers (Groq Whisper). Optional locally (a fake transcriber is used); required in production for voice answers. `STT_MODEL` / `STT_BASE_URL` override the defaults. |
 | `AUTH_SECRET` | Secret for hashing sign-in codes and signing OAuth state. **Required in production.** |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client. Both required together; omit both to disable Google sign-in. |
 | `APP_ORIGIN`, `TRUST_PROXY`, `PORT` | Deployment settings for running behind a proxy or on a custom domain. |
@@ -185,7 +192,9 @@ Vercel Cron (daily) ──► /api/v1/internal/maintenance
 | `MIGRATION_DATABASE_URL` | Supabase prod, session pooler (`:5432`) | Supabase staging, session pooler |
 | `AUTH_SECRET` | random 32 bytes (hex) | a different random value |
 | `CRON_SECRET` | random 32 bytes (hex) | – |
+| `ADMIN_EMAILS` | comma-separated initial admin accounts | same |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Resend key; `DesignRounds <no-reply@designrounds.in>` | same |
+| `VERCEL_DEPLOY_HOOK_URL` | production deploy hook for publishing handbook articles | – |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth web client for **designrounds.in** (redirect `https://designrounds.in/api/v1/auth/google/callback`) | optional; same client only if preview redirect URIs are registered in Google Cloud |
 | `AI_API_KEY`, `AI_MODEL` (`AI_BASE_URL`) | AI provider | same, or unset to disable AI |
 | `APP_ORIGIN` | `https://designrounds.in` | – |

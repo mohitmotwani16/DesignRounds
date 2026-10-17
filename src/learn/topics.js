@@ -28,12 +28,26 @@ export async function preloadAllTopics() {
 // chunk arrives (client-side navigation between topics).
 export function useTopic(slug) {
   const [body, setBody] = useState(() => cache.get(slug) ?? null);
+  const [loadError, setLoadError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    if (cache.has(slug)) { setBody(cache.get(slug)); return undefined; }
+    setLoadError(false);
+    if (cache.has(slug)) {
+      const cached = cache.get(slug);
+      setBody(cached ?? null);
+      setLoadError(cached == null);
+      return undefined;
+    }
     setBody(null);
-    loadTopic(slug).then((loaded) => { if (!cancelled) setBody(loaded); });
+    loadTopic(slug).then((loaded) => {
+      if (!cancelled) {
+        setBody(loaded);
+        setLoadError(loaded == null);
+      }
+    }).catch(() => {
+      if (!cancelled) setLoadError(true);
+    });
     return () => { cancelled = true; };
   }, [slug]);
-  return body;
+  return { body, loadError, retry: () => window.location.reload() };
 }

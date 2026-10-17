@@ -63,6 +63,7 @@ export const api = {
   requestReview: (id, requestId) => request("POST", `/sessions/${id}/reviews`, { requestId }),
   getInterview: (id) => request("GET", `/sessions/${id}/interview`),
   sendInterviewMessage: (id, body) => request("POST", `/sessions/${id}/interview/messages`, body),
+  sendInterviewAudio: (id, body) => request("POST", `/sessions/${id}/interview/audio`, body),
   interviewCheck: (id, body) => request("POST", `/sessions/${id}/interview/check`, body),
   publishedArticles: () => request("GET", "/articles/published"),
   publishedArticle: (slug) => request("GET", `/articles/published/${encodeURIComponent(slug)}`),
@@ -79,4 +80,6 @@ export const api = {
   adminList: () => request("GET", "/admin/admins"),
   grantAdmin: (email) => request("POST", "/admin/admins", { email }),
   revokeAdmin: (id) => request("DELETE", `/admin/admins/${id}`),
+  adminMembers: (email = "") => request("GET", `/admin/members${email ? `?email=${encodeURIComponent(email)}` : ""}`),
+  setMemberPlan: (id, plan, expiresAt) => request("PUT", `/admin/members/${id}/plan`, { plan, expiresAt }),
 };

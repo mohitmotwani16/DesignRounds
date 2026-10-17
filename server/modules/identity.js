@@ -5,6 +5,7 @@ import { query, queryOne } from "../db.js";
 import { devToolsEnabled, isProduction } from "../flags.js";
 import { deliveryMode, sendLoginCode } from "../email.js";
 import { HttpError, createLimiter, parse, route } from "../http.js";
+import { planFor } from "./plans.js";
 
 const SESSION_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
@@ -112,6 +113,9 @@ export function requireAdmin(req, _res, next) {
 }
 
 export function toPublicUser(row) {
+  const planExpiresAt = row.plan_expires_at instanceof Date
+    ? row.plan_expires_at.toISOString().slice(0, 10)
+    : typeof row.plan_expires_at === "string" ? row.plan_expires_at.slice(0, 10) : null;
   return {
     id: row.id,
     isAdmin: isAdmin(row),
@@ -120,7 +124,8 @@ export function toPublicUser(row) {
     headline: row.headline,
     targetRole: row.target_role,
     experienceLevel: row.experience_level,
-    plan: row.plan,
+    plan: planFor(row),
+    planExpiresAt,
     devTools: devToolsEnabled,
     onboarded: Boolean(row.onboarded_at),
     createdAt: row.created_at,

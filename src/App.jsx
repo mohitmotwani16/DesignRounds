@@ -6,6 +6,7 @@ import { findPrompt, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
+import { recommendedFreeRound } from "./data/free-rounds.js";
 import { Link, navigate, safeNext, useRoute } from "./router.js";
 import { applyMeta, routeMeta } from "./seo.js";
 import AboutPage from "./pages/About.jsx";
@@ -61,7 +62,7 @@ function Routes() {
     return <SignInPage next={params.get("next")} error={params.get("error")} />;
   }
 
-  const needsAuth = path === "/welcome" || path === "/profile" || path.startsWith("/workspace/") || path.startsWith("/start/")
+  const needsAuth = path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/workspace/") || path.startsWith("/start/")
     || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/");
   if (needsAuth) {
     if (auth.status === "loading") return loadingScreen;
@@ -77,6 +78,10 @@ function Routes() {
   }
 
   if (path === "/welcome") return <OnboardingPage next={params.get("next")} />;
+  if (path === "/start-free") {
+    const prompt = recommendedFreeRound(auth.user);
+    return prompt ? <Redirect to={`/start/${prompt.id}`} /> : <Redirect to="/library" />;
+  }
   if (path.startsWith("/start/")) return <StartRound promptId={path.slice("/start/".length)} />;
   if (path.startsWith("/workspace/")) return <Suspense fallback={loadingScreen}><WorkspaceRoute sessionId={path.slice("/workspace/".length)} /></Suspense>;
   if (path === "/workspace") return <Redirect to="/library" />;

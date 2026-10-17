@@ -96,6 +96,7 @@ Disallow: /signin
 Disallow: /welcome
 Disallow: /profile
 Disallow: /start/
+Disallow: /start-free
 Disallow: /workspace/
 Disallow: /learn/write
 Disallow: /admin

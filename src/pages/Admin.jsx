@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, LoaderCircle, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, LoaderCircle, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { CATEGORIES, categoryById } from "../learn/catalog.js";
@@ -39,14 +39,15 @@ function AdminHome() {
         <header className="write-head">
           <div>
             <h1><ShieldCheck size={24} /> Admin</h1>
-            <p>Review community articles and manage who has admin access.</p>
+            <p>Review community articles, manage admins, and grant expiring Plus access.</p>
           </div>
         </header>
         <div className="admin-tabs" role="tablist">
           <button role="tab" aria-selected={tab === "articles"} onClick={() => setTab("articles")}>Articles</button>
           <button role="tab" aria-selected={tab === "admins"} onClick={() => setTab("admins")}>Admins</button>
+          <button role="tab" aria-selected={tab === "members"} onClick={() => setTab("members")}>Memberships</button>
         </div>
-        {tab === "articles" ? <ArticleQueue /> : <AdminList />}
+        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : <MemberList />}
       </div>
     </main>
   );
@@ -84,6 +85,94 @@ function ArticleQueue() {
         </ul>
       ) : <p className="write-empty">Nothing here right now.</p>)}
     </>
+  );
+}
+
+function MemberList() {
+  const [email, setEmail] = useState("");
+  const [members, setMembers] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  async function load(search = "") {
+    setLoading(true);
+    setError("");
+    try {
+      const { members: list } = await api.adminMembers(search);
+      setMembers(list);
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function save(member, plan, expiresAt) {
+    setBusyId(member.id);
+    setError("");
+    setNotice("");
+    try {
+      await api.setMemberPlan(member.id, plan, expiresAt || null);
+      setNotice(`${member.email} now has ${plan === "plus" ? `Plus through ${expiresAt}` : "Free"} access.`);
+      await load(email.trim().toLowerCase());
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return (
+    <section className="admin-members">
+      <form className="admin-grant" onSubmit={(event) => { event.preventDefault(); load(email.trim().toLowerCase()); }}>
+        <label className="field-label" htmlFor="member-email">Find an account by email</label>
+        <div>
+          <input id="member-email" className="text-input" type="email" placeholder="person@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <button className="btn btn-primary"><Search size={15} /> Find</button>
+          {email && <button type="button" className="btn btn-ghost" onClick={() => { setEmail(""); load(); }}>Clear</button>}
+        </div>
+        <small>Plus access must have an expiry date. It remains active through that UTC date.</small>
+      </form>
+      {notice && <p className="write-notice"><Check size={14} /> {notice}</p>}
+      {error && <p className="form-error">{error}</p>}
+      {loading && <p className="learn-loading"><LoaderCircle size={16} className="spin" /> Loading…</p>}
+      {!loading && members?.length === 0 && <p className="write-empty">No account found. They need to sign in once before you can grant access.</p>}
+      {!loading && members?.length > 0 && (
+        <ul className="write-list">
+          {members.map((member) => <MemberRow key={member.id} member={member} busy={busyId === member.id} onSave={save} />)}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function MemberRow({ member, busy, onSave }) {
+  const [plan, setPlan] = useState(member.plan);
+  const [expiresAt, setExpiresAt] = useState(member.planExpiresAt || "");
+  useEffect(() => {
+    setPlan(member.plan);
+    setExpiresAt(member.planExpiresAt || "");
+  }, [member]);
+
+  return (
+    <li className="membership-row">
+      <div className="membership-identity">
+        <strong>{member.displayName || member.email}</strong>
+        <small>{member.email}{member.plan === "plus" && !member.planExpiresAt ? " · expiry missing" : ""}</small>
+      </div>
+      <form onSubmit={(event) => { event.preventDefault(); onSave(member, plan, expiresAt); }}>
+        <select className="text-input" aria-label={`Plan for ${member.email}`} value={plan} onChange={(event) => setPlan(event.target.value)}>
+          <option value="free">Free</option>
+          <option value="plus">Plus</option>
+        </select>
+        {plan === "plus" && <input className="text-input" aria-label={`Plus expiry for ${member.email}`} type="date" required value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />}
+        <button className="btn btn-ghost" disabled={busy || (plan === "plus" && !expiresAt)}><Save size={14} /> Save</button>
+      </form>
+    </li>
   );
 }
 

@@ -36,6 +36,15 @@ const updateBody = z.object(fields).partial().strict();
 const messageBody = z.object({ body: z.string().trim().min(2).max(4000) }).strict();
 const decisionBody = z.object({ action: z.enum(["request_changes", "reject", "publish", "unpublish"]), message: z.string().trim().max(4000).optional() }).strict();
 const adminBody = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();
+const membershipBody = z.object({
+  plan: z.enum(["free", "plus"]),
+  expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }, "Enter a valid expiry date.").nullable().optional(),
+}).strict().refine(({ plan, expiresAt }) => plan === "plus" ? Boolean(expiresAt) : !expiresAt, {
+  message: "Plus access requires an expiry date; Free access must not have one.",
+});
 
 const reservedSlug = (slug) => Boolean(topicMeta(slug)) || ["write", "admin", "submit", "new"].includes(slug);
 
@@ -356,4 +365,50 @@ articlesRouter.delete("/admin/admins/:id", requireAdmin, route(async (req, res) 
   await query("update users set role = 'user', updated_at = now() where id = $1", [row.id]);
   console.log(`[admin] ${req.user.email} revoked admin from ${row.email}`);
   res.json({ revoked: row.email });
+}));
+
+articlesRouter.get("/admin/members", requireAdmin, route(async (req, res) => {
+  const email = String(req.query.email || "").trim().toLowerCase();
+  if (email && !adminBody.shape.email.safeParse(email).success) {
+    throw new HttpError(400, "INVALID_EMAIL", "Enter a valid account email.");
+  }
+  const rows = await query(
+    `select id, email, display_name, plan, plan_expires_at
+       from users
+      where ($1::text is null or email = $1)
+      order by (plan = 'plus') desc, updated_at desc
+      limit 200`,
+    [email || null]
+  );
+  res.json({
+    members: rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      plan: row.plan,
+      planExpiresAt: row.plan_expires_at instanceof Date ? row.plan_expires_at.toISOString().slice(0, 10) : row.plan_expires_at,
+    })),
+  });
+}));
+
+articlesRouter.put("/admin/members/:id/plan", requireAdmin, route(async (req, res) => {
+  const { plan, expiresAt } = parse(membershipBody, req.body);
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) throw new HttpError(404, "NOT_FOUND", "User not found.");
+  const member = await queryOne(
+    `update users set plan = $2, plan_expires_at = $3::date, updated_at = now()
+      where id = $1
+      returning id, email, display_name, plan, plan_expires_at`,
+    [req.params.id, plan, expiresAt || null]
+  );
+  if (!member) throw new HttpError(404, "NOT_FOUND", "User not found.");
+  console.log(`[admin] ${req.user.email} set ${member.email} to ${plan}${expiresAt ? ` through ${expiresAt}` : ""}`);
+  res.json({
+    member: {
+      id: member.id,
+      email: member.email,
+      displayName: member.display_name,
+      plan: member.plan,
+      planExpiresAt: member.plan_expires_at instanceof Date ? member.plan_expires_at.toISOString().slice(0, 10) : member.plan_expires_at,
+    },
+  });
 }));
