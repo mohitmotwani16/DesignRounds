@@ -57,6 +57,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   const recorder = useVoiceRecorder({ onRecorded: interview.sendAudio });
   const recording = recorder.status === "recording";
   const voiceTip = useVoiceTip(interview.sessionId, voice && canSend);
+  const [voiceUsed, markVoiceUsed] = useVoiceUsed();
 
   useEffect(() => {
     const list = listRef.current;
@@ -75,6 +76,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
 
   function startRecording() {
     voiceTip.hide();
+    markVoiceUsed();
     recorder.start();
   }
 
@@ -161,7 +163,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
                   empty box it is the main action, like a messaging app. */}
               {voice && !pending && (
                 <button
-                  className={`${draft.trim() ? "voice-secondary" : ""}${voiceTip.visible ? " voice-attention" : ""}`}
+                  className={draft.trim() ? "voice-secondary" : !voiceUsed && canSend ? "voice-heartbeat" : ""}
                   aria-label="Record a voice answer"
                   title="Answer out loud (up to 2 minutes)"
                   disabled={!canSend || recorder.status === "requesting"}
@@ -186,6 +188,21 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
       </div>
     </>
   );
+}
+
+// Until a learner has tried voice once, the mic beats gently so it's easy to find.
+// Remembered per browser, so it stops for good after the first recording.
+const VOICE_USED_KEY = "designrounds:voice-used";
+
+function useVoiceUsed() {
+  const [used, setUsed] = useState(() => {
+    try { return Boolean(window.localStorage.getItem(VOICE_USED_KEY)); } catch { return false; }
+  });
+  const mark = () => {
+    setUsed(true);
+    try { window.localStorage.setItem(VOICE_USED_KEY, "1"); } catch { /* the heartbeat just shows again next visit */ }
+  };
+  return [used, mark];
 }
 
 // A one-line nudge toward answering out loud: once per round, the first time the
