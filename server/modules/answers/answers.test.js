@@ -163,3 +163,17 @@ test("reviews receive the pool as private calibration and ignore it when absent"
   assert.equal(reviewTemplateVersion(null, { fingerprint: "abc123" }).endsWith("pool-abc123"), true);
   assert.equal(reviewTemplateVersion(null, null).endsWith("no-pool"), true);
 });
+
+test("the model aggregates scraped excerpts into the pool schema", async () => {
+  process.env.AI_PROVIDER = "fake";
+  const { aggregateSources, answerPoolTask } = await import("./aggregate.js");
+  const excerpt = `${"The redirect path caches the short code and stores the long URL. ".repeat(6)}`;
+  const sources = [{ url: "https://notes.example/blog", title: "Notes", kind: "blog", excerpt }];
+  const promptText = answerPoolTask.buildUser({ prompt, sources });
+  assert.match(promptText, /notes\.example\/blog/);
+  assert.match(promptText, /redirect path caches/);
+  const { pool, model } = await aggregateSources(prompt, sources);
+  assert.equal(model, "fake");
+  assert.equal(pool.answers.some((answer) => answer.band === "strong"), true);
+  assert.equal(pool.answers.some((answer) => answer.band === "weak"), true);
+});

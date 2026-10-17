@@ -1,5 +1,6 @@
 import { prompts } from "../../../src/data/prompts.js";
 import { gatherSources } from "./gather.js";
+import { aggregateSources } from "./aggregate.js";
 import { claimAnswerPool, failAnswerPool, saveAnswerPool, syncAnswerPools } from "./store.js";
 import { deterministicPool, poolOutput } from "./task.js";
 
@@ -16,8 +17,7 @@ export async function processNextAnswerPool(promptId = null) {
   }
   try {
     const sources = await gatherSources(prompt);
-    const pool = poolOutput.parse(deterministicPool(prompt, sources));
-    const model = "deterministic";
+    const { pool, model } = await aggregateSources(prompt, sources);
     const saved = await saveAnswerPool({ promptId: job.prompt_id, fingerprint: job.prompt_fingerprint, pool, model, sources });
     console.log(`[answers] ${job.prompt_id} ${saved ? "ready" : "stale"} sources=${sources.length} model=${model}`);
     return saved ? "ready" : "failed";

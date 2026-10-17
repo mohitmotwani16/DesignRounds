@@ -52,6 +52,12 @@ export const aiConfig = {
     interview_summary: { effort: "low", maxTokens: 3_000, timeoutMs: 45_000 },
     // Runs alongside the review, so it must finish well within the review's time.
     communication: { effort: "low", maxTokens: 4_000, timeoutMs: 90_000 },
+    // One aggregation per question, off the learner's request path.
+    answer_pool: {
+      effort: env.AI_ANSWER_POOL_EFFORT || "medium",
+      maxTokens: Number(env.AI_ANSWER_POOL_MAX_TOKENS || 8_000),
+      timeoutMs: Number(env.AI_ANSWER_POOL_TIMEOUT_MS || 90_000),
+    },
   },
 };
 
