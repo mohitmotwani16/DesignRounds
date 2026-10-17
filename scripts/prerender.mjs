@@ -80,12 +80,43 @@ for (const url of paths) {
 // 3. Not-found page.
 write("404.html", page(ssr.renderNotFound(), ssr.metaHtml(ssr.routeMeta("/this-page-does-not-exist"))));
 
-// 4. Sitemap.
+// 4. Sitemap, with each page's last real change: guides carry their own dates, community
+// articles their last edit, and everything else the site's content date.
 const priority = (url) => (url === "/" ? "1.0" : url === "/library" || url.startsWith("/learn") ? "0.9" : url.startsWith("/library/") ? "0.8" : "0.7");
+const day = (value) => String(value).slice(0, 10);
+const lastmod = (url) => {
+  const slug = url.startsWith(`${ssr.LEARN_PATH}/`) ? url.slice(ssr.LEARN_PATH.length + 1) : null;
+  const topic = slug && ssr.topicMeta(slug);
+  if (topic) return topic.published ?? ssr.LEARN_UPDATED;
+  const article = slug && community.find((entry) => entry.slug === slug);
+  if (article) return day(article.updatedAt ?? article.publishedAt);
+  return url === ssr.LEARN_PATH ? ssr.LEARN_UPDATED : ssr.SITE_UPDATED;
+};
 write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${paths.map((url) => `  <url><loc>${ssr.SITE.url}${url === "/" ? "/" : url}</loc><priority>${priority(url)}</priority></url>`).join("\n")}
+${paths.map((url) => `  <url><loc>${ssr.SITE.url}${url === "/" ? "/" : url}</loc><lastmod>${lastmod(url)}</lastmod><priority>${priority(url)}</priority></url>`).join("\n")}
 </urlset>
+`);
+
+// 4b. Atom feed of the handbook, newest first, so feed readers and search engines
+// discover new guides as they're published.
+const xml = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const feed = [
+  ...ssr.TOPICS.map((topic) => ({ slug: topic.slug, title: topic.title, summary: topic.description, updated: topic.published ?? ssr.LEARN_UPDATED })),
+  ...community.map((article) => ({ slug: article.slug, title: article.title, summary: article.description, updated: day(article.updatedAt ?? article.publishedAt) })),
+].sort((a, b) => b.updated.localeCompare(a.updated));
+const learnUrl = `${ssr.SITE.url}${ssr.LEARN_PATH}`;
+write(`${ssr.LEARN_PATH.slice(1)}/feed.xml`, `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>DesignRounds system design handbook</title>
+  <subtitle>Free system design guides with diagrams, from the basics to distributed systems.</subtitle>
+  <link href="${learnUrl}/feed.xml" rel="self" />
+  <link href="${learnUrl}" />
+  <id>${learnUrl}</id>
+  <updated>${feed[0].updated}T00:00:00Z</updated>
+  <author><name>DesignRounds</name></author>
+${feed.map((entry) => `  <entry><title>${xml(entry.title)}</title><link href="${learnUrl}/${entry.slug}" /><id>${learnUrl}/${entry.slug}</id><updated>${entry.updated}T00:00:00Z</updated><summary>${xml(entry.summary)}</summary></entry>`).join("\n")}
+</feed>
 `);
 
 // 5. robots.txt: everything public is crawlable; signed-in areas and the API are not.
@@ -105,17 +136,16 @@ Sitemap: ${ssr.SITE.url}/sitemap.xml
 `);
 
 // 6. llms.txt: a plain summary for AI assistants and crawlers (llmstxt.org format).
-const free = ssr.prompts.filter((prompt) => prompt.access === "free").length;
 const byTrack = ssr.tracks.map((track) => {
   const rounds = ssr.prompts.filter((prompt) => prompt.track === track.id);
   return `### ${ssr.TRACK_SEO[track.id].h1}\n\n- [${track.label} rounds](${ssr.SITE.url}${ssr.trackPath(track.id)}): ${ssr.TRACK_SEO[track.id].description}\n${rounds.map((prompt) => `- [${prompt.title}](${ssr.SITE.url}${ssr.roundPath(prompt.id)}): ${prompt.description} (${prompt.difficulty}, ${prompt.minutes} min, ${prompt.access === "free" ? "free" : "Plus"})`).join("\n")}`;
 }).join("\n\n");
 write("llms.txt", `# DesignRounds
 
-> DesignRounds (designrounds.in) is a system design interview practice platform. Learners pick a realistic design problem, build the architecture on a canvas, defend their choices to an AI interviewer, and get a rubric-based review scored on six dimensions: requirements and scope, high-level architecture, data model and storage, scale and performance, reliability and security, and trade-offs and reasoning.
+> DesignRounds (designrounds.in) is a system design interview practice platform. Learners pick a realistic design problem, build the architecture on a canvas, defend their choices to an AI interviewer, and get a rubric-based review scored on requirements and scope, high-level architecture, data model and storage, scale and performance, reliability and security, and trade-offs and reasoning.
 
 - Who it's for: software engineers preparing for system design interviews, across backend, data engineering, machine learning, platform and infrastructure, distributed systems, and frontend and mobile roles.
-- Pricing: Free plan with ${free} practice rounds and ${ssr.aiLimits.free.reviewsPerRound} AI review per round (up to ${ssr.aiLimits.free.reviewsPerMonth} a month), no credit card. Plus (coming soon) adds every round, a live AI interviewer and full coaching.
+- Pricing: Free plan with practice rounds in every discipline and ${ssr.aiLimits.free.reviewsPerRound} AI review per round (up to ${ssr.aiLimits.free.reviewsPerMonth} a month), no credit card. Plus (coming soon) adds every round, a live AI interviewer and full coaching.
 - Sign-in: email one-time code; no password.
 
 ## System design handbook
@@ -125,6 +155,8 @@ ${ssr.CATEGORIES.map((category) => `### ${category.title}\n\n${category.topics.m
 ## More
 
 - [About DesignRounds](${ssr.SITE.url}/about): what it is, who it's for, how it works and pricing.
+- [DesignRounds Plus](${ssr.SITE.url}/plus): every round, a live AI interviewer, communication feedback and what each review grades.
+- [Handbook feed](${learnUrl}/feed.xml): new and updated guides.
 
 ## Practice rounds
 
@@ -132,4 +164,4 @@ ${byTrack}
 `);
 
 rmSync(path.join(root, "dist-ssr"), { recursive: true, force: true });
-console.log(`[prerender] ${paths.length} pages, app.html, 404.html, sitemap.xml, robots.txt, llms.txt`);
+console.log(`[prerender] ${paths.length} pages, app.html, 404.html, sitemap.xml, learn feed, robots.txt, llms.txt`);

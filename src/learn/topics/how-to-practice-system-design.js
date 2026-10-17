@@ -5,6 +5,7 @@ export default {
       "type": "p",
       "text": "There are four common ways to prepare for system design interviews: reading books and articles, watching videos, doing mock interviews with people, and practicing with an AI interviewer. They are not interchangeable. Each one trains a different part of the skill, and the best preparation combines them."
     },
+    {"type":"diagram","kind":"flow","caption":"The practice loop that builds interview skill: learn one concept, use it in a timed round, read the review, fix the gaps, and go again.","nodes":[{"id":"learn","label":"Learn a concept","sub":"handbook guide","col":0,"row":0},{"id":"mock","label":"Timed mock round","sub":"45 minutes","col":1,"row":0,"tone":"accent"},{"id":"review","label":"Review","sub":"rubric scores","col":1,"row":1},{"id":"fix","label":"Fix the gaps","sub":"re-read, redesign","col":0,"row":1,"tone":"ok"}],"edges":[{"from":"learn","to":"mock"},{"from":"mock","to":"review"},{"from":"review","to":"fix"},{"from":"fix","to":"learn","label":"next round","dashed":true}]},
     {
       "type": "h2",
       "text": "The comparison at a glance"

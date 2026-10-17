@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ArrowUp, Check, ChevronDown, LayoutGrid, PlayCircle, RotateCcw, Search, SearchX, SlidersHorizontal, WifiOff, X } from "lucide-react";
+import { SearchBox } from "../components/SearchBox.jsx";
+import { ArrowRight, ArrowUp, Check, ChevronDown, LayoutGrid, PlayCircle, RotateCcw, SearchX, SlidersHorizontal, WifiOff, X } from "lucide-react";
 import { practiceTracks } from "../data/interests.js";
 import { prompts, topics, tracks } from "../data/prompts.js";
 import { api } from "../api.js";
@@ -101,7 +102,6 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [showTop, setShowTop] = useState(false);
-  const searchRef = useRef(null);
   const sentinelRef = useRef(null);
   const q = useDebounced(search.trim(), 250);
 
@@ -117,14 +117,8 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
   }, [authStatus]);
 
   useEffect(() => {
-    const onKeyDown = (event) => {
-      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
-      if (((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") || (event.key === "/" && !typing)) {
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
-      if (event.key === "Escape") setDrawerOpen(false);
-    };
+    // The search shortcuts live in SearchBox; Escape here closes the filter drawer.
+    const onKeyDown = (event) => { if (event.key === "Escape") setDrawerOpen(false); };
     const onScroll = () => setShowTop(window.scrollY > 1200);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -155,7 +149,6 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
   }, [sessions]);
   const inProgress = sessions.filter((session) => session.status === "in_progress").slice(0, 3);
 
-  const trackCounts = catalog.facets?.tracks ?? {};
   const topicCounts = catalog.facets?.topics ?? {};
   const visibleTopics = topics.filter((topic) => topicCounts[topic] || selectedTopics.includes(topic));
   const shownTopics = showAllTopics ? visibleTopics : visibleTopics.slice(0, TOPICS_COLLAPSED);
@@ -191,26 +184,21 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
         <h1>{activeTrack ? TRACK_SEO[activeTrack.id].h1 : <>System design interview questions <span className="serif-accent">to practice.</span></>}</h1>
         {activeTrack
           ? TRACK_SEO[activeTrack.id].intro.map((paragraph) => <p key={paragraph.slice(0, 24)}>{paragraph}</p>)
-          : <p>Interview-grade design rounds across six disciplines, each with a realistic brief, the scale to design for and a rubric-based review. Filter by level, time or topic, or search for a system, requirement or concept.</p>}
-        <label className="lib-search">
-          <Search size={20} />
-          <span className="sr-only">Search practice rounds</span>
-          <input ref={searchRef} type="search" placeholder="Search “rate limiter”, “idempotency”, “websocket”…" value={search} onChange={(event) => setSearch(event.target.value)} />
-          {search ? <button type="button" className="clear" onClick={() => { setSearch(""); searchRef.current?.focus(); }} aria-label="Clear search"><X size={15} /></button> : <kbd>Ctrl K</kbd>}
-        </label>
+          : <p>Interview-grade design rounds for every discipline, each with a realistic brief, the scale to design for and a rubric-based review. Filter by level, time or topic, or search for a system, requirement or concept.</p>}
+        <SearchBox className="lib-search" value={search} onChange={setSearch} label="Search practice rounds" placeholder="Search “rate limiter”, “idempotency”, “websocket”…" />
       </section>
 
       <div className="lib-tabs-bar">
         <div className="wrap">
           <div className="lib-tabs" role="toolbar" aria-label="Discipline">
             <Link className="lib-tab tone-slate" to="/library" aria-current={track === "all" ? "page" : undefined}>
-              <i><LayoutGrid size={13} /></i>All<small>{trackCounts.all ?? "–"}</small>
+              <i><LayoutGrid size={13} /></i>All
             </Link>
             {tracks.map((item) => {
               const Icon = trackIcon(item.icon);
               return (
                 <Link key={item.id} className={`lib-tab tone-${item.color}`} to={trackPath(item.id)} aria-current={track === item.id ? "page" : undefined}>
-                  <i><Icon size={13} /></i>{item.shortLabel}<small>{trackCounts[item.id] ?? 0}</small>
+                  <i><Icon size={13} /></i>{item.shortLabel}
                 </Link>
               );
             })}
@@ -259,13 +247,13 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
             <div className="chips">
               {shownTopics.map((topic) => (
                 <button key={topic} className="chip-btn" aria-pressed={selectedTopics.includes(topic)} onClick={() => setSelectedTopics((list) => toggle(list, topic))}>
-                  {topic}<small>{topicCounts[topic] || 0}</small>
+                  {topic}
                 </button>
               ))}
             </div>
             {visibleTopics.length > TOPICS_COLLAPSED && (
               <button className="link-btn" onClick={() => setShowAllTopics((value) => !value)}>
-                {showAllTopics ? "Show fewer" : `Show all ${visibleTopics.length}`} <ChevronDown size={13} style={{ transform: showAllTopics ? "rotate(180deg)" : "none" }} />
+                {showAllTopics ? "Show fewer" : "Show all topics"} <ChevronDown size={13} style={{ transform: showAllTopics ? "rotate(180deg)" : "none" }} />
               </button>
             )}
           </div>
@@ -296,7 +284,7 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
 
           <div className="lib-toolbar">
             <span className="lib-count" aria-live="polite">
-              {catalog.status === "error" && total === null ? "Library unavailable" : total === null ? "Loading rounds…" : <><strong>{total}</strong> {total === 1 ? "round" : "rounds"}{activeTrack ? ` in ${activeTrack.shortLabel}` : ""}{q ? ` matching “${q}”` : ""}</>}
+              {catalog.status === "error" && total === null ? "Library unavailable" : total === null ? "Loading rounds…" : total === 0 ? "No rounds match" : <>{activeTrack ? `${activeTrack.shortLabel} rounds` : "All rounds"}{q ? ` matching “${q}”` : ""}{filterCount ? ", filtered" : ""}</>}
             </span>
             <div className="lib-tools">
               <button className="btn btn-ghost btn-sm lib-filter-toggle" onClick={() => setDrawerOpen(true)}><SlidersHorizontal size={14} /> Filters{filterCount ? ` · ${filterCount}` : ""}</button>
@@ -344,11 +332,10 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
                 <button className="btn btn-ghost btn-sm" onClick={catalog.retry}><RotateCcw size={13} /> Couldn't load more. Retry</button>
               ) : catalog.nextCursor ? (
                 <>
-                  <span>Showing {catalog.items.length} of {total}</span>
                   <span className="progress-line"><b style={{ width: `${(catalog.items.length / total) * 100}%` }} /></span>
                 </>
               ) : total > PAGE_SIZE ? (
-                <span>You've seen all {total} rounds.</span>
+                <span>That’s every round.</span>
               ) : null
             )}
           </div>

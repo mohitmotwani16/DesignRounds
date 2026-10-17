@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { TOPICS } = await import(pathToFileURL(path.join(root, "src", "learn", "catalog.js")).href);
 const { prompts } = await import(pathToFileURL(path.join(root, "src", "data", "prompts.js")).href);
+const { ROADMAPS } = await import(pathToFileURL(path.join(root, "src", "learn", "roadmaps.js")).href);
 
 const topicSlugs = new Set(TOPICS.map((topic) => topic.slug));
 const roundIds = new Set(prompts.map((prompt) => prompt.id));
@@ -56,7 +57,30 @@ for (const file of files) {
   for (const tip of body.interview ?? []) checkText(slug, tip);
   for (const related of body.related ?? []) if (!topicSlugs.has(related)) problems.push(`${slug}: unknown related topic ${related}`);
   for (const round of body.practice ?? []) if (!roundIds.has(round)) problems.push(`${slug}: unknown practice round ${round}`);
+  for (const source of body.reading ?? []) {
+    if (!/^https:\/\/\S+$/.test(source.url ?? "")) problems.push(`${slug}: reading link must be https: ${source.url}`);
+    if (!source.title || !source.publisher) problems.push(`${slug}: reading link needs a title and publisher: ${source.url}`);
+  }
 }
+
+// Roadmaps: every stage topic and practice round exists, and each roadmap has a page.
+const roadmapPages = new Set();
+for (const [id, roadmap] of Object.entries(ROADMAPS)) {
+  if (!topicSlugs.has(roadmap.page)) problems.push(`roadmap ${id}: page ${roadmap.page} is not a topic`);
+  for (const stage of roadmap.stages) {
+    if (!stage.topics.length) problems.push(`roadmap ${id}: stage "${stage.title}" has no topics`);
+    for (const { slug } of stage.topics) if (!topicSlugs.has(slug)) problems.push(`roadmap ${id}: unknown topic ${slug}`);
+    for (const round of stage.rounds) if (!roundIds.has(round)) problems.push(`roadmap ${id}: unknown practice round ${round}`);
+  }
+}
+for (const file of files) {
+  const body = (await import(pathToFileURL(path.join(dir, file)).href)).default;
+  for (const block of body.blocks ?? []) if (block.type === "roadmap") {
+    if (!ROADMAPS[block.id]) problems.push(`${file}: unknown roadmap ${block.id}`);
+    else roadmapPages.add(block.id);
+  }
+}
+for (const id of Object.keys(ROADMAPS)) if (!roadmapPages.has(id)) problems.push(`roadmap ${id}: not placed on any page`);
 
 const pending = [...topicSlugs].filter((slug) => !files.includes(`${slug}.js`));
 if (process.argv.includes("--allow-missing")) problems.splice(0, problems.length, ...problems.filter((problem) => !problem.endsWith("has no body")));

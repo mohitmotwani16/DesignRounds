@@ -5,6 +5,7 @@ export default {
       "type": "p",
       "text": "A system design interview asks you to design a real system, such as a URL shortener, a chat service or a news feed, in about 45 minutes, while explaining your reasoning out loud. There is no single correct answer. The interviewer is judging **how you think**: whether you clarify the problem, make sensible choices for the stated scale, and can defend the trade-offs behind them."
     },
+    {"type":"diagram","kind":"flow","caption":"A 45-minute system design interview in four stages. Most of the score is earned in the deep dive, so keep requirements and the first sketch brisk.","nodes":[{"id":"req","label":"Requirements","sub":"about 7 min","col":0,"row":0},{"id":"hld","label":"High-level design","sub":"about 13 min","col":1,"row":0},{"id":"deep","label":"Deep dive","sub":"about 18 min","col":2,"row":0,"tone":"accent"},{"id":"wrap","label":"Wrap-up","sub":"about 7 min","col":3,"row":0}],"edges":[{"from":"req","to":"hld"},{"from":"hld","to":"deep"},{"from":"deep","to":"wrap"}]},
     {
       "type": "p",
       "text": "Most preparation advice tells you what to read. This guide focuses on what actually moves the needle: practicing complete designs, under realistic constraints, and getting honest feedback on your reasoning."

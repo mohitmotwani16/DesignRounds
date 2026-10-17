@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, Crown, Layers2, LockKeyhole, LogOut, Menu, X } from "lucide-react";
 import { getTrack, tracks } from "../data/prompts.js";
-import { CATEGORIES, LEARN_PATH, topicPath } from "../learn/catalog.js";
+import { CATEGORIES, LEARN_PATH, topicMeta, topicPath } from "../learn/catalog.js";
 import { useAuth } from "../auth.jsx";
 import { Link, navigate, useRoute } from "../router.js";
 import { roundPath, trackPath } from "../seo.js";
@@ -51,8 +51,8 @@ export function SiteNav() {
   const current = (match) => (match ? "page" : undefined);
   const links = (
     <>
-      <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
       <Link className="nav-link-btn" to={LEARN_PATH} onClick={close} aria-current={current(path === LEARN_PATH || path.startsWith(`${LEARN_PATH}/`))}>Learn</Link>
+      <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
       {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>My rounds</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
     </>
@@ -96,7 +96,13 @@ export function SiteNav() {
   );
 }
 
+// Guides people search for most, linked from every page.
+const POPULAR = ["system-design-interview-questions", "hld-vs-lld", "caching", "load-balancing", "consistent-hashing", "sharding", "cap-theorem", "event-streaming-kafka", "rate-limiting"];
+
 export function SiteFooter() {
+  // Sign in is offered only once we know the visitor is signed out, so a signed-in
+  // reader never sees it flash in while their session loads.
+  const { status } = useAuth();
   return (
     <footer className="foot">
       <div className="wrap">
@@ -109,6 +115,7 @@ export function SiteFooter() {
             <h2>Product</h2>
             <ul>
               <li><Link to="/library">Practice library</Link></li>
+              <li><Link to="/plus">Plus</Link></li>
               {SECTIONS.map((item) => <li key={item.id}><Link to={`/#${item.id}`}>{item.label}</Link></li>)}
               <li><Link to="/about">About</Link></li>
               <li><Link to="/privacy">Privacy</Link></li>
@@ -125,9 +132,16 @@ export function SiteFooter() {
             <h2>Learn</h2>
             <ul>
               <li><Link to={LEARN_PATH}>System design handbook</Link></li>
-              {CATEGORIES.slice(0, 6).map((category) => <li key={category.id}><Link to={topicPath(category.topics[0].slug)}>{category.title}</Link></li>)}
+              {CATEGORIES.find((category) => category.id === "roadmaps").topics.map((topic) => <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}</Link></li>)}
               <li><Link to={topicPath("system-design-interview")}>Interview preparation</Link></li>
-              <li><Link to="/signin">Sign in</Link></li>
+              {status === "signed-in" && <li><Link to="/profile">My rounds</Link></li>}
+              {status === "signed-out" && <li><Link to="/signin">Sign in</Link></li>}
+            </ul>
+          </div>
+          <div>
+            <h2>Popular topics</h2>
+            <ul>
+              {POPULAR.map(topicMeta).filter(Boolean).map((topic) => <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}</Link></li>)}
             </ul>
           </div>
         </div>

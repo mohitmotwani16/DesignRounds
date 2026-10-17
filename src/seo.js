@@ -1,10 +1,16 @@
 import { findPrompt, getTrack, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, LEARN_UPDATED, TOPICS, categoryById, topicMeta, topicPath } from "./learn/catalog.js";
 import { communityArticle, communityArticles } from "./learn/community.js";
+import { ROADMAPS, roadmapSlugs } from "./learn/roadmaps.js";
+import { FAQS } from "./data/faqs.js";
 
 // Search and sharing metadata for every route: title, description, canonical URL,
 // robots, Open Graph and JSON-LD. Used by the build-time prerenderer (baked into the
 // HTML) and in the browser (kept in sync on client-side navigation).
+
+// When the product pages last changed in substance. Bump it with real content changes:
+// sitemap lastmod dates are only useful to search engines while they stay accurate.
+export const SITE_UPDATED = "2026-10-18";
 
 export const SITE = {
   name: "DesignRounds",
@@ -16,8 +22,8 @@ export const SITE = {
 // Keyword-targeted copy for each discipline hub (/library/<track>).
 export const TRACK_SEO = {
   "software-engineering": {
-    h1: "Software engineering system design interview questions",
-    title: "Software Engineering System Design Interview Questions",
+    h1: "Backend system design interview questions",
+    title: "Backend (SDE) System Design Interview Questions",
     description: "Practice the system design interview questions backend and full-stack engineers get asked: URL shortener, chat, news feed, rate limiter, payments and more.",
     intro: [
       "These are the classic system design interview questions for backend, full-stack and generalist software engineers: the URL shortener, chat system, news feed, rate limiter, ticketing and payment systems that show up in interviews at product companies and big tech alike.",
@@ -99,6 +105,7 @@ export function publicPaths() {
     LEARN_PATH,
     ...TOPICS.map((topic) => topicPath(topic.slug)),
     ...communityArticles().map((article) => topicPath(article.slug)),
+    "/plus",
     "/about",
     "/privacy",
     "/terms",
@@ -113,8 +120,8 @@ export function routeMeta(path) {
   if (path === "/") {
     return {
       ...base,
-      title: "DesignRounds — System Design Interview Practice with an AI Interviewer",
-      description: "Practice system design interviews on a real architecture canvas. Defend your choices to an AI interviewer and get a rubric-based review. Free to start.",
+      title: "Mock System Design Interviews with AI | DesignRounds",
+      description: "Free mock system design interviews with an AI interviewer: real questions for your role on an architecture canvas, and rubric-scored feedback on every round.",
       jsonLd: [
         { "@context": "https://schema.org", ...organization },
         { "@context": "https://schema.org", "@type": "WebSite", "@id": `${SITE.url}/#website`, name: SITE.name, url: SITE.url, publisher: { "@id": `${SITE.url}/#organization` } },
@@ -127,6 +134,11 @@ export function routeMeta(path) {
           operatingSystem: "Web browser",
           description: "System design interview practice: realistic prompts, an architecture canvas, an AI interviewer, and rubric-based reviews.",
           offers: { "@type": "Offer", price: "0", priceCurrency: "INR", description: "Free plan" },
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: FAQS.map((faq) => ({ "@type": "Question", name: faq.question, acceptedAnswer: { "@type": "Answer", text: faq.answer } })),
         },
       ],
     };
@@ -196,8 +208,8 @@ export function routeMeta(path) {
   if (path === LEARN_PATH) {
     return {
       ...base,
-      title: "System Design Handbook: Concepts, Patterns and Trade-offs",
-      description: `Free, in-depth guides to ${TOPICS.length} system design concepts with diagrams and real-world examples: caching, sharding, load balancing, Kafka, consensus and more.`,
+      title: "System Design Handbook: Free Tutorials and Roadmaps",
+      description: "Free system design tutorials with diagrams on caching, databases, sharding, Kafka and consistency, plus step-by-step roadmaps for every engineering role.",
       jsonLd: [
         {
           "@context": "https://schema.org",
@@ -244,7 +256,8 @@ export function routeMeta(path) {
   const learnTopic = path.startsWith(`${LEARN_PATH}/`) ? topicMeta(path.slice(LEARN_PATH.length + 1)) : null;
   if (learnTopic) {
     const category = categoryById(learnTopic.category);
-    const guide = category.id === "interview";
+    const guide = category.id === "interview" || category.id === "roadmaps";
+    const roadmap = Object.values(ROADMAPS).find((entry) => entry.page === learnTopic.slug);
     return {
       ...base,
       title: fitTitle(`${learnTopic.title} | DesignRounds`, learnTopic.title, `${learnTopic.short} Explained | DesignRounds`, `${learnTopic.short} Explained`),
@@ -268,6 +281,32 @@ export function routeMeta(path) {
           isAccessibleForFree: true,
         },
         breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH], [category.title, `${LEARN_PATH}#${category.id}`], [learnTopic.short, path]]),
+        ...(roadmap ? [{
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: `${roadmap.title} roadmap`,
+          itemListOrder: "https://schema.org/ItemListOrderAscending",
+          itemListElement: roadmapSlugs(roadmap).map((slug, index) => ({ "@type": "ListItem", position: index + 1, url: absolute(topicPath(slug)), name: topicMeta(slug)?.title ?? slug })),
+        }] : []),
+      ],
+    };
+  }
+
+  if (path === "/plus") {
+    return {
+      ...base,
+      title: "DesignRounds Plus: AI Mock System Design Interviews with Feedback",
+      description: "Every system design round, a live AI interviewer you talk your design through with, and feedback on your design and your communication. Request early access.",
+      jsonLd: [
+        {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: "DesignRounds Plus",
+          description: "System design interview practice with a live AI interviewer, rubric-based reviews and communication feedback.",
+          publisher: { "@id": `${SITE.url}/#organization` },
+          url: absolute(path),
+        },
+        breadcrumbs([["Home", "/"], ["Plus", "/plus"]]),
       ],
     };
   }
@@ -342,7 +381,13 @@ export function metaHtml(meta) {
     `<meta property="og:image" content="${SITE.image}" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image:alt" content="DesignRounds: system design interview practice" />`,
+    `<meta property="og:locale" content="en_IN" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:title" content="${escape(meta.title)}" />`,
+    meta.description && `<meta name="twitter:description" content="${escape(meta.description)}" />`,
+    `<meta name="twitter:image" content="${SITE.image}" />`,
+    `<link rel="alternate" type="application/atom+xml" title="DesignRounds system design handbook" href="${SITE.url}${LEARN_PATH}/feed.xml" />`,
     ...meta.jsonLd.map((data) => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`),
   ].filter(Boolean).join("\n    ");
 }

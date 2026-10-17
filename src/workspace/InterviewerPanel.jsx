@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Eye, Lightbulb, LoaderCircle, LockKeyhole, MessageSquare, Mic, RefreshCw, Send, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Eye, Lightbulb, LoaderCircle, MessageSquare, Mic, RefreshCw, Send, Sparkles, X } from "lucide-react";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
 const STAGES = [
@@ -25,13 +25,21 @@ export function InterviewerPanel({ interview, roundFinished, selected, onClearSe
   return <Conversation interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} />;
 }
 
+// Free plans: invite the learner to talk the design through, and show what that adds.
+// The Plus page opens in a new tab so the round stays where it is.
 function LockedInterviewer({ onShowReview }) {
   return (
     <div className="interviewer-body">
       <div className="interviewer-empty">
-        <span className="interviewer-empty-icon"><LockKeyhole size={19} /></span>
-        <h3>The live interviewer is part of Plus.</h3>
-        <p>Plus members design alongside an AI interviewer that asks about their choices, answers questions about the brief, and offers hints.</p>
+        <span className="interviewer-empty-icon"><Mic size={19} /></span>
+        <h3>Talk your solution through with the interviewer</h3>
+        <p>Explain your design out loud or in chat, the way you would in the room. The interviewer asks why, pushes on the weak spots, and gives you feedback on how clearly you communicate, not just on what you drew.</p>
+        <ul className="interviewer-perks">
+          <li><Sparkles size={14} /> Follow-up questions on every choice</li>
+          <li><Sparkles size={14} /> Feedback on clarity, structure and confidence</li>
+          <li><Sparkles size={14} /> Hints when you're stuck</li>
+        </ul>
+        <a className="button button-dark button-small interviewer-cta" href="/plus" target="_blank" rel="noopener">Get Plus <ArrowRight size={14} /></a>
       </div>
       <div className="interviewer-note">
         <MessageSquare size={16} />

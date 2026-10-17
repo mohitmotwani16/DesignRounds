@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Back-of-the-envelope estimation** is quick, rough arithmetic that tells you which problems are real before you design for them. Is this a read-heavy or write-heavy system? Will the data fit on one machine? Is bandwidth or storage the expensive part? The goal is the right **order of magnitude**, not precision." },
+    {"type":"diagram","kind":"flow","caption":"Estimation is a chain: start from users, derive average and peak load, then size servers, storage and bandwidth from those numbers.","nodes":[{"id":"users","label":"Daily users","sub":"from the brief","col":0,"row":0},{"id":"rps","label":"Requests/s","sub":"÷ 86,400 s","col":1,"row":0},{"id":"peak","label":"Peak load","sub":"× 2 to 3","col":2,"row":0},{"id":"servers","label":"Servers","sub":"peak ÷ per box","col":3,"row":0,"tone":"accent"},{"id":"storage","label":"Storage","sub":"size × retention","col":1,"row":1,"shape":"db","tone":"store"},{"id":"bandwidth","label":"Bandwidth","sub":"QPS × payload","col":2,"row":1}],"edges":[{"from":"users","to":"rps","label":"× actions"},{"from":"rps","to":"peak"},{"from":"peak","to":"servers"},{"from":"rps","to":"storage","label":"writes"},{"from":"peak","to":"bandwidth"}]},
 
     { type: "h2", text: "The numbers to have in your head" },
     { type: "h3", text: "Time" },

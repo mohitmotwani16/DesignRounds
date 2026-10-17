@@ -1,9 +1,9 @@
 export const tracks = [
   {
     id: "software-engineering",
-    label: "Software engineering (SDE)",
-    shortLabel: "SDE",
-    description: "Design the products and backend systems engineers build every day.",
+    label: "Backend and full-stack",
+    shortLabel: "Backend",
+    description: "Design the products and backend services engineers build every day.",
     icon: "service",
     color: "violet",
   },
