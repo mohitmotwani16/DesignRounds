@@ -233,6 +233,22 @@
 
 /* ---------------------------------------------------------------- landing: hero */
 
+.landing { position: relative; isolation: isolate; }
+.landing::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(280px circle at var(--cursor-x, 50vw) var(--cursor-y, 35vh), color-mix(in srgb, var(--accent) 12%, transparent), transparent 72%),
+    radial-gradient(220px circle at calc(var(--cursor-x, 50vw) + 70px) calc(var(--cursor-y, 35vh) - 45px), color-mix(in srgb, var(--t-teal) 6%, transparent), transparent 72%);
+  transition: opacity 280ms ease;
+}
+.landing[data-cursor-active="true"]::before { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .landing::before { display: none; } }
+
 .hero { position: relative; padding-block: 72px 40px; text-align: center; isolation: isolate; }
 .hero::before { content: ""; position: absolute; inset: -64px 0 0; z-index: -2; background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.2px); background-size: 22px 22px; -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 100%); mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 100%); }
 .hero::after { content: ""; position: absolute; left: 50%; top: 280px; z-index: -1; width: min(1100px, 100vw); height: 520px; transform: translateX(-50%); background: radial-gradient(closest-side, var(--glow), transparent); filter: blur(10px); }
