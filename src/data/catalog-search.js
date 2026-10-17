@@ -1,4 +1,4 @@
-import { getTrack, prompts } from "./prompts.js";
+import { getTrack, prompts, tracks } from "./prompts.js";
 
 // Catalog search shared by the API (server/modules/catalog.js), build-time
 // prerendering and the library's instant first page. Pure and dependency-free so it
@@ -18,6 +18,43 @@ export const SORTS = {
   hardest: (a, b) => LEVEL_RANK[b.difficulty] - LEVEL_RANK[a.difficulty] || b.minutes - a.minutes,
   title: (a, b) => a.title.localeCompare(b.title),
 };
+
+const TRACK_IDS = new Set(tracks.map((track) => track.id));
+
+// Pull questions from the learner's roles to the front. Several roles are
+// interleaved one-at-a-time so the top of the list is a mix, not one role
+// followed by the next. Order inside each role is left as the sort produced it.
+function mixPreferred(entries, prefer) {
+  const wanted = [];
+  const seen = new Set();
+  for (const id of prefer) {
+    if (TRACK_IDS.has(id) && !seen.has(id)) {
+      seen.add(id);
+      wanted.push(id);
+    }
+  }
+  if (!wanted.length) return entries;
+  const buckets = new Map(wanted.map((id) => [id, []]));
+  const rest = [];
+  for (const entry of entries) {
+    const bucket = buckets.get(entry.card.track);
+    if (bucket) bucket.push(entry);
+    else rest.push(entry);
+  }
+  const mixed = [];
+  const queues = wanted.map((id) => buckets.get(id));
+  let pending = true;
+  while (pending) {
+    pending = false;
+    for (const queue of queues) {
+      if (queue.length) {
+        mixed.push(queue.shift());
+        pending = true;
+      }
+    }
+  }
+  return mixed.concat(rest);
+}
 
 // Lower-case, punctuation (hyphens, slashes, ...) as spaces, so "exactly-once",
 // "exactly once" and "read/write" all match the same way.
@@ -63,11 +100,14 @@ function matches(entry, filters, skip) {
   return true;
 }
 
-// input: { q, track, level[], duration[], topic[], access, sort, cursor, limit }
-export function searchCatalog({ q = "", track = "all", level = [], duration = [], topic = [], access = "all", sort = "recommended", cursor, limit = 12 }) {
+// input: { q, track, level[], duration[], topic[], access, sort, prefer[], cursor, limit }
+// `prefer` is the learner's practice roles. It only changes the recommended
+// order; an explicit sort (shortest, A–Z, …) stays exactly that sort.
+export function searchCatalog({ q = "", track = "all", level = [], duration = [], topic = [], access = "all", sort = "recommended", prefer = [], cursor, limit = 12 }) {
   const filters = { track, level, duration, topic, access, words: normalize(q).split(" ").filter(Boolean) };
-  const results = catalog.filter((entry) => matches(entry, filters))
+  let results = catalog.filter((entry) => matches(entry, filters))
     .sort((a, b) => (SORTS[sort] ?? SORTS.recommended)(a.card, b.card) || a.order - b.order);
+  if ((SORTS[sort] ? sort : "recommended") === "recommended" && prefer.length) results = mixPreferred(results, prefer);
   const offset = Math.min(decodeCursor(cursor), results.length);
   const page = results.slice(offset, offset + limit);
   const next = offset + page.length;

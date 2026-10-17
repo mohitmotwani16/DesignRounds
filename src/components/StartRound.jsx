@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, Sparkles } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { practiceTracks } from "../data/interests.js";
 import { prompts, tracks } from "../data/prompts.js";
 import { Link } from "../router.js";
 import { trackPath } from "../seo.js";
@@ -10,14 +11,6 @@ import { trackIcon } from "./ui.jsx";
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 const rank = (prompt) => Math.max(0, LEVELS.indexOf(prompt.difficulty));
 
-// Profile answers (see Onboarding) mapped to a discipline and a starting level.
-const ROLE_TRACKS = {
-  "Software engineer": "software-engineering",
-  "Data engineer": "data-engineering",
-  "ML / AI engineer": "machine-learning",
-  "Platform / SRE": "platform-infrastructure",
-  "Frontend / mobile engineer": "frontend-mobile",
-};
 const EXPERIENCE_LEVELS = { "Student / new grad": 0, "1–3 years": 0, "3–6 years": 1, "6–10 years": 2, "10+ years": 2 };
 const DEFAULT_TRACK = "software-engineering";
 const TRACK_KEY = "designrounds:start-track";
@@ -88,7 +81,7 @@ export function StartRoundButton({ onStart, className = "btn btn-primary btn-lg"
   function toggle() {
     if (!open) {
       // The learner's last pick, else their profile's discipline, else backend.
-      const preferred = readStoredTrack() || ROLE_TRACKS[user?.targetRole];
+      const preferred = readStoredTrack() || practiceTracks(user)[0];
       setTrack(tracks.some((item) => item.id === preferred) ? preferred : DEFAULT_TRACK);
     }
     setOpen(!open);

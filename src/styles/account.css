@@ -60,6 +60,8 @@ select.text-input { padding-right: 8px; cursor: pointer; }
 .dev-code-note strong { letter-spacing: 2px; }
 .auth-footnote { max-width: 420px; margin-top: 18px; color: var(--fg-8790a0); font-size: 12.5px; line-height: 1.6; text-align: center; }
 .profile-fields { display: flex; flex-direction: column; gap: 14px; }
+.interest-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.field-hint { margin: 0; color: var(--fg-8790a0); font-size: 12.5px; line-height: 1.45; }
 
 /* Profile */
 .profile-page { min-height: calc(100vh - 76px); padding-top: 36px; }
