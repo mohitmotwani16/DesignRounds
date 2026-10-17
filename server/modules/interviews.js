@@ -9,6 +9,7 @@ import { clean, describeDiagram, nameComponents } from "./ai/context.js";
 import { AiError, toHttpError } from "./ai/errors.js";
 import { guideFor } from "./ai/guides.js";
 import { runTask } from "./ai/run.js";
+import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
 import { requireUser } from "./identity.js";
 import { hasInterviewer, limitsFor } from "./plans.js";
@@ -47,6 +48,7 @@ const audioBody = z.object({
   mimeType: z.string().max(100),
   durationMs: z.number().int().min(AUDIO_MIN_MS).max(AUDIO_MAX_MS + 2_000),
   data: z.string().max(Math.ceil(AUDIO_MAX_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  selectedNodeId: z.string().max(80).nullable().optional(),
 }).strict();
 
 // Container formats MediaRecorder produces, recognised by their first bytes so the
@@ -58,12 +60,16 @@ const AUDIO_FORMATS = {
   "audio/wav": (bytes) => bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WAVE",
 };
 
+// Voice answers need the flag, speech-to-text and the interviewer's model.
+const voiceAvailable = voiceAnswersEnabled && speechConfig.enabled && aiConfig.enabled;
+
 const db = { query, queryOne };
 
 function presentTurn(row) {
   const turn = { id: row.id, seq: row.seq, role: row.role, kind: row.kind, trigger: row.trigger, content: row.content, nodeIds: row.node_ids ?? [], createdAt: row.created_at };
-  // Only the duration is ever returned for a recording: the audio itself is never sent back.
-  if (row.kind === "audio") turn.audio = { durationMs: row.audio_duration_ms ?? null };
+  // A voice answer shows only its duration: the transcript stays server-side (the
+  // interviewer and the review read it) and the recording is never sent back.
+  if (row.kind === "audio") Object.assign(turn, { content: "", audio: { durationMs: row.audio_duration_ms ?? null } });
   return turn;
 }
 
@@ -197,7 +203,8 @@ export async function interviewTranscript(sessionId) {
   const state = await queryOne("select summary, summarized_through from interview_state where session_id = $1", [sessionId]);
   if (!state) return "";
   const turns = await query("select role, kind, content from interview_turns where session_id = $1 and seq > $2 order by seq desc limit 40", [sessionId, state.summarized_through]);
-  const lines = turns.reverse().map((turn) => `${turn.role === "learner" ? "Learner" : "Interviewer"}: ${turn.kind === "audio" && !turn.content ? "(voice answer, not transcribed)" : clean(turn.content, 800)}`);
+  const speaker = (turn) => (turn.role !== "learner" ? "Interviewer" : turn.kind === "audio" ? "Learner (spoken)" : "Learner");
+  const lines = turns.reverse().map((turn) => `${speaker(turn)}: ${turn.kind === "audio" && !turn.content ? "(voice answer, not transcribed)" : clean(turn.content, 800)}`);
   return [state.summary ? `Earlier: ${clean(state.summary, 3000)}` : "", ...lines].filter(Boolean).join("\n").slice(0, 12_000);
 }
 
@@ -226,51 +233,40 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
   res.json({
     access: "full",
     aiAvailable: aiConfig.enabled,
-    voice: voiceAnswersEnabled,
+    voice: voiceAvailable,
     turns: turns.map(presentTurn),
     state: state ? presentState(state) : null,
     allowance: await readAllowance(db, req.user, session.id, state),
   });
 }));
 
-interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (req, res) => {
-  const body = parse(messageBody, req.body);
-  const session = await ownedSession(req);
-  if (!hasInterviewer(req.user)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
-
-  // A retried request returns the turns the first attempt produced.
-  const replay = await queryOne("select * from interview_turns where user_id = $1 and request_id = $2", [req.user.id, body.requestId]);
-  if (replay) {
-    if (replay.session_id !== session.id) throw new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used for another round.");
-    const reply = await queryOne("select * from interview_turns where session_id = $1 and seq = $2 and role = 'interviewer'", [session.id, replay.seq + 1]);
-    return res.json({ turns: [replay, reply].filter(Boolean).map(presentTurn), replayed: true });
-  }
-
-  if (!aiConfig.enabled) throw toHttpError(new AiError("DISABLED"));
-  if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", "This round is finished, so the interview has ended. Your review is in the Review tab.");
-  const hint = body.intent === "hint";
-  const content = body.content.trim();
-  if (!hint && !content) throw new HttpError(400, "INVALID_REQUEST", "Write a message first.");
-  if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "You're sending messages very quickly. Wait a moment and try again.");
-
-  let reserved;
+// Reserves a learner turn: checks the reply allowance, records the turn (and a voice
+// answer's recording), takes a credit and marks a reply as pending, all atomically.
+async function reserveLearnerTurn({ session, user, kind, content, requestId, hint = false, audio = null }) {
   try {
-    reserved = await transaction(async (conn) => {
+    return await transaction(async (conn) => {
       await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
       const state = await ensureState(conn, session);
       if (state.pending_since && Date.now() - new Date(state.pending_since).getTime() < PENDING_MS) {
         throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
       }
-      const allowance = await readAllowance(conn, req.user, session.id, state);
+      const allowance = await readAllowance(conn, user, session.id, state);
       if (allowance.turns.used >= allowance.turns.limit) throw new HttpError(403, "INTERVIEW_LIMIT_ROUND", `You've used all ${allowance.turns.limit} interviewer replies for this round. Finish the round to get your review.`);
       if (allowance.month.used >= allowance.month.limit) throw new HttpError(403, "INTERVIEW_LIMIT_MONTH", "You've used this month's interviewer replies. They reset at the start of next month.");
       if (hint && allowance.hints.used >= allowance.hints.limit) throw new HttpError(403, "HINT_LIMIT", `You've used all ${allowance.hints.limit} hints for this round.`);
       const learner = await conn.queryOne(
         `insert into interview_turns (session_id, user_id, seq, role, kind, content, request_id, diagram_version)
          values ($1, $2, $3, 'learner', $4, $5, $6, $7) returning *`,
-        [session.id, req.user.id, await nextSeq(conn, session.id), hint ? "hint_request" : "message", content || "Could I have a hint?", body.requestId, session.diagram_version]
+        [session.id, user.id, await nextSeq(conn, session.id), kind, content, requestId, session.diagram_version]
       );
-      const credit = await conn.queryOne("insert into ai_credits (user_id, session_id, kind) values ($1, $2, 'interview_turn') returning id", [req.user.id, session.id]);
+      if (audio) {
+        await conn.query(
+          "insert into interview_audio (turn_id, user_id, mime_type, duration_ms, size_bytes, data) values ($1, $2, $3, $4, $5, $6)",
+          [learner.id, user.id, audio.mimeType, audio.durationMs, audio.bytes.length, audio.bytes]
+        );
+        learner.audio_duration_ms = audio.durationMs;
+      }
+      const credit = await conn.queryOne("insert into ai_credits (user_id, session_id, kind) values ($1, $2, 'interview_turn') returning id", [user.id, session.id]);
       await conn.query("update interview_state set pending_since = now() where session_id = $1", [session.id]);
       return { state, learner, creditId: credit.id };
     });
@@ -278,25 +274,65 @@ interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (re
     if (error.code === "23505") throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
     throw error;
   }
+}
 
+// Undoes a reserved turn after a failure, so a retry with the same request id starts
+// cleanly (the client keeps the draft or recording) and no credit is spent.
+async function undoLearnerTurn(session, reserved) {
+  await transaction(async (conn) => {
+    await conn.query("delete from interview_turns where id = $1", [reserved.learner.id]);
+    await releaseCredit(conn, reserved.creditId);
+    await conn.query("update interview_state set pending_since = null where session_id = $1", [session.id]);
+  });
+}
+
+async function replyToLearner({ req, session, reserved, hint = false }) {
   const design = describeDiagram(session.diagram);
+  const trigger = hint ? "hint" : "reply";
+  const turns = await recentTurns(session.id, reserved.state.summarized_through);
+  const { data } = await runTask(
+    interviewerTask,
+    taskInput({ session, state: reserved.state, turns, trigger, selectedNodeId: req.body.selectedNodeId, design, user: req.user }),
+    { userId: req.user.id, sessionId: session.id }
+  );
+  if (!data.message.trim()) throw new AiError("INVALID_OUTPUT", "The interviewer returned an empty reply.");
+  return saveInterviewerTurn({ session, state: reserved.state, output: data, trigger, design, creditId: reserved.creditId, hint });
+}
+
+// A retried request returns the turns the first attempt produced.
+async function replayed(req, session, requestId, kind) {
+  const turn = await queryOne(`${TURNS_WITH_AUDIO} where t.user_id = $1 and t.request_id = $2`, [req.user.id, requestId]);
+  if (!turn) return null;
+  if (turn.session_id !== session.id || (kind === "audio") !== (turn.kind === "audio")) {
+    throw new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used for another message.");
+  }
+  const reply = await queryOne("select * from interview_turns where session_id = $1 and seq = $2 and role = 'interviewer'", [session.id, turn.seq + 1]);
+  return { turns: [turn, reply].filter(Boolean).map(presentTurn), replayed: true };
+}
+
+const ROUND_FINISHED = "This round is finished, so the interview has ended. Your review is in the Review tab.";
+const TOO_FAST = "You're sending messages very quickly. Wait a moment and try again.";
+
+interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (req, res) => {
+  const body = parse(messageBody, req.body);
+  const session = await ownedSession(req);
+  if (!hasInterviewer(req.user)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
+  const replay = await replayed(req, session, body.requestId, "message");
+  if (replay) return res.json(replay);
+
+  if (!aiConfig.enabled) throw toHttpError(new AiError("DISABLED"));
+  if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", ROUND_FINISHED);
+  const hint = body.intent === "hint";
+  const content = body.content.trim();
+  if (!hint && !content) throw new HttpError(400, "INVALID_REQUEST", "Write a message first.");
+  if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", TOO_FAST);
+
+  const reserved = await reserveLearnerTurn({ session, user: req.user, kind: hint ? "hint_request" : "message", content: content || "Could I have a hint?", requestId: body.requestId, hint });
   let result;
   try {
-    const turns = await recentTurns(session.id, reserved.state.summarized_through);
-    const { data } = await runTask(
-      interviewerTask,
-      taskInput({ session, state: reserved.state, turns, trigger: hint ? "hint" : "reply", selectedNodeId: body.selectedNodeId, design, user: req.user }),
-      { userId: req.user.id, sessionId: session.id }
-    );
-    if (!data.message.trim()) throw new AiError("INVALID_OUTPUT", "The interviewer returned an empty reply.");
-    result = await saveInterviewerTurn({ session, state: reserved.state, output: data, trigger: hint ? "hint" : "reply", design, creditId: reserved.creditId, hint });
+    result = await replyToLearner({ req, session, reserved, hint });
   } catch (error) {
-    // Undo the learner's turn so a retry with the same text starts cleanly; the client keeps the draft.
-    await transaction(async (conn) => {
-      await conn.query("delete from interview_turns where id = $1", [reserved.learner.id]);
-      await releaseCredit(conn, reserved.creditId);
-      await conn.query("update interview_state set pending_since = null where session_id = $1", [session.id]);
-    });
+    await undoLearnerTurn(session, reserved);
     if (error instanceof AiError) throw toHttpError(error);
     throw error;
   }
@@ -309,55 +345,66 @@ interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (re
   afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
 }));
 
-// A voice answer: stored as a learner turn plus its recording. For now nothing reads
-// the recording (no model call, no interviewer reply, no credit); transcription will.
+const speechErrors = {
+  RATE_LIMITED: [503, "Voice answers are busy right now. Try again in a minute, or type your answer."],
+  UNREADABLE: [400, "That recording couldn't be read. Try recording again."],
+  AUTH: [503, "Voice answers aren't available right now. We've logged the problem."],
+  DISABLED: [503, "Voice answers aren't available right now."],
+};
+
+function speechHttpError(error) {
+  const [status, message] = speechErrors[error.code] || [502, "We couldn't process that recording. Try again."];
+  return new HttpError(status, `VOICE_${error.code}`, `${message} No credit was used.`);
+}
+
+// A voice answer: the recording is transcribed, the transcript becomes the learner's
+// turn, and the interviewer replies exactly as it would to typed text. Delivery numbers
+// (pace, fillers, pauses) are kept for communication feedback. The transcript is never
+// sent to the client, and neither is the recording.
 interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, res) => {
-  if (!voiceAnswersEnabled) throw new HttpError(404, "NOT_FOUND", "No such endpoint.");
+  if (!voiceAvailable) throw new HttpError(404, "NOT_FOUND", "No such endpoint.");
   const body = parse(audioBody, req.body);
   const session = await ownedSession(req);
   if (!hasInterviewer(req.user)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
+  const replay = await replayed(req, session, body.requestId, "audio");
+  if (replay) return res.json(replay);
 
-  const replay = await queryOne(`${TURNS_WITH_AUDIO} where t.user_id = $1 and t.request_id = $2`, [req.user.id, body.requestId]);
-  if (replay) {
-    if (replay.session_id !== session.id || replay.kind !== "audio") throw new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used.");
-    return res.json({ turns: [presentTurn(replay)], replayed: true });
-  }
-
-  if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", "This round is finished, so the interview has ended. Your review is in the Review tab.");
+  if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", ROUND_FINISHED);
   const mimeType = body.mimeType.split(";")[0].trim().toLowerCase();
   const bytes = Buffer.from(body.data, "base64");
   if (!AUDIO_FORMATS[mimeType] || bytes.length < AUDIO_MIN_BYTES || !AUDIO_FORMATS[mimeType](bytes)) {
     throw new HttpError(400, "INVALID_AUDIO", "That recording couldn't be read. Try recording again.");
   }
   if (bytes.length > AUDIO_MAX_BYTES) throw new HttpError(413, "PAYLOAD_TOO_LARGE", "That recording is too large to send.");
-  if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "You're sending messages very quickly. Wait a moment and try again.");
+  if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", TOO_FAST);
 
-  let turn;
+  const durationMs = Math.min(body.durationMs, AUDIO_MAX_MS);
+  const reserved = await reserveLearnerTurn({ session, user: req.user, kind: "audio", content: "", requestId: body.requestId, audio: { mimeType, durationMs, bytes } });
+  let result;
   try {
-    turn = await transaction(async (conn) => {
-      await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
-      const state = await ensureState(conn, session);
-      // Keeps the thread in order: a voice answer can't land in the middle of a reply.
-      if (state.pending_since && Date.now() - new Date(state.pending_since).getTime() < PENDING_MS) {
-        throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
-      }
-      const saved = await conn.queryOne(
-        `insert into interview_turns (session_id, user_id, seq, role, kind, content, request_id, diagram_version)
-         values ($1, $2, $3, 'learner', 'audio', '', $4, $5) returning *`,
-        [session.id, req.user.id, await nextSeq(conn, session.id), body.requestId, session.diagram_version]
-      );
-      const durationMs = Math.min(body.durationMs, AUDIO_MAX_MS);
+    const speech = await transcribe({ bytes, mimeType, durationMs, userId: req.user.id, sessionId: session.id });
+    if (!speech.text) throw new HttpError(422, "VOICE_EMPTY", "We couldn't hear anything in that recording. Check your microphone and try again. No credit was used.");
+    await transaction(async (conn) => {
+      await conn.query("update interview_turns set content = $2 where id = $1", [reserved.learner.id, speech.text.slice(0, 4000)]);
       await conn.query(
-        "insert into interview_audio (turn_id, user_id, mime_type, duration_ms, size_bytes, data) values ($1, $2, $3, $4, $5, $6)",
-        [saved.id, req.user.id, mimeType, durationMs, bytes.length, bytes]
+        "update interview_audio set transcribed_at = now(), stt_model = $2, delivery = $3::jsonb where turn_id = $1",
+        [reserved.learner.id, speech.model, JSON.stringify(speech.delivery)]
       );
-      return { ...saved, audio_duration_ms: durationMs };
     });
+    result = await replyToLearner({ req, session, reserved });
   } catch (error) {
-    if (error.code === "23505") throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
+    await undoLearnerTurn(session, reserved);
+    if (error instanceof SpeechError) throw speechHttpError(error);
+    if (error instanceof AiError) throw toHttpError(error);
     throw error;
   }
-  res.status(201).json({ turns: [presentTurn(turn)] });
+
+  res.status(201).json({
+    turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
+    state: presentState(result.state),
+    allowance: await readAllowance(db, req.user, session.id, result.state),
+  });
+  afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
 }));
 
 // Called by the workspace after the canvas has been quiet for a while. The server

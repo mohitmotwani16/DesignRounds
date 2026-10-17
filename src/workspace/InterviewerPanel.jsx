@@ -51,8 +51,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   const hintsLeft = allowance ? Math.max(0, allowance.hints.limit - allowance.hints.used) : 0;
   const outOfReplies = allowance && (repliesLeft === 0 || allowance.month.used >= allowance.month.limit);
   const canSend = !roundFinished && interview.aiAvailable && !pending && !outOfReplies;
-  // Voice answers get no interviewer reply yet, so they don't spend replies; the
-  // button follows the same rules as typing to keep the thread consistent.
+  // A voice answer is a reply like a typed one, so the mic follows the same rules.
   const [voiceAvailable] = useState(voiceSupported);
   const voice = interview.voice && voiceAvailable;
   const recorder = useVoiceRecorder({ onRecorded: interview.sendAudio });
@@ -91,7 +90,8 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
 
       <div className="interviewer-body interview-thread" ref={listRef} aria-live="polite">
         {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} />)}
-        {pending && <div className="interview-turn interviewer typing" role="status"><span className="interview-dots"><i /><i /><i /></span> Interviewer is thinking…</div>}
+        {interview.pendingAudio && <div className="interview-turn learner sending"><VoiceNote durationMs={interview.pendingAudio.durationMs} /></div>}
+        {pending && <div className="interview-turn interviewer typing" role="status"><span className="interview-dots"><i /><i /><i /></span> {interview.pendingAudio ? "Interviewer is listening…" : "Interviewer is thinking…"}</div>}
       </div>
 
       <div className="interviewer-compose">

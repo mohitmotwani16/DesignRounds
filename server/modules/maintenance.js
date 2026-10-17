@@ -10,6 +10,9 @@ import { HttpError, route } from "../http.js";
 // The scheduler authenticates with `Authorization: Bearer <CRON_SECRET>`. Without
 // CRON_SECRET the endpoint doesn't exist.
 const LOGIN_CODE_RETENTION = "1 day";
+// Voice recordings: kept for debugging and re-processing, then cleared. The transcript
+// and delivery numbers stay with the round.
+const VOICE_RETENTION = "30 days";
 
 function authorized(req) {
   const secret = process.env.CRON_SECRET;
@@ -25,6 +28,8 @@ export async function runMaintenance() {
     loginCodes: await count(`delete from login_codes where created_at < now() - interval '${LOGIN_CODE_RETENTION}'`),
     authSessions: await count("delete from auth_sessions where expires_at < now()"),
     rateLimits: await count("delete from rate_limits where reset_at < now()"),
+    voiceRecordings: await count(`update interview_audio set data = null, purged_at = now()
+      where data is not null and coalesce(transcribed_at, created_at) < now() - interval '${VOICE_RETENTION}'`),
   };
 }
 

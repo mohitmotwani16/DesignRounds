@@ -12,6 +12,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   const [data, setData] = useState({ status: "loading" });
   const [pending, setPending] = useState(false);
   const [sendError, setSendError] = useState(null);
+  const [pendingAudio, setPendingAudio] = useState(null);
   const typingRef = useRef(false);
   const pendingRef = useRef(false);
   const attempt = useRef(null);
@@ -58,17 +59,20 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     }
   }, [sessionId, settleSave, selectedIdRef]);
 
-  // A voice answer. The recording keeps its request id across retries, so a retry
-  // after a lost response can't save it twice. The blob is dropped once it's sent.
+  // A voice answer: transcribed and answered on the server, like a typed message. The
+  // recording keeps its request id across retries, so a retry after a lost response
+  // can't produce two replies. The blob is dropped once the answer is through.
   const sendAudio = useCallback(async (recording) => {
     if (pendingRef.current) return false;
     pendingRef.current = true;
     setPending(true);
+    setPendingAudio({ durationMs: recording.durationMs });
     setSendError(null);
     try {
+      await settleSave();
       const data = await blobToBase64(recording.blob);
-      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data });
-      appendTurns(result.turns);
+      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data, selectedNodeId: selectedIdRef.current });
+      appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
       return true;
     } catch (error) {
       setSendError({ message: error.message, intent: "audio", recording, retryable: error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY" });
@@ -76,8 +80,9 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     } finally {
       pendingRef.current = false;
       setPending(false);
+      setPendingAudio(null);
     }
-  }, [sessionId]);
+  }, [sessionId, settleSave, selectedIdRef]);
 
   // Proactive look at the canvas after it has been quiet for a while.
   const enabled = data.status === "ready" && data.access === "full" && data.aiAvailable && roundActive;
@@ -104,7 +109,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     return () => window.clearTimeout(timer);
   }, [enabled, structureKey, sessionId, settleSave, selectedIdRef, onProactiveTurn]);
 
-  return { ...data, pending, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
+  return { ...data, pending, pendingAudio, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
 }
 
 function blobToBase64(blob) {

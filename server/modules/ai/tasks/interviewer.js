@@ -43,7 +43,8 @@ function formatTurns(turns) {
   if (!turns.length) return "(no messages yet)";
   return turns.map((turn) => (turn.role === "learner"
     ? turn.kind === "audio"
-      ? `Learner (voice answer): ${clean(turn.content, 2000) || "(not transcribed; you can't hear it, so don't respond to its content)"}`
+      // Speech-to-text keeps fillers and can mishear terms: judge the ideas, not the wording.
+      ? `Learner (spoken answer, auto-transcribed; may include filler words and mis-heard terms): ${clean(turn.content, 2000) || "(not transcribed; you can't hear it, so don't respond to its content)"}`
       : `Learner${turn.kind === "hint_request" ? " (asked for a hint)" : ""}: ${clean(turn.content, 2000)}`
     : `Interviewer (${turn.kind}): ${clean(turn.content, 1500)}`)).join("\n");
 }
