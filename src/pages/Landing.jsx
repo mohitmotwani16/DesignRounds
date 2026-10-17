@@ -23,6 +23,40 @@ export default function LandingPage({ onStart }) {
   const ref = useRef(null);
   useReveal(ref);
 
+  useEffect(() => {
+    const landing = ref.current;
+    if (!landing || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+
+    let frame = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    const handlePointerMove = (event) => {
+      if (event.pointerType !== "mouse") return;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        landing.style.setProperty("--cursor-x", `${pointerX}px`);
+        landing.style.setProperty("--cursor-y", `${pointerY}px`);
+        landing.dataset.cursorActive = "true";
+        frame = 0;
+      });
+    };
+    const handlePointerLeave = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = 0;
+      delete landing.dataset.cursorActive;
+    };
+
+    landing.addEventListener("pointermove", handlePointerMove, { passive: true });
+    landing.addEventListener("pointerleave", handlePointerLeave);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      landing.removeEventListener("pointermove", handlePointerMove);
+      landing.removeEventListener("pointerleave", handlePointerLeave);
+    };
+  }, []);
+
   // "/#pricing" links to a section: a fresh page load jumps there, an in-page click
   // scrolls smoothly. Waits a tick so the page has laid out.
   const { hash } = useRoute();
@@ -39,7 +73,7 @@ export default function LandingPage({ onStart }) {
   const popular = [...prompts.filter((prompt) => prompt.popular), ...prompts].filter((prompt, index, list) => list.indexOf(prompt) === index).slice(0, 3);
 
   return (
-    <main ref={ref}>
+    <main className="landing" ref={ref}>
       <Hero onStart={onStart} />
 
       <section className="wrap section-tight" aria-label="DesignRounds in numbers">
