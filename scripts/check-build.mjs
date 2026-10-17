@@ -77,7 +77,7 @@ for (const [title, routes] of titles) if (routes.length > 1) fail(`duplicate tit
 for (const [description, routes] of descriptions) if (routes.length > 1) fail(`duplicate description on ${routes.join(", ")}`);
 
 // 3. Supporting files.
-for (const file of ["404.html", "app.html", "robots.txt", "llms.txt", "og.png", "favicon.svg"]) {
+for (const file of ["404.html", "app.html", "robots.txt", "llms.txt", "og.png", "favicon.svg", "favicon.ico", "favicon-96x96.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "site.webmanifest"]) {
   if (!existsSync(path.join(dist, file))) fail(`missing dist/${file}`);
 }
 // IndexNow key file: public/<key>.txt containing exactly the key.
