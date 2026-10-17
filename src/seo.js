@@ -1,5 +1,6 @@
 import { findPrompt, getTrack, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, LEARN_UPDATED, TOPICS, categoryById, topicMeta, topicPath } from "./learn/catalog.js";
+import { communityArticle, communityArticles } from "./learn/community.js";
 
 // Search and sharing metadata for every route: title, description, canonical URL,
 // robots, Open Graph and JSON-LD. Used by the build-time prerenderer (baked into the
@@ -86,7 +87,7 @@ export const roundPath = (id) => `/system-design/${id}`;
 export const trackPath = (id) => `/library/${id}`;
 
 // Routes that require an account: never indexed.
-const PRIVATE = /^\/(signin|welcome|profile|start|workspace)(\/|$)/;
+const PRIVATE = /^\/(signin|welcome|profile|start|workspace|admin|learn\/write)(\/|$)/;
 
 // Every indexable URL, for the sitemap and the prerenderer.
 export function publicPaths() {
@@ -97,6 +98,7 @@ export function publicPaths() {
     ...prompts.map((prompt) => roundPath(prompt.id)),
     LEARN_PATH,
     ...TOPICS.map((topic) => topicPath(topic.slug)),
+    ...communityArticles().map((article) => topicPath(article.slug)),
     "/about",
     "/privacy",
     "/terms",
@@ -205,6 +207,36 @@ export function routeMeta(path) {
           hasPart: TOPICS.map((topic) => ({ "@type": "TechArticle", headline: topic.title, url: absolute(topicPath(topic.slug)) })),
         },
         breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH]]),
+      ],
+    };
+  }
+
+  const community = path.startsWith(`${LEARN_PATH}/`) && !topicMeta(path.slice(LEARN_PATH.length + 1)) ? communityArticle(path.slice(LEARN_PATH.length + 1)) : null;
+  if (community) {
+    const category = categoryById(community.category);
+    const author = community.authorName ? { "@type": "Person", name: community.authorName } : organization;
+    return {
+      ...base,
+      title: fitTitle(`${community.title} | DesignRounds`, community.title, `${community.shortTitle} | DesignRounds`),
+      description: clamp(community.description),
+      ogType: "article",
+      jsonLd: [
+        {
+          "@context": "https://schema.org",
+          "@type": "TechArticle",
+          headline: community.title,
+          description: community.description,
+          url: absolute(path),
+          mainEntityOfPage: absolute(path),
+          datePublished: community.publishedAt,
+          dateModified: community.updatedAt ?? community.publishedAt,
+          author,
+          publisher: organization,
+          image: SITE.image,
+          inLanguage: "en",
+          isAccessibleForFree: true,
+        },
+        breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH], [category?.title ?? "Community", `${LEARN_PATH}#${community.category}`], [community.shortTitle || community.title, path]]),
       ],
     };
   }

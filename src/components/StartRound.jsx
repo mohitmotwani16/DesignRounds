@@ -2,32 +2,16 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, Sparkles } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { practiceTracks } from "../data/interests.js";
 import { prompts, tracks } from "../data/prompts.js";
-import { Link } from "../router.js";
+import { DEFAULT_TRACK, levelForUser, recommendRounds, trackForUser } from "../data/free-rounds.js";
+import { Link, navigate } from "../router.js";
 import { trackPath } from "../seo.js";
 import { trackIcon } from "./ui.jsx";
 
-const LEVELS = ["Beginner", "Intermediate", "Advanced"];
-const rank = (prompt) => Math.max(0, LEVELS.indexOf(prompt.difficulty));
-
-const EXPERIENCE_LEVELS = { "Student / new grad": 0, "1–3 years": 0, "3–6 years": 1, "6–10 years": 2, "10+ years": 2 };
-const DEFAULT_TRACK = "software-engineering";
 const TRACK_KEY = "designrounds:start-track";
 
 // "Design a URL shortener" -> "URL shortener"
 const shortTitle = (title) => title.replace(/^Design (a |an )?/i, "").replace(/^./, (char) => char.toUpperCase());
-
-// Up to three free rounds for a discipline: closest to the learner's level first, then
-// easier, then the classic (popular) ones. Rounds already finished are left out unless
-// that would leave nothing.
-export function recommendRounds(trackId, { done = new Set(), level = 0 } = {}) {
-  const free = prompts.filter((prompt) => prompt.track === trackId && prompt.access === "free");
-  const fresh = free.filter((prompt) => !done.has(prompt.id));
-  return [...(fresh.length ? fresh : free)]
-    .sort((a, b) => Math.abs(rank(a) - level) - Math.abs(rank(b) - level) || rank(a) - rank(b) || Number(Boolean(b.popular)) - Number(Boolean(a.popular)) || a.minutes - b.minutes)
-    .slice(0, 3);
-}
 
 function readStoredTrack() {
   try { return window.localStorage.getItem(TRACK_KEY); } catch { return null; }
@@ -79,9 +63,13 @@ export function StartRoundButton({ onStart, className = "btn btn-primary btn-lg"
   }
 
   function toggle() {
+    if (!signedIn) {
+      navigate(`/signin?next=${encodeURIComponent("/start-free")}`);
+      return;
+    }
     if (!open) {
       // The learner's last pick, else their profile's discipline, else backend.
-      const preferred = readStoredTrack() || practiceTracks(user)[0];
+      const preferred = readStoredTrack() || trackForUser(user);
       setTrack(tracks.some((item) => item.id === preferred) ? preferred : DEFAULT_TRACK);
     }
     setOpen(!open);
@@ -93,7 +81,7 @@ export function StartRoundButton({ onStart, className = "btn btn-primary btn-lg"
   }
 
   const done = new Set((sessions ?? []).filter((session) => session.status === "completed").map((session) => session.promptId));
-  const level = EXPERIENCE_LEVELS[user?.experienceLevel] ?? 0;
+  const level = levelForUser(user);
   const rounds = recommendRounds(track, { done, level });
   const current = tracks.find((item) => item.id === track);
   const freeInTrack = prompts.filter((prompt) => prompt.track === track && prompt.access === "free").length;

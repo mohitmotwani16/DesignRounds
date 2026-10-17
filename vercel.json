@@ -30,11 +30,31 @@
       "destination": "/app"
     },
     {
+      "source": "/start-free",
+      "destination": "/app"
+    },
+    {
       "source": "/start/:path*",
       "destination": "/app"
     },
     {
       "source": "/workspace/:path*",
+      "destination": "/app"
+    },
+    {
+      "source": "/learn/write",
+      "destination": "/app"
+    },
+    {
+      "source": "/learn/write/:path*",
+      "destination": "/app"
+    },
+    {
+      "source": "/admin",
+      "destination": "/app"
+    },
+    {
+      "source": "/admin/:path*",
       "destination": "/app"
     }
   ],
@@ -124,6 +144,15 @@
       ]
     },
     {
+      "source": "/start-free",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
       "source": "/start/:path*",
       "headers": [
         {
@@ -143,6 +172,42 @@
     },
     {
       "source": "/app",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/learn/write",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/learn/write/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin/:path*",
       "headers": [
         {
           "key": "X-Robots-Tag",

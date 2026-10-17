@@ -3,6 +3,7 @@ import { prompts } from "../../src/data/prompts.js";
 import { plusBriefs } from "../content/round-briefs.js";
 import { loadGuideExcerpts } from "../content/guide-excerpts.js";
 import { HttpError, route } from "../http.js";
+import { isPlus } from "./plans.js";
 
 // Full practice rounds for the server: the public catalog plus the Plus rounds'
 // briefs, which only the server holds. Everything server-side (sessions, the AI
@@ -14,7 +15,7 @@ const excerpts = loadGuideExcerpts();
 
 // Entitlements are decided here, never by the client.
 export function canAccessRound(user, prompt) {
-  return prompt.access === "free" || user?.plan === "plus";
+  return prompt.access === "free" || isPlus(user);
 }
 
 // The detailed brief of a round: what a learner needs to design it.

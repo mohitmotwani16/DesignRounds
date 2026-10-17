@@ -6,6 +6,7 @@ import { devToolsEnabled, isProduction } from "../flags.js";
 import { deliveryMode, sendLoginCode } from "../email.js";
 import { INTEREST_OPTIONS, interestLabel } from "../../src/data/interests.js";
 import { HttpError, createLimiter, parse, route } from "../http.js";
+import { planFor } from "./plans.js";
 
 const SESSION_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
@@ -103,16 +104,33 @@ function signInErrorRedirect(path, code) {
   return `${url.pathname}${url.search}`;
 }
 
+// Admins review community articles and manage other admins. The first admins come
+// from ADMIN_EMAILS (comma-separated); after that, admins grant the role in the app.
+const bootstrapAdmins = new Set((process.env.ADMIN_EMAILS || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+export const isBootstrapAdmin = (email) => bootstrapAdmins.has(email);
+export const isAdmin = (user) => Boolean(user) && (user.role === "admin" || bootstrapAdmins.has(user.email));
+
+export function requireAdmin(req, _res, next) {
+  if (!req.user) return next(new HttpError(401, "AUTH_REQUIRED", "Sign in to continue."));
+  if (!isAdmin(req.user)) return next(new HttpError(403, "ADMIN_REQUIRED", "This page is for DesignRounds admins."));
+  next();
+}
+
 export function toPublicUser(row) {
+  const planExpiresAt = row.plan_expires_at instanceof Date
+    ? row.plan_expires_at.toISOString().slice(0, 10)
+    : typeof row.plan_expires_at === "string" ? row.plan_expires_at.slice(0, 10) : null;
   return {
     id: row.id,
+    isAdmin: isAdmin(row),
     email: row.email,
     displayName: row.display_name,
     headline: row.headline,
     targetRole: row.target_role,
     interests: row.interests ?? [],
     experienceLevel: row.experience_level,
-    plan: row.plan,
+    plan: planFor(row),
+    planExpiresAt,
     devTools: devToolsEnabled,
     onboarded: Boolean(row.onboarded_at),
     createdAt: row.created_at,

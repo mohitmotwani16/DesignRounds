@@ -1,8 +1,9 @@
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, details = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    this.problems = details.problems ?? null;
   }
 }
 
@@ -25,7 +26,7 @@ async function request(method, path, body, { signal } = {}) {
     // Gateway errors from the hosting platform (e.g. a timeout) carry no JSON body.
     const unavailable = !payload.error && [502, 503, 504].includes(response.status);
     const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
-    throw new ApiError(response.status, payload.error?.code || (unavailable ? "UNAVAILABLE" : "HTTP_ERROR"), payload.error?.message || fallback);
+    throw new ApiError(response.status, payload.error?.code || (unavailable ? "UNAVAILABLE" : "HTTP_ERROR"), payload.error?.message || fallback, { problems: payload.error?.problems });
   }
   return payload;
 }
@@ -64,4 +65,21 @@ export const api = {
   sendInterviewMessage: (id, body) => request("POST", `/sessions/${id}/interview/messages`, body),
   sendInterviewAudio: (id, body) => request("POST", `/sessions/${id}/interview/audio`, body),
   interviewCheck: (id, body) => request("POST", `/sessions/${id}/interview/check`, body),
+  publishedArticles: () => request("GET", "/articles/published"),
+  publishedArticle: (slug) => request("GET", `/articles/published/${encodeURIComponent(slug)}`),
+  myArticles: () => request("GET", "/articles/mine"),
+  slugAvailable: (slug, except) => request("GET", `/articles/slug-available?slug=${encodeURIComponent(slug)}&except=${encodeURIComponent(except || "")}`),
+  createArticle: (fields) => request("POST", "/articles", fields),
+  getArticle: (id) => request("GET", `/articles/${id}`),
+  updateArticle: (id, fields) => request("PATCH", `/articles/${id}`, fields),
+  deleteArticle: (id) => request("DELETE", `/articles/${id}`),
+  submitArticle: (id) => request("POST", `/articles/${id}/submit`, {}),
+  sendArticleMessage: (id, body) => request("POST", `/articles/${id}/messages`, { body }),
+  adminArticles: (status) => request("GET", `/admin/articles?status=${encodeURIComponent(status)}`),
+  adminDecision: (id, action, message) => request("POST", `/admin/articles/${id}/decision`, message ? { action, message } : { action }),
+  adminList: () => request("GET", "/admin/admins"),
+  grantAdmin: (email) => request("POST", "/admin/admins", { email }),
+  revokeAdmin: (id) => request("DELETE", `/admin/admins/${id}`),
+  adminMembers: (email = "") => request("GET", `/admin/members${email ? `?email=${encodeURIComponent(email)}` : ""}`),
+  setMemberPlan: (id, plan, expiresAt) => request("PUT", `/admin/members/${id}/plan`, { plan, expiresAt }),
 };

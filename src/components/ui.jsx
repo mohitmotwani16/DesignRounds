@@ -58,6 +58,8 @@ export function UserMenu({ compact = false }) {
         <div className="user-menu-popover" role="menu">
           <div className="user-menu-identity"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></div>
           <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & practice history</button>
+          <button role="menuitem" onClick={() => { setOpen(false); navigate("/learn/write"); }}><SquarePen size={15} /> My articles</button>
+          {user.isAdmin && <button role="menuitem" onClick={() => { setOpen(false); navigate("/admin"); }}><ShieldCheck size={15} /> Admin</button>}
           {user.devTools && (
             <button role="menuitem" className="dev-menu-item" onClick={async () => {
               setOpen(false);

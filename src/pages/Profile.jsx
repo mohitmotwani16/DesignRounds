@@ -91,7 +91,7 @@ export default function ProfilePage({ onStart }) {
           <h1>{user.displayName || "Your profile"}</h1>
           <p>{[user.headline, interestSummary(user), user.experienceLevel].filter(Boolean).join(" · ") || user.email}</p>
         </div>
-        <span className="plan-badge">{user.plan === "plus" ? "Plus plan" : "Free plan"}</span>
+        <span className="plan-badge">{user.plan === "plus" ? `Plus plan · through ${user.planExpiresAt}` : "Free plan"}</span>
       </header>
 
       <dl className="profile-stats">
