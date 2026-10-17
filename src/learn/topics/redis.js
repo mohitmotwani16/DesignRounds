@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Redis** is an in-memory data store that serves reads and writes in well under a millisecond and offers rich data structures, not just key-value strings: hashes, lists, sets, sorted sets, streams and more. In system design it's the default choice for caching, but also for session storage, rate limiting, leaderboards, counters, distributed locks with care, and lightweight queues. Knowing which data structure fits each problem, and what happens when Redis restarts, is what interviewers look for." },
+    {"type":"diagram","kind":"flow","caption":"One Redis, many jobs: the same in-memory store serves as a cache, a leaderboard and a rate limiter, with snapshots or an append-only file for durability.","nodes":[{"id":"app","label":"App server","col":0,"row":1},{"id":"redis","label":"Redis","sub":"in memory","col":1,"row":1,"shape":"db","tone":"cache"},{"id":"cache","label":"Cache","sub":"GET/SET with TTL","col":2,"row":0},{"id":"rank","label":"Leaderboard","sub":"sorted set","col":2,"row":1},{"id":"limit","label":"Rate limiter","sub":"INCR + EXPIRE","col":2,"row":2},{"id":"disk","label":"RDB / AOF","sub":"persistence","col":1,"row":2,"shape":"db","tone":"store"}],"edges":[{"from":"app","to":"redis"},{"from":"redis","to":"cache"},{"from":"redis","to":"rank"},{"from":"redis","to":"limit"},{"from":"redis","to":"disk","dashed":true}]},
 
     { type: "h2", text: "Data structures and what they're for" },
     { type: "table", head: ["Structure", "Key commands", "Typical use"], rows: [

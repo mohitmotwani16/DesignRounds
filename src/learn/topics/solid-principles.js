@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "The **SOLID principles** are five guidelines for object-oriented design that make code easier to change, test and understand: **S**ingle responsibility, **O**pen-closed, **L**iskov substitution, **I**nterface segregation and **D**ependency inversion. They were collected by Robert C. Martin and are the vocabulary of low-level design interviews. Each one is a way of limiting how far a change has to spread." },
+    {"type":"diagram","kind":"flow","caption":"Single responsibility and dependency inversion together: one class that did everything becomes small parts, and orders depend on a notifier interface rather than on email.","nodes":[{"id":"god","label":"OrderManager","sub":"prices, saves, emails","col":0,"row":1,"tone":"danger"},{"id":"price","label":"PriceCalculator","col":1,"row":0},{"id":"repo","label":"OrderRepository","col":1,"row":1,"tone":"store"},{"id":"notify","label":"Notifier","sub":"interface","col":1,"row":2,"tone":"accent","shape":"pill"},{"id":"email","label":"EmailNotifier","col":2,"row":2}],"edges":[{"from":"god","to":"price","label":"split"},{"from":"god","to":"repo","label":"split"},{"from":"god","to":"notify","label":"split"},{"from":"email","to":"notify","label":"implements","dashed":true}]},
 
     { type: "h2", text: "S: Single responsibility principle" },
     { type: "p", text: "**A class should have one reason to change.** An `Invoice` class that calculates totals, formats a PDF and emails it changes whenever tax rules, PDF layout or email providers change." },

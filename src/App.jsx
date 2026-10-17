@@ -17,6 +17,7 @@ import { CommunityArticlePage, LearnHubPage, LearnTopicPage } from "./pages/Lear
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
 import OnboardingPage from "./pages/Onboarding.jsx";
+import PlusPage from "./pages/Plus.jsx";
 import ProfilePage from "./pages/Profile.jsx";
 import RoundPage from "./pages/RoundPage.jsx";
 import SignInPage from "./pages/SignIn.jsx";
@@ -109,6 +110,7 @@ function Page({ path, onStart }) {
   if (path === "/library") return <LibraryPage key="all" onStart={onStart} track="all" />;
   if (path === "/profile") return <ProfilePage onStart={onStart} />;
   if (path === "/about") return <AboutPage />;
+  if (path === "/plus") return <PlusPage />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;
 

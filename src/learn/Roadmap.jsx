@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { Check, Map as MapIcon, RotateCcw } from "lucide-react";
 import { getTrack, prompts } from "../data/prompts.js";
 import { Link } from "../router.js";
 import { roundPath } from "../seo.js";
@@ -58,10 +58,16 @@ export function Roadmap({ id }) {
 
   return (
     <section className="rm" aria-label={`${roadmap.title} roadmap`}>
+      {roadmap.basedOn && (
+        <p className="rm-based">
+          <MapIcon size={16} aria-hidden="true" />
+          <span>Builds on the <Link to={topicPath(roadmapById(roadmap.basedOn).page)}>core system design roadmap</Link>. Do that first, or skip the parts you already know; this one only covers what {roadmap.title.toLowerCase()} interviews go deeper on.</span>
+        </p>
+      )}
       <div className="rm-head">
         <div className="rm-progress">
-          <span><strong>{done}</strong> of {all.length} topics read</span>
-          <span className="rm-bar" aria-hidden="true"><span style={{ width: `${all.length ? (done / all.length) * 100 : 0}%` }} /></span>
+          <span>{done ? "Your progress" : "Tick topics off as you read them"}</span>
+          <span className="rm-bar" role="progressbar" aria-label="Topics read" aria-valuemin={0} aria-valuemax={100} aria-valuenow={all.length ? Math.round((done / all.length) * 100) : 0}><span style={{ width: `${all.length ? (done / all.length) * 100 : 0}%` }} /></span>
         </div>
         <div className="rm-legend" aria-hidden="true">
           <span className="rm-key rm-key-core">Core</span>

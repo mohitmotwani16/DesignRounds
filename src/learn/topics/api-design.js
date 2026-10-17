@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**API design** is deciding the contract between a service and its clients: the resources and operations it exposes, how requests and responses are shaped, how errors are reported, and how the contract evolves without breaking anyone. A well-designed API is predictable, hard to misuse, efficient over the network and stable for years. In system design interviews, writing the key API endpoints early clarifies requirements and anchors the rest of the design." },
+    {"type":"diagram","kind":"flow","caption":"A request's path through a well-designed API: one versioned contract at the edge, an idempotency key so retries are safe, and storage hidden behind the service.","nodes":[{"id":"client","label":"Client","sub":"web, mobile, partner","col":0,"row":1},{"id":"gw","label":"API gateway","sub":"auth, rate limits","col":1,"row":1,"tone":"accent"},{"id":"svc","label":"Orders API","sub":"POST /v1/orders","col":2,"row":1},{"id":"idem","label":"Idempotency keys","sub":"seen requests","col":2,"row":0,"shape":"db","tone":"cache"},{"id":"db","label":"Orders DB","col":3,"row":1,"shape":"db","tone":"store"}],"edges":[{"from":"client","to":"gw","label":"JSON over HTTPS"},{"from":"gw","to":"svc","label":"validated"},{"from":"svc","to":"idem","label":"check key","dashed":true},{"from":"svc","to":"db","label":"write"}]},
 
     { type: "h2", text: "Resource-oriented design" },
     { type: "p", text: "REST-style APIs model the domain as **resources** (nouns) and use HTTP methods for operations (verbs):" },

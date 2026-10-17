@@ -17,10 +17,10 @@ export const CATEGORIES = [
   {
     id: "roadmaps",
     title: "Learning roadmaps",
-    blurb: "Step-by-step paths through the handbook for each discipline, from first principles to interview-ready.",
+    blurb: "The core system design roadmap every role starts with, then one per role that goes deeper.",
     topics: [
-      { slug: "system-design-roadmap", title: "System Design Roadmap 2026: Beginner to Advanced, Step by Step", short: "System design roadmap", level: "Beginner", description: "A step-by-step system design roadmap: fundamentals, building blocks, distributed systems and interview practice, with every topic linked to a free guide.", published: NEW },
-      { slug: "backend-system-design-roadmap", title: "Backend (SDE) System Design Roadmap: APIs, Databases and Scale", short: "Backend (SDE) roadmap", level: "Beginner", description: "The system design roadmap for backend and SDE interviews: APIs, databases, caching, queues, low-level design and the classic design questions, in order.", published: NEW },
+      { slug: "system-design-roadmap", title: "System Design Roadmap 2026: Beginner to Advanced, Step by Step", short: "System design roadmap", level: "Beginner", description: "The core system design roadmap every engineer starts with: fundamentals, building blocks, distributed systems and interview practice, each step linked to a free guide.", published: NEW },
+      { slug: "backend-system-design-roadmap", title: "Backend System Design Roadmap: LLD, Databases and Real Systems", short: "Backend roadmap", level: "Intermediate", description: "The backend (SDE) system design roadmap after the core: low-level design, API and database depth, reliable async work and the building blocks of classic questions.", published: NEW },
       { slug: "data-engineering-roadmap", title: "Data Engineering Roadmap: Pipelines, Warehouses and Streaming", short: "Data engineering roadmap", level: "Beginner", description: "A data engineering roadmap for 2026: ETL and ELT, data modeling, warehouses and lakehouses, Spark, Kafka, streaming, orchestration and data quality.", published: NEW },
       { slug: "machine-learning-system-design-roadmap", title: "ML System Design Roadmap: From Data to Production Models", short: "ML system design roadmap", level: "Intermediate", description: "An ML system design roadmap: features, training, serving, ranking and recommendations, evaluation, monitoring, plus RAG, vector search and LLM serving.", published: NEW },
       { slug: "platform-engineering-roadmap", title: "Platform Engineering and SRE Roadmap: Kubernetes to SLOs", short: "Platform and SRE roadmap", level: "Intermediate", description: "A platform engineering and SRE roadmap: containers, Kubernetes, infrastructure as code, CI/CD, observability, SLOs, incident response and resilience.", published: NEW },
@@ -292,10 +292,19 @@ export const CATEGORIES = [
     blurb: "How system design interviews work, what to practice, and how to practise it well.",
     topics: [
       { slug: "system-design-interview", title: "How to Prepare for a System Design Interview: A Practice-First Guide", short: "Interview preparation", level: "Beginner", description: "How to prepare for a system design interview: what interviewers assess, a step-by-step 45-minute framework, common mistakes and a 4-week practice plan.", published: "2026-10-14" },
-      { slug: "system-design-interview-questions", title: "System Design Interview Questions to Practice, by Role and Level", short: "Interview questions", level: "Beginner", description: "49 system design interview questions grouped by role (SDE, data engineering, ML, platform, distributed systems, frontend) and level, with what each one tests.", published: "2026-10-14" },
+      { slug: "system-design-interview-questions", title: "System Design Interview Questions to Practice, by Role and Level", short: "Interview questions", level: "Beginner", description: "System design interview questions grouped by role (SDE, data engineering, ML, platform, distributed systems, frontend) and level, with what each one tests.", published: "2026-10-14" },
       { slug: "how-to-practice-system-design", title: "How to Practice System Design: Books vs Mock Interviews vs AI", short: "How to practice", level: "Beginner", description: "How to practice system design: books and courses vs mock interviews with peers or experts vs AI practice tools, what each is good for and how to combine them.", published: "2026-10-14" },
     ],
   },
+];
+
+// The handbook's table of contents in four families, used by the sidebar and the hub so
+// readers see the same map everywhere. Every category belongs to exactly one group.
+export const GROUPS = [
+  { id: "start", title: "Start here", blurb: "Roadmaps and interview guides.", categories: ["roadmaps", "interview"] },
+  { id: "core", title: "Core concepts", blurb: "The building blocks every design uses.", categories: ["foundations", "networking", "databases", "caching", "messaging"] },
+  { id: "scale", title: "Distributed systems and reliability", blurb: "Agreement, failure and the shape of whole systems.", categories: ["distributed", "reliability", "architecture", "security"] },
+  { id: "disciplines", title: "By discipline", blurb: "What each role's interviews go deep on.", categories: ["building-blocks", "low-level-design", "data-engineering", "machine-learning", "ai-architecture", "operations", "frontend-mobile"] },
 ];
 
 // Categories community authors can write in (roadmaps and interview guides are editorial).

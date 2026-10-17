@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "A **slowly changing dimension (SCD)** is a dimension table whose attributes change occasionally: a customer moves city, a product changes category, an employee changes team. The **SCD type** decides what the warehouse does with the old value. **Type 1** overwrites it, **Type 2** keeps every version as a separate row, and **Type 3** keeps the previous value in an extra column. The choice determines whether last year's report still shows last year's truth." },
+    {"type":"diagram","kind":"flow","caption":"When a customer moves city, Type 1 overwrites the row and loses history; Type 2 closes the old row and adds a new one, so old facts still join to the old city.","nodes":[{"id":"change","label":"Customer moves","sub":"Pune to Delhi","col":0,"row":1},{"id":"t1","label":"Type 1","sub":"overwrite","col":1,"row":0,"tone":"muted"},{"id":"t2","label":"Type 2","sub":"close, then insert","col":1,"row":2,"tone":"accent"},{"id":"r1","label":"One row","sub":"history lost","col":2,"row":0,"tone":"danger"},{"id":"r2","label":"Two rows","sub":"valid_from, valid_to","col":2,"row":2,"tone":"ok"}],"edges":[{"from":"change","to":"t1"},{"from":"change","to":"t2"},{"from":"t1","to":"r1"},{"from":"t2","to":"r2"}]},
 
     { type: "h2", text: "The main SCD types" },
     { type: "table", head: ["Type", "What happens on change", "History kept", "Use when"], rows: [

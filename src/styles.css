@@ -187,6 +187,10 @@ a { color: inherit; text-decoration: none; }
 .interviewer-empty-icon { width: 40px; height: 40px; display: grid; place-items: center; color: var(--fg-5964d8); border-radius: 10px; background: var(--bg-f1f2fd); }
 .interviewer-empty h3 { margin: 16px 0 8px; color: var(--fg-2b3649); font: 600 20px/1.3 var(--serif); letter-spacing: -.4px; }
 .interviewer-empty p { margin: 0; color: var(--fg-6b7686); font-size: 14px; line-height: 1.6; }
+.interviewer-perks { margin: 14px 0 16px; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--fg-3f4b5f); font-size: 13.5px; }
+.interviewer-perks li { display: flex; align-items: center; gap: 8px; }
+.interviewer-perks svg { flex: none; color: var(--fg-5964d8); }
+.interviewer-empty .interviewer-cta { text-decoration: none; }
 .interviewer-example { margin: 0; padding: 16px 18px; border-left: 3px solid var(--bd-d9dcf5); border-radius: 0 10px 10px 0; background: var(--bg-fafafe); }
 .interviewer-example figcaption { color: var(--fg-8a93a1); font-size: 11.5px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
 .interviewer-example blockquote { margin: 8px 0 0; color: var(--fg-3f4b5f); font-size: 14px; line-height: 1.6; }

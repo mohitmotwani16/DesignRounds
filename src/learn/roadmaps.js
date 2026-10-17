@@ -1,4 +1,11 @@
-// Learning roadmaps: an ordered path through handbook topics for each discipline.
+// Learning roadmaps: an ordered path through handbook topics.
+//
+// There is one core roadmap ("system-design") that every role starts with; it is also
+// most of what a backend interview tests. Each role roadmap builds on it (basedOn) and
+// lists what that role goes deeper on; core topics appear there at most as optional
+// review, except in distributed systems, which deepens them. Frontend and
+// mobile is a different interview, so its roadmap stands alone.
+//
 // A roadmap page's body places one with { type: "roadmap", id }. Every `topics` entry is
 // a handbook slug (prefix "?" for a good-to-know topic); `rounds` are practice round ids.
 // scripts/check-learn.mjs verifies every reference.
@@ -29,34 +36,34 @@ export const ROADMAPS = {
   },
   backend: {
     page: "backend-system-design-roadmap",
-    title: "Backend (SDE)",
+    title: "Backend and full-stack",
+    basedOn: "system-design",
     stages: [
-      stage("Interview foundations", "The two kinds of design round and how each is scored.", ["system-design-interview", "hld-vs-lld", "back-of-the-envelope-estimation"]),
-      stage("Low-level design", "Clean code inside one service: the LLD round.", ["solid-principles", "design-patterns"]),
-      stage("APIs", "Contracts that clients can rely on and evolve with.", ["api-design", "api-styles", "pagination", "idempotency", "?webhooks", "?real-time-communication"], ["url-shortener"]),
-      stage("Databases", "Modelling data and keeping it correct under concurrency.", ["sql-vs-nosql", "database-indexing", "transactions-isolation-levels", "optimistic-vs-pessimistic-locking", "connection-pooling", "?normalization-denormalization"], ["ticket-booking"]),
-      stage("Scaling reads and writes", "Replicas, shards and caches.", ["replication", "sharding", "caching", "cache-strategies", "redis", "?cache-invalidation"], ["distributed-cache"]),
-      stage("Async processing", "Queues, events and the patterns that keep them safe.", ["message-queues", "event-streaming-kafka", "delivery-semantics", "outbox-pattern", "?saga-pattern"], ["notification-service"]),
-      stage("Real-world building blocks", "The mechanisms behind the classic questions.", ["typeahead-autocomplete", "resumable-file-uploads", "distributed-task-scheduler", "payment-system-ledger", "video-streaming-adaptive-bitrate", "?geospatial-indexing"], ["autocomplete", "file-storage", "task-scheduler"]),
-      stage("Production readiness", "Protecting and operating what you built.", ["rate-limiting", "retries-and-timeouts", "observability", "authentication-authorization", "?circuit-breaker"], ["rate-limiter", "payment-platform"]),
+      stage("Low-level design", "The LLD or machine-coding round: clean classes inside one service.", ["solid-principles", "design-patterns"]),
+      stage("APIs in depth", "Contracts that clients can page through, retry and build on.", ["api-styles", "pagination", "webhooks", "?real-time-communication"], ["url-shortener"]),
+      stage("Databases in depth", "Keeping data correct when many requests touch it at once.", ["transactions-isolation-levels", "optimistic-vs-pessimistic-locking", "connection-pooling", "normalization-denormalization", "?search-and-inverted-index"], ["ticket-booking"]),
+      stage("Reliable async work", "Making events and multi-step workflows safe to retry.", ["outbox-pattern", "saga-pattern", "?event-sourcing-cqrs"], ["notification-service"]),
+      stage("Real-world building blocks", "The mechanisms behind the classic questions.", ["redis", "typeahead-autocomplete", "resumable-file-uploads", "distributed-task-scheduler", "payment-system-ledger", "?geospatial-indexing"], ["autocomplete", "file-storage", "task-scheduler", "payment-platform"]),
     ],
   },
   "data-engineering": {
     page: "data-engineering-roadmap",
     title: "Data engineering",
+    basedOn: "system-design",
     stages: [
       stage("The shape of a data platform", "Sources, layers, consumers and who owns what.", ["data-engineering-architecture", "etl-vs-elt", "data-warehouse-vs-data-lake", "medallion-architecture"]),
-      stage("Storage and SQL foundations", "How analytical data is stored and queried.", ["sql-vs-nosql", "database-indexing", "columnar-file-formats", "?object-storage", "?normalization-denormalization"]),
+      stage("Analytical storage", "How data is laid out so scans over billions of rows stay cheap.", ["columnar-file-formats", "open-table-formats", "?object-storage", "?normalization-denormalization"]),
       stage("Data modeling", "Designing tables analysts can trust.", ["dimensional-modeling", "slowly-changing-dimensions"], ["scd2-warehouse"]),
-      stage("Batch processing", "Large, repeatable transformations.", ["batch-vs-stream-processing", "apache-spark-architecture", "open-table-formats", "?sharding"], ["etl-framework"]),
-      stage("Ingestion and streaming", "Moving changes and events as they happen.", ["event-streaming-kafka", "outbox-pattern", "stream-processing-windows-watermarks", "delivery-semantics", "?backpressure"], ["clickstream", "realtime-analytics"]),
-      stage("Orchestration and reliability", "Pipelines that recover and backfill safely.", ["data-pipeline-orchestration", "idempotency", "data-contracts-schema-evolution"], ["data-alerting"]),
+      stage("Batch processing", "Large, repeatable transformations.", ["batch-vs-stream-processing", "apache-spark-architecture", "?hot-partitions"], ["etl-framework"]),
+      stage("Ingestion and streaming", "Moving changes and events as they happen.", ["stream-processing-windows-watermarks", "outbox-pattern", "?event-streaming-kafka", "?delivery-semantics", "?backpressure"], ["clickstream", "realtime-analytics"]),
+      stage("Orchestration and reliability", "Pipelines that recover and backfill safely.", ["data-pipeline-orchestration", "data-contracts-schema-evolution", "?idempotency"], ["data-alerting"]),
       stage("Quality and governance", "Proving the data is right and keeping it safe.", ["data-quality", "?encryption", "?authentication-authorization"], ["data-quality", "fraud-data-platform"]),
     ],
   },
   "machine-learning": {
     page: "machine-learning-system-design-roadmap",
     title: "Machine learning systems",
+    basedOn: "system-design",
     stages: [
       stage("The end-to-end ML system", "How data, training, serving and feedback connect.", ["machine-learning-system-architecture", "?data-engineering-architecture", "?batch-vs-stream-processing"]),
       stage("Data and features", "Consistent features for training and serving.", ["feature-store", "data-quality", "?stream-processing-windows-watermarks"], ["feature-store"]),
@@ -70,19 +77,21 @@ export const ROADMAPS = {
   platform: {
     page: "platform-engineering-roadmap",
     title: "Platform engineering and SRE",
+    basedOn: "system-design",
     stages: [
-      stage("Reliability vocabulary", "How reliability is defined, measured and budgeted.", ["availability", "latency-vs-throughput", "back-of-the-envelope-estimation"]),
-      stage("Compute and orchestration", "Packaging and scheduling workloads.", ["containers-vs-virtual-machines", "kubernetes-architecture", "autoscaling", "?serverless"]),
-      stage("Infrastructure and delivery", "Changing production safely and repeatably.", ["infrastructure-as-code", "ci-cd-pipelines", "deployment-strategies", "feature-flags"], ["deployment-platform", "config-control-plane"]),
-      stage("Networking and service-to-service", "How services find and talk to each other.", ["load-balancing", "service-discovery", "dns", "?service-mesh", "?api-gateway"], ["service-discovery"]),
-      stage("Observability", "Seeing what the system is doing.", ["observability", "?time-series-databases"], ["metrics-platform"]),
-      stage("Resilience", "Surviving failures and overload.", ["health-checks-failover", "retries-and-timeouts", "circuit-breaker", "load-shedding", "disaster-recovery", "chaos-engineering"], ["multi-region"]),
-      stage("Operating at scale", "People, process and shared platforms.", ["incident-management", "capacity-planning", "multi-tenancy", "secrets-management", "internal-developer-platform"], ["secrets-platform", "service-platform"]),
+      stage("SLOs and capacity", "How reliability is promised, budgeted and paid for.", ["capacity-planning", "?availability"]),
+      stage("Compute and orchestration", "Packaging and scheduling workloads.", ["containers-vs-virtual-machines", "kubernetes-architecture", "?autoscaling", "?serverless"]),
+      stage("Infrastructure and delivery", "Changing production safely and repeatably.", ["infrastructure-as-code", "ci-cd-pipelines", "feature-flags", "?deployment-strategies"], ["deployment-platform", "config-control-plane"]),
+      stage("Service-to-service networking", "How services find, trust and talk to each other.", ["service-discovery", "service-mesh", "?load-balancing"], ["service-discovery"]),
+      stage("Observability at scale", "Storing and querying the signals a fleet produces.", ["time-series-databases", "?observability"], ["metrics-platform"]),
+      stage("Resilience", "Surviving failures and overload, and proving it.", ["load-shedding", "disaster-recovery", "chaos-engineering", "?health-checks-failover", "?circuit-breaker"], ["multi-region"]),
+      stage("Operating at scale", "People, process and shared platforms.", ["incident-management", "multi-tenancy", "secrets-management", "internal-developer-platform"], ["secrets-platform", "service-platform"]),
     ],
   },
   "distributed-systems": {
     page: "distributed-systems-roadmap",
     title: "Distributed systems",
+    basedOn: "system-design",
     stages: [
       stage("Why it's hard", "Partial failure and the limits of agreement.", ["fallacies-of-distributed-computing", "two-generals-and-flp", "cap-theorem"]),
       stage("Replication", "Keeping copies of data on many machines.", ["replication", "write-ahead-log", "quorums", "consistency-models"]),

@@ -1,61 +1,22 @@
-import { useEffect, useRef } from "react";
-import {
-  ArrowRight, ArrowUp, BookOpenCheck, Boxes, Check, Clock3, Database, GitBranch, History, Layers2, ListOrdered,
-  MessageSquareText, MonitorSmartphone, MousePointer2, Network, Plus, Server, Shapes, Sparkles, StickyNote, Zap,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, ArrowUp, BookOpen, Database, Layers2, ListOrdered, MessageCircle, MonitorSmartphone, Network, Server, Sparkles, Workflow, Zap } from "lucide-react";
 import { prompts, tracks } from "../data/prompts.js";
-import { aiLimits } from "../data/plans.js";
-import { LevelMeter, RoundCard, SiteFooter, useReveal } from "../components/site.jsx";
+import { RUBRIC, aiLimits } from "../data/plans.js";
+import { FAQS } from "../data/faqs.js";
+import { SiteFooter, useReveal } from "../components/site.jsx";
 import { StartRoundButton } from "../components/StartRound.jsx";
-import { trackIcon } from "../components/ui.jsx";
 import { Link, useRoute } from "../router.js";
-import { topicMeta, topicPath } from "../learn/catalog.js";
+import { LEARN_PATH, topicPath } from "../learn/catalog.js";
 import { roundPath, trackPath } from "../seo.js";
 
-// "Design a URL shortener" -> "URL shortener"
+// The page's one motif is the round's clock: every DesignRounds round is timed, so a
+// circle (the dial) times the demo, rounds every button and marks every question.
+
 const shortTitle = (title) => title.replace(/^Design (a |an )?/i, "").replace(/^./, (char) => char.toUpperCase());
-
-const minutes = prompts.map((prompt) => prompt.minutes);
-const ROUND_LENGTH = `${Math.min(...minutes)}–${Math.max(...minutes)}m`;
-
 
 export default function LandingPage({ onStart }) {
   const ref = useRef(null);
   useReveal(ref);
-
-  useEffect(() => {
-    const landing = ref.current;
-    if (!landing || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
-
-    let frame = 0;
-    let pointerX = 0;
-    let pointerY = 0;
-    const handlePointerMove = (event) => {
-      if (event.pointerType !== "mouse") return;
-      pointerX = event.clientX;
-      pointerY = event.clientY;
-      if (frame) return;
-      frame = window.requestAnimationFrame(() => {
-        landing.style.setProperty("--cursor-x", `${pointerX}px`);
-        landing.style.setProperty("--cursor-y", `${pointerY}px`);
-        landing.dataset.cursorActive = "true";
-        frame = 0;
-      });
-    };
-    const handlePointerLeave = () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = 0;
-      delete landing.dataset.cursorActive;
-    };
-
-    landing.addEventListener("pointermove", handlePointerMove, { passive: true });
-    landing.addEventListener("pointerleave", handlePointerLeave);
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      landing.removeEventListener("pointermove", handlePointerMove);
-      landing.removeEventListener("pointerleave", handlePointerLeave);
-    };
-  }, []);
 
   // "/#pricing" links to a section: a fresh page load jumps there, an in-page click
   // scrolls smoothly. Waits a tick so the page has laid out.
@@ -70,384 +31,377 @@ export default function LandingPage({ onStart }) {
     return () => window.clearTimeout(timer);
   }, [hash]);
 
-  const popular = [...prompts.filter((prompt) => prompt.popular), ...prompts].filter((prompt, index, list) => list.indexOf(prompt) === index).slice(0, 3);
-
   return (
-    <main className="landing" ref={ref}>
+    <main className="landing lp dot-ground" ref={ref}>
       <Hero onStart={onStart} />
-
-      <section className="wrap section-tight" aria-label="DesignRounds in numbers">
-        <div className="stats reveal">
-          <div className="stat"><strong>{ROUND_LENGTH}</strong><span>Timed like real interview rounds</span></div>
-          <div className="stat"><strong>{tracks.length}</strong><span>Engineering disciplines</span></div>
-          <div className="stat"><strong>240+</strong><span>Components, from Kafka to CDNs</span></div>
-          <div className="stat"><strong>6</strong><span>Rubric dimensions, scored every time</span></div>
-        </div>
-      </section>
-
-      <section className="wrap section-tight">
-        <p className="statement reveal">
-          Most prep teaches you to recite architectures. <span>Interviews reward people who can defend them: why this database, what breaks at 10× traffic, which trade-off you'd accept. DesignRounds is where you practice that part.</span>
-        </p>
-      </section>
-
-      <section className="wrap section" id="how">
-        <div className="section-head reveal">
-          <span className="kicker">How it works</span>
-          <h2>One round. Three moves. <span className="serif-accent">Real feedback.</span></h2>
-          <p>Every round mirrors a real system design interview, without the scheduling, the nerves, or waiting a week for feedback.</p>
-        </div>
-        <div className="steps">
-          <article className="step reveal" style={{ transitionDelay: "0ms" }}>
-            <div className="step-art">
-              <div className="mini-card">
-                <strong className="mini-title">Design a URL shortener</strong>
-                <p>Turn long links into short, shareable URLs.</p>
-                <div className="mini-req">
-                  <span><Check size={13} /> Redirects in under 50 ms</span>
-                  <span><Check size={13} /> 100M new links a month</span>
-                  <span><Check size={13} /> Links can expire</span>
-                </div>
-                <div className="mini-meta"><span><Clock3 size={11} /> 35 min</span><span>Beginner</span><span>Storage</span></div>
-              </div>
-            </div>
-            <div className="step-copy">
-              <span className="step-num">01</span>
-              <h3>Pick a real brief</h3>
-              <p>Clear requirements, realistic scale, and room to ask questions, just like the first five minutes of an interview.</p>
-            </div>
-          </article>
-          <article className="step reveal" style={{ transitionDelay: "90ms" }}>
-            <div className="step-art">
-              <div className="mini-flow">
-                <span className="mini-node tone-violet"><i><Network size={12} /></i>Gateway</span>
-                <span className="mini-arrow" />
-                <span className="mini-node tone-blue"><i><Server size={12} /></i>Service</span>
-                <span className="mini-arrow" />
-                <span className="mini-node tone-rose"><i><Zap size={12} /></i>Redis</span>
-              </div>
-            </div>
-            <div className="step-copy">
-              <span className="step-num">02</span>
-              <h3>Design it on the canvas</h3>
-              <p>Drag in real components, wire them up, label every connection, and pin a note on why each choice is there.</p>
-            </div>
-          </article>
-          <article className="step reveal" style={{ transitionDelay: "180ms" }}>
-            <div className="step-art">
-              <div className="mini-score">
-                <div className="ring" style={{ "--p": 82 }}><strong>82</strong></div>
-                <div className="mini-bars">
-                  <div>Architecture<b style={{ "--v": "86%" }} /></div>
-                  <div>Trade-offs<b style={{ "--v": "78%" }} /></div>
-                  <div>Scale<b style={{ "--v": "70%" }} /></div>
-                </div>
-              </div>
-            </div>
-            <div className="step-copy">
-              <span className="step-num">03</span>
-              <h3>Defend it, get scored</h3>
-              <p>An AI interviewer probes your decisions, then a rubric-based review scores six dimensions and tells you exactly what to fix.</p>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section className="wrap section" id="features">
-        <div className="section-head center reveal">
-          <span className="kicker">What's inside</span>
-          <h2>Everything a design round asks of you, <span className="serif-accent">in one place.</span></h2>
-        </div>
-        <div className="bento">
-          <article className="tile wide reveal">
-            <div className="tile-copy">
-              <h3>A canvas built for architecture</h3>
-              <p>240+ components across clients, compute, data, messaging, and observability, plus real technology marks. Zones, labels, sync and async connections, undo, autosave.</p>
-            </div>
-            <div className="tile-art">
-              <div className="palette">
-                {[["Load balancer", Network, "violet"], ["API gateway", Shapes, "violet"], ["Kafka", ListOrdered, "orange"], ["Redis", Zap, "rose"], ["PostgreSQL", Database, "teal"], ["Object storage", Boxes, "blue"], ["CDN", MonitorSmartphone, "green"], ["Worker pool", Server, "blue"], ["Search index", BookOpenCheck, "teal"]].map(([label, Icon, tone]) => (
-                  <span key={label} className={`tone-${tone}`}><i><Icon size={12} /></i>{label}</span>
-                ))}
-                <span className="more"><Plus size={13} /> 230 more</span>
-              </div>
-            </div>
-          </article>
-          <article className="tile reveal">
-            <div className="tile-copy">
-              <h3>An interviewer that asks why</h3>
-              <p>It watches the canvas and asks about significant choices, but never about ones you've already explained.</p>
-            </div>
-            <div className="tile-art">
-              <div className="bubble-stack">
-                <div className="msg ai"><span className="msg-who">Interviewer</span>You sharded by user ID. What happens to a celebrity's followers?</div>
-                <div className="msg me"><span className="msg-who">You</span>Hot keys get fan-out on read instead…</div>
-              </div>
-            </div>
-          </article>
-          <article className="tile reveal">
-            <div className="tile-copy">
-              <h3>Scored on a real rubric</h3>
-              <p>Requirements, architecture, data, scale, reliability, and trade-offs, weighted the way interviewers weigh them.</p>
-            </div>
-            <div className="tile-art">
-              <div className="mini-score">
-                <div className="ring" style={{ "--p": 74 }}><strong>74</strong></div>
-                <div className="mini-bars">
-                  <div>Requirements<b style={{ "--v": "80%" }} /></div>
-                  <div>Data model<b style={{ "--v": "64%" }} /></div>
-                  <div>Reliability<b style={{ "--v": "72%" }} /></div>
-                </div>
-              </div>
-            </div>
-          </article>
-          <article className="tile reveal">
-            <div className="tile-copy">
-              <h3>Decisions, not just boxes</h3>
-              <p>Pin a "why" to any component. Explained reasoning is what moves your score.</p>
-            </div>
-            <div className="tile-art">
-              <div className="note-card"><b>Why Cassandra?</b>Write-heavy timeline inserts, partitioned by user. We accept eventual consistency for likes.</div>
-            </div>
-          </article>
-          <article className="tile reveal">
-            <div className="tile-copy">
-              <h3>Never lose a design</h3>
-              <p>Autosave with versioned checkpoints. Stale tabs can't overwrite newer work.</p>
-            </div>
-            <div className="tile-art">
-              <div className="versions">
-                <div><i /> Added read replicas <span>now</span></div>
-                <div><i /> Cache-aside for redirects <span>4 min</span></div>
-                <div><i /> First draft <span>12 min</span></div>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section className="wrap section" id="disciplines">
-        <div className="row-head reveal">
-          <div className="section-head">
-            <span className="kicker">Six disciplines</span>
-            <h2>Practice for the role <span className="serif-accent">you actually want.</span></h2>
-          </div>
-          <Link className="btn btn-ghost" to="/library">Browse all designs <ArrowRight size={15} className="nudge" /></Link>
-        </div>
-        <div className="tracks">
-          {tracks.map((track) => {
-            const Icon = trackIcon(track.icon);
-            const list = prompts.filter((prompt) => prompt.track === track.id);
-            return (
-              <Link key={track.id} className={`track tone-${track.color} reveal`} to={trackPath(track.id)}>
-                <div className="track-top"><span className="track-ico"><Icon size={19} /></span></div>
-                <h3>{track.label}</h3>
-                <p>{track.description}</p>
-                <ul>{list.slice(0, 3).map((prompt) => <li key={prompt.id}>{shortTitle(prompt.title)}</li>)}</ul>
-                <span className="track-go">Explore {track.shortLabel} <ArrowRight size={14} /></span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="wrap section-tight">
-        <div className="row-head reveal" style={{ marginBottom: 28 }}>
-          <div className="section-head">
-            <span className="kicker">Start here</span>
-            <h2>Popular rounds</h2>
-          </div>
-        </div>
-        <div className="rounds">
-          {popular.map((prompt, index) => <RoundCard key={prompt.id} round={prompt} onStart={onStart} index={index} />)}
-        </div>
-      </section>
-
-      <QuestionIndex />
-
+      <RoundStages />
+      <RoleRounds />
+      <Rubric />
       <Pricing onStart={onStart} />
       <Faq />
-
-      <section className="cta-band reveal">
-        <h2>Your next interview is a design review. <em>Rehearse it.</em></h2>
-        <p>Pick a design, sketch your architecture, and find out where it bends before an interviewer does.</p>
-        <div className="hero-ctas">
-          <StartRoundButton onStart={onStart} />
-          <Link className="btn btn-ghost btn-lg" to="/library">Explore the library</Link>
-        </div>
-      </section>
+      <Close onStart={onStart} />
       <SiteFooter />
     </main>
   );
 }
 
+// ------------------------------------------------------------------ hero
+
 function Hero({ onStart }) {
   return (
-    <section className="hero wrap">
-      <Link className="pill rise" style={{ "--d": 0 }} to="/library">
-        <span className="pill-tag">New</span> A live AI interviewer that asks <em style={{ fontFamily: "var(--font-serif)", fontSize: 15 }}>why</em> <ArrowRight size={13} />
-      </Link>
-      <h1 className="rise" style={{ "--d": 1 }}>Practice system design the way it's <em>actually</em> tested.</h1>
-      <p className="hero-sub rise" style={{ "--d": 2 }}>
-        Real interview design problems, a canvas built for architecture, and an AI interviewer that pushes back. Then a rubric-based review tells you exactly what to fix.
-      </p>
-      <div className="hero-ctas rise" style={{ "--d": 3 }}>
-        <StartRoundButton onStart={onStart} />
-        <Link className="btn btn-ghost btn-lg" to="/library">Browse all designs</Link>
+    <section className="lp-hero" aria-labelledby="lp-title">
+      <div className="lp-hero-copy wrap">
+        <h1 id="lp-title" className="rise" style={{ "--d": 0 }}>Mock system design interviews with AI</h1>
+        <div className="lp-hero-text">
+          <p className="lp-hero-sub rise" style={{ "--d": 1 }}>Design real interview questions on a canvas while an AI interviewer asks why. Every round ends with a scored review that shows exactly what to fix.</p>
+          <div className="lp-hero-actions rise" style={{ "--d": 2 }}>
+            <StartRoundButton onStart={onStart} className="btn lp-btn" />
+            <Link className="lp-text-link" to="/library">Browse the questions</Link>
+          </div>
+          <p className="lp-hero-facts rise" style={{ "--d": 3 }}>Free to start. No card. Sign in with your email.</p>
+        </div>
+        <QuestionStack />
       </div>
-      <div className="hero-checks rise" style={{ "--d": 4 }}>
-        <span><Check size={15} /> Free to start</span>
-        <span><Check size={15} /> No credit card</span>
-        <span><Check size={15} /> Sign in with just your email</span>
+      <div className="wrap lp-demo-wrap rise" style={{ "--d": 4 }}>
+        <Demo />
       </div>
-      <div className="rise" style={{ "--d": 5 }}><Demo /></div>
     </section>
   );
 }
 
-// Coordinates are in a 960×600 stage; HTML elements are placed by percentage so they
-// line up with the SVG wires at any width.
-const at = (x, y) => ({ left: `${(x / 960) * 100}%`, top: `${(y / 600) * 100}%` });
-const NODES = [
-  { id: "clients", x: 95, y: 300, label: "Clients", sub: "web · mobile", Icon: MonitorSmartphone, tone: "slate", d: 500 },
-  { id: "gateway", x: 300, y: 300, label: "API gateway", sub: "rate limits", Icon: Network, tone: "violet", d: 750 },
-  { id: "service", x: 520, y: 300, label: "Link service", sub: "stateless ×6", Icon: Server, tone: "blue", d: 1000, focus: true },
-  { id: "cache", x: 765, y: 165, label: "Redis", sub: "cache-aside", Icon: Zap, tone: "rose", d: 1300 },
-  { id: "db", x: 765, y: 435, label: "PostgreSQL", sub: "replicated", Icon: Database, tone: "teal", d: 1500 },
-  { id: "queue", x: 520, y: 505, label: "Kafka", sub: "click events", Icon: ListOrdered, tone: "orange", d: 1700 },
+// The problem the page solves, in its own words: an open question, a scale to meet and
+// the follow-up that comes once you've answered. Every card is rendered in the same
+// grid cell, so the stack is always as tall as its tallest card and never jumps; the
+// current card settles in while the previous one lifts away. Hovering or focusing the
+// stack holds the current card, and the dots pick any of them. Readers who ask for less
+// motion get the first card, still.
+const QUESTIONS = [
+  { id: "chat-system", ask: "Design a chat app", needs: ["Billions of users", "Messages in order", "Works offline"], then: "A user is offline for a week. How do their messages arrive, and in what order?" },
+  { id: "url-shortener", ask: "Design a URL shortener", needs: ["100M new links a day", "Redirects in 50 ms"], then: "One link goes viral and its cache key expires. What happens to your database?" },
+  { id: "ride-hailing", ask: "Design a ride-hailing service", needs: ["Driver locations every 4 s", "A match in seconds"], then: "How do you find the nearest drivers without scanning all of them?" },
+  { id: "ticket-booking", ask: "Design a ticketing platform", needs: ["A million fans at 10 am", "No seat sold twice"], then: "Two fans tap the same seat in the same millisecond. Who gets it?" },
+  { id: "video-streaming", ask: "Design video streaming", needs: ["A global audience", "Quality that adapts"], then: "A new episode drops at 9 pm everywhere. Where does all that traffic land?" },
+  { id: "rate-limiter", ask: "Design an API rate limiter", needs: ["Per user and per key", "Shared by every server"], then: "Two servers see the same user at once. How do they agree on the count?" },
 ];
-// Nodes are 158 units wide and ~52 tall, so edges sit at x ± 79 and y ± 26.
-const WIRES = [
-  { d: "M 175 300 L 219 300", label: "HTTPS", lx: 197, ly: 286, delay: 900 },
-  { d: "M 380 300 L 439 300", label: "/:code", lx: 410, ly: 286, delay: 1150 },
-  { d: "M 600 290 C 648 290 640 165 684 165", label: "GET", lx: 622, ly: 214, delay: 1500 },
-  { d: "M 600 312 C 648 312 640 435 684 435", label: "on miss", lx: 600, ly: 400, delay: 1700 },
-  { d: "M 520 327 L 520 475", label: "async", lx: 492, ly: 406, delay: 1900, async: true },
-];
+const DEAL_MS = 5500;
 
-function Demo() {
+function QuestionStack() {
+  const [index, setIndex] = useState(0);
+  const [previous, setPrevious] = useState(null);
+  const [held, setHeld] = useState(false);
+  const [still, setStill] = useState(false);
+  const show = (next) => {
+    if (next === index) return;
+    setPrevious(index);
+    setIndex(next);
+  };
+  useEffect(() => { setStill(Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)); }, []);
+  useEffect(() => {
+    if (held || still) return undefined;
+    const timer = window.setTimeout(() => show((index + 1) % QUESTIONS.length), DEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [index, held, still]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="demo" aria-label="Preview of a DesignRounds practice round: a URL shortener design with an AI interviewer and a review score" role="img">
-      <div className="demo-bar">
-        <span className="demo-dots"><i /><i /><i /></span>
-        <span className="demo-title">Design a URL shortener <span className="chip">Free</span></span>
-        <span className="demo-meta"><span className="timer">23:41</span><span className="saved">Saved</span></span>
+    <div className="lp-qstack rise" style={{ "--d": 2 }} onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={() => setHeld(false)}>
+      <span className="lp-qstack-back lp-qstack-back-2" aria-hidden="true" />
+      <span className="lp-qstack-back lp-qstack-back-1" aria-hidden="true" />
+      <div className="lp-qdeck">
+        {QUESTIONS.map((question, position) => {
+          const active = position === index;
+          const state = active ? "is-active" : position === previous ? "is-leaving" : "";
+          return (
+            <article key={question.id} className={`lp-qcard-front ${state}`} aria-hidden={!active} aria-label={active ? "An example system design interview question" : undefined}>
+              <p className="lp-qf-ask"><span className="lp-qf-live" aria-hidden="true" />{question.ask}</p>
+              <ul className="lp-qf-needs">
+                {question.needs.map((need, order) => <li key={need} style={{ "--k": order }}>{need}</li>)}
+              </ul>
+              <div className="lp-qf-then">
+                <span className="lp-qf-typing" aria-hidden="true"><i /><i /><i /></span>
+                <p><b>Then</b>{question.then}</p>
+              </div>
+              <Link className="lp-qf-go" to={roundPath(question.id)} tabIndex={active ? undefined : -1}>Practise this question <ArrowRight size={15} /></Link>
+            </article>
+          );
+        })}
       </div>
-      <div className="demo-body">
-        <div className="demo-rail" aria-hidden="true">
-          <span className="on"><MousePointer2 size={15} /></span><span><Layers2 size={15} /></span><span><StickyNote size={15} /></span><span><GitBranch size={15} /></span><span><History size={15} /></span>
-        </div>
-        <div className="stage" aria-hidden="true">
-          <div className="zone" style={{ ...at(430, 92), width: `${(440 / 960) * 100}%`, height: `${(470 / 600) * 100}%`, "--d": 300 }}><span>ap-south-1 · VPC</span></div>
-          <svg className="wires" viewBox="0 0 960 600" preserveAspectRatio="none">
-            <defs>
-              <marker id="demo-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" fill="currentColor" style={{ color: "var(--ink-4)" }} /></marker>
-            </defs>
-            {WIRES.map((wire) => (
-              <g key={wire.d}>
-                <path className={`wire ${wire.async ? "async" : ""}`} d={wire.d} markerEnd="url(#demo-arrow)" style={{ "--d": wire.delay }} />
-                <text className="wire-label" x={wire.lx} y={wire.ly} textAnchor="middle" style={{ "--d": wire.delay + 250 }}>{wire.label}</text>
-              </g>
-            ))}
-            {WIRES.slice(0, 4).map((wire, index) => (
-              <circle key={`p-${wire.d}`} r="3.5" className="packet" style={{ "--d": 2300 + index * 250 }}>
-                <animateMotion dur={`${1.6 + index * 0.25}s`} repeatCount="indefinite" begin={`${2.3 + index * 0.25}s`} path={wire.d} />
-              </circle>
-            ))}
-          </svg>
-          {NODES.map((node) => (
-            <div key={node.id} className={`node tone-${node.tone} ${node.focus ? "focus" : ""}`} style={{ ...at(node.x, node.y), "--d": node.d }}>
-              <i><node.Icon /></i>
-              <span>{node.label}<small>{node.sub}</small></span>
-            </div>
-          ))}
-          <div className="note" style={{ ...at(52, 60), "--d": 2500 }}><b>Why Redis?</b>~100:1 reads to writes. Cache-aside with a 24-hour TTL keeps p99 redirects under 20 ms.</div>
-          <div className="score" style={{ "--d": 7000 }}>
-            <div className="score-top"><span>Review · v3</span><strong>82<small>/100</small></strong></div>
-            <span className="score-band">Strong</span>
-            <div className="score-bars">
-              {[["Architecture", "88%"], ["Trade-offs", "80%"], ["Scale & performance", "74%"]].map(([label, value], index) => (
-                <div key={label}>{label}<b style={{ "--v": value, "--d": 7000 + index * 120 }} /></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <aside className="demo-chat" aria-hidden="true">
-          <div className="chat-head"><Sparkles size={15} style={{ color: "var(--accent-text)" }} /> Interviewer <span className="live">live</span></div>
-          <div className="chat-log">
-            <div className="msg ai" style={{ "--d": 2000 }}><span className="msg-who">Interviewer</span>Walk me through a redirect. Where does the lookup go first?</div>
-            <div className="msg me" style={{ "--d": 3400 }}><span className="msg-who">You</span>Redis first, cache-aside. On a miss, read the replica and backfill with a 24-hour TTL.</div>
-            <div className="demo-typing" style={{ "--d": 4300 }}><i /><i /><i /></div>
-            <div className="msg ai" style={{ "--d": 5700 }}><span className="msg-who">Interviewer</span>Good. A link goes viral and its key expires. What happens to your database?</div>
-          </div>
-          <div className="chat-input">Explain your thinking… <span><ArrowUp size={14} /></span></div>
-        </aside>
+      <div className="lp-qstack-dots" role="group" aria-label="Example questions">
+        {QUESTIONS.map((item, position) => (
+          <button key={item.id} type="button" aria-label={item.ask} aria-pressed={position === index} onClick={() => show(position)} />
+        ))}
       </div>
     </div>
   );
 }
 
-function Pricing({ onStart }) {
-  const free = aiLimits.free;
-  const plus = aiLimits.plus;
+// The round clock: counts down from part-way through a 45-minute round and starts
+// again. It holds still for readers who ask for less motion.
+const ROUND_SECONDS = 45 * 60;
+const START_LEFT = 23 * 60 + 41;
+
+function useRoundClock() {
+  const [left, setLeft] = useState(START_LEFT);
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const timer = window.setInterval(() => setLeft((value) => (value > 0 ? value - 1 : START_LEFT)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return { text: `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`, used: 1 - left / ROUND_SECONDS };
+}
+
+// A URL shortener as a learner would draw it. Requests flow left to right as packets
+// on the wires. Positions are in a 960×560 stage; the HTML nodes are placed by
+// percentage, so they stay on the SVG wires at any width.
+const at = (x, y) => ({ left: `${(x / 960) * 100}%`, top: `${(y / 560) * 100}%` });
+const NODES = [
+  { id: "users", x: 95, y: 280, label: "Users", sub: "web and mobile", Icon: MonitorSmartphone, tone: "slate" },
+  { id: "gateway", x: 300, y: 280, label: "API gateway", sub: "rate limits", Icon: Network, tone: "violet" },
+  { id: "service", x: 515, y: 280, label: "Link service", sub: "stateless", Icon: Server, tone: "blue", focus: true },
+  { id: "cache", x: 790, y: 110, label: "Redis", sub: "cache-aside", Icon: Zap, tone: "rose" },
+  { id: "db", x: 790, y: 280, label: "PostgreSQL", sub: "replicated", Icon: Database, tone: "teal" },
+  { id: "queue", x: 515, y: 455, label: "Kafka", sub: "click events", Icon: ListOrdered, tone: "orange" },
+  { id: "analytics", x: 790, y: 455, label: "Analytics", sub: "stream jobs", Icon: Workflow, tone: "green" },
+];
+// Nodes are about 170 units wide, so wires start and end 85 units from a node's centre.
+const WIRES = [
+  { d: "M 180 280 L 215 280", label: "HTTPS", lx: 197, ly: 258 },
+  { d: "M 385 280 L 430 280", label: "/:code", lx: 407, ly: 258 },
+  { d: "M 600 266 C 650 266 650 110 705 110", label: "GET", lx: 640, ly: 172 },
+  { d: "M 600 280 L 705 280", label: "on miss", lx: 652, ly: 302 },
+  { d: "M 515 306 L 515 428", label: "async", lx: 548, ly: 372, async: true },
+  { d: "M 600 455 L 705 455", label: "stream", lx: 652, ly: 435 },
+];
+
+function Demo() {
+  const clock = useRoundClock();
+  const R = 15;
+  const C = 2 * Math.PI * R;
   return (
-    <section className="wrap section" id="pricing">
-      <div className="section-head center reveal">
-        <span className="kicker">Pricing</span>
-        <h2>Start free. <span className="serif-accent">Go deeper</span> when you're ready.</h2>
-        <p>Your score is computed the same way on every plan. Plus adds more rounds, the live interviewer, and the full coaching behind each score.</p>
+    <div className="lp-demo" data-ui role="img" aria-label="A DesignRounds practice round: an AI interviewer asks about a URL shortener design drawn on the canvas, with requests flowing between components">
+      <div className="lp-demo-bar" aria-hidden="true">
+        <svg className="lp-dial" viewBox="0 0 36 36" width="30" height="30">
+          <circle cx="18" cy="18" r={R} className="lp-dial-track" />
+          <circle cx="18" cy="18" r={R} className="lp-dial-used" strokeDasharray={`${C * clock.used} ${C}`} transform="rotate(-90 18 18)" />
+        </svg>
+        <strong>Design a URL shortener</strong>
+        <span className="lp-demo-time">{clock.text} left · deep dive</span>
+        <span className="lp-demo-saved">Saved</span>
       </div>
-      <div className="plans">
-        <article className="plan reveal">
-          <h3>Free</h3>
-          <div className="plan-price">₹0 <small>forever</small></div>
-          <p className="plan-note">Everything you need to practice and see where you stand.</p>
-          <ul>
-            <li><Check size={16} /> Free design rounds in every discipline</li>
-            <li><Check size={16} /> The full canvas, autosave, and version history</li>
-            <li><Check size={16} /> {free.reviewsPerRound} AI review per round, up to {free.reviewsPerMonth} a month</li>
-            <li><Check size={16} /> Scores on all six rubric dimensions, plus your top strength and biggest risk</li>
-          </ul>
-          <StartRoundButton onStart={onStart} className="btn btn-ink btn-lg" />
-        </article>
-        <article className="plan featured reveal">
-          <span className="plan-flag">Coming soon</span>
-          <h3>Plus</h3>
-          <div className="plan-price">Soon <small>pricing at launch</small></div>
-          <p className="plan-note">For the final weeks before your interviews.</p>
-          <ul>
-            <li><Check size={16} /> Every design round, including Plus-only ones</li>
-            <li><Check size={16} /> Live AI interviewer: up to {plus.interviewTurnsPerRound} replies and {plus.hintsPerRound} hints per round</li>
-            <li><Check size={16} /> {plus.reviewsPerRound} reviews per round, up to {plus.reviewsPerMonth} a month</li>
-            <li><Check size={16} /> Full coaching: every decision analyzed, every risk, next steps, and follow-up questions</li>
-          </ul>
-          <Link className="btn btn-primary btn-lg" to="/library">Explore the library <ArrowRight size={16} className="nudge" /></Link>
-        </article>
+      <div className="lp-demo-body" aria-hidden="true">
+        <aside className="lp-demo-chat">
+          <p className="lp-demo-chat-head"><Sparkles size={15} /> Interviewer <span>live</span></p>
+          <div className="lp-demo-log">
+            <div className="lp-msg lp-msg-ai" style={{ "--m": 0 }}><b>Interviewer</b>Walk me through a redirect. Where does the lookup go first?</div>
+            <div className="lp-msg lp-msg-me" style={{ "--m": 1 }}><b>You</b>Redis first, cache-aside. On a miss I read a replica and backfill with a 24-hour TTL.</div>
+            <div className="lp-typing" style={{ "--m": 2 }}><i /><i /><i /></div>
+            <div className="lp-msg lp-msg-ai" style={{ "--m": 3 }}><b>Interviewer</b>A link goes viral and its key expires. What happens to your database?</div>
+          </div>
+          <div className="lp-demo-input">Explain your thinking… <span><ArrowUp size={14} /></span></div>
+        </aside>
+        <div className="lp-demo-canvas">
+          <div className="lp-demo-stage">
+            <svg className="lp-wires" viewBox="0 0 960 560">
+              <defs>
+                <marker id="lp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" className="lp-arrow" /></marker>
+              </defs>
+              {WIRES.map((wire, index) => (
+                <g key={wire.d}>
+                  <path className={wire.async ? "lp-wire lp-wire-async" : "lp-wire"} d={wire.d} markerEnd="url(#lp-arrow)" style={{ "--w": index }} />
+                  <text className="lp-wire-label" x={wire.lx} y={wire.ly} textAnchor="middle" style={{ "--w": index }}>{wire.label}</text>
+                </g>
+              ))}
+              {WIRES.map((wire, index) => (
+                <circle key={`packet-${wire.d}`} r="5" className="lp-packet">
+                  <animateMotion dur={`${1.3 + (index % 3) * 0.3}s`} repeatCount="indefinite" begin={`${1.6 + index * 0.3}s`} path={wire.d} />
+                </circle>
+              ))}
+            </svg>
+            {NODES.map((node, index) => (
+              <div key={node.id} className={`lp-node tone-${node.tone} ${node.focus ? "lp-node-focus" : ""}`} style={{ ...at(node.x, node.y), "--n": index }}>
+                <i><node.Icon size={17} /></i>
+                <span>{node.label}<small>{node.sub}</small></span>
+              </div>
+            ))}
+            <div className="lp-note" style={at(250, 95)}><b>Why Redis?</b>Reads outnumber writes by about 100 to 1, so cache-aside keeps redirects fast.</div>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ how a round runs
+
+// The interviewer's real stages, sized by how a 45-minute round is paced. When the bar
+// comes into view a playhead runs through it, filling each stage in its share of time.
+const STAGES = [
+  { minutes: 7, label: "7 minutes", title: "Requirements", clause: "Pin down the users, the scale and what’s out of scope, asking as you would in the room.", tone: "teal" },
+  { minutes: 13, label: "13 minutes", title: "High-level design", clause: "Sketch the design with real components and label every connection.", tone: "blue" },
+  { minutes: 18, label: "18 minutes", title: "Deep dive", clause: "The interviewer asks why, and what breaks at ten times the traffic.", tone: "accent" },
+  { minutes: 7, label: "7 minutes", title: "Wrap-up", clause: "Name the risks you’d fix with more time.", tone: "orange" },
+  { minutes: 1, label: "After", title: "Review", clause: "A review scores your design on the rubric and says what to fix.", tone: "ink" },
+];
+const TOTAL_MINUTES = STAGES.reduce((total, stage) => total + stage.minutes, 0);
+
+function RoundStages() {
+  let elapsed = 0;
+  return (
+    <section className="lp-section wrap" id="how" aria-labelledby="lp-how-title">
+      <h2 id="lp-how-title" className="lp-h2 reveal">One round, 45&nbsp;minutes</h2>
+      <ol className="lp-bar reveal">
+        {STAGES.map((stage) => {
+          const start = elapsed / TOTAL_MINUTES;
+          elapsed += stage.minutes;
+          return (
+            <li key={stage.title} className={`lp-seg lp-seg-${stage.tone}`} style={{ "--grow": stage.minutes, "--start": start, "--share": stage.minutes / TOTAL_MINUTES }}>
+              <div className="lp-seg-fill">
+                <span className="lp-seg-time">{stage.label}</span>
+                <strong>{stage.title}</strong>
+              </div>
+              <p>{stage.clause}</p>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }
 
-const FAQS = [
-  ["Is DesignRounds really free?", `Yes. A broad set of design rounds, the full canvas, and an AI review for every round are free, with no credit card. Plus, coming soon, adds more rounds, the live interviewer, and deeper coaching.`],
-  ["How is this different from watching system design videos?", "Videos show you someone else's design. Here you make every decision yourself, explain it, and get challenged on it. That's the skill an interview actually tests, and it only improves with practice."],
-  ["How does the AI review score my design?", "Against a fixed rubric of six weighted dimensions: requirements, architecture, data, scale, reliability, and trade-offs. It reads your components, connections, labels, and the reasoning you wrote down. Explained choices count. Unexplained ones earn little, even when they're right."],
-  ["Do I need to know a specific cloud provider?", "No. You can design with generic building blocks (load balancers, queues, caches, databases) or with specific technologies like Kafka, Redis, or PostgreSQL. The review cares about why, not which logo."],
-  ["Which roles is this for?", "Backend and full-stack engineers, data engineers, ML engineers, platform and infrastructure engineers, and frontend and mobile engineers. Each discipline has its own set of design rounds."],
-  ["Is my work private?", "Your designs are private to your account. To generate feedback, your design and its notes are sent to our AI provider. You can delete any round, or your whole account, at any time."],
-];
+// ------------------------------------------------------------------ rounds by role
+
+const SHOWN = 8;
+
+function RoleRounds() {
+  const [active, setActive] = useState(tracks[0].id);
+  const tabsRef = useRef(null);
+  const onKeyDown = (event) => {
+    const index = tracks.findIndex((track) => track.id === active);
+    const keys = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tracks.length - 1 };
+    if (!(event.key in keys)) return;
+    event.preventDefault();
+    const next = tracks[(keys[event.key] + tracks.length) % tracks.length];
+    setActive(next.id);
+    tabsRef.current?.querySelector(`[data-track="${next.id}"]`)?.focus();
+  };
+
+  return (
+    <section className="lp-section lp-roles wrap" id="questions" aria-labelledby="lp-roles-title">
+      <h2 id="lp-roles-title" className="lp-h2 reveal">System design questions for your role</h2>
+      <div className="lp-tabs reveal" role="tablist" aria-label="Disciplines" ref={tabsRef} onKeyDown={onKeyDown}>
+        {tracks.map((track) => (
+          <button
+            key={track.id}
+            type="button"
+            role="tab"
+            id={`lp-tab-${track.id}`}
+            data-track={track.id}
+            aria-selected={active === track.id}
+            aria-controls={`lp-panel-${track.id}`}
+            tabIndex={active === track.id ? 0 : -1}
+            onClick={() => setActive(track.id)}
+          >
+            {track.shortLabel}
+          </button>
+        ))}
+      </div>
+      {tracks.map((track) => {
+        const list = prompts.filter((prompt) => prompt.track === track.id);
+        return (
+          <div key={track.id} className="lp-panel" role="tabpanel" id={`lp-panel-${track.id}`} aria-labelledby={`lp-tab-${track.id}`} hidden={active !== track.id}>
+            <p className="lp-panel-lede">{track.description}</p>
+            <ul className="lp-qcards">
+              {list.slice(0, SHOWN).map((prompt, index) => (
+                <li key={prompt.id} className="lp-qcard" style={{ "--q": index }}>
+                  <p className="lp-qcard-tags"><span className={prompt.access === "free" ? "lp-tag lp-tag-free" : "lp-tag"}>{prompt.access === "free" ? "Free" : "Plus"}</span><span>{prompt.difficulty}</span><span>{prompt.minutes} min</span></p>
+                  <h3><Link to={roundPath(prompt.id)}>{shortTitle(prompt.title)}</Link></h3>
+                  <p className="lp-qcard-desc">{prompt.description}</p>
+                  <span className="lp-qcard-go" aria-hidden="true"><ArrowRight size={16} /></span>
+                </li>
+              ))}
+            </ul>
+            <Link className="lp-text-link" to={trackPath(track.id)}>See all {track.shortLabel} rounds <ArrowRight size={15} /></Link>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ what interviewers grade
+
+function Rubric() {
+  return (
+    <section className="lp-section lp-rubric wrap" id="rubric" aria-labelledby="lp-rubric-title">
+      <div className="lp-rubric-head reveal">
+        <h2 id="lp-rubric-title" className="lp-h2">What interviewers grade</h2>
+        <p className="lp-lead">Every review scores the dimensions a system design interviewer listens for. Each one links to the guide in the free handbook that helps most.</p>
+        <p className="lp-rubric-links">
+          <Link className="lp-text-link" to={LEARN_PATH}><BookOpen size={16} /> Open the handbook</Link>
+        </p>
+      </div>
+      <ol className="lp-rubric-list">
+        {RUBRIC.map((dimension, index) => (
+          <li key={dimension.id} className="reveal" style={{ transitionDelay: `${index * 60}ms` }}>
+            <span className="lp-rubric-dot" aria-hidden="true" />
+            <div>
+              <h3>{dimension.name}</h3>
+              <p>{dimension.text}</p>
+            </div>
+            <Link className="lp-rubric-guide" to={topicPath(dimension.guide)}>{dimension.guideTitle} <ArrowRight size={14} /></Link>
+          </li>
+        ))}
+        <li className="lp-rubric-plus reveal">
+          <span className="lp-rubric-dot" aria-hidden="true"><MessageCircle size={14} /></span>
+          <div>
+            <h3>Communication <span className="lp-tag">Plus</span></h3>
+            <p>How clearly, concisely and confidently you explain and defend the design to the interviewer.</p>
+          </div>
+          <Link className="lp-rubric-guide" to="/plus">See Plus <ArrowRight size={14} /></Link>
+        </li>
+      </ol>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ pricing
+
+function Pricing({ onStart }) {
+  const free = aiLimits.free;
+  return (
+    <section className="lp-pricing" id="pricing" aria-labelledby="lp-pricing-title">
+      <h2 id="lp-pricing-title" className="sr-only">Pricing</h2>
+      <article className="lp-plan lp-plan-free reveal">
+        <h3>Free</h3>
+        <p className="lp-plan-for">For practising and seeing where you stand.</p>
+        <p className="lp-plan-body">Free rounds in every discipline, the full canvas with autosave and version history, and an AI review of each round, up to {free.reviewsPerMonth} a month, scored on every rubric dimension.</p>
+        <div className="lp-plan-foot">
+          <p className="lp-price">₹0<small>forever</small></p>
+          <StartRoundButton onStart={onStart} className="btn lp-btn lp-btn-on-accent" />
+        </div>
+      </article>
+      <article className="lp-plan lp-plan-plus reveal" style={{ transitionDelay: "80ms" }}>
+        <h3>Plus</h3>
+        <p className="lp-plan-for">For the last weeks before your interviews.</p>
+        <p className="lp-plan-body">Every round, a live AI interviewer you can talk your design through with, feedback on how you communicate, hints, more reviews per round and coaching on every decision.</p>
+        <div className="lp-plan-foot">
+          <p className="lp-price">Plus<small>launching soon</small></p>
+          <Link className="btn lp-btn" to="/plus">Get Plus <ArrowRight size={17} className="nudge" /></Link>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ FAQ
 
 function Faq() {
   return (
-    <section className="wrap section" id="faq">
-      <div className="section-head center reveal">
-        <span className="kicker">FAQ</span>
-        <h2>Questions, <span className="serif-accent">answered.</span></h2>
-      </div>
-      <div className="faq reveal">
-        {FAQS.map(([question, answer], index) => (
-          <details key={question} open={index === 0}>
-            <summary>{question}<Plus size={18} /></summary>
+    <section className="lp-section lp-faq wrap" id="faq" aria-labelledby="lp-faq-title">
+      <h2 id="lp-faq-title" className="lp-h2 reveal">Common questions</h2>
+      <div className="lp-cards">
+        {FAQS.map(({ topic, question, answer }, index) => (
+          <details key={question} name="lp-faq" className="lp-card reveal" open={index === 0} style={{ "--i": index % 4 }}>
+            <summary><span className="lp-card-tab">{topic}</span><span className="lp-card-q">{question}</span></summary>
             <p>{answer}</p>
           </details>
         ))}
@@ -456,32 +410,16 @@ function Faq() {
   );
 }
 
-// Internal links to the most-asked questions and the guides: helps learners find a
-// starting point, and gives search engines a path into every important page.
-const POPULAR_QUESTIONS = ["url-shortener", "chat-system", "news-feed", "rate-limiter", "notification-service", "autocomplete", "file-storage", "ticket-booking", "key-value-store", "recommendation-engine", "realtime-analytics", "offline-first-sync"];
+// ------------------------------------------------------------------ close
 
-function QuestionIndex() {
-  const questions = POPULAR_QUESTIONS.map((id) => prompts.find((prompt) => prompt.id === id)).filter(Boolean);
+function Close({ onStart }) {
   return (
-    <section className="wrap section-tight" id="questions">
-      <div className="qi reveal">
-        <div className="qi-head">
-          <span className="kicker">Practice by question</span>
-          <h2>Common system design interview questions</h2>
-          <p>Each question has its own page with the brief, the scale to design for, the follow-up questions interviewers ask and the mistakes to avoid.</p>
-          <ul className="qi-guides">
-            {["system-design-interview", "system-design-interview-questions", "how-to-practice-system-design"].map(topicMeta).map((guide) => <li key={guide.slug}><Link to={topicPath(guide.slug)}>{guide.short} <ArrowRight size={14} /></Link></li>)}
-            <li><Link to="/learn">System design handbook <ArrowRight size={14} /></Link></li>
-          </ul>
-        </div>
-        <ul className="qi-list">
-          {questions.map((prompt) => (
-            <li key={prompt.id}>
-              <Link to={roundPath(prompt.id)}>{prompt.title}</Link>
-              <LevelMeter level={prompt.difficulty} />
-            </li>
-          ))}
-        </ul>
+    <section className="lp-close" aria-labelledby="lp-close-title">
+      <div className="lp-close-mark" aria-hidden="true"><Layers2 strokeWidth={1.6} /></div>
+      <div className="lp-close-copy">
+        <h2 id="lp-close-title">Rehearse the round</h2>
+        <p>Your next interview is a design review. Find out where your design bends before an interviewer does.</p>
+        <StartRoundButton onStart={onStart} className="btn lp-btn lp-btn-on-accent" />
       </div>
     </section>
   );

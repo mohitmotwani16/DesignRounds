@@ -1,40 +1,42 @@
 export default {
   blocks: [
-    { type: "p", text: "This **backend system design roadmap** is for software engineers (SDE) preparing for the two design rounds most companies run: **high-level design (HLD)**, where you architect a whole system, and **low-level design (LLD)**, where you design the classes inside one component. It covers APIs, databases and concurrency, scaling with replicas, shards and caches, asynchronous processing, and the specific mechanisms behind the classic questions such as typeahead, file storage, payments and job scheduling." },
-    { type: "callout", tone: "tip", text: "Already comfortable with the basics? Start at step 4. If you've never sat a design round, read the [general system design roadmap](/learn/system-design-roadmap) first; this one assumes its vocabulary." },
+    { type: "p", text: "This **backend system design roadmap** is for backend and full-stack engineers (the SDE roles most companies hire for). Backend interviews run two kinds of design round: **high-level design (HLD)**, where you architect a whole system, and **low-level design (LLD)**, where you design the classes inside one component. The [core system design roadmap](/learn/system-design-roadmap) already covers most of the HLD round. This one picks up where it ends: low-level design, the depth interviewers probe in APIs and databases, async work that's safe to retry, and the mechanisms behind the classic questions." },
+    { type: "callout", tone: "tip", text: "New to system design? Do the [core roadmap](/learn/system-design-roadmap) first. Already comfortable with load balancers, caches, queues and sharding? Start here." },
 
     { type: "roadmap", id: "backend" },
 
     { type: "h2", text: "What backend interviews actually test" },
     { type: "table", head: ["Round", "What you produce", "Where it's covered"], rows: [
-      ["High-level design", "Requirements, estimates, an architecture diagram, data model and the trade-offs behind each component", "Steps 1 and 3 to 8"],
-      ["Low-level design", "Classes, interfaces and relationships for one component, plus how they handle change and concurrency", "Step 2: [SOLID](/learn/solid-principles) and [design patterns](/learn/design-patterns)"],
-      ["Deep dives inside HLD", "One part of the design in detail: the database schema, the cache, the queue consumer, the failure path", "Steps 4 to 7"],
+      ["High-level design", "Requirements, estimates, an architecture diagram, data model and the trade-offs behind each component", "The [core roadmap](/learn/system-design-roadmap), then steps 2 to 5 here for the deep dives"],
+      ["Low-level design", "Classes, interfaces and relationships for one component, plus how they handle change and concurrency", "Step 1: [SOLID](/learn/solid-principles) and [design patterns](/learn/design-patterns)"],
+      ["Deep dives inside HLD", "One part of the design in detail: the API contract, the schema and its locks, the queue consumer, the failure path", "Steps 2 to 4"],
     ] },
-    { type: "p", text: "Junior roles lean on a clean architecture and correct storage choices. Mid-level roles add scaling and consistency trade-offs. Senior roles are judged on the deep dives: what breaks first, how you'd know, and what you'd change at ten times the load." },
+    { type: "p", text: "Junior roles lean on a clean architecture and correct storage choices. Mid-level roles add concurrency and consistency trade-offs. Senior roles are judged on the deep dives: what breaks first, how you'd know, and what you'd change at ten times the load." },
 
     { type: "h2", text: "The questions this roadmap prepares you for" },
     { type: "table", head: ["Question", "Topics it leans on"], rows: [
-      ["[Design a URL shortener](/system-design/url-shortener)", "API design, unique IDs, key-value storage, caching"],
+      ["[Design a URL shortener](/system-design/url-shortener)", "API design, idempotent writes, unique IDs, caching"],
       ["[Design a ticketing platform](/system-design/ticket-booking)", "Optimistic vs pessimistic locking, transactions, queues for traffic spikes"],
       ["[Design search autocomplete](/system-design/autocomplete)", "Tries, precomputed top-k, caching at the edge"],
       ["[Design cloud file storage](/system-design/file-storage)", "Chunked and resumable uploads, object storage, metadata databases"],
       ["[Design a distributed task scheduler](/system-design/task-scheduler)", "Delayed jobs, leases, at-least-once execution"],
-      ["[Design a payment platform](/system-design/payment-platform)", "Idempotency, double-entry ledgers, reconciliation"],
-      ["[Design a notification service](/system-design/notification-service)", "Queues, fan-out, retries, delivery guarantees"],
+      ["[Design a payment platform](/system-design/payment-platform)", "Idempotency, double-entry ledgers, sagas, reconciliation"],
+      ["[Design a notification service](/system-design/notification-service)", "The outbox pattern, retries, delivery guarantees"],
     ] },
 
-    { type: "h2", text: "A four-week plan" },
+    { type: "h2", text: "A three-week plan" },
+    { type: "p", text: "This assumes you've finished the core roadmap, or know its topics well enough to explain them without notes." },
     { type: "ol", items: [
-      "**Week 1:** steps 1 to 3. Practise the interview framework on the URL shortener and write one LLD (a parking lot or a rate limiter class design) using the patterns in step 2.",
-      "**Week 2:** steps 4 and 5. For every design you practise, write the main table schema and name the index each query uses.",
-      "**Week 3:** step 6 and the first half of step 7. Make one design asynchronous and walk through what happens when a consumer crashes mid-message.",
-      "**Week 4:** the rest of step 7 and step 8. Three full timed designs, each followed by a written list of what you'd improve.",
+      "**Week 1:** steps 1 and 2. Write one LLD (a parking lot or a rate limiter class design) using the patterns in step 1, then design the API for the URL shortener with pagination, idempotency keys and error responses.",
+      "**Week 2:** steps 3 and 4. For every design you practise, write the main table schema, name the index each query uses, and say what happens when two requests change the same row. Make one flow asynchronous with an outbox and walk through a consumer crashing mid-message.",
+      "**Week 3:** step 5. Three full timed designs from the table above, each followed by a written list of what you'd improve.",
     ] },
 
     { type: "h2", text: "Frequently asked questions" },
+    { type: "h3", text: "How is this different from the core system design roadmap?" },
+    { type: "p", text: "The core roadmap teaches the building blocks every design round uses, whatever your role: networking, storage, caching, queues, distributed systems basics and reliability. This roadmap only covers what backend interviews go deeper on, so no topic appears in both. Do the core first unless you already know it." },
     { type: "h3", text: "Is low-level design asked in every company?" },
-    { type: "p", text: "No. Many product companies in India and some global ones run an LLD or machine-coding round, especially for SDE-1 and SDE-2. Others fold class design into a coding round or skip it. Check the interview loop with your recruiter, and prepare step 2 if it's listed." },
+    { type: "p", text: "No. Many product companies in India and some global ones run an LLD or machine-coding round, especially for SDE-1 and SDE-2. Others fold class design into a coding round or skip it. Check the interview loop with your recruiter, and prepare step 1 if it's listed." },
     { type: "h3", text: "Which language should I use for LLD?" },
     { type: "p", text: "Any object-oriented language you write fluently: Java, C++, Python, C# or TypeScript. Interviewers judge the structure (responsibilities, interfaces, extensibility), not the syntax." },
     { type: "h3", text: "How many design questions should I practise?" },

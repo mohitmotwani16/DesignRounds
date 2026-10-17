@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Design patterns** are proven, named solutions to recurring design problems in object-oriented code, catalogued most famously by the \"Gang of Four\" book. In low-level design interviews, a handful come up again and again: **strategy**, **observer**, **factory**, **builder**, **singleton**, **decorator**, **adapter** and **state**. The skill being tested isn't reciting them but recognising which problem in the requirements a pattern solves, and not using one where it doesn't." },
+    {"type":"diagram","kind":"flow","caption":"The Strategy pattern: checkout depends on one interface, so a new pricing rule is a new class instead of another branch in an if-else chain.","nodes":[{"id":"ctx","label":"Checkout","sub":"needs a price","col":0,"row":1},{"id":"iface","label":"PricingStrategy","sub":"interface","col":1,"row":1,"tone":"accent","shape":"pill"},{"id":"regular","label":"RegularPricing","col":2,"row":0},{"id":"sale","label":"SalePricing","col":2,"row":1},{"id":"member","label":"MemberPricing","col":2,"row":2}],"edges":[{"from":"ctx","to":"iface","label":"price(cart)"},{"from":"regular","to":"iface","dashed":true},{"from":"sale","to":"iface","dashed":true},{"from":"member","to":"iface","dashed":true}]},
 
     { type: "h2", text: "The patterns that matter most" },
     { type: "table", head: ["Pattern", "Problem it solves", "LLD example"], rows: [

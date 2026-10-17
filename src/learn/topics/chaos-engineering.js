@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Chaos engineering** is the practice of deliberately injecting failures into a system, carefully and in a controlled way, to find weaknesses before they cause real outages. Instead of hoping that failover, retries and timeouts work, you run experiments that prove they do: kill an instance, add network latency, fail a dependency, and check whether users notice. It turns resilience from an assumption into evidence." },
+    {"type":"diagram","kind":"flow","caption":"A chaos experiment: state what normal looks like, inject one fault with a small blast radius, and either widen the experiment or fix the weakness it found.","nodes":[{"id":"steady","label":"Steady state","sub":"SLO metrics","col":0,"row":0},{"id":"hyp","label":"Hypothesis","sub":"it should hold","col":1,"row":0},{"id":"inject","label":"Inject a fault","sub":"small blast radius","col":2,"row":0,"tone":"danger"},{"id":"observe","label":"Observe","sub":"dashboards, alerts","col":3,"row":0},{"id":"widen","label":"Widen the radius","sub":"more traffic, more hosts","col":3,"row":1,"tone":"ok"},{"id":"fix","label":"Fix the weakness","sub":"then re-run","col":2,"row":1,"tone":"accent"}],"edges":[{"from":"steady","to":"hyp"},{"from":"hyp","to":"inject"},{"from":"inject","to":"observe"},{"from":"observe","to":"widen","label":"holds"},{"from":"observe","to":"fix","label":"breaks","tone":"danger"},{"from":"fix","to":"hyp","label":"re-run","dashed":true}]},
 
     { type: "h2", text: "The experiment loop" },
     { type: "ol", items: [

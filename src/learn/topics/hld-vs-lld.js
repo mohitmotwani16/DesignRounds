@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**High-level design (HLD)** is the architecture of a whole system: which services exist, how they communicate, where data is stored, and how it scales and fails. **Low-level design (LLD)** is the design of the code inside one component: its classes, interfaces, data structures and how they collaborate. Many companies interview for both as separate rounds, often called the system design round and the machine-coding or object-oriented design round, and they reward different skills." },
+    {"type":"diagram","kind":"flow","caption":"High-level design draws the system as services and data stores; low-level design zooms into one component as classes, interfaces and methods.","nodes":[{"id":"req","label":"Requirements","col":0,"row":1},{"id":"hld","label":"High-level design","sub":"services, data, scale","col":1,"row":0,"tone":"accent"},{"id":"lld","label":"Low-level design","sub":"classes, interfaces","col":1,"row":2,"tone":"queue"},{"id":"sys","label":"System diagram","sub":"boxes and arrows","col":2,"row":0},{"id":"cls","label":"Class diagram","sub":"methods, patterns","col":2,"row":2}],"edges":[{"from":"req","to":"hld"},{"from":"req","to":"lld"},{"from":"hld","to":"sys"},{"from":"lld","to":"cls"},{"from":"sys","to":"cls","label":"zoom into one part","dashed":true}]},
 
     { type: "h2", text: "HLD vs LLD at a glance" },
     { type: "table", head: ["", "High-level design", "Low-level design"], rows: [

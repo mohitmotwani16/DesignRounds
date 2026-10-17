@@ -125,7 +125,7 @@ export function LockedPromptDialog({ prompt, alternative, onClose, onStart }) {
         <div className="lock-note"><Sparkles size={16} /><span>The brief, scale and interviewer notes for this round are for Plus members. Plus is coming soon, with every round, the live AI interviewer, and full coaching.</span></div>
         <div className="lock-actions">
           {alternative && <button className="btn btn-primary btn-lg" onClick={() => { onClose(); onStart(alternative.id); }}>Try “{alternative.title.replace(/^Design (a |an )?/i, "")}” free <ArrowRight size={16} /></button>}
-          <button className="btn btn-ghost btn-lg" onClick={onClose}>Back to the library</button>
+          <button className="btn btn-ghost btn-lg" onClick={() => { onClose(); navigate("/plus"); }}>See what's in Plus</button>
         </div>
       </section>
     </div>

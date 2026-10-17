@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Capacity planning** makes sure a system has enough resources (servers, database throughput, network, storage, third-party quotas) to meet demand with acceptable performance, at a reasonable cost, and before the demand arrives. It combines **forecasting** how load will grow, **measuring** how much load each component can actually handle through **load testing**, and keeping **headroom** for spikes and failures." },
+    {"type":"diagram","kind":"flow","caption":"Capacity planning is a loop: forecast demand, measure what one unit of capacity handles, find the bottleneck, provision with headroom, then watch real traffic and re-forecast.","nodes":[{"id":"forecast","label":"Forecast demand","sub":"growth, events","col":0,"row":0},{"id":"test","label":"Load test","sub":"per-node limit","col":1,"row":0},{"id":"neck","label":"Find the bottleneck","sub":"CPU, DB, network","col":2,"row":0,"tone":"danger"},{"id":"provision","label":"Provision","sub":"with headroom","col":2,"row":1,"tone":"accent"},{"id":"monitor","label":"Monitor","sub":"utilisation, SLOs","col":0,"row":1,"tone":"ok"}],"edges":[{"from":"forecast","to":"test"},{"from":"test","to":"neck"},{"from":"neck","to":"provision"},{"from":"provision","to":"monitor","label":"real traffic"},{"from":"monitor","to":"forecast","label":"re-forecast","dashed":true}]},
 
     { type: "h2", text: "The capacity planning loop" },
     { type: "ol", items: [

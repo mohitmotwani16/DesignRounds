@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Core Web Vitals** are Google's user-centred measures of page experience: **Largest Contentful Paint (LCP)** for loading speed, **Interaction to Next Paint (INP)** for responsiveness, and **Cumulative Layout Shift (CLS)** for visual stability. They're measured on real users' devices and affect search ranking, but more importantly they track what makes a site feel fast. Web performance work is mostly about doing less work, later, on the critical path." },
+    {"type":"diagram","kind":"flow","caption":"Where each Core Web Vital sits in a page load: LCP when the main content paints, CLS for anything that shifts it, INP when the user first interacts.","nodes":[{"id":"req","label":"Request","sub":"server responds","col":0,"row":0},{"id":"render","label":"First render","sub":"CSS, fonts","col":1,"row":0},{"id":"lcp","label":"Largest paint","sub":"LCP ≤ 2.5 s","col":2,"row":0,"tone":"ok"},{"id":"inp","label":"User interacts","sub":"INP ≤ 200 ms","col":3,"row":0,"tone":"accent"},{"id":"cls","label":"Layout shifts","sub":"CLS ≤ 0.1","col":2,"row":1,"tone":"danger"}],"edges":[{"from":"req","to":"render","label":"HTML"},{"from":"render","to":"lcp","label":"hero image"},{"from":"lcp","to":"inp"},{"from":"render","to":"cls","label":"late images, ads","dashed":true}]},
 
     { type: "h2", text: "The three metrics" },
     { type: "table", head: ["Metric", "Measures", "Good", "Poor", "Common causes of poor scores"], rows: [

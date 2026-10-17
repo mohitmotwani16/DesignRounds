@@ -1,7 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "This **system design roadmap** is an ordered path through the concepts that system design interviews and real architecture work rely on. It starts with how interviews are run and how to estimate scale, moves through networking, storage, caching and asynchronous processing, and ends with distributed systems, reliability and full practice designs. Every step links to a free guide in the handbook, and most steps end with a design round that tests what you just read." },
-    { type: "callout", tone: "tip", text: "Tick the box on a topic once you can explain it out loud without notes. Your progress is saved in this browser, and it carries over to the discipline roadmaps that share the same topics." },
+    { type: "callout", tone: "tip", text: "Tick the box on a topic once you can explain it out loud without notes. Your progress is saved in this browser. This is the core roadmap every role starts with; the role roadmaps build on it." },
 
     { type: "roadmap", id: "system-design" },
 
@@ -24,15 +24,15 @@ export default {
     { type: "p", text: "Five weeks at about an hour a day is enough for most mid-level interviews if you already write backend code. If you're newer to the field, spend twice as long on steps 3 to 5; they carry most of the weight in junior and mid-level rounds. Senior candidates should spend more time on steps 7 to 9, where the follow-up questions get harder." },
 
     { type: "h2", text: "Which roadmap should I follow?" },
-    { type: "p", text: "This roadmap is the general path that every software engineer benefits from. If you're interviewing for a specific discipline, follow its roadmap after (or alongside) this one:" },
-    { type: "table", head: ["You're interviewing for", "Follow"], rows: [
-      ["Backend or general SDE roles, including low-level design rounds", "[Backend (SDE) roadmap](/learn/backend-system-design-roadmap)"],
-      ["Data engineering", "[Data engineering roadmap](/learn/data-engineering-roadmap)"],
-      ["Machine learning, ML platform or AI engineering", "[ML system design roadmap](/learn/machine-learning-system-design-roadmap)"],
-      ["Platform, infrastructure, DevOps or SRE", "[Platform and SRE roadmap](/learn/platform-engineering-roadmap)"],
-      ["Storage, databases or infrastructure at the distributed-systems level", "[Distributed systems roadmap](/learn/distributed-systems-roadmap)"],
-      ["Frontend, web or mobile", "[Frontend system design roadmap](/learn/frontend-system-design-roadmap)"],
+    { type: "p", text: "This is the **core roadmap**: every role starts here, and it covers most of what a backend or full-stack design round tests. Each role roadmap builds on it and covers what that role’s interviews go deeper on, with core topics at most as optional review (the distributed systems roadmap is the exception: it goes deeper on the core’s own topics). Finish this one (or skip what you know), then follow yours:" },
+    { type: "table", head: ["You're interviewing for", "After this roadmap, follow"], rows: [
+      ["Backend or full-stack (SDE), including low-level design rounds", "[Backend roadmap](/learn/backend-system-design-roadmap): LLD, API and database depth, real-world building blocks"],
+      ["Data engineering", "[Data engineering roadmap](/learn/data-engineering-roadmap): pipelines, modelling, batch and streaming"],
+      ["Machine learning, ML platform or AI engineering", "[ML system design roadmap](/learn/machine-learning-system-design-roadmap): features, training, serving and evaluation"],
+      ["Platform, infrastructure, DevOps or SRE", "[Platform and SRE roadmap](/learn/platform-engineering-roadmap): delivery, observability and resilience"],
+      ["Storage, databases or infrastructure at the distributed-systems level", "[Distributed systems roadmap](/learn/distributed-systems-roadmap): replication, consensus and transactions in depth"],
     ] },
+    { type: "p", text: "Interviewing for **frontend or mobile**? Client-side design rounds are a different interview, so the [frontend system design roadmap](/learn/frontend-system-design-roadmap) is its own path and doesn't assume this one." },
 
     { type: "h2", text: "Frequently asked questions" },
     { type: "h3", text: "How long does it take to learn system design?" },

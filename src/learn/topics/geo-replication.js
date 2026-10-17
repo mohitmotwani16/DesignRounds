@@ -1,6 +1,7 @@
 export default {
   blocks: [
     { type: "p", text: "**Geo-replication** keeps copies of data in several geographic regions so users get low latency wherever they are, and the system survives the loss of an entire region. The hard part is that light takes tens to hundreds of milliseconds to cross continents, so every design chooses how much consistency to pay for in latency: **single-leader** setups keep one region authoritative, **multi-leader** setups let every region accept writes and resolve conflicts, and **consensus-based** setups make every write wait for a cross-region majority." },
+    {"type":"diagram","kind":"flow","caption":"Single-leader geo-replication: reads stay in the user's region, writes cross to the primary, and each replica lags by the replication delay.","nodes":[{"id":"us","label":"US users","col":0,"row":0},{"id":"eu","label":"EU users","col":0,"row":2},{"id":"east","label":"us-east","sub":"primary","col":1,"row":0,"shape":"db","tone":"store"},{"id":"west","label":"eu-west","sub":"replica","col":1,"row":2,"shape":"db","tone":"cache"},{"id":"south","label":"ap-south","sub":"replica","col":2,"row":1,"shape":"db","tone":"cache"}],"edges":[{"from":"us","to":"east","label":"reads, writes"},{"from":"eu","to":"west","label":"reads"},{"from":"eu","to":"east","label":"writes","dashed":true},{"from":"east","to":"west","label":"async"},{"from":"east","to":"south","label":"async"}]},
 
     { type: "h2", text: "The physics" },
     { type: "table", head: ["Path", "Approximate round trip"], rows: [
