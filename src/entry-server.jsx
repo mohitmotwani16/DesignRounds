@@ -8,7 +8,8 @@ import { AuthProvider } from "./auth.jsx";
 
 export { publicPaths, routeMeta, metaHtml, SITE, TRACK_SEO, roundPath, trackPath } from "./seo.js";
 export { prompts, tracks, getTrack } from "./data/prompts.js";
-export { GUIDES } from "./content/guides.js";
+export { CATEGORIES, TOPICS, topicPath } from "./learn/catalog.js";
+export { preloadAllTopics } from "./learn/topics.js";
 export { aiLimits } from "./data/plans.js";
 
 export function render(url) {

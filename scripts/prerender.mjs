@@ -17,6 +17,8 @@ const dist = path.join(root, "dist");
 const ssrEntry = path.join(root, "dist-ssr", "entry-server.js");
 if (!existsSync(ssrEntry)) throw new Error("Run `vite build --ssr src/entry-server.jsx --outDir dist-ssr` first.");
 const ssr = await import(pathToFileURL(ssrEntry).href);
+// Learn topics are lazy chunks in the app; load them all so every page renders complete.
+await ssr.preloadAllTopics();
 
 const template = readFileSync(path.join(dist, "index.html"), "utf8");
 if (!template.includes('<div id="root"></div>')) throw new Error("dist/index.html has no empty #root to render into.");
@@ -50,7 +52,7 @@ for (const url of paths) {
 write("404.html", page(ssr.renderNotFound(), ssr.metaHtml(ssr.routeMeta("/this-page-does-not-exist"))));
 
 // 4. Sitemap.
-const priority = (url) => (url === "/" ? "1.0" : url === "/library" || url.startsWith("/guide/") ? "0.9" : url.startsWith("/library/") ? "0.8" : "0.7");
+const priority = (url) => (url === "/" ? "1.0" : url === "/library" || url.startsWith("/learn") ? "0.9" : url.startsWith("/library/") ? "0.8" : "0.7");
 write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${paths.map((url) => `  <url><loc>${ssr.SITE.url}${url === "/" ? "/" : url}</loc><priority>${priority(url)}</priority></url>`).join("\n")}
@@ -84,9 +86,12 @@ write("llms.txt", `# DesignRounds
 - Pricing: Free plan with ${free} practice rounds and ${ssr.aiLimits.free.reviewsPerRound} AI review per round (up to ${ssr.aiLimits.free.reviewsPerMonth} a month), no credit card. Plus (coming soon) adds every round, a live AI interviewer and full coaching.
 - Sign-in: email one-time code; no password.
 
-## Guides
+## System design handbook
 
-${ssr.GUIDES.map((guide) => `- [${guide.title}](${ssr.SITE.url}${guide.path}): ${guide.description}`).join("\n")}
+${ssr.CATEGORIES.map((category) => `### ${category.title}\n\n${category.topics.map((topic) => `- [${topic.title}](${ssr.SITE.url}${ssr.topicPath(topic.slug)}): ${topic.description}`).join("\n")}`).join("\n\n")}
+
+## More
+
 - [About DesignRounds](${ssr.SITE.url}/about): what it is, who it's for, how it works and pricing.
 
 ## Practice rounds

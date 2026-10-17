@@ -3,7 +3,7 @@ import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { findPrompt, prompts, tracks } from "./data/prompts.js";
-import { guideBySlug } from "./content/guides.js";
+import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
 import { Link, navigate, safeNext, useRoute } from "./router.js";
@@ -11,7 +11,7 @@ import { applyMeta, routeMeta } from "./seo.js";
 import AboutPage from "./pages/About.jsx";
 import PrivacyPage from "./pages/Privacy.jsx";
 import TermsPage from "./pages/Terms.jsx";
-import GuidePage from "./pages/Guide.jsx";
+import { LearnHubPage, LearnTopicPage } from "./pages/Learn.jsx";
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
 import OnboardingPage from "./pages/Onboarding.jsx";
@@ -102,8 +102,12 @@ function Page({ path, onStart }) {
   const round = /^\/system-design\/([a-z0-9-]+)$/.exec(path)?.[1];
   if (round && findPrompt(round)) return <RoundPage key={round} id={round} onStart={onStart} />;
 
+  if (path === LEARN_PATH) return <LearnHubPage />;
+  const topic = /^\/learn\/([a-z0-9-]+)$/.exec(path)?.[1];
+  if (topic && topicMeta(topic)) return <LearnTopicPage key={topic} slug={topic} />;
+  // The old guide URLs moved to /learn (the host also redirects them permanently).
   const guide = /^\/guide\/([a-z0-9-]+)$/.exec(path)?.[1];
-  if (guide && guideBySlug(guide)) return <GuidePage key={guide} guide={guideBySlug(guide)} />;
+  if (guide && topicMeta(guide)) return <Redirect to={`${LEARN_PATH}/${guide}`} />;
 
   return <NotFound />;
 }

@@ -8,7 +8,7 @@ import { aiLimits } from "../data/plans.js";
 import { LevelMeter, RoundCard, SiteFooter, useReveal } from "../components/site.jsx";
 import { trackIcon } from "../components/ui.jsx";
 import { Link, useRoute } from "../router.js";
-import { GUIDES } from "../content/guides.js";
+import { topicMeta, topicPath } from "../learn/catalog.js";
 import { roundPath, trackPath } from "../seo.js";
 
 // "Design a URL shortener" -> "URL shortener"
@@ -437,7 +437,8 @@ function QuestionIndex() {
           <h2>Common system design interview questions</h2>
           <p>Each question has its own page with the brief, the scale to design for, the follow-up questions interviewers ask and the mistakes to avoid.</p>
           <ul className="qi-guides">
-            {GUIDES.map((guide) => <li key={guide.slug}><Link to={guide.path}>{guide.short} <ArrowRight size={14} /></Link></li>)}
+            {["system-design-interview", "system-design-interview-questions", "how-to-practice-system-design"].map(topicMeta).map((guide) => <li key={guide.slug}><Link to={topicPath(guide.slug)}>{guide.short} <ArrowRight size={14} /></Link></li>)}
+            <li><Link to="/learn">System design handbook <ArrowRight size={14} /></Link></li>
           </ul>
         </div>
         <ul className="qi-list">

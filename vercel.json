@@ -161,5 +161,17 @@
     }
   ],
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/guide/:slug",
+      "destination": "/learn/:slug",
+      "permanent": true
+    },
+    {
+      "source": "/guides",
+      "destination": "/learn",
+      "permanent": true
+    }
+  ]
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, Crown, Layers2, LockKeyhole, LogOut, Menu, X } from "lucide-react";
 import { getTrack, tracks } from "../data/prompts.js";
-import { GUIDES } from "../content/guides.js";
+import { CATEGORIES, LEARN_PATH, topicPath } from "../learn/catalog.js";
 import { useAuth } from "../auth.jsx";
 import { Link, navigate, useRoute } from "../router.js";
 import { roundPath, trackPath } from "../seo.js";
@@ -52,7 +52,7 @@ export function SiteNav() {
   const links = (
     <>
       <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
-      <Link className="nav-link-btn" to="/guide/system-design-interview" onClick={close} aria-current={current(path.startsWith("/guide/"))}>Guides</Link>
+      <Link className="nav-link-btn" to={LEARN_PATH} onClick={close} aria-current={current(path === LEARN_PATH || path.startsWith(`${LEARN_PATH}/`))}>Learn</Link>
       {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>My rounds</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
     </>
@@ -122,9 +122,11 @@ export function SiteFooter() {
             </ul>
           </div>
           <div>
-            <h2>Guides</h2>
+            <h2>Learn</h2>
             <ul>
-              {GUIDES.map((guide) => <li key={guide.slug}><Link to={guide.path}>{guide.short}</Link></li>)}
+              <li><Link to={LEARN_PATH}>System design handbook</Link></li>
+              {CATEGORIES.slice(0, 6).map((category) => <li key={category.id}><Link to={topicPath(category.topics[0].slug)}>{category.title}</Link></li>)}
+              <li><Link to={topicPath("system-design-interview")}>Interview preparation</Link></li>
               <li><Link to="/signin">Sign in</Link></li>
             </ul>
           </div>

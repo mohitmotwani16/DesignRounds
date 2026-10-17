@@ -45,7 +45,7 @@ export default function AboutPage() {
             <p>The URL shortener is a classic first system design question and takes about 35 minutes.</p>
             <div className="hero-ctas">
               <Link className="btn btn-primary btn-lg" to="/system-design/url-shortener">Start a free round <ArrowRight size={16} className="nudge" /></Link>
-              <Link className="btn btn-ghost btn-lg" to="/guide/system-design-interview">Read the preparation guide</Link>
+              <Link className="btn btn-ghost btn-lg" to="/learn/system-design-interview">Read the preparation guide</Link>
             </div>
           </aside>
         </article>
