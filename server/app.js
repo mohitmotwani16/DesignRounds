@@ -10,6 +10,7 @@ import { identityRouter, loadUser } from "./modules/identity.js";
 import { practiceRouter } from "./modules/practice.js";
 import { reviewsRouter } from "./modules/reviews.js";
 import { interviewsRouter } from "./modules/interviews.js";
+import { articlesRouter } from "./modules/articles.js";
 import { maintenanceRouter } from "./modules/maintenance.js";
 import { catalogRouter } from "./modules/catalog.js";
 import { roundsRouter } from "./modules/rounds.js";
@@ -64,6 +65,8 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use(loadUser);
   // Before the routers that require sign-in: round content answers visitors too.
   api.use("/v1", roundsRouter);
+  // Before the routers that require sign-in for everything: published articles are public.
+  api.use("/v1", articlesRouter);
   api.use("/v1", identityRouter);
   api.use("/v1", practiceRouter);
   api.use("/v1", reviewsRouter);

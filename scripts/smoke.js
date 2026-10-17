@@ -9,11 +9,11 @@ import os from "node:os";
 import path from "node:path";
 
 const dataDir = await mkdtemp(path.join(os.tmpdir(), "designrounds-smoke-"));
-Object.assign(process.env, { PGLITE_DIR: dataDir, AI_PROVIDER: "fake", CRON_SECRET: "smoke-secret", DEV_TOOLS: "true" });
+Object.assign(process.env, { PGLITE_DIR: dataDir, AI_PROVIDER: "fake", CRON_SECRET: "smoke-secret", DEV_TOOLS: "true", ADMIN_EMAILS: "admin@example.com" });
 for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", "NODE_ENV", "VERCEL", "VERCEL_ENV"]) delete process.env[key];
 
 const { createApp } = await import("../server/app.js");
-const { close } = await import("../server/db.js");
+const { close, query } = await import("../server/db.js");
 const { prompts } = await import("../src/data/prompts.js");
 
 const app = await createApp({ serveFrontend: false });
@@ -195,6 +195,78 @@ try {
     const run = await call("GET", "/api/v1/internal/maintenance", undefined, { Authorization: "Bearer smoke-secret" });
     assert.equal(run.status, 200);
     assert.equal(typeof run.body.deleted.rateLimits, "number");
+  });
+
+  await step("community articles: write, review, request changes, publish", async () => {
+    const signInAs = async (email) => {
+      cookie = "";
+      const { body } = await call("POST", "/api/v1/auth/request-code", { email });
+      assert.equal((await call("POST", "/api/v1/auth/verify-code", { email, code: body.devCode })).status, 200);
+      return cookie;
+    };
+    const authorCookie = await signInAs("writer@example.com");
+    await call("PATCH", "/api/v1/me", { displayName: "Asha Writer" });
+
+    // Drafts can be incomplete; the handbook's own URLs are reserved.
+    assert.equal((await call("POST", "/api/v1/articles", { title: "Caching", category: "caching", slug: "caching" })).status, 409, "handbook slugs are reserved");
+    const created = await call("POST", "/api/v1/articles", { title: "Designing a feature flag service", category: "architecture", slug: "feature-flag-service" });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.article.id;
+    const notReady = await call("POST", `/api/v1/articles/${id}/submit`, {});
+    assert.equal(notReady.status, 422);
+    assert.ok(notReady.body.error.problems.length >= 3, "submitting an incomplete draft lists what's missing");
+
+    const body = [
+      "## Why feature flags", "Flags separate deploying code from releasing a feature. ".repeat(8),
+      "## Evaluating flags fast", "Clients cache rules and evaluate locally so a flag check costs microseconds. ".repeat(6),
+      "- rules are versioned", "- updates stream to clients",
+      "| Option | Latency |", "|---|---|", "| Local evaluation | microseconds |", "| Remote call | milliseconds |",
+      "Read more about [caching](/learn/caching).",
+    ].join("\n\n");
+    const saved = await call("PATCH", `/api/v1/articles/${id}`, { shortTitle: "Feature flag service", description: "How to design a feature flag service: rule storage, fast local evaluation, streaming updates and safe rollouts.", level: "Intermediate", body });
+    assert.equal(saved.status, 200);
+    const submitted = await call("POST", `/api/v1/articles/${id}/submit`, {});
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
+    assert.equal(submitted.body.article.status, "in_review");
+    assert.equal((await call("PATCH", `/api/v1/articles/${id}`, { title: "Sneaky edit during review" })).status, 409, "no edits while in review");
+    assert.equal((await call("GET", "/api/v1/admin/articles")).status, 403, "authors aren't admins");
+
+    // ADMIN_EMAILS makes admin@example.com an admin.
+    const adminCookie = await signInAs("admin@example.com");
+    assert.equal((await call("GET", "/api/v1/session")).body.user.isAdmin, true);
+    const queue = await call("GET", "/api/v1/admin/articles?status=in_review");
+    assert.ok(queue.body.articles.some((article) => article.id === id), "the submission is in the review queue");
+    assert.equal((await call("POST", `/api/v1/admin/articles/${id}/decision`, { action: "request_changes" })).status, 400, "feedback is required");
+    const changes = await call("POST", `/api/v1/admin/articles/${id}/decision`, { action: "request_changes", message: "Add a section on rollout safety." });
+    assert.equal(changes.body.article.status, "changes_requested");
+
+    cookie = authorCookie;
+    const thread = await call("GET", `/api/v1/articles/${id}`);
+    assert.ok(thread.body.messages.some((message) => message.role === "admin" && message.body.includes("rollout safety")), "the author sees the feedback");
+    assert.equal(thread.body.canEdit, true);
+    await call("PATCH", `/api/v1/articles/${id}`, { body: `${body}\n\n## Rolling out safely\n\nStart with internal users, then 1%, then everyone, watching error rates.` });
+    assert.equal((await call("POST", `/api/v1/articles/${id}/messages`, { body: "Added the rollout section, thanks!" })).status, 201);
+    assert.equal((await call("POST", `/api/v1/articles/${id}/submit`, {})).body.article.status, "in_review");
+
+    cookie = adminCookie;
+    const published = await call("POST", `/api/v1/admin/articles/${id}/decision`, { action: "publish" });
+    assert.equal(published.status, 200, JSON.stringify(published.body));
+    assert.equal(published.body.article.status, "published");
+
+    cookie = "";
+    const list = await call("GET", "/api/v1/articles/published");
+    assert.ok(list.body.articles.some((article) => article.slug === "feature-flag-service" && article.authorName === "Asha Writer"), "published articles are public");
+    const page = await call("GET", "/api/v1/articles/published/feature-flag-service");
+    assert.match(page.body.article.body, /Rolling out safely/);
+
+    // Admins can grant and revoke admin access.
+    cookie = adminCookie;
+    const writer = await query("select id from users where email = 'writer@example.com'");
+    assert.equal((await call("POST", "/api/v1/admin/admins", { email: "writer@example.com" })).status, 201);
+    assert.ok((await call("GET", "/api/v1/admin/admins")).body.admins.some((admin) => admin.email === "writer@example.com"));
+    assert.equal((await call("DELETE", `/api/v1/admin/admins/${writer[0].id}`)).status, 200);
+    assert.equal((await call("POST", "/api/v1/admin/admins", { email: "nobody@example.com" })).status, 404);
+    cookie = authorCookie;
   });
 
   await step("sign out ends the session", async () => {

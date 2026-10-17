@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronRight, Clock3, LoaderCircle, Menu, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronRight, Clock3, LoaderCircle, Menu, PenLine, Search, Users, X } from "lucide-react";
 import { getTrack, prompts, tracks } from "../data/prompts.js";
 import { CATEGORIES, LEARN_PATH, LEARN_UPDATED, START_HERE, TOPICS, categoryById, neighbours, topicMeta, topicPath } from "../learn/catalog.js";
 import { Diagram } from "../learn/Diagram.jsx";
 import { useTopic } from "../learn/topics.js";
+import { communityArticle, communityInCategory, loadCommunityArticle, loadedCommunityArticle, useCommunityArticles } from "../learn/community.js";
+import { markdownToBlocks } from "../learn/markdown.js";
 import { Rich, plainText } from "../components/rich.jsx";
 import { LevelMeter, SiteFooter } from "../components/site.jsx";
 import { Link } from "../router.js";
@@ -13,14 +15,15 @@ const LEVEL_ORDER = ["Beginner", "Intermediate", "Advanced"];
 const formatDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 export const headingId = (text) => plainText(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-function LevelTag({ level }) {
+export function LevelTag({ level }) {
   return <span className={`learn-level learn-level-${level.toLowerCase()}`}>{level}</span>;
 }
 
 // ------------------------------------------------------------------ sidebar
 
-function LearnSidebar({ currentSlug }) {
-  const currentCategory = currentSlug ? topicMeta(currentSlug)?.category : null;
+export function LearnSidebar({ currentSlug }) {
+  useCommunityArticles();
+  const currentCategory = currentSlug ? (topicMeta(currentSlug) ?? communityArticle(currentSlug))?.category : null;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(() => new Set(currentCategory ? [currentCategory] : CATEGORIES.map((category) => category.id)));
   const [drawer, setDrawer] = useState(false);
@@ -44,9 +47,11 @@ function LearnSidebar({ currentSlug }) {
           <Search size={14} />
           <input type="search" placeholder={`Search ${TOPICS.length} topics`} value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search topics" />
         </label>
+        <Link className="learn-write-link" to="/learn/write"><PenLine size={14} /> Write an article</Link>
         <nav>
           {CATEGORIES.map((category) => {
-            const topics = category.topics.filter(matches);
+            const community = communityInCategory(category.id).map((article) => ({ slug: article.slug, title: article.title, short: article.shortTitle, description: article.description, community: true }));
+            const topics = [...category.topics, ...community].filter(matches);
             if (!topics.length) return null;
             const expanded = Boolean(needle) || open.has(category.id);
             return (
@@ -56,12 +61,12 @@ function LearnSidebar({ currentSlug }) {
                   aria-expanded={expanded}
                   onClick={() => setOpen((previous) => { const next = new Set(previous); if (next.has(category.id)) next.delete(category.id); else next.add(category.id); return next; })}
                 >
-                  <ChevronDown size={14} className={expanded ? "" : "collapsed"} /> {category.title} <span>{category.topics.length}</span>
+                  <ChevronDown size={14} className={expanded ? "" : "collapsed"} /> {category.title} <span>{category.topics.length + community.length}</span>
                 </button>
                 <ul hidden={!expanded}>
                   {topics.map((topic) => (
                     <li key={topic.slug}>
-                      <Link to={topicPath(topic.slug)} aria-current={topic.slug === currentSlug ? "page" : undefined}>{topic.short}</Link>
+                      <Link to={topicPath(topic.slug)} aria-current={topic.slug === currentSlug ? "page" : undefined}>{topic.short}{topic.community && <Users size={11} className="learn-community-mark" aria-label="Community article" />}</Link>
                     </li>
                   ))}
                 </ul>
@@ -77,7 +82,7 @@ function LearnSidebar({ currentSlug }) {
 
 // ------------------------------------------------------------------ on this page
 
-function OnThisPage({ headings }) {
+export function OnThisPage({ headings }) {
   const [active, setActive] = useState(headings[0]?.id);
   useEffect(() => {
     const elements = headings.map((heading) => document.getElementById(heading.id)).filter(Boolean);
@@ -100,21 +105,21 @@ function OnThisPage({ headings }) {
 
 // ------------------------------------------------------------------ blocks
 
-function Block({ block }) {
+export function Block({ block }) {
   switch (block.type) {
     case "h2": return <h2 id={headingId(block.text)}>{block.text}</h2>;
     case "h3": return <h3>{block.text}</h3>;
     case "p": return <p><Rich text={block.text} /></p>;
-    case "ul": return <ul>{block.items.map((item) => <li key={item}><Rich text={item} /></li>)}</ul>;
-    case "ol": return <ol>{block.items.map((item) => <li key={item}><Rich text={item} /></li>)}</ol>;
+    case "ul": return <ul>{block.items.map((item, index) => <li key={index}><Rich text={item} /></li>)}</ul>;
+    case "ol": return <ol>{block.items.map((item, index) => <li key={index}><Rich text={item} /></li>)}</ol>;
     case "callout": return <p className={`callout ${block.tone ? `callout-${block.tone}` : ""}`}><Rich text={block.text} /></p>;
     case "code": return <pre className="learn-code"><code>{block.code.trim()}</code></pre>;
     case "diagram": return <Diagram spec={block} />;
     case "table": return (
       <div className="table-wrap">
         <table>
-          <thead><tr>{block.head.map((cell) => <th key={cell} scope="col">{cell}</th>)}</tr></thead>
-          <tbody>{block.rows.map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={index}><Rich text={cell} /></td>)}</tr>)}</tbody>
+          <thead><tr>{block.head.map((cell, cellIndex) => <th key={cellIndex} scope="col">{cell}</th>)}</tr></thead>
+          <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, index) => <td key={index}><Rich text={cell} /></td>)}</tr>)}</tbody>
         </table>
       </div>
     );
@@ -262,6 +267,11 @@ export function LearnTopicPage({ slug }) {
                 {previous ? <Link to={topicPath(previous.slug)}><span><ArrowLeft size={13} /> Previous</span>{previous.short}</Link> : <span />}
                 {next ? <Link className="next" to={topicPath(next.slug)}><span>Next <ArrowRight size={13} /></span>{next.short}</Link> : <span />}
               </nav>
+
+              <aside className="learn-write-cta compact">
+                <p><PenLine size={15} /> Know a topic well? Write an article for the handbook and get credited for it.</p>
+                <Link to="/learn/write">Submit your own article <ArrowRight size={14} /></Link>
+              </aside>
             </>
           )}
         </article>
@@ -275,6 +285,7 @@ export function LearnTopicPage({ slug }) {
 // ------------------------------------------------------------------ hub
 
 export function LearnHubPage() {
+  useCommunityArticles();
   const start = START_HERE.map(topicMeta).filter(Boolean);
   return (
     <main className="learn-page">
@@ -312,10 +323,24 @@ export function LearnHubPage() {
                       <LevelTag level={topic.level} />
                     </li>
                   ))}
+                  {communityInCategory(category.id).map((article) => (
+                    <li key={article.slug}>
+                      <Link to={topicPath(article.slug)}>{article.title} <Users size={12} className="learn-community-mark" aria-label="Community article" /></Link>
+                      <LevelTag level={article.level} />
+                    </li>
+                  ))}
                 </ul>
               </section>
             ))}
           </div>
+
+          <aside className="learn-write-cta">
+            <div>
+              <h2><PenLine size={18} /> Know something worth sharing?</h2>
+              <p>Write an article for the handbook. Draft it with a live preview, submit it for review, and our editors will help you polish it before it goes live with your name on it.</p>
+            </div>
+            <Link className="btn btn-ghost btn-lg" to="/learn/write">Write an article <ArrowRight size={16} /></Link>
+          </aside>
 
           <aside className="guide-cta">
             <h2>Reading is half of it</h2>
@@ -325,6 +350,82 @@ export function LearnHubPage() {
             </div>
           </aside>
         </div>
+      </div>
+      <SiteFooter />
+    </main>
+  );
+}
+
+// ------------------------------------------------------------------ community articles
+
+// The body of a community article: blocks from its Markdown. Shared by the published
+// page and the editor's preview, so authors see exactly what will be published.
+export function ArticleBody({ markdown }) {
+  const blocks = useMemo(() => markdownToBlocks(markdown), [markdown]);
+  return blocks.map((block, index) => <Block key={index} block={block} />);
+}
+
+export const articleHeadings = (markdown) => markdownToBlocks(markdown).filter((block) => block.type === "h2").map((block) => ({ id: headingId(block.text), text: block.text }));
+
+// Header shared by published community articles and the editor's preview.
+export function CommunityArticleHeader({ article, category }) {
+  const minutes = Math.max(3, Math.round(String(article.body || "").split(/\s+/).length / 220));
+  return (
+    <>
+      <nav className="crumbs" aria-label="Breadcrumb">
+        <Link to="/">Home</Link><ChevronRight size={13} />
+        <Link to={LEARN_PATH}>Learn</Link><ChevronRight size={13} />
+        {category && <><Link to={`${LEARN_PATH}#${category.id}`}>{category.title}</Link><ChevronRight size={13} /></>}
+        <span aria-current="page">{article.shortTitle || article.title}</span>
+      </nav>
+      <header>
+        <span className="kicker">{category?.title ?? "Community"}</span>
+        <h1>{article.title || "Untitled article"}</h1>
+        {article.description && <p className="learn-lede">{article.description}</p>}
+        <p className="guide-meta">
+          {article.level && <LevelTag level={article.level} />}
+          <span className="learn-byline"><Users size={13} /> Community article{article.authorName ? ` by ${article.authorName}` : ""}</span>
+          <Clock3 size={14} /> {minutes} min read
+        </p>
+      </header>
+    </>
+  );
+}
+
+export function CommunityArticlePage({ slug }) {
+  useCommunityArticles();
+  const [article, setArticle] = useState(() => loadedCommunityArticle(slug));
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (loadedCommunityArticle(slug)) { setArticle(loadedCommunityArticle(slug)); return undefined; }
+    loadCommunityArticle(slug).then((loaded) => { if (cancelled) return; if (loaded) setArticle(loaded); else setMissing(true); });
+    return () => { cancelled = true; };
+  }, [slug]);
+  const headings = useMemo(() => (article ? articleHeadings(article.body) : []), [article]);
+  const category = article ? categoryById(article.category) : null;
+
+  return (
+    <main className="learn-page">
+      <div className="learn-layout">
+        <LearnSidebar currentSlug={slug} />
+        <article className="prose learn-article">
+          {missing ? (
+            <header><h1>Article not found</h1><p className="learn-lede">This article doesn't exist or isn't published. <Link to={LEARN_PATH}>Back to the handbook</Link>.</p></header>
+          ) : !article ? (
+            <p className="learn-loading"><LoaderCircle size={16} className="spin" /> Loading…</p>
+          ) : (
+            <>
+              <CommunityArticleHeader article={article} category={category} />
+              <ArticleBody markdown={article.body} />
+              <aside className="learn-write-cta compact">
+                <p><PenLine size={15} /> Written by a member of the DesignRounds community and reviewed by our editors.</p>
+                <Link to="/learn/write">Write your own article <ArrowRight size={14} /></Link>
+              </aside>
+            </>
+          )}
+        </article>
+        <OnThisPage headings={headings} />
       </div>
       <SiteFooter />
     </main>

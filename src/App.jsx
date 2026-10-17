@@ -11,7 +11,7 @@ import { applyMeta, routeMeta } from "./seo.js";
 import AboutPage from "./pages/About.jsx";
 import PrivacyPage from "./pages/Privacy.jsx";
 import TermsPage from "./pages/Terms.jsx";
-import { LearnHubPage, LearnTopicPage } from "./pages/Learn.jsx";
+import { CommunityArticlePage, LearnHubPage, LearnTopicPage } from "./pages/Learn.jsx";
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
 import OnboardingPage from "./pages/Onboarding.jsx";
@@ -20,6 +20,8 @@ import RoundPage from "./pages/RoundPage.jsx";
 import SignInPage from "./pages/SignIn.jsx";
 
 const WorkspaceRoute = lazy(() => import("./workspace/Workspace.jsx"));
+const LearnWritePage = lazy(() => import("./pages/LearnWrite.jsx"));
+const AdminPage = lazy(() => import("./pages/Admin.jsx"));
 const loadingScreen = <FullPageMessage title="Loading…"><LoaderCircle size={18} className="spin" /></FullPageMessage>;
 
 // `authStatus` lets the prerenderer render public pages as a signed-out visitor.
@@ -59,7 +61,8 @@ function Routes() {
     return <SignInPage next={params.get("next")} error={params.get("error")} />;
   }
 
-  const needsAuth = path === "/welcome" || path === "/profile" || path.startsWith("/workspace/") || path.startsWith("/start/");
+  const needsAuth = path === "/welcome" || path === "/profile" || path.startsWith("/workspace/") || path.startsWith("/start/")
+    || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/");
   if (needsAuth) {
     if (auth.status === "loading") return loadingScreen;
     if (auth.status !== "signed-in") {
@@ -103,8 +106,18 @@ function Page({ path, onStart }) {
   if (round && findPrompt(round)) return <RoundPage key={round} id={round} onStart={onStart} />;
 
   if (path === LEARN_PATH) return <LearnHubPage />;
+  // Writing and reviewing community articles (signed in; checked above).
+  if (path === "/learn/write") return <Suspense fallback={loadingScreen}><LearnWritePage /></Suspense>;
+  const draft = /^\/learn\/write\/([a-z0-9-]+)$/.exec(path)?.[1];
+  if (draft) return <Suspense fallback={loadingScreen}><LearnWritePage key={draft} id={draft} /></Suspense>;
+  if (path === "/admin") return <Suspense fallback={loadingScreen}><AdminPage /></Suspense>;
+  const reviewed = /^\/admin\/articles\/([0-9a-f-]+)$/.exec(path)?.[1];
+  if (reviewed) return <Suspense fallback={loadingScreen}><AdminPage key={reviewed} articleId={reviewed} /></Suspense>;
+
   const topic = /^\/learn\/([a-z0-9-]+)$/.exec(path)?.[1];
   if (topic && topicMeta(topic)) return <LearnTopicPage key={topic} slug={topic} />;
+  // Anything else under /learn is a community article (or "not found" if it isn't published).
+  if (topic) return <CommunityArticlePage key={topic} slug={topic} />;
   // The old guide URLs moved to /learn (the host also redirects them permanently).
   const guide = /^\/guide\/([a-z0-9-]+)$/.exec(path)?.[1];
   if (guide && topicMeta(guide)) return <Redirect to={`${LEARN_PATH}/${guide}`} />;

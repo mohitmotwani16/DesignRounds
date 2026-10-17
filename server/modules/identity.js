@@ -99,9 +99,22 @@ function signInErrorRedirect(path, code) {
   return `${url.pathname}${url.search}`;
 }
 
+// Admins review community articles and manage other admins. The first admins come
+// from ADMIN_EMAILS (comma-separated); after that, admins grant the role in the app.
+const bootstrapAdmins = new Set((process.env.ADMIN_EMAILS || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+export const isBootstrapAdmin = (email) => bootstrapAdmins.has(email);
+export const isAdmin = (user) => Boolean(user) && (user.role === "admin" || bootstrapAdmins.has(user.email));
+
+export function requireAdmin(req, _res, next) {
+  if (!req.user) return next(new HttpError(401, "AUTH_REQUIRED", "Sign in to continue."));
+  if (!isAdmin(req.user)) return next(new HttpError(403, "ADMIN_REQUIRED", "This page is for DesignRounds admins."));
+  next();
+}
+
 export function toPublicUser(row) {
   return {
     id: row.id,
+    isAdmin: isAdmin(row),
     email: row.email,
     displayName: row.display_name,
     headline: row.headline,
