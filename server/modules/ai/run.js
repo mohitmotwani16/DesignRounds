@@ -1,10 +1,13 @@
 import { query } from "../../db.js";
 import { aiConfig } from "./config.js";
 import { AiError } from "./errors.js";
-import { complete } from "./providers.js";
+import { createMessageExtractor } from "./message-stream.js";
+import { complete, streamComplete } from "./providers.js";
 import { describeIssues, toJsonSchema } from "./schema.js";
 
 const FAKE_LATENCY_MS = 1200;
+const FAKE_CHUNK_CHARS = 18;
+const FAKE_CHUNK_MS = 35;
 const jsonSchemas = new WeakMap();
 
 function jsonSchemaFor(task) {
@@ -82,6 +85,89 @@ export async function runTask(task, input, { userId, sessionId, meter = true } =
     console.warn(`[ai] ${task.name} invalid output (round ${round}): ${parsed.problem}`);
     messages.push(
       { role: "assistant", content: completion.text.slice(0, 30_000) },
+      { role: "user", content: `Your reply could not be used because ${parsed.problem}. Reply again with only the corrected JSON object that matches the schema.` }
+    );
+  }
+  throw new AiError("INVALID_OUTPUT", "The model did not return valid output.");
+}
+
+async function emitInChunks(text, onDelta) {
+  if (!text || !onDelta) return;
+  for (let index = 0; index < text.length; index += FAKE_CHUNK_CHARS) {
+    onDelta(text.slice(index, index + FAKE_CHUNK_CHARS));
+    if (index + FAKE_CHUNK_CHARS < text.length) await new Promise((resolve) => setTimeout(resolve, FAKE_CHUNK_MS));
+  }
+}
+
+// Like `runTask`, but calls `onDelta` with each newly visible piece of the top-level
+// `message` string while the model is still writing. `onReset` runs before a repair
+// attempt so a partial reply can be replaced. Other fields, including private notes,
+// are never passed to `onDelta`.
+export async function runTaskStream(task, input, { userId, sessionId, meter = true, onDelta, onReset } = {}) {
+  const settings = aiConfig.tasks[task.name];
+  const meta = { task: task.name, userId, sessionId, meter };
+
+  if (aiConfig.provider === "fake") {
+    const started = Date.now();
+    const data = task.output.parse(task.fake(input));
+    await emitInChunks(data.message ?? "", onDelta);
+    await recordUsage({ ...meta, model: "fake", outcome: "ok", latencyMs: Date.now() - started });
+    return { data, model: "fake" };
+  }
+  if (!aiConfig.enabled) throw new AiError("DISABLED", "No AI provider is configured.");
+
+  const messages = [
+    { role: "system", content: task.system },
+    { role: "user", content: task.buildUser(input) },
+  ];
+  let streamed = false;
+  const forward = (text) => {
+    if (!text) return;
+    streamed = true;
+    onDelta?.(text);
+  };
+
+  for (let round = 1; round <= 2; round += 1) {
+    if (round > 1 && streamed) onReset?.();
+    streamed = false;
+    const started = Date.now();
+    const extractor = createMessageExtractor();
+    let text = "";
+    let finishReason = null;
+    let model = aiConfig.model;
+    let attempts = 1;
+    let inputTokens = null;
+    let outputTokens = null;
+    try {
+      for await (const event of streamComplete({ messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
+        if (event.type === "delta") {
+          text += event.text;
+          forward(extractor.push(event.text));
+        } else {
+          finishReason = event.finishReason;
+          model = event.model;
+          attempts = event.attempts;
+          inputTokens = event.inputTokens;
+          outputTokens = event.outputTokens;
+        }
+      }
+    } catch (error) {
+      await recordUsage({ ...meta, model: aiConfig.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
+      if (error.detail) console.error(`[ai] ${task.name} ${error.code}:`, JSON.stringify(error.detail));
+      throw error;
+    }
+    const usage = { model, attempts, inputTokens, outputTokens, latencyMs: Date.now() - started };
+    const parsed = finishReason === "length"
+      ? { ok: false, problem: "the reply was cut off before the JSON was complete; be more concise" }
+      : parseOutput(task, text);
+    if (parsed.ok) {
+      await recordUsage({ ...meta, ...usage, outcome: "ok" });
+      return { data: parsed.data, model };
+    }
+    await recordUsage({ ...meta, ...usage, outcome: "invalid_output" });
+    console.warn(`[ai] ${task.name} invalid output (round ${round}): ${parsed.problem}`);
+    messages.push(
+      { role: "assistant", content: text.slice(0, 30_000) },
       { role: "user", content: `Your reply could not be used because ${parsed.problem}. Reply again with only the corrected JSON object that matches the schema.` }
     );
   }

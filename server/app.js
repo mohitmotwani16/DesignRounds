@@ -78,6 +78,11 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   if (devToolsEnabled) api.use("/v1", devRouter);
   api.use((_req, _res, next) => next(new HttpError(404, "NOT_FOUND", "No such endpoint.")));
   api.use((error, req, res, _next) => {
+    if (res.headersSent) {
+      console.error(`[api] ${req.method} ${req.originalUrl} failed after the response started:`, error);
+      if (!res.writableEnded) res.end();
+      return;
+    }
     if (error.type === "entity.too.large") {
       const message = req.path.endsWith("/interview/audio") ? "That recording is too large to send." : "That design is too large to save.";
       return res.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message } });

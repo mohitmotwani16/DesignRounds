@@ -43,7 +43,7 @@ function LockedInterviewer({ onShowReview }) {
 }
 
 function Conversation({ interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
-  const { turns, state, allowance, pending, sendError } = interview;
+  const { turns, state, allowance, pending, pendingAudio, outgoing, replyText, sendError } = interview;
   const [draft, setDraft] = useState("");
   const listRef = useRef(null);
   const stageIndex = Math.max(0, STAGES.findIndex(([id]) => id === state?.stage));
@@ -62,7 +62,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   useEffect(() => {
     const list = listRef.current;
     if (list) list.scrollTop = list.scrollHeight;
-  }, [turns.length, pending]);
+  }, [turns.length, pending, pendingAudio, outgoing, replyText]);
 
   // Recording counts as typing, so the interviewer doesn't interrupt; a finished
   // round discards an unsent recording.
@@ -97,10 +97,24 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
         ))}
       </ol>
 
-      <div className="interviewer-body interview-thread" ref={listRef} aria-live="polite">
+      <div className="interviewer-body interview-thread" ref={listRef} role="log" aria-relevant="additions" aria-label="Interview conversation">
         {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} />)}
-        {interview.pendingAudio && <div className="interview-turn learner sending"><VoiceNote durationMs={interview.pendingAudio.durationMs} /></div>}
-        {pending && <div className="interview-turn interviewer typing" role="status"><span className="interview-dots"><i /><i /><i /></span> {interview.pendingAudio ? "Interviewer is listening…" : "Interviewer is thinking…"}</div>}
+        {outgoing && (
+          <div className="interview-turn learner">
+            {outgoing.kind === "hint_request"
+              ? <p className="interview-hint-request"><Lightbulb size={13} /> {outgoing.content}</p>
+              : <p>{outgoing.content}</p>}
+          </div>
+        )}
+        {pendingAudio && <div className="interview-turn learner sending"><VoiceNote durationMs={pendingAudio.durationMs} /></div>}
+        {replyText ? (
+          <div className="interview-turn interviewer" aria-busy="true">
+            <span className="interview-turn-meta">Interviewer</span>
+            <p>{replyText}<span className="stream-caret" aria-hidden="true" /></p>
+          </div>
+        ) : pending && (
+          <div className="interview-turn interviewer typing" role="status"><span className="interview-dots"><i /><i /><i /></span> {pendingAudio ? "Interviewer is listening…" : "Interviewer is thinking…"}</div>
+        )}
       </div>
 
       <div className="interviewer-compose">

@@ -1,3 +1,5 @@
+import { createInterviewStream, readServerEvents } from "./sse.js";
+
 export class ApiError extends Error {
   constructor(status, code, message, details = {}) {
     super(message);
@@ -31,6 +33,54 @@ async function request(method, path, body, { signal } = {}) {
   return payload;
 }
 
+// Interview replies are an event stream: `delta` appends text, `reset` drops a
+// discarded attempt, and `done` is the saved turns. Errors that happen before
+// the stream starts are still a single JSON body.
+async function streamRequest(method, path, body, { onDelta, onReset } = {}) {
+  let response;
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      method,
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    throw new ApiError(0, "NETWORK", "Can't reach DesignRounds. Check your connection and that the API server is running.");
+  }
+
+  const type = response.headers.get("content-type") || "";
+  if (!type.includes("text/event-stream")) {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const unavailable = !payload.error && [502, 503, 504].includes(response.status);
+      const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
+      throw new ApiError(response.status, payload.error?.code || (unavailable ? "UNAVAILABLE" : "HTTP_ERROR"), payload.error?.message || fallback, { problems: payload.error?.problems });
+    }
+    return payload;
+  }
+
+  const stream = createInterviewStream();
+  try {
+    await readServerEvents(response, {
+      onEvent(event, raw) {
+        const before = stream.reply;
+        stream.onEvent(event, raw);
+        if (event === "delta" && stream.reply !== before) onDelta?.(stream.reply.slice(before.length));
+        if (event === "reset") onReset?.();
+      },
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK", "The interviewer reply was interrupted. Check your connection and try again.");
+  }
+  if (stream.failure) {
+    throw new ApiError(stream.failure.status || 502, stream.failure.code || "HTTP_ERROR", stream.failure.message || "The interviewer reply failed.");
+  }
+  if (!stream.result) throw new ApiError(0, "NETWORK", "The interviewer reply was interrupted. Check your connection and try again.");
+  return stream.result;
+}
+
 const query = (params) => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -62,8 +112,8 @@ export const api = {
   listReviews: (id) => request("GET", `/sessions/${id}/reviews`),
   requestReview: (id, requestId) => request("POST", `/sessions/${id}/reviews`, { requestId }),
   getInterview: (id) => request("GET", `/sessions/${id}/interview`),
-  sendInterviewMessage: (id, body) => request("POST", `/sessions/${id}/interview/messages`, body),
-  sendInterviewAudio: (id, body) => request("POST", `/sessions/${id}/interview/audio`, body),
+  sendInterviewMessage: (id, body, handlers) => streamRequest("POST", `/sessions/${id}/interview/messages`, body, handlers),
+  sendInterviewAudio: (id, body, handlers) => streamRequest("POST", `/sessions/${id}/interview/audio`, body, handlers),
   interviewCheck: (id, body) => request("POST", `/sessions/${id}/interview/check`, body),
   publishedArticles: () => request("GET", "/articles/published"),
   publishedArticle: (slug) => request("GET", `/articles/published/${encodeURIComponent(slug)}`),

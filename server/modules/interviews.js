@@ -4,11 +4,12 @@ import { query, queryOne, transaction } from "../db.js";
 import { voiceAnswersEnabled } from "../flags.js";
 import { HttpError, afterResponse, createLimiter, parse, route } from "../http.js";
 import { aiConfig } from "./ai/config.js";
+import { openSse, wantsEventStream } from "./ai/sse.js";
 import { isSignificantKind } from "./ai/components.js";
 import { clean, describeDiagram, nameComponents } from "./ai/context.js";
 import { AiError, toHttpError } from "./ai/errors.js";
 import { guideFor } from "./ai/guides.js";
-import { runTask } from "./ai/run.js";
+import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
 import { requireUser } from "./identity.js";
@@ -331,17 +332,65 @@ async function undoLearnerTurn(session, reserved) {
   });
 }
 
-async function replyToLearner({ req, session, reserved, hint = false }) {
+async function replyToLearner({ req, session, reserved, hint = false, onDelta, onReset }) {
   const design = describeDiagram(session.diagram);
   const trigger = hint ? "hint" : "reply";
   const turns = await recentTurns(session.id, reserved.state.summarized_through);
-  const { data } = await runTask(
+  const run = onDelta ? runTaskStream : runTask;
+  const { data } = await run(
     interviewerTask,
     taskInput({ session, state: reserved.state, turns, trigger, selectedNodeId: req.body.selectedNodeId, design, user: req.user }),
-    { userId: req.user.id, sessionId: session.id }
+    { userId: req.user.id, sessionId: session.id, onDelta, onReset }
   );
   if (!data.message.trim()) throw new AiError("INVALID_OUTPUT", "The interviewer returned an empty reply.");
   return saveInterviewerTurn({ session, state: reserved.state, output: data, trigger, design, creditId: reserved.creditId, hint, learnerTurnId: hint ? null : reserved.learner.id });
+}
+
+// Writes the learner's turn and the interviewer's reply. Clients that accept an
+// event stream see the reply text as it is generated; everyone else gets one JSON body.
+async function deliverLearnerReply(req, res, { session, reserved, hint = false }) {
+  const produce = async (hooks) => {
+    let result;
+    try {
+      result = await replyToLearner({ req, session, reserved, hint, ...hooks });
+    } catch (error) {
+      try {
+        await undoLearnerTurn(session, reserved);
+      } catch (undoError) {
+        console.error("[ai] could not release interview turn:", undoError.message);
+      }
+      throw error;
+    }
+    return {
+      turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
+      state: presentState(result.state),
+      allowance: await readAllowance(db, req.user, session.id, result.state),
+    };
+  };
+  const summarize = () => afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
+
+  if (!wantsEventStream(req)) {
+    const payload = await produce({});
+    res.status(201).json(payload);
+    summarize();
+    return;
+  }
+
+  const sse = openSse(res);
+  try {
+    const payload = await produce({
+      onDelta: (text) => sse.send("delta", { text }),
+      onReset: () => sse.send("reset", {}),
+    });
+    sse.send("done", payload);
+    sse.end();
+    summarize();
+  } catch (error) {
+    const http = error instanceof HttpError ? error : error instanceof AiError ? toHttpError(error) : new HttpError(500, "INTERNAL", "Something went wrong on our side. No credit was used.");
+    if (!(error instanceof HttpError) && !(error instanceof AiError)) console.error("[ai] interview stream failed:", error);
+    sse.send("error", { status: http.status, code: http.code, message: http.message });
+    sse.end();
+  }
 }
 
 // A retried request returns the turns the first attempt produced.
@@ -374,21 +423,12 @@ interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (re
   if (!(await messageLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", TOO_FAST);
 
   const reserved = await reserveLearnerTurn({ session, user: req.user, kind: hint ? "hint_request" : "message", content: content || "Could I have a hint?", requestId: body.requestId, hint });
-  let result;
   try {
-    result = await replyToLearner({ req, session, reserved, hint });
+    await deliverLearnerReply(req, res, { session, reserved, hint });
   } catch (error) {
-    await undoLearnerTurn(session, reserved);
     if (error instanceof AiError) throw toHttpError(error);
     throw error;
   }
-
-  res.status(201).json({
-    turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
-    state: presentState(result.state),
-    allowance: await readAllowance(db, req.user, session.id, result.state),
-  });
-  afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
 }));
 
 const speechErrors = {
@@ -426,7 +466,6 @@ interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, 
 
   const durationMs = Math.min(body.durationMs, AUDIO_MAX_MS);
   const reserved = await reserveLearnerTurn({ session, user: req.user, kind: "audio", content: "", requestId: body.requestId, audio: { mimeType, durationMs, bytes } });
-  let result;
   try {
     const speech = await transcribe({ bytes, mimeType, durationMs, userId: req.user.id, sessionId: session.id });
     if (!speech.text) throw new HttpError(422, "VOICE_EMPTY", "We couldn't hear anything in that recording. Check your microphone and try again. No credit was used.");
@@ -437,20 +476,19 @@ interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, 
         [reserved.learner.id, speech.model, JSON.stringify(speech.delivery)]
       );
     });
-    result = await replyToLearner({ req, session, reserved });
   } catch (error) {
     await undoLearnerTurn(session, reserved);
     if (error instanceof SpeechError) throw speechHttpError(error);
     if (error instanceof AiError) throw toHttpError(error);
     throw error;
   }
-
-  res.status(201).json({
-    turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
-    state: presentState(result.state),
-    allowance: await readAllowance(db, req.user, session.id, result.state),
-  });
-  afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
+  try {
+    await deliverLearnerReply(req, res, { session, reserved });
+  } catch (error) {
+    if (res.headersSent) return;
+    if (error instanceof AiError) throw toHttpError(error);
+    throw error;
+  }
 }));
 
 // Called by the workspace after the canvas has been quiet for a while. The server
