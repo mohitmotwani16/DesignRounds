@@ -9,13 +9,41 @@ export class ApiError extends Error {
   }
 }
 
+// This page load's human-check id. It is not stored, so a reload starts over.
+let humanLaunch = "";
+let onHumanRequired = () => {};
+
+export function setHumanLaunch(id) {
+  humanLaunch = id || "";
+}
+
+export function getHumanLaunch() {
+  return humanLaunch;
+}
+
+export function setHumanRequiredHandler(handler) {
+  onHumanRequired = handler || (() => {});
+}
+
+function requestHeaders(json) {
+  return {
+    ...(json ? { "Content-Type": "application/json" } : {}),
+    ...(humanLaunch ? { "X-Human-Launch": humanLaunch } : {}),
+  };
+}
+
+function noteHumanFailure(status, payload) {
+  const code = payload?.error?.code;
+  if (status === 403 && (code === "HUMAN_CHECK_REQUIRED" || code === "NETWORK_CHANGED")) onHumanRequired(code);
+}
+
 async function request(method, path, body, { signal } = {}) {
   let response;
   try {
     response = await fetch(`/api/v1${path}`, {
       method,
       credentials: "same-origin",
-      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      headers: requestHeaders(body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     });
@@ -25,6 +53,7 @@ async function request(method, path, body, { signal } = {}) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    noteHumanFailure(response.status, payload);
     // Gateway errors from the hosting platform (e.g. a timeout) carry no JSON body.
     const unavailable = !payload.error && [502, 503, 504].includes(response.status);
     const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
@@ -42,7 +71,7 @@ async function streamRequest(method, path, body, { onDelta, onReset } = {}) {
     response = await fetch(`/api/v1${path}`, {
       method,
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: { ...requestHeaders(true), Accept: "text/event-stream" },
       body: JSON.stringify(body),
     });
   } catch (error) {
@@ -54,6 +83,7 @@ async function streamRequest(method, path, body, { onDelta, onReset } = {}) {
   if (!type.includes("text/event-stream")) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      noteHumanFailure(response.status, payload);
       const unavailable = !payload.error && [502, 503, 504].includes(response.status);
       const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
       throw new ApiError(response.status, payload.error?.code || (unavailable ? "UNAVAILABLE" : "HTTP_ERROR"), payload.error?.message || fallback, { problems: payload.error?.problems });
@@ -96,8 +126,10 @@ export const api = {
   catalog: (params, options) => request("GET", `/catalog/prompts${query(params)}`, undefined, options),
   me: () => request("GET", "/me"),
   session: () => request("GET", "/session"),
-  requestCode: (email) => request("POST", "/auth/request-code", { email }),
+  requestCode: (email, turnstileToken) => request("POST", "/auth/request-code", { email, ...(turnstileToken ? { turnstileToken } : {}) }),
   verifyCode: (email, code) => request("POST", "/auth/verify-code", { email, code }),
+  confirmHuman: (turnstileToken) => request("POST", "/auth/human-check", { turnstileToken }),
+  startGoogle: (next, turnstileToken) => request("POST", "/auth/google/start", { next, ...(turnstileToken ? { turnstileToken } : {}) }),
   signOut: () => request("POST", "/auth/sign-out", {}),
   signOutEverywhere: () => request("POST", "/auth/sign-out-everywhere", {}),
   updateProfile: (fields) => request("PATCH", "/me", fields),

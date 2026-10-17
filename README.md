@@ -61,6 +61,19 @@ If the same person later uses email OTP with the same address (or the reverse), 
 
 **Production:** set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Vercel (see table below), redeploy, and register the production redirect URI in Google Cloud. While the OAuth app is in **Testing**, only accounts listed as **Test users** can sign in; publish the consent screen when you are ready for everyone.
 
+## Set up the human check (Cloudflare Turnstile)
+
+Turnstile is Cloudflare's free replacement for a "not a robot" checkbox. On the sign-in page it runs before an email code is sent and before Continue with Google leaves for Google. The widget produces a token; the API checks that token with Cloudflare's Siteverify API. The secret key never goes to the browser.
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/turnstile), create a widget. Choose **Managed** so most visitors pass without a click, and a checkbox appears only when Cloudflare wants a person to confirm.
+2. Add the hostnames that serve the site: `localhost` for local development, `designrounds.in` for production, and any Vercel preview hostname you want to sign in on.
+3. Put the site key and secret key in `.env` (see `.env.example`). Restart `npm run dev`. The API log should say `turnstile=on`.
+4. Open `/signin`. The check sits above the Google and email buttons. Email me a code and Continue with Google stay disabled until it succeeds. Resending a code asks for a fresh check, because each token works once and expires after five minutes.
+
+Staying signed in does not skip the check. Every time the site is opened, and again if the network changes (Wi-Fi to mobile data, another network, or a VPN), the signed-in page asks for Turnstile before any account request. The server remembers the network of the last pass and rejects the session from a different address until the visitor confirms again. Reloading the page starts a new check. Moving around the site does not.
+
+Without a Cloudflare account, the dummy keys in `.env.example` render a checkbox that always passes. Those keys are for local development only. Production and preview deployments refuse email and Google sign-in until real keys are set.
+
 ## Set up AI reviews (free Gemini key)
 
 1. Sign in to [Google AI Studio](https://aistudio.google.com/apikey) with a Google account and click **Create API key**. No payment details are needed.
@@ -112,6 +125,7 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `GROQ_API_KEY` | Speech-to-text for voice answers (Groq Whisper). Optional locally (a fake transcriber is used); required in production for voice answers. `STT_MODEL` / `STT_BASE_URL` override the defaults. |
 | `AUTH_SECRET` | Secret for hashing sign-in codes and signing OAuth state. **Required in production.** |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client. Both required together; omit both to disable Google sign-in. |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile on sign-in. Both required in production. Omit both locally to skip the check. |
 | `APP_ORIGIN`, `TRUST_PROXY`, `PORT` | Deployment settings for running behind a proxy or on a custom domain. |
 
 ## Project layout
@@ -158,7 +172,8 @@ Public pages are real URLs, prerendered to static HTML on every build, so search
 
 ## Security notes
 
-- Sign-in codes are 6 digits, expire after 10 minutes, allow 5 attempts, and are stored only as an HMAC. Requests are rate-limited per email and per IP.
+- Sign-in codes are 6 digits, expire after 10 minutes, allow 5 attempts, and are stored only as an HMAC. Requests are rate-limited per email and per IP. When Turnstile is configured, the API also checks a single-use token with Cloudflare before sending a code or starting Google sign-in.
+- The Turnstile secret stays on the server. Production refuses those sign-in routes if the keys are missing.
 - Sessions use a random token in an `httpOnly`, `SameSite=Lax` cookie. Only the token's SHA-256 hash is stored.
 - State-changing API requests must be JSON and come from the same origin.
 - Every practice-round query is scoped to the signed-in user. Plan access (free vs. Plus) is enforced on the server.
@@ -200,6 +215,7 @@ Vercel Cron (daily) ──► /api/v1/internal/maintenance
 | `RESEND_API_KEY`, `EMAIL_FROM` | Resend key; `DesignRounds <no-reply@designrounds.in>` | same |
 | `VERCEL_DEPLOY_HOOK_URL` | production deploy hook for publishing handbook articles | – |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth web client for **designrounds.in** (redirect `https://designrounds.in/api/v1/auth/google/callback`) | optional; same client only if preview redirect URIs are registered in Google Cloud |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Managed Turnstile widget whose hostnames include `designrounds.in` | same widget if the preview hostname is allowed on it; sign-in stays off until both are set |
 | `AI_API_KEY`, `AI_MODEL` (`AI_BASE_URL`) | AI provider | same, or unset to disable AI |
 | `APP_ORIGIN` | `https://designrounds.in` | – |
 

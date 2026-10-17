@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Layers2, LoaderCircle, Mail, ShieldCheck 
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Logo } from "../components/site.jsx";
+import { TurnstileWidget } from "../components/Turnstile.jsx";
 import { Link, navigate, safeNext } from "../router.js";
 
 const GOOGLE_ERRORS = {
@@ -13,6 +14,7 @@ const GOOGLE_ERRORS = {
   google_unverified: "Google didn't verify that email address. Use a verified Google account, or sign in with email.",
   google_link_conflict: "This email is already linked to a different Google account. Sign in with email instead.",
   rate_limited: "Too many sign-in attempts. Try again in a few minutes.",
+  turnstile_required: "Confirm you're human, then continue with Google.",
 };
 
 function GoogleMark() {
@@ -27,17 +29,25 @@ function GoogleMark() {
 }
 
 export default function SignInPage({ next, error: initialError, email: initialEmail = "" }) {
-  const { setUser, googleAuth } = useAuth();
+  const { setUser, googleAuth, turnstileSiteKey, noteLaunch } = useAuth();
   const [step, setStep] = useState("email");
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(() => (initialError && GOOGLE_ERRORS[initialError]) || "");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const [devCode, setDevCode] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const codeRef = useRef(null);
   const destination = safeNext(next);
   const googleHref = `/api/v1/auth/google?next=${encodeURIComponent(destination)}`;
+  const humanReady = !turnstileSiteKey || Boolean(turnstileToken);
+
+  function consumeHumanCheck() {
+    setTurnstileToken("");
+    setTurnstileReset((value) => value + 1);
+  }
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -52,14 +62,32 @@ export default function SignInPage({ next, error: initialError, email: initialEm
     setBusy(true);
     setError("");
     try {
-      const result = await api.requestCode(email);
+      const result = await api.requestCode(email, turnstileToken);
       setDevCode(result.devCode || "");
       setCooldown(result.resendAfterSeconds || 45);
       setCode("");
       setStep("code");
+      consumeHumanCheck();
     } catch (requestError) {
       setError(requestError.message);
+      // Cooldown and rate limits are decided before the token is checked, so the
+      // visitor can retry with the same confirmation once the wait is over.
+      if (requestError.status !== 429) consumeHumanCheck();
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function continueWithGoogle() {
+    if (!turnstileSiteKey) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { url } = await api.startGoogle(destination, turnstileToken);
+      window.location.assign(url);
+    } catch (requestError) {
+      setError(requestError.message);
+      if (requestError.status !== 429) consumeHumanCheck();
       setBusy(false);
     }
   }
@@ -70,7 +98,8 @@ export default function SignInPage({ next, error: initialError, email: initialEm
     setBusy(true);
     setError("");
     try {
-      const { user } = await api.verifyCode(email, code);
+      const { user, launchId } = await api.verifyCode(email, code);
+      if (launchId) noteLaunch(launchId);
       setUser(user);
       navigate(user.onboarded ? destination : `/welcome?next=${encodeURIComponent(destination)}`, { replace: true });
     } catch (verifyError) {
@@ -93,22 +122,29 @@ export default function SignInPage({ next, error: initialError, email: initialEm
         {step === "email" ? (
           <>
             <h1 id="auth-title">Sign in to practice</h1>
-            {googleAuth ? (
+            <p className="auth-lede">{googleAuth
+              ? "Continue with Google, or use a one-time email code. New here? Either option creates your account."
+              : "Enter your email and we'll send you a 6-digit code. No password needed. New here? This also creates your account."}</p>
+            {turnstileSiteKey && <TurnstileWidget siteKey={turnstileSiteKey} resetKey={turnstileReset} onToken={setTurnstileToken} />}
+            {googleAuth && (
               <>
-                <p className="auth-lede">Continue with Google, or use a one-time email code. New here? Either option creates your account.</p>
-                <a className="btn btn-google btn-lg auth-submit" href={googleHref}>
-                  <GoogleMark /> Continue with Google
-                </a>
+                {turnstileSiteKey ? (
+                  <button type="button" className="btn btn-google btn-lg auth-submit" disabled={busy || !humanReady} onClick={continueWithGoogle}>
+                    <GoogleMark /> Continue with Google
+                  </button>
+                ) : (
+                  <a className="btn btn-google btn-lg auth-submit" href={googleHref}>
+                    <GoogleMark /> Continue with Google
+                  </a>
+                )}
                 <div className="auth-divider" role="separator" aria-label="or"><span>or use email</span></div>
               </>
-            ) : (
-              <p className="auth-lede">Enter your email and we'll send you a 6-digit code. No password needed. New here? This also creates your account.</p>
             )}
             <form onSubmit={sendCode}>
               <label className="field-label" htmlFor="signin-email">Email address</label>
               <input id="signin-email" className="text-input" type="email" autoComplete="email" inputMode="email" required placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
               {error && <p className="form-error" role="alert">{error}</p>}
-              <button className="btn btn-ghost btn-lg auth-submit" disabled={busy || !email}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Email me a code <ArrowRight size={15} /></button>
+              <button className="btn btn-ghost btn-lg auth-submit" disabled={busy || !email || !humanReady}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Email me a code <ArrowRight size={15} /></button>
             </form>
           </>
         ) : (
@@ -130,9 +166,15 @@ export default function SignInPage({ next, error: initialError, email: initialEm
             />
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="btn btn-primary btn-lg auth-submit" disabled={busy || code.length !== 6}>{busy ? <LoaderCircle size={16} className="spin" /> : <Check size={15} />}Verify and continue</button>
+            {turnstileSiteKey && (
+              <>
+                <p className="turnstile-resend-note">Confirm you're human again only if you need another code.</p>
+                <TurnstileWidget siteKey={turnstileSiteKey} resetKey={turnstileReset} onToken={setTurnstileToken} />
+              </>
+            )}
             <div className="auth-secondary">
               <button type="button" className="text-button" onClick={() => { setStep("email"); setError(""); }}><ArrowLeft size={13} /> Use a different email</button>
-              <button type="button" className="text-button" disabled={cooldown > 0 || busy} onClick={sendCode}>{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}</button>
+              <button type="button" className="text-button" disabled={cooldown > 0 || busy || !humanReady} onClick={sendCode}>{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}</button>
             </div>
           </form>
         )}
