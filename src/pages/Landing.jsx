@@ -6,6 +6,7 @@ import {
 import { prompts, tracks } from "../data/prompts.js";
 import { aiLimits } from "../data/plans.js";
 import { LevelMeter, RoundCard, SiteFooter, useReveal } from "../components/site.jsx";
+import { StartRoundButton } from "../components/StartRound.jsx";
 import { trackIcon } from "../components/ui.jsx";
 import { Link, useRoute } from "../router.js";
 import { GUIDES } from "../content/guides.js";
@@ -17,8 +18,6 @@ const shortTitle = (title) => title.replace(/^Design (a |an )?/i, "").replace(/^
 const minutes = prompts.map((prompt) => prompt.minutes);
 const ROUND_LENGTH = `${Math.min(...minutes)}–${Math.max(...minutes)}m`;
 
-const freeRounds = prompts.filter((prompt) => prompt.access === "free");
-const FIRST_ROUND = freeRounds.find((prompt) => prompt.id === "url-shortener") ?? freeRounds[0];
 
 export default function LandingPage({ onStart }) {
   const ref = useRef(null);
@@ -239,7 +238,7 @@ export default function LandingPage({ onStart }) {
         <h2>Your next interview is a design review. <em>Rehearse it.</em></h2>
         <p>Pick a design, sketch your architecture, and find out where it bends before an interviewer does.</p>
         <div className="hero-ctas">
-          <button className="btn btn-primary btn-lg" onClick={() => onStart(FIRST_ROUND.id)}>Start a free round <ArrowRight size={17} className="nudge" /></button>
+          <StartRoundButton onStart={onStart} />
           <Link className="btn btn-ghost btn-lg" to="/library">Explore the library</Link>
         </div>
       </section>
@@ -259,7 +258,7 @@ function Hero({ onStart }) {
         Real interview design problems, a canvas built for architecture, and an AI interviewer that pushes back. Then a rubric-based review tells you exactly what to fix.
       </p>
       <div className="hero-ctas rise" style={{ "--d": 3 }}>
-        <button className="btn btn-primary btn-lg" onClick={() => onStart(FIRST_ROUND.id)}>Start a free round <ArrowRight size={17} className="nudge" /></button>
+        <StartRoundButton onStart={onStart} />
         <Link className="btn btn-ghost btn-lg" to="/library">Browse all designs</Link>
       </div>
       <div className="hero-checks rise" style={{ "--d": 4 }}>
@@ -375,7 +374,7 @@ function Pricing({ onStart }) {
             <li><Check size={16} /> {free.reviewsPerRound} AI review per round, up to {free.reviewsPerMonth} a month</li>
             <li><Check size={16} /> Scores on all six rubric dimensions, plus your top strength and biggest risk</li>
           </ul>
-          <button className="btn btn-ink btn-lg" onClick={() => onStart(FIRST_ROUND.id)}>Start a free round <ArrowRight size={16} className="nudge" /></button>
+          <StartRoundButton onStart={onStart} className="btn btn-ink btn-lg" />
         </article>
         <article className="plan featured reveal">
           <span className="plan-flag">Coming soon</span>
