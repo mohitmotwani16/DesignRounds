@@ -4,6 +4,7 @@
 //
 // Uses the console email provider and the fake AI provider, so it needs no secrets.
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -361,10 +362,16 @@ try {
     assert.equal(submitted.body.article.status, "in_review");
     assert.equal((await call("PATCH", `/api/v1/articles/${id}`, { title: "Sneaky edit during review" })).status, 409, "no edits while in review");
     assert.equal((await call("GET", "/api/v1/admin/articles")).status, 403, "authors aren't admins");
+    assert.equal((await call("GET", "/api/v1/admin/members")).status, 403, "only admins can list users");
+    assert.equal((await call("POST", "/api/v1/admin/invitations", { email: "nope@example.com", plan: "free" })).status, 403, "only admins can invite accounts");
 
     // ADMIN_EMAILS makes admin@example.com an admin.
     const adminCookie = await signInAs("admin@example.com");
     assert.equal((await call("GET", "/api/v1/session")).body.user.isAdmin, true);
+    const ownerCookie = await signInAs("designrounds.app@gmail.com");
+    cookie = ownerCookie;
+    assert.equal((await call("GET", "/api/v1/session")).body.user.isAdmin, true, "the requested owner account is an admin");
+    cookie = adminCookie;
     const queue = await call("GET", "/api/v1/admin/articles?status=in_review");
     assert.ok(queue.body.articles.some((article) => article.id === id), "the submission is in the review queue");
     assert.equal((await call("POST", `/api/v1/admin/articles/${id}/decision`, { action: "request_changes" })).status, 400, "feedback is required");
@@ -393,7 +400,9 @@ try {
     // Admins can grant and revoke admin access.
     cookie = adminCookie;
     const writer = await query("select id from users where email = 'writer@example.com'");
-    assert.equal((await call("GET", "/api/v1/admin/members?email=writer%40example.com")).status, 200);
+    const writerStatus = await call("GET", "/api/v1/admin/members?email=writer%40example.com");
+    assert.equal(writerStatus.status, 200);
+    assert.equal(writerStatus.body.members[0].isAdmin, false);
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus" })).status, 400, "Plus requires an expiry date");
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus", expiresAt: "2028-02-30" })).status, 400, "invalid calendar dates are rejected");
     const today = new Date().toISOString().slice(0, 10);
@@ -407,6 +416,9 @@ try {
     assert.equal((await call("GET", `/api/v1/sessions/${plusSession.id}/reviews`)).body.allowance.plan, "plus");
     cookie = adminCookie;
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus", expiresAt: pastDate })).status, 200);
+    const expiredMember = (await call("GET", "/api/v1/admin/members?email=writer%40example.com")).body.members[0];
+    assert.equal(expiredMember.plan, "free", "expired Plus is shown as Free");
+    assert.equal(expiredMember.storedPlan, "plus", "the stored expiry remains visible to admins");
     cookie = authorCookie;
     assert.equal((await call("GET", "/api/v1/me")).body.user.plan, "free");
     assert.equal((await call("GET", `/api/v1/rounds/${paidPrompt.id}`)).status, 403);
@@ -415,8 +427,43 @@ try {
     cookie = adminCookie;
     assert.equal((await call("POST", "/api/v1/admin/admins", { email: "writer@example.com" })).status, 201);
     assert.ok((await call("GET", "/api/v1/admin/admins")).body.admins.some((admin) => admin.email === "writer@example.com"));
+    assert.equal((await call("GET", "/api/v1/admin/members?email=writer%40example.com")).body.members[0].isAdmin, true, "the user list reflects role changes");
     assert.equal((await call("DELETE", `/api/v1/admin/admins/${writer[0].id}`)).status, 200);
+    assert.equal((await call("GET", "/api/v1/admin/members?email=writer%40example.com")).body.members[0].isAdmin, false);
     assert.equal((await call("POST", "/api/v1/admin/admins", { email: "nobody@example.com" })).status, 404);
+
+    const inviteSend = await call("POST", "/api/v1/admin/invitations", { email: "invite-send@example.com", plan: "free", expiresAt: null });
+    assert.equal(inviteSend.status, 201, JSON.stringify(inviteSend.body));
+    assert.equal(inviteSend.body.plan, "free");
+    assert.equal((await call("POST", "/api/v1/admin/invitations", { email: "missing-date@example.com", plan: "plus" })).status, 400);
+
+    const invitationToken = crypto.randomBytes(32).toString("base64url");
+    const tokenHash = crypto.createHash("sha256").update(invitationToken).digest("hex");
+    const [admin] = await query("select id from users where email = 'admin@example.com'");
+    await query(
+      `insert into users (email) values ('invited@example.com') on conflict (email) do nothing`
+    );
+    await query(
+      `insert into invitations (email, token_hash, plan, plan_expires_at, created_by)
+       values ('invited@example.com', $1, 'plus', $2::date, $3)`,
+      [tokenHash, new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10), admin.id]
+    );
+    cookie = "";
+    const invitation = await call("GET", `/api/v1/invitations/${invitationToken}`);
+    assert.equal(invitation.status, 200);
+    assert.equal(invitation.body.email, "invited@example.com");
+    assert.equal(invitation.body.plan, "plus");
+    assert.equal((await call("POST", `/api/v1/invitations/${invitationToken}/accept`, {})).status, 401);
+    const inviteeCookie = await signInAs("invited@example.com");
+    cookie = authorCookie;
+    assert.equal((await call("POST", `/api/v1/invitations/${invitationToken}/accept`, {})).status, 403, "another account cannot accept the invitation");
+    cookie = inviteeCookie;
+    const accepted = await call("POST", `/api/v1/invitations/${invitationToken}/accept`, {});
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+    assert.equal((await call("POST", `/api/v1/invitations/${invitationToken}/accept`, {})).body.alreadyAccepted, true, "acceptance retries are idempotent");
+    assert.equal((await call("GET", "/api/v1/me")).body.user.plan, "plus");
+    const [welcomed] = await query("select welcome_email_sent_at, welcome_email_claimed_at from users where email = 'invited@example.com'");
+    assert.ok(welcomed.welcome_email_sent_at || welcomed.welcome_email_claimed_at, "a new account is queued for its first-login welcome email");
     cookie = authorCookie;
   });
 

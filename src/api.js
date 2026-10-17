@@ -82,4 +82,7 @@ export const api = {
   revokeAdmin: (id) => request("DELETE", `/admin/admins/${id}`),
   adminMembers: (email = "") => request("GET", `/admin/members${email ? `?email=${encodeURIComponent(email)}` : ""}`),
   setMemberPlan: (id, plan, expiresAt) => request("PUT", `/admin/members/${id}/plan`, { plan, expiresAt }),
+  inviteMember: (email, plan, expiresAt) => request("POST", "/admin/invitations", { email, plan, expiresAt }),
+  getInvitation: (token) => request("GET", `/invitations/${encodeURIComponent(token)}`),
+  acceptInvitation: (token) => request("POST", `/invitations/${encodeURIComponent(token)}/accept`, {}),
 };

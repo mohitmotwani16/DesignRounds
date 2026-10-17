@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
+import { invitationEmail } from "./emails/invitation.js";
 import { loginCodeEmail } from "./emails/login-code.js";
+import { welcomeEmail } from "./emails/welcome.js";
 import { isProduction } from "./flags.js";
 
 // Sends email (sign-in codes and notifications). Configure one provider:
@@ -60,4 +62,15 @@ export async function sendLoginCode(email, code, { expiresInMinutes }) {
     return;
   }
   await sendEmail({ to: email, subject, text, html });
+}
+
+export async function sendWelcomeEmail(email, name) {
+  const appUrl = ((process.env.APP_ORIGIN || "https://designrounds.in").split(",")[0].trim()).replace(/\/+$/, "");
+  const { subject, text, html } = welcomeEmail({ name, appUrl });
+  await sendEmail({ to: email, subject, text, html });
+}
+
+export async function sendInvitationEmail(details) {
+  const { subject, text, html } = invitationEmail(details);
+  await sendEmail({ to: details.email, subject, text, html });
 }

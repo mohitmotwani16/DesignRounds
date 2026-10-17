@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, LoaderCircle, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, LoaderCircle, Mail, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { CATEGORIES, categoryById } from "../learn/catalog.js";
@@ -45,9 +45,10 @@ function AdminHome() {
         <div className="admin-tabs" role="tablist">
           <button role="tab" aria-selected={tab === "articles"} onClick={() => setTab("articles")}>Articles</button>
           <button role="tab" aria-selected={tab === "admins"} onClick={() => setTab("admins")}>Admins</button>
-          <button role="tab" aria-selected={tab === "members"} onClick={() => setTab("members")}>Memberships</button>
+          <button role="tab" aria-selected={tab === "members"} onClick={() => setTab("members")}>Users & access</button>
+          <button role="tab" aria-selected={tab === "invitations"} onClick={() => setTab("invitations")}>Invitations</button>
         </div>
-        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : <MemberList />}
+        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : <InvitationForm />}
       </div>
     </main>
   );
@@ -95,6 +96,7 @@ function MemberList() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [busyRoleId, setBusyRoleId] = useState("");
 
   async function load(search = "") {
     setLoading(true);
@@ -126,16 +128,37 @@ function MemberList() {
     }
   }
 
+  async function changeRole(member) {
+    if (member.isAdmin && !window.confirm(`Remove admin access for ${member.email}?`)) return;
+    setBusyRoleId(member.id);
+    setError("");
+    setNotice("");
+    try {
+      if (member.isAdmin) {
+        await api.revokeAdmin(member.id);
+        setNotice(`${member.email} no longer has admin access.`);
+      } else {
+        await api.grantAdmin(member.email);
+        setNotice(`${member.email} is now an admin.`);
+      }
+      await load(email.trim().toLowerCase());
+    } catch (roleError) {
+      setError(roleError.message);
+    } finally {
+      setBusyRoleId("");
+    }
+  }
+
   return (
     <section className="admin-members">
       <form className="admin-grant" onSubmit={(event) => { event.preventDefault(); load(email.trim().toLowerCase()); }}>
-        <label className="field-label" htmlFor="member-email">Find an account by email</label>
+        <label className="field-label" htmlFor="member-email">Search existing users by email</label>
         <div>
           <input id="member-email" className="text-input" type="email" placeholder="person@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
           <button className="btn btn-primary"><Search size={15} /> Find</button>
           {email && <button type="button" className="btn btn-ghost" onClick={() => { setEmail(""); load(); }}>Clear</button>}
         </div>
-        <small>Plus access must have an expiry date. It remains active through that UTC date.</small>
+        <small>Review each user's plan and admin status, grant or remove access, or change their role. Plus access remains active through its expiry date.</small>
       </form>
       {notice && <p className="write-notice"><Check size={14} /> {notice}</p>}
       {error && <p className="form-error">{error}</p>}
@@ -143,14 +166,15 @@ function MemberList() {
       {!loading && members?.length === 0 && <p className="write-empty">No account found. They need to sign in once before you can grant access.</p>}
       {!loading && members?.length > 0 && (
         <ul className="write-list">
-          {members.map((member) => <MemberRow key={member.id} member={member} busy={busyId === member.id} onSave={save} />)}
+          {members.map((member) => <MemberRow key={member.id} member={member} busy={busyId === member.id} roleBusy={busyRoleId === member.id} onSave={save} onRoleChange={changeRole} />)}
         </ul>
       )}
     </section>
   );
 }
 
-function MemberRow({ member, busy, onSave }) {
+function MemberRow({ member, busy, roleBusy, onSave, onRoleChange }) {
+  const { user } = useAuth();
   const [plan, setPlan] = useState(member.plan);
   const [expiresAt, setExpiresAt] = useState(member.planExpiresAt || "");
   useEffect(() => {
@@ -162,17 +186,78 @@ function MemberRow({ member, busy, onSave }) {
     <li className="membership-row">
       <div className="membership-identity">
         <strong>{member.displayName || member.email}</strong>
-        <small>{member.email}{member.plan === "plus" && !member.planExpiresAt ? " · expiry missing" : ""}</small>
+        <small>{member.email} · {member.isAdmin ? (member.fromSettings ? "Admin · from settings" : "Admin") : "User"} · {member.plan === "plus" ? `Plus${member.planExpiresAt ? ` through ${member.planExpiresAt}` : ""}` : member.storedPlan === "plus" ? `Free · Plus expired${member.planExpiresAt ? ` ${member.planExpiresAt}` : ""}` : "Free"}{member.storedPlan === "plus" && !member.planExpiresAt ? " · expiry missing" : ""}</small>
       </div>
-      <form onSubmit={(event) => { event.preventDefault(); onSave(member, plan, expiresAt); }}>
-        <select className="text-input" aria-label={`Plan for ${member.email}`} value={plan} onChange={(event) => setPlan(event.target.value)}>
-          <option value="free">Free</option>
-          <option value="plus">Plus</option>
-        </select>
-        {plan === "plus" && <input className="text-input" aria-label={`Plus expiry for ${member.email}`} type="date" required value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />}
-        <button className="btn btn-ghost" disabled={busy || (plan === "plus" && !expiresAt)}><Save size={14} /> Save</button>
-      </form>
+      <div className="membership-actions">
+        <form onSubmit={(event) => { event.preventDefault(); onSave(member, plan, expiresAt); }}>
+          <select className="text-input" aria-label={`Plan for ${member.email}`} value={plan} onChange={(event) => setPlan(event.target.value)}>
+            <option value="free">Free</option>
+            <option value="plus">Plus</option>
+          </select>
+          {plan === "plus" && <input className="text-input" aria-label={`Plus expiry for ${member.email}`} type="date" required value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />}
+          <button className="btn btn-ghost" disabled={busy || (plan === "plus" && !expiresAt)}><Save size={14} /> Save plan</button>
+        </form>
+        {!member.fromSettings && member.id !== user.id && (
+          <button className="btn btn-ghost" disabled={roleBusy} onClick={() => onRoleChange(member)}>
+            {roleBusy ? <LoaderCircle size={14} className="spin" /> : member.isAdmin ? <Trash2 size={14} /> : <UserPlus size={14} />}
+            {member.isAdmin ? "Remove admin" : "Make admin"}
+          </button>
+        )}
+      </div>
     </li>
+  );
+}
+
+function initialPlusExpiry() {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + 30);
+  return date.toISOString().slice(0, 10);
+}
+
+function InvitationForm() {
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState("free");
+  const [expiresAt, setExpiresAt] = useState(initialPlusExpiry);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function invite(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api.inviteMember(email.trim().toLowerCase(), plan, plan === "plus" ? expiresAt : null);
+      setNotice(`Invitation emailed to ${result.invited}. It expires in 14 days.`);
+      setEmail("");
+    } catch (inviteError) {
+      setError(inviteError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="admin-invitations">
+      <form className="admin-grant" onSubmit={invite}>
+        <label className="field-label" htmlFor="invite-email">Invite someone by email</label>
+        <div className="invite-form-fields">
+          <input id="invite-email" className="text-input" type="email" required maxLength={254} placeholder="person@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <select className="text-input" aria-label="Invitation plan" value={plan} onChange={(event) => setPlan(event.target.value)}>
+            <option value="free">Free account</option>
+            <option value="plus">Plus access</option>
+          </select>
+          {plan === "plus" && <input className="text-input" aria-label="Plus expiry date" type="date" required min={new Date().toISOString().slice(0, 10)} value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />}
+          <button className="btn btn-primary" disabled={busy || (plan === "plus" && !expiresAt)}>
+            {busy ? <LoaderCircle size={15} className="spin" /> : <Mail size={15} />} Send invitation
+          </button>
+        </div>
+        <small>Recipients can sign in or create an account with the invited email. Invitations expire after 14 days; Plus access is activated after acceptance.</small>
+      </form>
+      {notice && <p className="write-notice"><Check size={14} /> {notice}</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </section>
   );
 }
 

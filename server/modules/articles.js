@@ -1,12 +1,14 @@
+import crypto from "node:crypto";
 import express from "express";
 import { z } from "zod";
 import { query, queryOne, transaction } from "../db.js";
-import { sendEmail } from "../email.js";
+import { sendEmail, sendInvitationEmail } from "../email.js";
 import { isProduction } from "../flags.js";
 import { HttpError, afterResponse, createLimiter, parse, route } from "../http.js";
 import { CATEGORIES, topicMeta } from "../../src/learn/catalog.js";
 import { LEVELS, SLUG_PATTERN, articleProblems } from "../../src/learn/markdown.js";
 import { isAdmin, isBootstrapAdmin, requireAdmin, requireUser } from "./identity.js";
+import { planFor } from "./plans.js";
 
 // Community articles for the Learn handbook.
 //
@@ -20,6 +22,7 @@ const EDITABLE = new Set(["draft", "changes_requested"]);
 const MAX_OPEN_ARTICLES = 20;
 const writeLimiter = createLimiter({ name: "article-write", windowMs: 60 * 60_000, max: 120 });
 const submitLimiter = createLimiter({ name: "article-submit", windowMs: 24 * 60 * 60_000, max: 10 });
+const invitationLimiter = createLimiter({ name: "admin-invitation", windowMs: 60 * 60_000, max: 20 });
 
 const categoryIds = CATEGORIES.filter((category) => category.id !== "interview").map((category) => category.id);
 const fields = {
@@ -45,6 +48,18 @@ const membershipBody = z.object({
 }).strict().refine(({ plan, expiresAt }) => plan === "plus" ? Boolean(expiresAt) : !expiresAt, {
   message: "Plus access requires an expiry date; Free access must not have one.",
 });
+const invitationBody = z.object({
+  email: adminBody.shape.email,
+  plan: z.enum(["free", "plus"]),
+  expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+}).strict().refine(({ plan, expiresAt }) => plan === "plus" ? Boolean(expiresAt) : !expiresAt, {
+  message: "Plus invitations require an expiry date; Free invitations must not have one.",
+}).refine(({ plan, expiresAt }) => {
+  if (plan !== "plus" || !expiresAt) return true;
+  const date = new Date(`${expiresAt}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === expiresAt
+    && expiresAt >= new Date().toISOString().slice(0, 10);
+}, { message: "Choose a valid Plus expiry date that is today or later." });
 
 const reservedSlug = (slug) => Boolean(topicMeta(slug)) || ["write", "admin", "submit", "new"].includes(slug);
 
@@ -373,7 +388,7 @@ articlesRouter.get("/admin/members", requireAdmin, route(async (req, res) => {
     throw new HttpError(400, "INVALID_EMAIL", "Enter a valid account email.");
   }
   const rows = await query(
-    `select id, email, display_name, plan, plan_expires_at
+    `select id, email, display_name, plan, plan_expires_at, role
        from users
       where ($1::text is null or email = $1)
       order by (plan = 'plus') desc, updated_at desc
@@ -385,8 +400,11 @@ articlesRouter.get("/admin/members", requireAdmin, route(async (req, res) => {
       id: row.id,
       email: row.email,
       displayName: row.display_name,
-      plan: row.plan,
+      plan: planFor(row),
+      storedPlan: row.plan,
       planExpiresAt: row.plan_expires_at instanceof Date ? row.plan_expires_at.toISOString().slice(0, 10) : row.plan_expires_at,
+      isAdmin: isAdmin(row),
+      fromSettings: isBootstrapAdmin(row.email),
     })),
   });
 }));
@@ -411,4 +429,94 @@ articlesRouter.put("/admin/members/:id/plan", requireAdmin, route(async (req, re
       planExpiresAt: member.plan_expires_at instanceof Date ? member.plan_expires_at.toISOString().slice(0, 10) : member.plan_expires_at,
     },
   });
+}));
+
+articlesRouter.post("/admin/invitations", requireAdmin, route(async (req, res) => {
+  if (!(await invitationLimiter(req.user.id))) {
+    throw new HttpError(429, "RATE_LIMITED", "Too many invitations. Try again in an hour.");
+  }
+  const { email, plan, expiresAt } = parse(invitationBody, req.body);
+  const token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const invitation = await queryOne(
+    `insert into invitations (email, token_hash, plan, plan_expires_at, created_by)
+     values ($1, $2, $3, $4::date, $5)
+     returning id`,
+    [email, tokenHash, plan, expiresAt || null, req.user.id]
+  );
+  const appOrigin = (process.env.APP_ORIGIN || "").split(",")[0].trim().replace(/\/+$/, "") || origin(req);
+  try {
+    await sendInvitationEmail({
+      email,
+      plan,
+      planExpiresAt: expiresAt || null,
+      inviteUrl: `${appOrigin}/invite/${token}`,
+    });
+  } catch (error) {
+    await query("update invitations set cancelled_at = now() where id = $1", [invitation.id]);
+    console.error("[admin] invitation email failed:", error.message);
+    throw new HttpError(502, "EMAIL_FAILED", "The invitation could not be emailed. Check the email provider and try again.");
+  }
+  console.log(`[admin] ${req.user.email} invited ${email} to ${plan}${expiresAt ? ` through ${expiresAt}` : ""}`);
+  res.status(201).json({ invited: email, plan, expiresAt: expiresAt || null });
+}));
+
+articlesRouter.get("/invitations/:token", route(async (req, res) => {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(req.params.token)) throw new HttpError(404, "NOT_FOUND", "Invitation not found.");
+  const tokenHash = crypto.createHash("sha256").update(req.params.token).digest("hex");
+  const invitation = await queryOne(
+    `select email, plan, plan_expires_at, expires_at, accepted_at, cancelled_at
+       from invitations where token_hash = $1`,
+    [tokenHash]
+  );
+  if (!invitation || invitation.cancelled_at) throw new HttpError(404, "NOT_FOUND", "Invitation not found.");
+  res.json({
+    email: invitation.email,
+    plan: invitation.plan,
+    planExpiresAt: invitation.plan_expires_at instanceof Date ? invitation.plan_expires_at.toISOString().slice(0, 10) : invitation.plan_expires_at,
+    expiresAt: invitation.expires_at,
+    accepted: Boolean(invitation.accepted_at),
+    expired: new Date(invitation.expires_at).getTime() <= Date.now(),
+  });
+}));
+
+articlesRouter.post("/invitations/:token/accept", requireUser, route(async (req, res) => {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(req.params.token)) throw new HttpError(404, "NOT_FOUND", "Invitation not found.");
+  const tokenHash = crypto.createHash("sha256").update(req.params.token).digest("hex");
+  const result = await transaction(async ({ queryOne: txQueryOne, query: txQuery }) => {
+    const invitation = await txQueryOne(
+      `select * from invitations where token_hash = $1 for update`,
+      [tokenHash]
+    );
+    if (!invitation || invitation.cancelled_at) throw new HttpError(404, "NOT_FOUND", "Invitation not found.");
+    if (invitation.email !== req.user.email) {
+      throw new HttpError(403, "INVITATION_EMAIL_MISMATCH", `Sign in as ${invitation.email} to accept this invitation.`);
+    }
+    if (invitation.accepted_at) {
+      if (invitation.accepted_by === req.user.id) return { accepted: true, alreadyAccepted: true };
+      throw new HttpError(409, "INVITATION_USED", "This invitation has already been accepted.");
+    }
+    if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+      throw new HttpError(410, "INVITATION_EXPIRED", "This invitation has expired. Ask the inviter for a new one.");
+    }
+    if (invitation.plan === "plus") {
+      await txQuery(
+        `update users
+            set plan = 'plus',
+                plan_expires_at = case
+                  when plan = 'plus' and (plan_expires_at is null or plan_expires_at >= $2::date) then plan_expires_at
+                  else $2::date
+                end,
+                updated_at = now()
+          where id = $1`,
+        [req.user.id, invitation.plan_expires_at]
+      );
+    }
+    await txQuery(
+      `update invitations set accepted_at = now(), accepted_by = $2 where id = $1`,
+      [invitation.id, req.user.id]
+    );
+    return { accepted: true, alreadyAccepted: false };
+  });
+  res.json(result);
 }));

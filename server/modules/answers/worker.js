@@ -2,6 +2,7 @@ import { prompts } from "../../../src/data/prompts.js";
 import { gatherSources } from "./gather.js";
 import { aggregateSources } from "./aggregate.js";
 import { claimAnswerPool, failAnswerPool, saveAnswerPool, syncAnswerPools } from "./store.js";
+import { deterministicPool, poolOutput } from "./task.js";
 
 const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]));
 
