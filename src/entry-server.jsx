@@ -10,6 +10,7 @@ export { publicPaths, routeMeta, metaHtml, SITE, TRACK_SEO, roundPath, trackPath
 export { prompts, tracks, getTrack } from "./data/prompts.js";
 export { CATEGORIES, TOPICS, topicPath } from "./learn/catalog.js";
 export { preloadAllTopics } from "./learn/topics.js";
+export { setCommunityArticles, communityArticles } from "./learn/community.js";
 export { aiLimits } from "./data/plans.js";
 
 export function render(url) {
