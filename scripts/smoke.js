@@ -176,7 +176,21 @@ try {
     const usedBefore = opened.body.allowance.turns.used;
 
     const body = audio();
-    const sent = await call("POST", url, body);
+    const sending = call("POST", url, body);
+    let reserved = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if ((await query("select id from interview_turns where request_id = $1", [body.requestId])).length) {
+        reserved = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(reserved, "the first request reserves its turn");
+    const inProgress = await call("POST", url, body);
+    assert.equal(inProgress.status, 409);
+    assert.equal(inProgress.body.error.code, "INTERVIEWER_BUSY");
+
+    const sent = await sending;
     assert.equal(sent.status, 201, JSON.stringify(sent.body));
     const [mine, reply] = sent.body.turns;
     assert.deepEqual([mine.role, mine.kind, mine.content, mine.audio], ["learner", "audio", "", { durationMs: 9000 }], "the learner sees only the duration");

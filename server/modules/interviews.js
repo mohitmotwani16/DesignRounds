@@ -352,7 +352,8 @@ async function replayed(req, session, requestId, kind) {
     throw new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used for another message.");
   }
   const reply = await queryOne("select * from interview_turns where session_id = $1 and seq = $2 and role = 'interviewer'", [session.id, turn.seq + 1]);
-  return { turns: [turn, reply].filter(Boolean).map(presentTurn), replayed: true };
+  if (!reply) throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
+  return { turns: [turn, reply].map(presentTurn), replayed: true };
 }
 
 const ROUND_FINISHED = "This round is finished, so the interview has ended. Your review is in the Review tab.";

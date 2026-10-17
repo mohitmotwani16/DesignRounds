@@ -50,8 +50,9 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
       appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
       return true;
     } catch (error) {
-      setSendError({ message: error.message, draft: content, intent, retryable: error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY" });
-      if (error.status !== 0) attempt.current = null;
+      const retryable = error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY";
+      setSendError({ message: error.message, draft: content, intent, retryable });
+      if (!retryable) attempt.current = null;
       return false;
     } finally {
       pendingRef.current = false;
