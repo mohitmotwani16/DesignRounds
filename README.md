@@ -1,6 +1,6 @@
 # DesignRounds
 
-DesignRounds is a practice portal for system design interviews. Learners pick a prompt, build a design on a draw.io-style canvas, and get an AI review of the design and their reasoning. An AI interviewer conversation is next. See [DESIGNROUNDS_PRODUCT_AND_SYSTEM_DESIGN.md](DESIGNROUNDS_PRODUCT_AND_SYSTEM_DESIGN.md) for the product and system design.
+DesignRounds is a practice portal for system design interviews. Learners pick a prompt, build a design on a draw.io-style canvas, practise with an AI interviewer, and get an AI review of the design and their reasoning. See [DESIGNROUNDS_PRODUCT_AND_SYSTEM_DESIGN.md](DESIGNROUNDS_PRODUCT_AND_SYSTEM_DESIGN.md) for the product and system design.
 
 ## What's in this version
 
@@ -11,12 +11,13 @@ DesignRounds is a practice portal for system design interviews. Learners pick a 
 - **Saving:** designs autosave to the database. Saves use optimistic versioning, so a stale tab can't overwrite newer work, and periodic checkpoints are stored as diagram versions. A finished round becomes read-only and can be reopened.
 
 - **AI final review:** after finishing a round, learners request a rubric-based review: an overall score out of 100, six scored dimensions, strengths, risks, next steps, and (Plus) a decision-by-decision analysis of whether each choice was justified, needed, and right-sized. Reviews are capped per round and per month by plan. Free users see scores and the top strength and risk; Plus users see everything.
+- **AI interviewer and answer context:** Plus learners can discuss their design with a live interviewer, by text or voice. Each answer is kept verbatim and separately analyzed into technical decisions and assumptions, communication gaps, and (for speech) a filler-reduced copy. The technical context informs later interviewer turns and the final design review; communication feedback uses the original answer and delivery measurements.
 
 - **Community handbook:** signed-in learners can draft and preview articles before submitting them. Admins review submissions, exchange feedback with authors, and publish approved work to the Learn handbook.
 - **Memberships and invitations:** admins can search existing users, change Free/Plus access, grant or remove admin status, and email a Free or expiring Plus invitation from `/admin`. Invitees verify the invited email, then accept their one-time link within 14 days. New accounts receive a welcome email after their first successful sign-in.
 - **Admin bootstrap:** the migration promotes `designrounds.app@gmail.com` to admin while preserving any existing account data. Additional bootstrap admins can be configured with `ADMIN_EMAILS`; admins can manage other existing accounts in the admin UI.
 
-The AI interviewer and payments are not built yet. Plus rounds can be browsed but not started on a Free account (use the dev plan switch to test them).
+Payments are not built yet. Plus rounds can be browsed but not started on a Free account (use the dev plan switch to test them).
 
 ## Run locally
 

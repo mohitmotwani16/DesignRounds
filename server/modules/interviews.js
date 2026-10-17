@@ -6,6 +6,7 @@ import { HttpError, afterResponse, createLimiter, parse, route } from "../http.j
 import { aiConfig } from "./ai/config.js";
 import { isSignificantKind } from "./ai/components.js";
 import { clean, describeDiagram, nameComponents } from "./ai/context.js";
+import { filterFillerWords, parseAnswerContext } from "./ai/communication.js";
 import { AiError, toHttpError } from "./ai/errors.js";
 import { guideFor } from "./ai/guides.js";
 import { runTask } from "./ai/run.js";
@@ -143,11 +144,19 @@ function openingMessage(prompt) {
 
 // Saves the interviewer's turn and the state it implies, and settles the credit. The
 // interviewer's private note on how the learner communicated is kept on the learner's turn.
-async function saveInterviewerTurn({ session, state, output, trigger, design, creditId, hint, learnerTurnId = null }) {
+async function saveInterviewerTurn({ session, state, output, trigger, design, creditId, hint, learnerTurn = null }) {
   return transaction(async (conn) => {
     const note = output.communication;
-    if (learnerTurnId && note && (note.signals.length || note.note)) {
-      await conn.query("update interview_turns set communication = $2::jsonb where id = $1", [learnerTurnId, JSON.stringify({ signals: [...new Set(note.signals)], note: note.note })]);
+    if (learnerTurn && trigger === "reply") {
+      const answerContext = {
+        technicalContext: output.answerContext.technicalContext,
+        communicationGaps: [...new Set(output.answerContext.communicationGaps)],
+        filteredContent: learnerTurn.kind === "audio" ? filterFillerWords(learnerTurn.content) : learnerTurn.content,
+      };
+      await conn.query(
+        "update interview_turns set communication = $2::jsonb, answer_context = $3::jsonb where id = $1",
+        [learnerTurn.id, JSON.stringify({ signals: [...new Set(note.signals)], note: note.note }), JSON.stringify(answerContext)]
+      );
     }
     const seq = await nextSeq(conn, session.id);
     const nodeIds = output.nodeIds.filter((id) => design.componentIds.has(id));
@@ -207,9 +216,19 @@ function taskInput({ session, state, turns, trigger, selectedNodeId, design, cha
 export async function interviewTranscript(sessionId) {
   const state = await queryOne("select summary, summarized_through from interview_state where session_id = $1", [sessionId]);
   if (!state) return "";
-  const turns = await query("select role, kind, content from interview_turns where session_id = $1 and seq > $2 order by seq desc limit 40", [sessionId, state.summarized_through]);
+  const turns = await query("select role, kind, content, answer_context from interview_turns where session_id = $1 and seq > $2 order by seq desc limit 40", [sessionId, state.summarized_through]);
   const speaker = (turn) => (turn.role !== "learner" ? "Interviewer" : turn.kind === "audio" ? "Learner (spoken)" : "Learner");
-  const lines = turns.reverse().map((turn) => `${speaker(turn)}: ${turn.kind === "audio" && !turn.content ? "(voice answer, not transcribed)" : clean(turn.content, 800)}`);
+  const lines = turns.reverse().flatMap((turn) => {
+    const context = parseAnswerContext(turn.answer_context);
+    const answer = `${speaker(turn)}${turn.role === "learner" ? " (verbatim)" : ""}: ${turn.kind === "audio" && !turn.content ? "(voice answer, not transcribed)" : clean(turn.content, 800)}`;
+    if (turn.role !== "learner" || !context) return [answer];
+    return [
+      answer,
+      context.filteredContent !== turn.content ? `  Filler-reduced answer: ${clean(context.filteredContent, 800)}` : "",
+      context.technicalContext ? `  Extracted technical context: ${clean(context.technicalContext, 900)}` : "",
+      context.communicationGaps?.length ? `  Identified communication gaps: ${context.communicationGaps.join(", ")}` : "",
+    ].filter(Boolean);
+  });
   return [state.summary ? `Earlier: ${clean(state.summary, 3000)}` : "", ...lines].filter(Boolean).join("\n").slice(0, 12_000);
 }
 
@@ -227,7 +246,18 @@ export async function communicationInput(sessionId) {
     if (row.role === "interviewer") { question = row.content; continue; }
     if (row.kind !== "message" && row.kind !== "audio") continue;
     if (row.kind === "audio" && !row.content) continue;
-    answers.push({ question, spoken: row.kind === "audio", content: row.content, durationMs: row.audio_duration_ms, delivery: row.delivery, note: row.communication });
+    const context = parseAnswerContext(row.answer_context) ?? {};
+    answers.push({
+      question,
+      spoken: row.kind === "audio",
+      content: row.content,
+      filteredContent: context.filteredContent ?? (row.kind === "audio" ? filterFillerWords(row.content) : row.content),
+      technicalContext: context.technicalContext ?? "",
+      communicationGaps: context.communicationGaps ?? [],
+      durationMs: row.audio_duration_ms,
+      delivery: row.delivery,
+      note: row.communication,
+    });
   }
   if (answers.length < MIN_ANSWERS_FOR_COMMUNICATION) return null;
 
@@ -341,7 +371,7 @@ async function replyToLearner({ req, session, reserved, hint = false }) {
     { userId: req.user.id, sessionId: session.id }
   );
   if (!data.message.trim()) throw new AiError("INVALID_OUTPUT", "The interviewer returned an empty reply.");
-  return saveInterviewerTurn({ session, state: reserved.state, output: data, trigger, design, creditId: reserved.creditId, hint, learnerTurnId: hint ? null : reserved.learner.id });
+  return saveInterviewerTurn({ session, state: reserved.state, output: data, trigger, design, creditId: reserved.creditId, hint, learnerTurn: hint ? null : reserved.learner });
 }
 
 // A retried request returns the turns the first attempt produced.
@@ -437,6 +467,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, 
         [reserved.learner.id, speech.model, JSON.stringify(speech.delivery)]
       );
     });
+    reserved.learner.content = speech.text.slice(0, 4000);
     result = await replyToLearner({ req, session, reserved });
   } catch (error) {
     await undoLearnerTurn(session, reserved);

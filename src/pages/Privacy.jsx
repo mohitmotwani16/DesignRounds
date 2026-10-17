@@ -23,8 +23,8 @@ export default function PrivacyPage() {
           <ul>
             <li><strong>Account details:</strong> your email address, and the profile you choose to add: display name, target role, experience level and headline.</li>
             <li><strong>Google sign-in:</strong> if you continue with Google, we receive your Google account ID, email address, whether Google has verified it, and your name. We don't receive your password or access your Gmail, contacts, Drive or anything else.</li>
-            <li><strong>Your practice work:</strong> the designs you build, your notes and explanations, earlier versions of a design, your conversations with the AI interviewer, and the reviews generated for you.</li>
-            <li><strong>Voice answers:</strong> if you answer the interviewer by voice (a Plus feature), we store the recording, a written transcript of it, and measurements of your delivery, such as speaking pace, filler words and pauses, which we use for communication feedback. We don't use your voice to identify you.</li>
+            <li><strong>Your practice work:</strong> the designs you build, your notes and explanations, earlier versions of a design, your conversations with the AI interviewer, extracted technical context and communication gaps, and the reviews generated for you.</li>
+            <li><strong>Voice answers:</strong> if you answer the interviewer by voice (a Plus feature), we store the recording, a verbatim transcript, a filler-reduced copy for technical context, and measurements of your delivery, such as speaking pace, filler words and pauses. These help inform later interviewer turns and your review. We don't use your voice to identify you.</li>
             <li><strong>Security and sign-in records:</strong> one-time sign-in codes (stored only as a hash), the browser user-agent of each signed-in session, and IP addresses used for rate limiting and abuse prevention.</li>
             <li><strong>Usage counts:</strong> how many AI reviews and interviewer replies you've used, so plan limits can be applied.</li>
           </ul>
@@ -49,13 +49,13 @@ export default function PrivacyPage() {
             <li><strong>Resend:</strong> delivers sign-in code emails.</li>
             <li><strong>Groq:</strong> converts voice answers to text. It receives the recording only, not your email address or name.</li>
             <li><strong>Google:</strong> provides Google sign-in, if you use it.</li>
-            <li><strong>AI provider (currently the Google Gemini API):</strong> receives your design, notes and interview answers to generate replies and reviews. It does not receive your email address. Depending on the provider's terms for the service tier we use, the provider may retain or review this content to improve its services, so don't put personal or confidential information in your designs.</li>
+            <li><strong>AI provider (currently the Google Gemini API):</strong> receives your design, notes and interview answers, including filler-reduced copies and extracted answer context, to generate replies and reviews. It does not receive your email address. Depending on the provider's terms for the service tier we use, the provider may retain or review this content to improve its services, so don't put personal or confidential information in your designs.</li>
           </ul>
           <p>We may disclose information if required by law, or to protect the security of the service and its users.</p>
 
           <h2>How long we keep it</h2>
           <ul>
-            <li>Your account, designs and reviews are kept until you delete them or your account.</li>
+            <li>Your account, designs, interview transcripts, derived answer context and reviews are kept until you delete them or your account.</li>
             <li>Voice recordings are deleted 30 days after they're transcribed. The transcript and delivery measurements stay with the practice round until you delete it or your account.</li>
             <li>Sign-in codes are deleted within a day, expired sessions are removed daily, and rate-limit records are removed once their time window ends.</li>
           </ul>

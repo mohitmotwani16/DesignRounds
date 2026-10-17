@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { SIGNAL_IDS, describeDelivery, describeSignals } from "../communication.js";
+import { GAP_SIGNALS, SIGNAL_IDS, describeDelivery, describeSignals, filterFillerWords, parseAnswerContext } from "../communication.js";
 import { clean } from "../context.js";
 import { policy, policyVersion } from "../prompts/policy.js";
 import { list, oneOf, text } from "../schema.js";
 
 export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
-export const interviewerTemplateVersion = `interviewer-v2/${policyVersion}`;
+export const interviewerTemplateVersion = `interviewer-v3/${policyVersion}`;
 
 const output = z.object({
   action: oneOf(["respond", "ask", "skip"], "'respond' when replying to the learner. For a proactive look at the canvas: 'ask' to raise one question, or 'skip' to stay quiet."),
@@ -18,6 +18,10 @@ const output = z.object({
     signals: list(oneOf(SIGNAL_IDS, "A communication signal."), { max: 4 }, "Signals clearly present in the learner's latest message. Empty when the trigger isn't 'reply'."),
     note: text(240, "One specific sentence on how the learner communicated in their latest message. Empty when the trigger isn't 'reply'."),
   }).describe("Your private interviewer notes on HOW the learner communicated in their latest message. Never shown during the interview."),
+  answerContext: z.object({
+    technicalContext: text(900, "A concise, factual extraction of the learner's technical choices, assumptions, rationale, trade-offs, scale and unresolved technical questions from their latest answer. Do not invent details. Empty when the trigger isn't 'reply' or the answer contains no technical information."),
+    communicationGaps: list(oneOf(GAP_SIGNALS, "A communication gap clearly present in the learner's latest answer."), { max: 4 }, "Communication gaps in the latest answer only. Empty when the trigger isn't 'reply' or no gap is clearly present."),
+  }).describe("A private structured extraction of the learner's latest answer, separate from the interviewer reply."),
 });
 
 const instructions = `## Your task: live interviewer
@@ -45,18 +49,31 @@ Like a real interviewer jotting notes, record how the learner communicated in th
 ${describeSignals()}
 For spoken answers, also use the delivery numbers, but a few fillers or mis-transcribed words are normal speech, not a problem. Judge the message against the question it answered: a long answer to a broad question is not over-explaining. The note is one specific sentence, for example "Opened with 'I'm not sure' twice before committing to Redis; the reasoning was sound once stated." Never mention these notes, or how the learner speaks, in your message.
 
+Structured answer context (trigger "reply" only; otherwise leave both fields empty):
+- Extract the technical facts and decisions the learner actually stated, including their rationale, trade-offs, assumptions and open questions. Keep it short and useful as memory for later interviewer turns and the final review. Do not infer unstated architecture or treat interviewer suggestions as learner decisions.
+- Use the filler-reduced learner text when available. The original transcript remains private for exact quotes and communication feedback. Treat transcription uncertainty as uncertainty, not as a learner mistake.
+- communicationGaps contains only clearly observed communication habits from this answer, using the gap labels in the schema. It is separate from technical correctness and must not repeat strengths such as clear or confident.
+
 Reply with a single JSON object that matches the provided schema.`;
 
 const system = `${policy}\n\n${instructions}`;
 
 function formatTurns(turns) {
   if (!turns.length) return "(no messages yet)";
-  return turns.map((turn) => (turn.role === "learner"
-    ? turn.kind === "audio"
-      // Speech-to-text keeps fillers and can mishear terms: judge the ideas, not the wording.
-      ? `Learner (spoken answer, auto-transcribed; may include filler words and mis-heard terms) ${describeDelivery(turn.delivery, turn.audio_duration_ms)}: ${clean(turn.content, 2000) || "(not transcribed; you can't hear it, so don't respond to its content)"}`
-      : `Learner${turn.kind === "hint_request" ? " (asked for a hint)" : ""}: ${clean(turn.content, 2000)}`
-    : `Interviewer (${turn.kind}): ${clean(turn.content, 1500)}`)).join("\n");
+  return turns.map((turn) => {
+    if (turn.role !== "learner") return `Interviewer (${turn.kind}): ${clean(turn.content, 1500)}`;
+    const context = parseAnswerContext(turn.answer_context);
+    const content = context
+      ? context.filteredContent
+      : turn.kind === "audio" ? filterFillerWords(turn.content) : turn.content;
+    const prefix = turn.kind === "audio"
+      ? `Learner (spoken answer, auto-transcribed; may include mis-heard terms) ${describeDelivery(turn.delivery, turn.audio_duration_ms)}`
+      : `Learner${turn.kind === "hint_request" ? " (asked for a hint)" : ""}`;
+    const technicalContext = context?.technicalContext
+      ? `\n  Previously extracted technical context: ${clean(context.technicalContext, 900)}`
+      : "";
+    return `${prefix}: ${clean(content, 2000) || "(no substantive words after filler filtering)"}${technicalContext}`;
+  }).join("\n");
 }
 
 function buildUser({ prompt, guide, design, state, turns, trigger, selected, changes, hints }) {
@@ -88,22 +105,27 @@ Trigger: ${trigger}`;
 function fake({ trigger, turns, candidates = [], state }) {
   const last = [...turns].reverse().find((turn) => turn.role === "learner");
   const silent = { signals: [], note: "" };
+  const emptyContext = { technicalContext: "", communicationGaps: [] };
   if (trigger === "proactive") {
-    if (!candidates.length) return { action: "skip", intent: "question", message: "", nodeIds: [], stage: state.stage, coveredNodeIds: [], communication: silent };
-    return { action: "ask", intent: "question", message: `(Sample interviewer) Why did you add ${candidates[0].label}, and what would break without it?`, nodeIds: [candidates[0].id], stage: state.stage, coveredNodeIds: [], communication: silent };
+    if (!candidates.length) return { action: "skip", intent: "question", message: "", nodeIds: [], stage: state.stage, coveredNodeIds: [], communication: silent, answerContext: emptyContext };
+    return { action: "ask", intent: "question", message: `(Sample interviewer) Why did you add ${candidates[0].label}, and what would break without it?`, nodeIds: [candidates[0].id], stage: state.stage, coveredNodeIds: [], communication: silent, answerContext: emptyContext };
   }
-  if (trigger === "hint") return { action: "respond", intent: "hint", message: "(Sample hint) Think about what happens when traffic grows tenfold. Which part breaks first?", nodeIds: [], stage: state.stage, coveredNodeIds: [], communication: silent };
+  if (trigger === "hint") return { action: "respond", intent: "hint", message: "(Sample hint) Think about what happens when traffic grows tenfold. Which part breaks first?", nodeIds: [], stage: state.stage, coveredNodeIds: [], communication: silent, answerContext: emptyContext };
   const hedged = /\b(um|uh|not sure|maybe)\b/i.test(last?.content || "");
   return {
     action: "respond",
     intent: "acknowledgement",
-    message: `(Sample interviewer) Thanks. You said "${(last?.content || "").slice(0, 60)}". What trade-off does that create?`,
+    message: `(Sample interviewer) Thanks. You said "${filterFillerWords(last?.content || "").slice(0, 60)}". What trade-off does that create?`,
     nodeIds: [],
     stage: state.stage === "requirements" ? "high_level" : state.stage,
     coveredNodeIds: [],
     communication: hedged
       ? { signals: ["hedging", "rambling"], note: "(Sample note) Hesitated and restarted before committing to the cache." }
       : { signals: ["clear", "concise"], note: "(Sample note) Stated the choice and the reason in one sentence." },
+    answerContext: {
+      technicalContext: last?.content ? `(Sample technical context) ${filterFillerWords(last.content)}` : "",
+      communicationGaps: hedged ? ["hedging"] : [],
+    },
   };
 }
 
