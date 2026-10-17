@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ArrowUp, Check, ChevronDown, LayoutGrid, PlayCircle, RotateCcw, Search, SearchX, SlidersHorizontal, WifiOff, X } from "lucide-react";
+import { practiceTracks } from "../data/interests.js";
 import { prompts, topics, tracks } from "../data/prompts.js";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
@@ -55,7 +56,7 @@ function useCatalog(query) {
     controller.current = abort;
     setState((current) => (cursor
       ? { ...current, status: "more", error: null }
-      : { key, items: [], total: current.key === key ? current.total : null, facets: current.facets, nextCursor: null, status: "loading", error: null }));
+      : { key, ...searchCatalog({ ...query, limit: PAGE_SIZE }), status: "loading", error: null }));
     try {
       const page = await api.catalog({ ...query, limit: PAGE_SIZE, cursor }, { signal: abort.signal });
       setState((current) => ({
@@ -88,7 +89,7 @@ function useCatalog(query) {
 }
 
 export default function LibraryPage({ onStart, track: routeTrack }) {
-  const { status: authStatus } = useAuth();
+  const { status: authStatus, user } = useAuth();
   const [search, setSearch] = useState("");
   const track = validTrack(routeTrack);
   const [levels, setLevels] = useState([]);
@@ -104,7 +105,8 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
   const sentinelRef = useRef(null);
   const q = useDebounced(search.trim(), 250);
 
-  const query = useMemo(() => ({ q, track, level: levels, duration: durations, topic: selectedTopics, access, sort }), [q, track, levels, durations, selectedTopics, access, sort]);
+  const prefer = useMemo(() => (sort === "recommended" ? practiceTracks(user) : []), [sort, user]);
+  const query = useMemo(() => ({ q, track, level: levels, duration: durations, topic: selectedTopics, access, sort, prefer }), [q, track, levels, durations, selectedTopics, access, sort, prefer]);
   const catalog = useCatalog(query);
 
   useEffect(() => {
@@ -332,7 +334,7 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
           ) : (
             <div className="rounds">
               {catalog.items.map((round, index) => <RoundCard key={round.id} round={round} onStart={onStart} status={statusByPrompt[round.id]} index={index} />)}
-              {(loading || catalog.status === "more") && Array.from({ length: loading ? 6 : 3 }, (_, index) => <RoundCardSkeleton key={`sk-${index}`} />)}
+              {((loading && !catalog.items.length) || catalog.status === "more") && Array.from({ length: loading ? 6 : 3 }, (_, index) => <RoundCardSkeleton key={`sk-${index}`} />)}
             </div>
           )}
 

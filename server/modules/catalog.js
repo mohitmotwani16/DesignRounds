@@ -28,6 +28,7 @@ const querySchema = z.object({
   topic: csv(null),
   access: z.enum(["all", "free", "paid"]).optional().default("all"),
   sort: z.enum(Object.keys(SORTS)).optional().default("recommended"),
+  prefer: csv(tracks.map((track) => track.id)),
   cursor: z.string().max(40).optional(),
   limit: z.coerce.number().int().min(1).max(PAGE_MAX).optional().default(PAGE_DEFAULT),
 });
