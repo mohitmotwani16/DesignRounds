@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, Check, Eye, FileText, LoaderCircle, MessageSquare, PenLine, Plus, Send, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { CATEGORIES, LEARN_PATH, categoryById } from "../learn/catalog.js";
+import { CATEGORIES, LEARN_PATH, WRITABLE_CATEGORY_IDS, categoryById } from "../learn/catalog.js";
 import { ARTICLE_LIMITS, LEVELS, articleProblems, slugify } from "../learn/markdown.js";
 import { SITE } from "../seo.js";
 import { Link, navigate } from "../router.js";
 import { ArticleBody, CommunityArticleHeader } from "./Learn.jsx";
 import { SiteFooter } from "../components/site.jsx";
 
-const WRITABLE_CATEGORIES = CATEGORIES.filter((category) => category.id !== "interview");
+const WRITABLE_CATEGORIES = CATEGORIES.filter((category) => WRITABLE_CATEGORY_IDS.includes(category.id));
 const STATUS = {
   draft: ["Draft", "muted"],
   in_review: ["In review", "accent"],

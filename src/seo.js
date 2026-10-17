@@ -1,6 +1,7 @@
 import { findPrompt, getTrack, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, LEARN_UPDATED, TOPICS, categoryById, topicMeta, topicPath } from "./learn/catalog.js";
 import { communityArticle, communityArticles } from "./learn/community.js";
+import { ROADMAPS, roadmapSlugs } from "./learn/roadmaps.js";
 
 // Search and sharing metadata for every route: title, description, canonical URL,
 // robots, Open Graph and JSON-LD. Used by the build-time prerenderer (baked into the
@@ -197,7 +198,7 @@ export function routeMeta(path) {
     return {
       ...base,
       title: "System Design Handbook: Concepts, Patterns and Trade-offs",
-      description: `Free, in-depth guides to ${TOPICS.length} system design concepts with diagrams and real-world examples: caching, sharding, load balancing, Kafka, consensus and more.`,
+      description: `Free system design handbook: ${TOPICS.length} guides with diagrams, plus step-by-step roadmaps for backend, data engineering, ML, platform, distributed and frontend.`,
       jsonLd: [
         {
           "@context": "https://schema.org",
@@ -244,7 +245,8 @@ export function routeMeta(path) {
   const learnTopic = path.startsWith(`${LEARN_PATH}/`) ? topicMeta(path.slice(LEARN_PATH.length + 1)) : null;
   if (learnTopic) {
     const category = categoryById(learnTopic.category);
-    const guide = category.id === "interview";
+    const guide = category.id === "interview" || category.id === "roadmaps";
+    const roadmap = Object.values(ROADMAPS).find((entry) => entry.page === learnTopic.slug);
     return {
       ...base,
       title: fitTitle(`${learnTopic.title} | DesignRounds`, learnTopic.title, `${learnTopic.short} Explained | DesignRounds`, `${learnTopic.short} Explained`),
@@ -268,6 +270,13 @@ export function routeMeta(path) {
           isAccessibleForFree: true,
         },
         breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH], [category.title, `${LEARN_PATH}#${category.id}`], [learnTopic.short, path]]),
+        ...(roadmap ? [{
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: `${roadmap.title} roadmap`,
+          itemListOrder: "https://schema.org/ItemListOrderAscending",
+          itemListElement: roadmapSlugs(roadmap).map((slug, index) => ({ "@type": "ListItem", position: index + 1, url: absolute(topicPath(slug)), name: topicMeta(slug)?.title ?? slug })),
+        }] : []),
       ],
     };
   }

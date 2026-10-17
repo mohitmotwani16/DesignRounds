@@ -5,7 +5,7 @@ import { query, queryOne, transaction } from "../db.js";
 import { sendEmail, sendInvitationEmail } from "../email.js";
 import { isProduction } from "../flags.js";
 import { HttpError, afterResponse, createLimiter, parse, route } from "../http.js";
-import { CATEGORIES, topicMeta } from "../../src/learn/catalog.js";
+import { CATEGORIES, WRITABLE_CATEGORY_IDS, topicMeta } from "../../src/learn/catalog.js";
 import { LEVELS, SLUG_PATTERN, articleProblems } from "../../src/learn/markdown.js";
 import { isAdmin, isBootstrapAdmin, requireAdmin, requireUser } from "./identity.js";
 import { planFor } from "./plans.js";
@@ -24,7 +24,7 @@ const writeLimiter = createLimiter({ name: "article-write", windowMs: 60 * 60_00
 const submitLimiter = createLimiter({ name: "article-submit", windowMs: 24 * 60 * 60_000, max: 10 });
 const invitationLimiter = createLimiter({ name: "admin-invitation", windowMs: 60 * 60_000, max: 20 });
 
-const categoryIds = CATEGORIES.filter((category) => category.id !== "interview").map((category) => category.id);
+const categoryIds = WRITABLE_CATEGORY_IDS;
 const fields = {
   title: z.string().trim().max(120),
   shortTitle: z.string().trim().max(60),
@@ -272,7 +272,7 @@ articlesRouter.post("/articles/:id/submit", requireUser, route(async (req, res) 
   if (!EDITABLE.has(row.status)) throw new HttpError(409, "NOT_EDITABLE", "This article has already been submitted.");
   const problems = articleProblems(
     { title: row.title, shortTitle: row.short_title, description: row.description, category: row.category, level: row.level, slug: row.slug, body: row.body },
-    { categories: CATEGORIES.filter((category) => category.id !== "interview"), taken: reservedSlug }
+    { categories: CATEGORIES.filter((category) => WRITABLE_CATEGORY_IDS.includes(category.id)), taken: reservedSlug }
   );
   if (problems.length) return res.status(422).json({ error: { code: "NOT_READY", message: "Fix these before submitting.", problems } });
   if (!(await submitLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "You've submitted a lot today. Try again tomorrow.");

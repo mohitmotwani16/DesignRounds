@@ -125,7 +125,7 @@ export function SiteFooter() {
             <h2>Learn</h2>
             <ul>
               <li><Link to={LEARN_PATH}>System design handbook</Link></li>
-              {CATEGORIES.slice(0, 6).map((category) => <li key={category.id}><Link to={topicPath(category.topics[0].slug)}>{category.title}</Link></li>)}
+              {CATEGORIES.find((category) => category.id === "roadmaps").topics.map((topic) => <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}</Link></li>)}
               <li><Link to={topicPath("system-design-interview")}>Interview preparation</Link></li>
               <li><Link to="/signin">Sign in</Link></li>
             </ul>

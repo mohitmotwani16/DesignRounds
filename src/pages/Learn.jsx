@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronRight, Clock3, LoaderCircle, Menu, PenLine, Search, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronRight, Clock3, ExternalLink, LoaderCircle, Map as MapIcon, Menu, PenLine, Search, Users, X } from "lucide-react";
 import { getTrack, prompts, tracks } from "../data/prompts.js";
-import { CATEGORIES, LEARN_PATH, LEARN_UPDATED, START_HERE, TOPICS, categoryById, neighbours, topicMeta, topicPath } from "../learn/catalog.js";
+import { CATEGORIES, DISCIPLINES, LEARN_PATH, LEARN_UPDATED, START_HERE, TOPICS, categoryById, neighbours, topicMeta, topicPath } from "../learn/catalog.js";
 import { Diagram } from "../learn/Diagram.jsx";
+import { Roadmap } from "../learn/Roadmap.jsx";
+import { roadmapsFor } from "../learn/roadmaps.js";
 import { useTopic } from "../learn/topics.js";
 import { communityArticle, communityInCategory, loadCommunityArticle, loadedCommunityArticle, useCommunityArticles } from "../learn/community.js";
 import { markdownToBlocks } from "../learn/markdown.js";
@@ -124,6 +126,7 @@ export function Block({ block }) {
       </div>
     );
     case "rounds": return <RoundLinks ids={block.ids} />;
+    case "roadmap": return <Roadmap id={block.id} />;
     case "questions-by-track": return <QuestionsByTrack />;
     default: return null;
   }
@@ -185,6 +188,7 @@ export function LearnTopicPage({ slug }) {
   const { body, loadError, retry } = useTopic(slug);
   const category = categoryById(meta.category);
   const { previous, next } = neighbours(slug);
+  const onRoadmaps = meta.category === "roadmaps" ? [] : roadmapsFor(slug);
 
   const headings = useMemo(() => {
     if (!body) return [];
@@ -192,6 +196,7 @@ export function LearnTopicPage({ slug }) {
     if (body.generated === "questions") list.push(...tracks.map((track) => ({ id: headingId(TRACK_SEO[track.id].h1), text: TRACK_SEO[track.id].h1 })));
     if (body.uses?.length) list.push({ id: "where-its-used", text: "Where it's used" });
     if (body.interview?.length) list.push({ id: "in-an-interview", text: "In an interview" });
+    if (body.reading?.length) list.push({ id: "further-reading", text: "Further reading" });
     return list;
   }, [body]);
 
@@ -257,6 +262,29 @@ export function LearnTopicPage({ slug }) {
                 </aside>
               )}
 
+              {body.reading?.length > 0 && (
+                <section className="learn-reading">
+                  <h2 id="further-reading">Further reading</h2>
+                  <ul>
+                    {body.reading.map((source) => (
+                      <li key={source.url}>
+                        <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<ExternalLink size={12} aria-hidden="true" /></a>
+                        <span>{source.publisher}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {onRoadmaps.length > 0 && (
+                <aside className="learn-on-roadmap" aria-label="Roadmaps that include this topic">
+                  <MapIcon size={15} aria-hidden="true" />
+                  <p>On the roadmap: {onRoadmaps.map((entry, index) => (
+                    <span key={entry.page}>{index > 0 && " · "}<Link to={topicPath(entry.page)}>{entry.title}</Link> (step {entry.stage}: {entry.stageTitle.toLowerCase()})</span>
+                  ))}</p>
+                </aside>
+              )}
+
               {body.related?.length > 0 && (
                 <nav className="learn-related" aria-label="Related topics">
                   <h2>Related topics</h2>
@@ -288,15 +316,6 @@ export function LearnTopicPage({ slug }) {
 }
 
 // ------------------------------------------------------------------ hub
-
-const DOMAIN_GUIDES = {
-  "software-engineering": ["system-design-interview", "caching", "message-queues"],
-  "data-engineering": ["data-engineering-architecture", "batch-vs-stream-processing", "event-streaming-kafka"],
-  "machine-learning": ["machine-learning-system-architecture", "ai-application-architecture", "batch-vs-stream-processing"],
-  "platform-infrastructure": ["observability", "service-mesh", "health-checks-failover"],
-  "distributed-systems": ["consistency-models", "replication", "event-streaming-kafka"],
-  "frontend-mobile": ["cdn", "real-time-communication", "authentication-authorization"],
-};
 
 export function LearnHubPage() {
   useCommunityArticles();
@@ -337,6 +356,23 @@ export function LearnHubPage() {
             </label>
           </header>
 
+          <section className="learn-roadmaps" aria-labelledby="learn-roadmaps-title">
+            <div className="learn-section-heading">
+              <div><span className="kicker">Not sure where to start?</span><h2 id="learn-roadmaps-title">Follow a roadmap</h2></div>
+            </div>
+            <ul className="learn-roadmap-grid">
+              {categoryById("roadmaps").topics.map((topic) => (
+                <li key={topic.slug}>
+                  <Link to={topicPath(topic.slug)}>
+                    <span className="learn-roadmap-icon"><MapIcon size={16} /></span>
+                    <strong>{topic.short}</strong>
+                    <span>{topic.description}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           <section className="learn-domain-section" aria-labelledby="learn-domains-title">
             <div className="learn-section-heading">
               <div><span className="kicker">Choose your path</span><h2 id="learn-domains-title">Explore by interview domain</h2></div>
@@ -344,11 +380,14 @@ export function LearnHubPage() {
             </div>
             <div className="learn-domain-grid">
               {tracks.map((track) => {
-                const guides = (DOMAIN_GUIDES[track.id] || []).map(topicMeta).filter(Boolean);
+                const discipline = DISCIPLINES[track.id];
+                const guides = (discipline?.guides || []).map(topicMeta).filter(Boolean);
+                const roadmap = discipline ? topicMeta(discipline.roadmap) : null;
                 return (
                   <article key={track.id} className={`learn-domain-card learn-domain-${track.color}`}>
                     <div className="learn-domain-title"><span><BookOpen size={17} /></span><h3>{track.label}</h3></div>
                     <p>{track.description}</p>
+                    {roadmap && <Link className="learn-domain-roadmap" to={topicPath(roadmap.slug)}><MapIcon size={14} /> {roadmap.short}<ArrowRight size={13} /></Link>}
                     <ul aria-label={`${track.label} reading suggestions`}>
                       {guides.map((topic) => <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}<ArrowRight size={12} /></Link></li>)}
                     </ul>
