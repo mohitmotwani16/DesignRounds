@@ -4,6 +4,20 @@ import { contentFromChunk, takeStreamLines } from "./openai-stream.js";
 
 const MAX_TRANSPORT_RETRIES = 2;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const rejectedReasoning = new Set();
+
+// Tries the requested effort, then "low", when a model rejects a faster setting
+// such as "none". A rejection is remembered so the next reply does not pay for it.
+export function reasoningPlan(effort, rejected = rejectedReasoning) {
+  if (!effort) return [undefined];
+  if (rejected.has(effort) || effort === "low") return ["low"];
+  return [effort, "low"];
+}
+
+function reasoningWasRejected(error) {
+  const body = `${error.detail?.body || ""} ${error.message || ""}`;
+  return error.detail?.status === 400 && /reasoning_effort|thinking level|thinking_level/i.test(body);
+}
 
 function retryDelay(response, attempt) {
   const header = Number(response?.headers.get("retry-after"));
@@ -14,7 +28,25 @@ function retryDelay(response, attempt) {
 // One chat completion against an OpenAI-compatible endpoint (Gemini, Groq, OpenRouter, ...),
 // constrained to `jsonSchema`. Retries rate limits, 5xx and network failures; never
 // retries a timeout, since the provider may still be working on (and billing) it.
-async function openAiCompatible({ messages, jsonSchema, effort, maxTokens, timeoutMs }) {
+async function openAiCompatible(request) {
+  let lastError;
+  const plans = reasoningPlan(request.effort);
+  for (let index = 0; index < plans.length; index += 1) {
+    try {
+      return await openAiCompatibleOnce({ ...request, effort: plans[index] });
+    } catch (error) {
+      lastError = error;
+      if (index < plans.length - 1 && reasoningWasRejected(error)) {
+        rejectedReasoning.add(plans[index]);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function openAiCompatibleOnce({ messages, jsonSchema, effort, maxTokens, timeoutMs }) {
   const body = {
     model: aiConfig.model,
     messages,
@@ -69,6 +101,25 @@ function providerFailure(response, detail, attempts) {
 // because the caller may already have shown the text.
 export async function* streamComplete(request) {
   if (aiConfig.provider !== "openai-compat") throw new AiError("DISABLED", "No AI provider is configured.");
+  let lastError;
+  const plans = reasoningPlan(request.effort);
+  for (let index = 0; index < plans.length; index += 1) {
+    try {
+      yield* streamCompleteOnce({ ...request, effort: plans[index] });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (index < plans.length - 1 && reasoningWasRejected(error)) {
+        rejectedReasoning.add(plans[index]);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function* streamCompleteOnce(request) {
   const { messages, jsonSchema, effort, maxTokens, timeoutMs } = request;
   const body = {
     model: aiConfig.model,

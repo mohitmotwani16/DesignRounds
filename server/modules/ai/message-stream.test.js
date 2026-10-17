@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
 import express from "express";
+import { toJsonSchema } from "./schema.js";
+import { interviewerTask } from "./tasks/interviewer.js";
+import { reasoningPlan } from "./providers.js";
 import { createMessageExtractor } from "./message-stream.js";
 import { contentFromChunk, takeStreamLines } from "./openai-stream.js";
 import { openSse } from "./sse.js";
@@ -21,6 +24,19 @@ function collect(chunks) {
   const extractor = createMessageExtractor();
   return chunks.map((chunk) => extractor.push(chunk)).join("");
 }
+
+test("the interviewer message is the first schema field", () => {
+  assert.equal(toJsonSchema(interviewerTask.output).required[0], "message");
+});
+
+test("a rejected fast reasoning setting falls back to low once", () => {
+  const rejected = new Set();
+  assert.deepEqual(reasoningPlan("none", rejected), ["none", "low"]);
+  rejected.add("none");
+  assert.deepEqual(reasoningPlan("none", rejected), ["low"]);
+  assert.deepEqual(reasoningPlan("low", rejected), ["low"]);
+  assert.deepEqual(reasoningPlan(undefined, rejected), [undefined]);
+});
 
 test("message text streams without private notes", () => {
   const json = JSON.stringify(sample);
