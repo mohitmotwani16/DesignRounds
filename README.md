@@ -100,6 +100,8 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | AI provider for reviews (see above). Unset means the fake provider in development and AI disabled in production. |
 | `AI_REVIEW_EFFORT`, `AI_REVIEW_MAX_TOKENS`, `AI_REVIEW_TIMEOUT_MS` | Optional tuning for review generation. |
 | `DEV_TOOLS` | Set to `false` to hide developer tools such as the plan switch. Always off in production. |
+| `VOICE_ANSWERS` | Voice answers in the live interviewer (record up to 2 minutes). On in development, off in production unless set to `true`. |
+| `GROQ_API_KEY` | Speech-to-text for voice answers (Groq Whisper). Optional locally (a fake transcriber is used); required in production for voice answers. `STT_MODEL` / `STT_BASE_URL` override the defaults. |
 | `AUTH_SECRET` | Secret for hashing sign-in codes and signing OAuth state. **Required in production.** |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client. Both required together; omit both to disable Google sign-in. |
 | `APP_ORIGIN`, `TRUST_PROXY`, `PORT` | Deployment settings for running behind a proxy or on a custom domain. |
