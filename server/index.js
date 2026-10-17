@@ -6,6 +6,7 @@ import { deliveryMode } from "./email.js";
 import { devToolsEnabled, isProduction } from "./flags.js";
 import { describeAi } from "./modules/ai/config.js";
 import { describeSpeech } from "./modules/ai/speech.js";
+import { describeTurnstile } from "./turnstile.js";
 import { startAnswerPoolWorker } from "./modules/answers/worker.js";
 
 const port = Number(process.env.PORT || 8787);
@@ -16,7 +17,7 @@ const buildAnswerPools = process.env.ANSWER_POOLS === "build" || (isProduction &
 const stopAnswerPools = buildAnswerPools ? startAnswerPoolWorker() : () => {};
 
 const server = app.listen(port, () => {
-  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  ai=${describeAi()}  stt=${describeSpeech()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
+  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  ai=${describeAi()}  stt=${describeSpeech()}  turnstile=${describeTurnstile()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
 });
 
 // Graceful shutdown: stop accepting connections, let in-flight requests finish (up

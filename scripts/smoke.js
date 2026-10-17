@@ -21,6 +21,10 @@ Object.assign(process.env, {
   // values are kept by loadEnvFile, which does not override existing variables.
   GOOGLE_CLIENT_ID: " ",
   GOOGLE_CLIENT_SECRET: " ",
+  // A developer's .env may enable Turnstile. Blank values block loadEnvFile
+  // from turning the human check on for the rest of this run.
+  TURNSTILE_SITE_KEY: " ",
+  TURNSTILE_SECRET_KEY: " ",
 });
 for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", "NODE_ENV", "VERCEL", "VERCEL_ENV", "VOICE_ANSWERS"]) delete process.env[key];
 
@@ -43,8 +47,13 @@ async function call(method, url, body, headers = {}) {
     headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...(cookie ? { Cookie: cookie } : {}), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const setCookie = response.headers.get("set-cookie");
-  if (setCookie) cookie = setCookie.split(";")[0];
+  const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
+  const sessionCookie = setCookies.find((value) => /^(?:__Host-)?dr_session=/.test(value));
+  if (sessionCookie) cookie = sessionCookie.split(";")[0];
+  else if (!setCookies.length) {
+    const setCookie = response.headers.get("set-cookie");
+    if (setCookie) cookie = setCookie.split(";")[0];
+  }
   return { status: response.status, body: await response.json().catch(() => null), headers: response.headers };
 }
 
@@ -157,6 +166,7 @@ try {
     assert.equal(anonymous.status, 200);
     assert.equal(anonymous.body.user, null);
     assert.equal(anonymous.body.googleAuth, false);
+    assert.equal(anonymous.body.turnstileSiteKey, null);
   });
 
   await step("google sign-in redirects when unconfigured", async () => {
@@ -167,6 +177,36 @@ try {
     // "/\evil.com" is protocol-relative in browsers and must fall back to the library.
     const sneaky = await fetch(`${base}/api/v1/auth/google?next=${encodeURIComponent("/\\evil.com")}`, { redirect: "manual" });
     assert.match(sneaky.headers.get("location") || "", /next=%2Flibrary&/);
+  });
+
+  await step("turnstile gates sign-in codes when configured", async () => {
+    process.env.TURNSTILE_SITE_KEY = "3x00000000000000000000FF";
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    try {
+      const session = await call("GET", "/api/v1/session");
+      assert.equal(session.body.turnstileSiteKey, "3x00000000000000000000FF");
+      assert.equal((await call("POST", "/api/v1/auth/request-code", { email: "bot@example.com" })).status, 403);
+      const passed = await call("POST", "/api/v1/auth/request-code", {
+        email: "bot@example.com",
+        turnstileToken: "XXXX.DUMMY.TOKEN.XXXX",
+      });
+      assert.equal(passed.status, 200);
+      assert.match(passed.body.devCode, /^\d{6}$/);
+
+      const verified = await call("POST", "/api/v1/auth/verify-code", { email: "bot@example.com", code: passed.body.devCode });
+      assert.equal(verified.status, 200);
+      assert.ok(verified.body.launchId, "this page load is checked because the code was requested on the same network");
+      assert.equal((await call("GET", "/api/v1/me")).status, 403, "a saved login is not enough on its own");
+      assert.equal((await call("GET", "/api/v1/me", undefined, { "X-Human-Launch": verified.body.launchId })).status, 200);
+      await query("update auth_sessions set human_ip = '203.0.113.50' where human_launch = $1", [verified.body.launchId]);
+      const moved = await call("GET", "/api/v1/me", undefined, { "X-Human-Launch": verified.body.launchId });
+      assert.equal(moved.status, 403);
+      assert.equal(moved.body.error.code, "NETWORK_CHANGED");
+      assert.equal((await call("POST", "/api/v1/auth/sign-out", {})).status, 200);
+    } finally {
+      process.env.TURNSTILE_SITE_KEY = " ";
+      process.env.TURNSTILE_SECRET_KEY = " ";
+    }
   });
 
   await step("cross-site and non-JSON writes are rejected", async () => {

@@ -648,6 +648,11 @@
 .auth-page.site .auth-divider::before, .auth-page.site .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .auth-page.site .auth-divider span { flex: none; }
 .auth-page.site .auth-card form .auth-submit { margin-top: 14px; }
+.auth-page.site .turnstile-field { margin: 0 0 16px; }
+.auth-page.site .turnstile-resend-note { margin: 16px 0 8px; color: var(--ink-4); font-size: 12.5px; line-height: 1.45; }
+.auth-page.site .turnstile-slot { min-height: 65px; }
+.auth-page.site .turnstile-slot iframe { max-width: 100%; }
+.auth-page.site .btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .auth-page.site .text-button { color: var(--accent-text); }
 .auth-page.site .auth-footnote { color: var(--ink-4); }
 .auth-page.site .form-error { color: var(--danger); }

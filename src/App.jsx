@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { findPrompt, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
+import { HumanCheck } from "./components/HumanCheck.jsx";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
 import { recommendedFreeRound } from "./data/free-rounds.js";
@@ -55,6 +56,12 @@ function Routes() {
     }
     navigate(`/start/${promptId}`);
   }, [auth.user]);
+
+  // A saved login survives a reload. Ask for a fresh human check on every launch,
+  // and again when the signed-in network no longer matches.
+  if (auth.status === "signed-in" && auth.humanCheckRequired && !auth.humanLaunch && path !== "/signin") {
+    return <HumanCheck />;
+  }
 
   if (path === "/signin") {
     if (auth.status === "signed-in") {

@@ -6,6 +6,7 @@ import { devToolsEnabled, isProduction } from "../flags.js";
 import { deliveryMode, sendLoginCode, sendWelcomeEmail } from "../email.js";
 import { INTEREST_OPTIONS, interestLabel } from "../../src/data/interests.js";
 import { afterResponse, HttpError, createLimiter, parse, route } from "../http.js";
+import { assertHuman, networkKey, turnstileRequired, turnstileSiteKey } from "../turnstile.js";
 import { planFor } from "./plans.js";
 
 const SESSION_DAYS = 30;
@@ -21,6 +22,11 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 // "__Host-" makes browsers reject the cookie unless it is Secure, host-only and path=/.
 const COOKIE_NAME = isProduction ? "__Host-dr_session" : "dr_session";
 const OAUTH_COOKIE = isProduction ? "__Host-dr_oauth" : "dr_oauth";
+// Short-lived proof that this browser just passed Turnstile, so the Google
+// redirect can stamp the new session. The launch id itself lives only in the
+// page that consumes it, so a reload asks again.
+const HUMAN_GRANT_COOKIE = isProduction ? "__Host-dr_human" : "dr_human";
+const LAUNCH_COOKIE = isProduction ? "__Host-dr_launch" : "dr_launch";
 const codeSecret = process.env.AUTH_SECRET || (() => {
   if (isProduction) throw new Error("AUTH_SECRET must be set in production.");
   return crypto.randomBytes(32).toString("hex");
@@ -38,8 +44,10 @@ const ipVerifyLimiter = createLimiter({ name: "ip-verify", windowMs: 15 * 60_000
 const ipGoogleLimiter = createLimiter({ name: "ip-google", windowMs: 15 * 60_000, max: 30 });
 
 const emailSchema = z.string().trim().toLowerCase().max(254).email();
-const requestCodeBody = z.object({ email: emailSchema });
+const turnstileToken = z.string().trim().min(1).max(2048).optional();
+const requestCodeBody = z.object({ email: emailSchema, turnstileToken });
 const verifyCodeBody = z.object({ email: emailSchema, code: z.string().trim().regex(/^\d{6}$/, "must be 6 digits") });
+const googleStartBody = z.object({ next: z.string().max(2048).optional(), turnstileToken });
 const optionalText = (max) => z.string().trim().max(max).transform((value) => value || null).nullable().optional();
 const interestIds = INTEREST_OPTIONS.map((option) => option.id);
 const profileBody = z.object({
@@ -180,14 +188,45 @@ function cookieOptions() {
   return { httpOnly: true, sameSite: "lax", secure: isProduction, path: "/", maxAge: SESSION_DAYS * 86_400_000 };
 }
 
-async function createSession(res, user, userAgent) {
+function grantCookieOptions() {
+  return { httpOnly: true, sameSite: "lax", secure: isProduction, path: "/", maxAge: OAUTH_STATE_TTL_MS };
+}
+
+function launchCookieOptions() {
+  return { httpOnly: true, sameSite: "lax", secure: isProduction, path: "/", maxAge: 2 * 60_000 };
+}
+
+function signHumanGrant(ip) {
+  return signOAuthState({ ip, kind: "human", exp: Date.now() + OAUTH_STATE_TTL_MS });
+}
+
+function readHumanGrant(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const [body, sig] = raw.split(".");
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", codeSecret).update(body).digest("base64url");
+  if (!safeEqual(sig, expected)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (payload?.kind !== "human" || typeof payload.ip !== "string" || !payload.exp || Date.now() > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// `network` is set when this sign-in already passed Turnstile on the same network.
+// The returned launch id is handed to that page only; a later load has to pass again.
+async function createSession(res, user, userAgent, { network = null } = {}) {
   const token = crypto.randomBytes(32).toString("base64url");
+  const launch = network ? crypto.randomBytes(24).toString("base64url") : null;
   await query(
-    `insert into auth_sessions (user_id, token_hash, user_agent, expires_at)
-     values ($1, $2, $3, now() + make_interval(days => $4::int))`,
-    [user.id, hashToken(token), (userAgent || "").slice(0, 300), SESSION_DAYS]
+    `insert into auth_sessions (user_id, token_hash, user_agent, expires_at, human_ip, human_launch, human_checked_at)
+     values ($1, $2, $3, now() + make_interval(days => $4::int), $5, $6, $7)`,
+    [user.id, hashToken(token), (userAgent || "").slice(0, 300), SESSION_DAYS, network, launch, launch ? new Date() : null]
   );
   res.cookie(COOKIE_NAME, token, cookieOptions());
+  return launch;
 }
 
 async function upsertGoogleUser({ sub, email, name }) {
@@ -228,7 +267,8 @@ export const loadUser = route(async (req, _res, next) => {
   const token = req.cookies?.[COOKIE_NAME];
   if (token && token.length <= 128) {
     const row = await queryOne(
-      `select u.*, s.id as auth_session_id, s.last_seen_at as session_seen_at
+      `select u.*, s.id as auth_session_id, s.last_seen_at as session_seen_at,
+              s.human_ip, s.human_launch
          from auth_sessions s join users u on u.id = s.user_id
         where s.token_hash = $1 and s.expires_at > now()`,
       [hashToken(token)]
@@ -249,10 +289,39 @@ export function requireUser(req, _res, next) {
   next();
 }
 
+// Routes a signed-in browser can call before this page load has passed Turnstile.
+const HUMAN_EXEMPT = new Set([
+  "GET /v1/session",
+  "POST /v1/auth/human-check",
+  "POST /v1/auth/sign-out",
+  "POST /v1/auth/sign-out-everywhere",
+  "POST /v1/auth/request-code",
+  "POST /v1/auth/verify-code",
+  "POST /v1/auth/google/start",
+  "GET /v1/auth/google",
+  "GET /v1/auth/google/callback",
+]);
+
+// A persisted login is not enough. This page load must have passed Turnstile,
+// and the request must still be on the network that passed it.
+export function requireCurrentHuman(req, _res, next) {
+  if (!req.user || !turnstileRequired()) return next();
+  if (HUMAN_EXEMPT.has(`${req.method} ${req.path}`)) return next();
+  const launch = req.get("x-human-launch") || "";
+  const expected = req.user.human_launch || "";
+  if (!expected || !launch || !safeEqual(launch, expected)) {
+    return next(new HttpError(403, "HUMAN_CHECK_REQUIRED", "Confirm you're human to continue."));
+  }
+  if (req.user.human_ip !== networkKey(req.ip)) {
+    return next(new HttpError(403, "NETWORK_CHANGED", "Your network changed. Confirm you're human to continue."));
+  }
+  next();
+}
+
 export const identityRouter = express.Router();
 
 identityRouter.post("/auth/request-code", route(async (req, res) => {
-  const { email } = parse(requestCodeBody, req.body);
+  const { email, turnstileToken: token } = parse(requestCodeBody, req.body);
   if (!(await ipCodeLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many code requests. Try again in a few minutes.");
   if (deliveryMode() === "unconfigured") throw new HttpError(503, "EMAIL_UNAVAILABLE", "Email sign-in is temporarily unavailable.");
 
@@ -268,6 +337,9 @@ identityRouter.post("/auth/request-code", route(async (req, res) => {
   if (recent.count >= MAX_CODES_PER_EMAIL_PER_HOUR) {
     throw new HttpError(429, "RATE_LIMITED", "Too many codes requested for this email. Try again later.");
   }
+
+  // After the cheap limits, before a code is created. Siteverify consumes the token.
+  await assertHuman(req, token);
 
   const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
   await query("update login_codes set consumed_at = now() where email = $1 and consumed_at is null", [email]);
@@ -314,7 +386,10 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
     if (attempt.attempts >= MAX_CODE_ATTEMPTS) throw new HttpError(400, "CODE_LOCKED", "Too many incorrect attempts. Request a new code.");
     throw invalid();
   }
-  const consumed = await queryOne("update login_codes set consumed_at = now() where id = $1 and consumed_at is null returning id", [pending.id]);
+  const consumed = await queryOne(
+    "update login_codes set consumed_at = now() where id = $1 and consumed_at is null returning id, request_ip",
+    [pending.id]
+  );
   if (!consumed) throw invalid();
 
   const user = await queryOne(
@@ -323,20 +398,17 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
      returning *`,
     [email]
   );
-  await createSession(res, user, req.get("user-agent"));
+  // The code request already passed Turnstile. Count this page load as checked
+  // only when the code is entered on that same network.
+  const sameNetwork = !turnstileRequired() || networkKey(consumed.request_ip) === networkKey(req.ip);
+  const launchId = await createSession(res, user, req.get("user-agent"), { network: sameNetwork ? networkKey(req.ip) : null });
   await welcomeFirstLogin(user);
-  res.json({ user: toPublicUser(user) });
+  const body = { user: toPublicUser(user) };
+  if (launchId) body.launchId = launchId;
+  res.json(body);
 }));
 
-identityRouter.get("/auth/google", route(async (req, res) => {
-  const next = safeNextPath(req.query.next);
-  if (!googleAuthEnabled) {
-    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "google_unconfigured"));
-  }
-  if (!(await ipGoogleLimiter(req.ip))) {
-    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "rate_limited"));
-  }
-
+function beginGoogle(req, res, next) {
   const nonce = crypto.randomBytes(24).toString("base64url");
   const redirectUri = googleRedirectUri(req);
   res.cookie(OAUTH_COOKIE, signOAuthState({
@@ -354,7 +426,35 @@ identityRouter.get("/auth/google", route(async (req, res) => {
     state: nonce,
     prompt: "select_account",
   });
-  res.redirect(`${GOOGLE_AUTH_URL}?${params}`);
+  return `${GOOGLE_AUTH_URL}?${params}`;
+}
+
+identityRouter.get("/auth/google", route(async (req, res) => {
+  const next = safeNextPath(req.query.next);
+  if (!googleAuthEnabled) {
+    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "google_unconfigured"));
+  }
+  // The widget token is verified on POST /auth/google/start. A direct visit
+  // cannot skip the human check by omitting it from the query string.
+  if (turnstileRequired()) {
+    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "turnstile_required"));
+  }
+  if (!(await ipGoogleLimiter(req.ip))) {
+    return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "rate_limited"));
+  }
+  res.redirect(beginGoogle(req, res, next));
+}));
+
+identityRouter.post("/auth/google/start", route(async (req, res) => {
+  const { next: requestedNext, turnstileToken: token } = parse(googleStartBody, req.body);
+  const next = safeNextPath(requestedNext);
+  if (!googleAuthEnabled) throw new HttpError(503, "GOOGLE_UNCONFIGURED", "Google sign-in isn't set up yet. Use email instead.");
+  if (!(await ipGoogleLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many sign-in attempts. Try again in a few minutes.");
+  await assertHuman(req, token);
+  if (turnstileRequired()) {
+    res.cookie(HUMAN_GRANT_COOKIE, signHumanGrant(networkKey(req.ip)), grantCookieOptions());
+  }
+  res.json({ url: beginGoogle(req, res, next) });
 }));
 
 identityRouter.get("/auth/google/callback", route(async (req, res) => {
@@ -428,16 +528,32 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
     throw error;
   }
 
-  await createSession(res, user, req.get("user-agent"));
+  const grant = readHumanGrant(req.cookies?.[HUMAN_GRANT_COOKIE]);
+  const network = grant && grant.ip === networkKey(req.ip) ? grant.ip : null;
+  const launchId = await createSession(res, user, req.get("user-agent"), { network: turnstileRequired() ? network : null });
   await welcomeFirstLogin(user);
   clearOAuth();
+  res.clearCookie(HUMAN_GRANT_COOKIE, { ...grantCookieOptions(), maxAge: undefined });
+  if (launchId) res.cookie(LAUNCH_COOKIE, launchId, launchCookieOptions());
   const destination = user.onboarded_at ? next : `/welcome?next=${encodeURIComponent(next)}`;
   res.redirect(destination);
+}));
+
+identityRouter.post("/auth/human-check", requireUser, route(async (req, res) => {
+  const { turnstileToken: token } = parse(z.object({ turnstileToken: z.string().trim().min(1).max(2048) }), req.body);
+  await assertHuman(req, token, "continue");
+  const launchId = crypto.randomBytes(24).toString("base64url");
+  await query(
+    `update auth_sessions set human_ip = $2, human_launch = $3, human_checked_at = now() where id = $1`,
+    [req.authSessionId, networkKey(req.ip), launchId]
+  );
+  res.json({ launchId });
 }));
 
 identityRouter.post("/auth/sign-out", route(async (req, res) => {
   if (req.authSessionId) await query("delete from auth_sessions where id = $1", [req.authSessionId]);
   res.clearCookie(COOKIE_NAME, { ...cookieOptions(), maxAge: undefined });
+  res.clearCookie(LAUNCH_COOKIE, { ...launchCookieOptions(), maxAge: undefined });
   res.json({ ok: true });
 }));
 
@@ -450,7 +566,19 @@ identityRouter.post("/auth/sign-out-everywhere", requireUser, route(async (req, 
 // Who is signed in, if anyone. Unlike /me, a visitor without a session is a normal
 // answer (user: null), not an error, so page loads don't log failed requests.
 identityRouter.get("/session", (req, res) => {
-  res.json({ user: req.user ? toPublicUser(req.user) : null, googleAuth: googleAuthEnabled });
+  const pendingLaunch = req.cookies?.[LAUNCH_COOKIE];
+  const launchId = req.user && pendingLaunch && pendingLaunch === req.user.human_launch && req.user.human_ip === networkKey(req.ip)
+    ? pendingLaunch
+    : undefined;
+  if (pendingLaunch) res.clearCookie(LAUNCH_COOKIE, { ...launchCookieOptions(), maxAge: undefined });
+  const body = {
+    user: req.user ? toPublicUser(req.user) : null,
+    googleAuth: googleAuthEnabled,
+    turnstileSiteKey: turnstileSiteKey(),
+    humanCheckRequired: Boolean(req.user) && turnstileRequired(),
+  };
+  if (launchId) body.launchId = launchId;
+  res.json(body);
 });
 
 identityRouter.get("/me", requireUser, (req, res) => {
