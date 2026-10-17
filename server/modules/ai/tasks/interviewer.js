@@ -7,10 +7,12 @@ import { list, oneOf, text } from "../schema.js";
 export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
 export const interviewerTemplateVersion = `interviewer-v3/${policyVersion}`;
 
+// `message` is first so a streamed reply can show the opening words before the
+// model fills in intent, stage, and the private communication notes.
 const output = z.object({
+  message: text(1200, "What you say to the learner, in plain conversational sentences, at most about 120 words and at most one question. Empty only when action is 'skip'. Write this field first."),
   action: oneOf(["respond", "ask", "skip"], "'respond' when replying to the learner. For a proactive look at the canvas: 'ask' to raise one question, or 'skip' to stay quiet."),
   intent: oneOf(["question", "answer", "clarification", "acknowledgement", "hint", "probe", "redirect"], "What this message mainly does."),
-  message: text(1200, "What you say to the learner, in plain conversational sentences, at most about 120 words and at most one question. Empty only when action is 'skip'."),
   nodeIds: list(z.string(), { max: 6 }, "Ids of the components this message is about; empty if none."),
   stage: oneOf(STAGES, "The interview stage after this turn."),
   coveredNodeIds: list(z.string(), { max: 40 }, "Ids of components the learner has now adequately explained, in notes or in the conversation, so they should not be asked about again."),
@@ -54,7 +56,7 @@ Structured answer context (trigger "reply" only; otherwise leave both fields emp
 - Use the filler-reduced learner text when available. The original transcript remains private for exact quotes and communication feedback. Treat transcription uncertainty as uncertainty, not as a learner mistake.
 - communicationGaps contains only clearly observed communication habits from this answer, using the gap labels in the schema. It is separate from technical correctness and must not repeat strengths such as clear or confident.
 
-Reply with a single JSON object that matches the provided schema.`;
+Reply with a single JSON object that matches the provided schema. Write the message field first, before action, intent, and the other fields.`;
 
 const system = `${policy}\n\n${instructions}`;
 

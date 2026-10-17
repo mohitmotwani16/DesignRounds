@@ -21,6 +21,7 @@
     "ai:eval": "node scripts/ai-eval.js",
     "answers:build": "node scripts/build-answer-pools.js",
     "test:answers": "node --test server/modules/answers/answers.test.js",
+    "test:stream": "node --test server/modules/ai/message-stream.test.js",
     "theme": "node scripts/theme-tokens.mjs"
   },
   "dependencies": {

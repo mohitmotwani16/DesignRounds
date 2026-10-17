@@ -43,9 +43,11 @@ export const aiConfig = {
       maxTokens: Number(env.AI_REVIEW_MAX_TOKENS || 12_000),
       timeoutMs: Number(env.AI_REVIEW_TIMEOUT_MS || 120_000),
     },
-    // Conversational turns: low effort keeps replies quick.
+    // Conversational turns skip the hidden thinking pass when the model allows it,
+    // so the first word of a streamed reply is not stuck behind that pass. A model
+    // that rejects "none" is retried at "low" (see providers.js).
     interviewer: {
-      effort: env.AI_INTERVIEWER_EFFORT || "low",
+      effort: env.AI_INTERVIEWER_EFFORT || "none",
       maxTokens: Number(env.AI_INTERVIEWER_MAX_TOKENS || 4_000),
       timeoutMs: Number(env.AI_INTERVIEWER_TIMEOUT_MS || 45_000),
     },

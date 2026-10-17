@@ -13,10 +13,15 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   const [pending, setPending] = useState(false);
   const [sendError, setSendError] = useState(null);
   const [pendingAudio, setPendingAudio] = useState(null);
+  const [outgoing, setOutgoing] = useState(null);
+  const [replyText, setReplyText] = useState(null);
   const typingRef = useRef(false);
   const pendingRef = useRef(false);
   const attempt = useRef(null);
   const lastCheck = useRef(0);
+  const generation = useRef(0);
+
+  useEffect(() => () => { generation.current += 1; }, []);
 
   const load = useCallback(async () => {
     try {
@@ -34,29 +39,46 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     return { ...current, ...extra, turns: [...current.turns, ...turns.filter((turn) => !known.has(turn.id))] };
   });
 
+  const streamHandlers = (gen) => ({
+    onDelta: (text) => {
+      if (generation.current !== gen || !text) return;
+      setReplyText((current) => (current ?? "") + text);
+    },
+    onReset: () => {
+      if (generation.current === gen) setReplyText("");
+    },
+  });
+
   const send = useCallback(async (content, intent = "message") => {
     if (pendingRef.current) return false;
     // A retry of the same draft reuses its id, so it can't produce two replies.
     if (!attempt.current || attempt.current.content !== content || attempt.current.intent !== intent) {
       attempt.current = { id: crypto.randomUUID(), content, intent };
     }
+    const gen = generation.current;
     pendingRef.current = true;
     setPending(true);
     setSendError(null);
+    setOutgoing({ kind: intent === "hint" ? "hint_request" : "message", content: content.trim() || "Could I have a hint?" });
+    setReplyText("");
     try {
       await settleSave();
-      const result = await api.sendInterviewMessage(sessionId, { requestId: attempt.current.id, content, intent, selectedNodeId: selectedIdRef.current });
+      const result = await api.sendInterviewMessage(sessionId, { requestId: attempt.current.id, content, intent, selectedNodeId: selectedIdRef.current }, streamHandlers(gen));
       attempt.current = null;
-      appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+      if (generation.current === gen) appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
       return true;
     } catch (error) {
       const retryable = error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY";
-      setSendError({ message: error.message, draft: content, intent, retryable });
+      if (generation.current === gen) setSendError({ message: error.message, draft: content, intent, retryable });
       if (!retryable) attempt.current = null;
       return false;
     } finally {
       pendingRef.current = false;
-      setPending(false);
+      if (generation.current === gen) {
+        setPending(false);
+        setOutgoing(null);
+        setReplyText(null);
+      }
     }
   }, [sessionId, settleSave, selectedIdRef]);
 
@@ -65,23 +87,28 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   // can't produce two replies. The blob is dropped once the answer is through.
   const sendAudio = useCallback(async (recording) => {
     if (pendingRef.current) return false;
+    const gen = generation.current;
     pendingRef.current = true;
     setPending(true);
     setPendingAudio({ durationMs: recording.durationMs });
+    setReplyText("");
     setSendError(null);
     try {
       await settleSave();
       const data = await blobToBase64(recording.blob);
-      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data, selectedNodeId: selectedIdRef.current });
-      appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data, selectedNodeId: selectedIdRef.current }, streamHandlers(gen));
+      if (generation.current === gen) appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
       return true;
     } catch (error) {
-      setSendError({ message: error.message, intent: "audio", recording, retryable: error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY" });
+      if (generation.current === gen) setSendError({ message: error.message, intent: "audio", recording, retryable: error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY" });
       return false;
     } finally {
       pendingRef.current = false;
-      setPending(false);
-      setPendingAudio(null);
+      if (generation.current === gen) {
+        setPending(false);
+        setPendingAudio(null);
+        setReplyText(null);
+      }
     }
   }, [sessionId, settleSave, selectedIdRef]);
 
@@ -110,7 +137,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     return () => window.clearTimeout(timer);
   }, [enabled, structureKey, sessionId, settleSave, selectedIdRef, onProactiveTurn]);
 
-  return { ...data, sessionId, pending, pendingAudio, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
+  return { ...data, sessionId, pending, pendingAudio, outgoing, replyText, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
 }
 
 function blobToBase64(blob) {
