@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Eye, Lightbulb, LoaderCircle, LockKeyhole, MessageSquare, RefreshCw, Send, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Eye, Lightbulb, LoaderCircle, LockKeyhole, MessageSquare, Mic, RefreshCw, Send, X } from "lucide-react";
+import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
 const STAGES = [
   ["requirements", "Requirements"],
@@ -50,21 +51,40 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   const hintsLeft = allowance ? Math.max(0, allowance.hints.limit - allowance.hints.used) : 0;
   const outOfReplies = allowance && (repliesLeft === 0 || allowance.month.used >= allowance.month.limit);
   const canSend = !roundFinished && interview.aiAvailable && !pending && !outOfReplies;
+  // A voice answer is a reply like a typed one, so the mic follows the same rules.
+  const [voiceAvailable] = useState(voiceSupported);
+  const voice = interview.voice && voiceAvailable;
+  const recorder = useVoiceRecorder({ onRecorded: interview.sendAudio });
+  const recording = recorder.status === "recording";
+  const voiceTip = useVoiceTip(interview.sessionId, voice && canSend);
+  const [voiceUsed, markVoiceUsed] = useVoiceUsed();
 
   useEffect(() => {
     const list = listRef.current;
     if (list) list.scrollTop = list.scrollHeight;
   }, [turns.length, pending]);
 
+  // Recording counts as typing, so the interviewer doesn't interrupt; a finished
+  // round discards an unsent recording.
+  useEffect(() => { interview.typingRef.current = recording; }, [recording, interview.typingRef]);
+  useEffect(() => { if (roundFinished) recorder.cancel(); }, [roundFinished]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A failed send puts the text back so nothing the learner wrote is lost.
   useEffect(() => {
     if (sendError?.intent === "message") setDraft((current) => current || sendError.draft);
   }, [sendError]);
 
+  function startRecording() {
+    voiceTip.hide();
+    markVoiceUsed();
+    recorder.start();
+  }
+
   async function submit(intent = "message") {
     // A hint request may carry the draft as context for what the learner is stuck on.
     const content = draft.trim();
     if (intent === "message" && !content) return;
+    voiceTip.hide();
     setDraft("");
     await interview.send(content, intent);
   }
@@ -79,7 +99,8 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
 
       <div className="interviewer-body interview-thread" ref={listRef} aria-live="polite">
         {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} />)}
-        {pending && <div className="interview-turn interviewer typing" role="status"><span className="interview-dots"><i /><i /><i /></span> Interviewer is thinking…</div>}
+        {interview.pendingAudio && <div className="interview-turn learner sending"><VoiceNote durationMs={interview.pendingAudio.durationMs} /></div>}
+        {pending && <div className="interview-turn interviewer typing" role="status"><span className="interview-dots"><i /><i /><i /></span> {interview.pendingAudio ? "Interviewer is listening…" : "Interviewer is thinking…"}</div>}
       </div>
 
       <div className="interviewer-compose">
@@ -94,8 +115,20 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
               <div className="interview-error" role="alert">
                 <AlertTriangle size={14} />
                 <span>{sendError.message}</span>
-                {sendError.retryable && <button onClick={() => { const text = sendError.draft; setDraft(""); interview.send(text, sendError.intent); }}><RefreshCw size={12} /> Retry</button>}
+                {sendError.retryable && (
+                  <button onClick={() => {
+                    if (sendError.intent === "audio") { interview.sendAudio(sendError.recording); return; }
+                    const text = sendError.draft; setDraft(""); interview.send(text, sendError.intent);
+                  }}><RefreshCw size={12} /> Retry</button>
+                )}
                 <button className="interview-error-close" aria-label="Dismiss" onClick={interview.clearError}><X size={13} /></button>
+              </div>
+            )}
+            {recorder.error && (
+              <div className="interview-error" role="alert">
+                <AlertTriangle size={14} />
+                <span>{recorder.error}</span>
+                <button className="interview-error-close" aria-label="Dismiss" onClick={recorder.dismissError}><X size={13} /></button>
               </div>
             )}
             {!interview.aiAvailable && <p className="interviewer-muted">The AI interviewer is unavailable right now.</p>}
@@ -105,6 +138,12 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
                 <button aria-label="Don't attach the selected component" onClick={onClearSelected}><X size={13} /></button>
               </div>
             )}
+            {voiceTip.visible && !recording && (
+              <p className="voice-tip" role="note"><Mic size={12} /> Tip: answer out loud with the mic, like in a real interview. Your review will include feedback on how you explain.</p>
+            )}
+            {recording ? (
+              <RecordingBar elapsed={recorder.elapsed} onCancel={recorder.cancel} onSend={recorder.send} />
+            ) : (
             <div className="compose-box">
               <textarea
                 aria-label="Message to interviewer"
@@ -113,15 +152,31 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
                 value={draft}
                 maxLength={2000}
                 disabled={!canSend && !pending}
-                onChange={(event) => setDraft(event.target.value)}
-                onFocus={() => { interview.typingRef.current = true; }}
+                onChange={(event) => { setDraft(event.target.value); voiceTip.offer(); }}
+                onFocus={() => { interview.typingRef.current = true; voiceTip.offer(); }}
                 onBlur={() => { interview.typingRef.current = false; }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (canSend) submit(); }
                 }}
               />
-              <button aria-label="Send message" disabled={!canSend || !draft.trim()} onClick={() => submit()}>{pending ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />}</button>
+              {/* The mic stays available while typing (a typed draft is kept); with an
+                  empty box it is the main action, like a messaging app. */}
+              {voice && !pending && (
+                <button
+                  className={draft.trim() ? "voice-secondary" : !voiceUsed && canSend ? "voice-heartbeat" : ""}
+                  aria-label="Record a voice answer"
+                  title="Answer out loud (up to 2 minutes)"
+                  disabled={!canSend || recorder.status === "requesting"}
+                  onClick={startRecording}
+                >
+                  {recorder.status === "requesting" ? <LoaderCircle size={16} className="spin" /> : <Mic size={16} />}
+                </button>
+              )}
+              {(!voice || draft.trim() || pending) && (
+                <button aria-label="Send message" disabled={!canSend || !draft.trim()} onClick={() => submit()}>{pending ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />}</button>
+              )}
             </div>
+            )}
             <div className="interview-footer">
               <button className="interview-hint" disabled={!canSend || hintsLeft === 0} onClick={() => submit("hint")} title="Ask for a nudge, not the answer">
                 <Lightbulb size={14} /> Hint {allowance ? `(${hintsLeft} left)` : ""}
@@ -133,6 +188,45 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
       </div>
     </>
   );
+}
+
+// Until a learner has tried voice once, the mic beats gently so it's easy to find.
+// Remembered per browser, so it stops for good after the first recording.
+const VOICE_USED_KEY = "designrounds:voice-used";
+
+function useVoiceUsed() {
+  const [used, setUsed] = useState(() => {
+    try { return Boolean(window.localStorage.getItem(VOICE_USED_KEY)); } catch { return false; }
+  });
+  const mark = () => {
+    setUsed(true);
+    try { window.localStorage.setItem(VOICE_USED_KEY, "1"); } catch { /* the heartbeat just shows again next visit */ }
+  };
+  return [used, mark];
+}
+
+// A one-line nudge toward answering out loud: once per round, the first time the
+// learner starts writing. It fades on its own and never needs dismissing.
+const VOICE_TIP_MS = 15_000;
+
+function useVoiceTip(sessionId, available) {
+  const [visible, setVisible] = useState(false);
+  const timer = useRef(0);
+  const key = `designrounds:voice-tip:${sessionId}`;
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const hide = () => { window.clearTimeout(timer.current); setVisible(false); };
+  const offer = () => {
+    if (!available || visible || !sessionId) return;
+    try {
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, "1");
+    } catch {
+      // Without storage the tip may show again next visit; that's harmless.
+    }
+    setVisible(true);
+    timer.current = window.setTimeout(() => setVisible(false), VOICE_TIP_MS);
+  };
+  return { visible: visible && available, offer, hide };
 }
 
 const kindLabels = { hint: "Hint", hint_request: "Asked for a hint" };
@@ -148,7 +242,9 @@ function Turn({ turn, onFocusNode, labelFor }) {
           {kindLabels[turn.kind] && <em>{kindLabels[turn.kind]}</em>}
         </span>
       )}
-      {mine && turn.kind === "hint_request" ? <p className="interview-hint-request"><Lightbulb size={13} /> {turn.content}</p> : <p>{turn.content}</p>}
+      {mine && turn.kind === "audio" ? <VoiceNote durationMs={turn.audio?.durationMs} />
+        : mine && turn.kind === "hint_request" ? <p className="interview-hint-request"><Lightbulb size={13} /> {turn.content}</p>
+        : <p>{turn.content}</p>}
       {turn.nodeIds?.length > 0 && (
         <div className="review-node-chips">
           {turn.nodeIds.map((id) => <button key={id} onClick={() => onFocusNode(id)} title="Show on canvas">{labelFor(id)}</button>)}

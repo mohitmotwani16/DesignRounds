@@ -57,6 +57,9 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   });
   // Public catalog: no cookies or session lookup, so it never touches the database.
   api.use("/v1", catalogRouter);
+  // Voice answers carry base64 audio, so they get a larger limit than everything else
+  // (a parsed body is skipped by the general parser below).
+  api.use("/v1/sessions/:sessionId/interview/audio", express.json({ limit: "3mb" }));
   api.use(express.json({ limit: "600kb" }));
   api.use(cookieParser());
   api.use(sameOriginWrites);
@@ -71,7 +74,10 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   if (devToolsEnabled) api.use("/v1", devRouter);
   api.use((_req, _res, next) => next(new HttpError(404, "NOT_FOUND", "No such endpoint.")));
   api.use((error, req, res, _next) => {
-    if (error.type === "entity.too.large") return res.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "That design is too large to save." } });
+    if (error.type === "entity.too.large") {
+      const message = req.path.endsWith("/interview/audio") ? "That recording is too large to send." : "That design is too large to save.";
+      return res.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message } });
+    }
     if (error.type === "entity.parse.failed") return res.status(400).json({ error: { code: "INVALID_JSON", message: "Malformed JSON." } });
     if (error instanceof HttpError) return res.status(error.status).json({ error: { code: error.code, message: error.message } });
     // The platform request id ties a user's report to the matching log line.

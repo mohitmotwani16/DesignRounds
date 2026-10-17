@@ -50,6 +50,8 @@ export const aiConfig = {
       timeoutMs: Number(env.AI_INTERVIEWER_TIMEOUT_MS || 45_000),
     },
     interview_summary: { effort: "low", maxTokens: 3_000, timeoutMs: 45_000 },
+    // Runs alongside the review, so it must finish well within the review's time.
+    communication: { effort: "low", maxTokens: 4_000, timeoutMs: 90_000 },
   },
 };
 
