@@ -75,7 +75,7 @@ const fitTitle = (...variants) => variants.find((title) => title.length <= 65) ?
 
 const absolute = (path) => `${SITE.url}${path === "/" ? "" : path}`;
 const clamp = (text, max = 158) => (text.length <= max ? text : `${text.slice(0, max - 1).replace(/\s+\S*$/, "")}…`);
-const organization = { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: SITE.name, url: SITE.url, logo: `${SITE.url}/favicon.svg` };
+const organization = { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: SITE.name, url: SITE.url, logo: `${SITE.url}/icon-512.png` };
 const breadcrumbs = (items) => ({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",

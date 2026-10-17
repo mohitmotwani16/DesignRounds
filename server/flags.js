@@ -15,3 +15,8 @@ export const deploymentEnv = vercelEnv || (isProduction ? "production" : "develo
 // development and can be turned off with DEV_TOOLS=false. They are always off in
 // production, where their routes are not mounted at all.
 export const devToolsEnabled = !isProduction && process.env.DEV_TOOLS !== "false";
+
+// Voice answers in the live interview (transcribed with speech-to-text, see
+// server/modules/ai/speech.js). On in development; opt-in elsewhere with
+// VOICE_ANSWERS=true, and only effective when speech-to-text is configured.
+export const voiceAnswersEnabled = process.env.VOICE_ANSWERS ? process.env.VOICE_ANSWERS === "true" : !isProduction;
