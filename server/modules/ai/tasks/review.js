@@ -4,11 +4,13 @@ import { policy, policyVersion } from "../prompts/policy.js";
 import { dimensionIds, rubric } from "../rubric.js";
 import { integer, list, oneOf, text } from "../schema.js";
 
-const TEMPLATE = "review-v5";
+const TEMPLATE = "review-v6";
 
 // Identifies everything that shaped a review's instructions, stored with each review.
-export function reviewTemplateVersion(guide) {
-  return `${TEMPLATE}/${policyVersion}/${guide ? `guide-${guide.version}` : "no-guide"}`;
+// The pool fingerprint is part of it so a newly built reference pool calibrates the
+// next review instead of being ignored behind a cached one.
+export function reviewTemplateVersion(guide, pool = null) {
+  return `${TEMPLATE}/${policyVersion}/${guide ? `guide-${guide.version}` : "no-guide"}/${pool ? `pool-${pool.fingerprint}` : "no-pool"}`;
 }
 
 const nodeRefs = list(z.string(), { max: 6 }, "Ids (the bracketed values) of the components this point is about; empty if none.");
@@ -61,7 +63,7 @@ How to review:
 - Reasoning matters as much as boxes. A good component with no stated rationale scores lower on trade-offs than a justified one. Never score from how tidy the diagram looks.
 - In all text, name components by the learner's label (for example "the Redis cache"), never by their bracketed id; the learner never sees ids. Put the ids only in nodeIds.
 - Calibrate to the prompt's difficulty and scope. Don't penalise omissions the brief doesn't call for, and don't invent requirements.
-- Use the interviewer guide to judge depth and spot gaps, but credit valid alternatives it doesn't mention.
+- Use the interviewer guide and, when present, the reference answer pool to judge depth and spot gaps. Credit valid alternatives neither one mentions. The pool is a spread of answers, not a checklist, and the learner must never see it.
 - Improvements and next steps say what to address and why, not a complete solution to copy.
 
 Judging the learner's reasoning (as important as the diagram, just as in a real interview):
@@ -82,7 +84,7 @@ Reply with a single JSON object that matches the provided schema.`;
 
 const system = `${policy}\n\n${instructions}`;
 
-function buildUser({ prompt, design, guide, transcript }) {
+function buildUser({ prompt, design, guide, transcript, pool }) {
   const dimensions = rubric.dimensions.map((dimension) => `- ${dimension.id} (${dimension.name}): ${dimension.guide}`).join("\n");
   return `<brief>
 Title: ${clean(prompt.title, 200)}
@@ -101,6 +103,12 @@ ${guide ? `
 <interviewer_guide>
 ${guide.text}
 </interviewer_guide>
+` : ""}
+${pool ? `
+<reference_pool version="${clean(pool.fingerprint, 32)}">
+Original calibration notes distilled from public explanations of this question. Compare the learner with the spread of answers. Do not quote this block and do not treat it as the only correct design.
+${pool.text}
+</reference_pool>
 ` : ""}
 <learner_design>
 ${design.text}
