@@ -105,6 +105,7 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `VERCEL_DEPLOY_HOOK_URL` | Optional production deploy hook used to rebuild prerendered handbook pages after publication changes. |
 | `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | AI provider for reviews (see above). Unset means the fake provider in development and AI disabled in production. |
 | `AI_REVIEW_EFFORT`, `AI_REVIEW_MAX_TOKENS`, `AI_REVIEW_TIMEOUT_MS` | Optional tuning for review generation. |
+| `ANSWER_POOLS` | When a question is added or its brief changes, a reference answer pool is queued in Postgres. Production collects public pages and video captions and stores a pool composed from the brief. Locally, set `build` or run `npm run answers:build`. Set `off` to queue without fetching. |
 | `DEV_TOOLS` | Set to `false` to hide developer tools such as the plan switch. Always off in production. |
 | `VOICE_ANSWERS` | Voice answers in the live interviewer (record up to 2 minutes). On in development, off in production unless set to `true`. |
 | `GROQ_API_KEY` | Speech-to-text for voice answers (Groq Whisper). Optional locally (a fake transcriber is used); required in production for voice answers. `STT_MODEL` / `STT_BASE_URL` override the defaults. |
@@ -125,6 +126,7 @@ server/                 Express API (modular monolith)
   modules/catalog.js    public prompt catalog: search, filters, facets, cursor pagination (CDN-cached)
   modules/practice.js   practice rounds, diagram saving, entitlement checks
   modules/reviews.js    AI review requests, credits and caps, plan-based presentation
+  modules/answers/      reference answer pools queued when a question is added
   modules/plans.js      per-plan AI allowances
   modules/ai/           provider adapters, prompt policy, rubric, task definitions, diagram context
   content/guides/       private per-prompt interviewer guides (never sent to the browser)

@@ -16,6 +16,7 @@ import { catalogRouter } from "./modules/catalog.js";
 import { roundsRouter } from "./modules/rounds.js";
 import { devRouter, devToolsEnabled } from "./modules/dev.js";
 import { guideFor } from "./modules/ai/guides.js";
+import { syncAnswerPools } from "./modules/answers/store.js";
 import { prompts } from "../src/data/prompts.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -111,6 +112,11 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
 
   const missingGuides = prompts.filter((prompt) => !guideFor(prompt.id)).map((prompt) => prompt.id);
   if (missingGuides.length) console.warn(`[ai] no interviewer guide for: ${missingGuides.join(", ")}`);
+
+  // New or edited questions become pending reference-pool jobs. Building them
+  // happens on the long-running worker or the production maintenance cron.
+  const pools = await syncAnswerPools();
+  if (pools.pending) console.log(`[answers] queued ${pools.pending} question(s) for a reference pool`);
 
   return app;
 }
