@@ -6,7 +6,7 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import { connect, query } from "./db.js";
 import { HttpError, sameOriginWrites } from "./http.js";
-import { identityRouter, loadUser } from "./modules/identity.js";
+import { identityRouter, loadUser, requireCurrentHuman } from "./modules/identity.js";
 import { practiceRouter } from "./modules/practice.js";
 import { reviewsRouter } from "./modules/reviews.js";
 import { interviewsRouter } from "./modules/interviews.js";
@@ -67,6 +67,7 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use(sameOriginWrites);
   api.use("/v1", maintenanceRouter);
   api.use(loadUser);
+  api.use(requireCurrentHuman);
   // Before the routers that require sign-in: round content answers visitors too.
   api.use("/v1", roundsRouter);
   // Before the routers that require sign-in for everything: published articles are public.
