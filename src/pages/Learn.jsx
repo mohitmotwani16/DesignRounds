@@ -289,55 +289,135 @@ export function LearnTopicPage({ slug }) {
 
 // ------------------------------------------------------------------ hub
 
+const DOMAIN_GUIDES = {
+  "software-engineering": ["system-design-interview", "caching", "message-queues"],
+  "data-engineering": ["data-engineering-architecture", "batch-vs-stream-processing", "event-streaming-kafka"],
+  "machine-learning": ["machine-learning-system-architecture", "ai-application-architecture", "batch-vs-stream-processing"],
+  "platform-infrastructure": ["observability", "service-mesh", "health-checks-failover"],
+  "distributed-systems": ["consistency-models", "replication", "event-streaming-kafka"],
+  "frontend-mobile": ["cdn", "real-time-communication", "authentication-authorization"],
+};
+
 export function LearnHubPage() {
   useCommunityArticles();
-  const start = START_HERE.map(topicMeta).filter(Boolean);
+  const [query, setQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const needle = query.trim().toLowerCase();
+  const community = CATEGORIES.flatMap((category) => communityInCategory(category.id).map((article) => ({
+    slug: article.slug,
+    title: article.title,
+    short: article.shortTitle || article.title,
+    description: article.description,
+    level: article.level,
+    category: category.id,
+    community: true,
+  })));
+  const entries = [...TOPICS, ...community];
+  const matches = (topic) => !needle || `${topic.title} ${topic.short} ${topic.description} ${categoryById(topic.category)?.title || ""}`.toLowerCase().includes(needle);
+  const start = START_HERE.slice(0, 4).map(topicMeta).filter(Boolean);
+
   return (
     <main className="learn-page">
       <div className="learn-layout learn-layout-hub">
         <LearnSidebar currentSlug={null} />
         <div className="learn-hub">
-          <header className="learn-hub-head">
-            <span className="kicker">Learn</span>
-            <h1>System Design Handbook</h1>
-            <p className="learn-lede">
-              {TOPICS.length} free, in-depth guides to the concepts behind system design interviews and real production systems,
-              from load balancers and caching to consensus and sagas. Each one explains how it works, shows it in a diagram,
-              and names the systems that use it.
-            </p>
+          <header className="learn-hub-head learn-hub-hero">
+            <span className="kicker">Learn by domain · {entries.length} free guides</span>
+            <h1>Build system design knowledge that sticks.</h1>
+            <p className="learn-lede">Start with the fundamentals, explore the discipline you work in, then go deeper into the patterns behind real production systems. Read a guide or put the ideas into practice with a design round.</p>
+            <div className="learn-hub-stats" aria-label="Handbook overview">
+              <span><strong>{tracks.length}</strong> interview domains</span>
+              <span><strong>{CATEGORIES.length}</strong> topic categories</span>
+              <span><strong>{entries.length}</strong> practical guides</span>
+            </div>
+            <label className="learn-hub-search">
+              <Search size={17} />
+              <input type="search" placeholder="Search concepts, domains, or technologies" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search handbook guides" />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><X size={15} /></button>}
+            </label>
           </header>
 
-          <section className="learn-start">
-            <h2>Start here</h2>
-            <ol>
-              {start.map((topic) => (
-                <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}</Link> <LevelTag level={topic.level} /></li>
-              ))}
-            </ol>
+          <section className="learn-domain-section" aria-labelledby="learn-domains-title">
+            <div className="learn-section-heading">
+              <div><span className="kicker">Choose your path</span><h2 id="learn-domains-title">Explore by interview domain</h2></div>
+              <Link to="/library">Browse all practice rounds <ArrowRight size={14} /></Link>
+            </div>
+            <div className="learn-domain-grid">
+              {tracks.map((track) => {
+                const guides = (DOMAIN_GUIDES[track.id] || []).map(topicMeta).filter(Boolean);
+                return (
+                  <article key={track.id} className={`learn-domain-card learn-domain-${track.color}`}>
+                    <div className="learn-domain-title"><span><BookOpen size={17} /></span><h3>{track.label}</h3></div>
+                    <p>{track.description}</p>
+                    <ul aria-label={`${track.label} reading suggestions`}>
+                      {guides.map((topic) => <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}<ArrowRight size={12} /></Link></li>)}
+                    </ul>
+                    <Link className="learn-domain-practice" to={trackPath(track.id)}>Practice {track.shortLabel} rounds <ArrowRight size={14} /></Link>
+                  </article>
+                );
+              })}
+            </div>
           </section>
 
-          <div className="learn-categories">
+          <section className="learn-topic-browser" aria-labelledby="learn-topics-title">
+            <div className="learn-section-heading learn-topic-browser-heading">
+              <div><span className="kicker">Go deeper</span><h2 id="learn-topics-title">Browse the handbook</h2></div>
+              <p>{needle ? `${entries.filter(matches).length} matching guides` : `${entries.length} guides across ${CATEGORIES.length} categories`}</p>
+            </div>
+            <div className="learn-category-filters" aria-label="Filter topics by category">
+              <button type="button" aria-pressed={selectedCategory === "all"} onClick={() => setSelectedCategory("all")}>All topics</button>
+              {CATEGORIES.map((category) => (
+                <button key={category.id} type="button" aria-pressed={selectedCategory === category.id} onClick={() => setSelectedCategory(category.id)}>
+                  {category.title}<span>{category.topics.length + communityInCategory(category.id).length}</span>
+                </button>
+              ))}
+            </div>
+            {selectedCategory === "all" && !needle && (
+              <section className="learn-start">
+                <div><span className="kicker">New to system design?</span><h3>Start with the essentials</h3><p>Understand the interview, then build up from scale and latency.</p></div>
+                <ol>{start.map((topic) => <li key={topic.slug}><Link to={topicPath(topic.slug)}>{topic.short}</Link><LevelTag level={topic.level} /></li>)}</ol>
+              </section>
+            )}
+            <div className="learn-categories">
             {CATEGORIES.map((category) => (
+              (selectedCategory === "all" || selectedCategory === category.id) && (() => {
+                const categoryEntries = [...category.topics, ...communityInCategory(category.id).map((article) => ({
+                  slug: article.slug,
+                  title: article.title,
+                  short: article.shortTitle || article.title,
+                  description: article.description,
+                  level: article.level,
+                  category: category.id,
+                  community: true,
+                }))].filter(matches);
+                if (!categoryEntries.length) return null;
+                const expanded = Boolean(needle) || selectedCategory === category.id;
+                const visible = expanded ? categoryEntries : categoryEntries.slice(0, 4);
+                return (
               <section key={category.id} id={category.id} className="learn-category">
-                <h2>{category.title}</h2>
+                <div className="learn-category-heading"><h3>{category.title}</h3><span>{categoryEntries.length} {categoryEntries.length === 1 ? "guide" : "guides"}</span></div>
                 <p>{category.blurb}</p>
                 <ul>
-                  {category.topics.map((topic) => (
-                    <li key={topic.slug}>
-                      <Link to={topicPath(topic.slug)}>{topic.title}</Link>
+                  {visible.map((topic) => (
+                    <li key={topic.slug} className="learn-topic-item">
+                      <Link to={topicPath(topic.slug)}>
+                        <strong>{topic.title}{topic.community && <Users size={12} className="learn-community-mark" aria-label="Community article" />}</strong>
+                        <span>{topic.description}</span>
+                      </Link>
                       <LevelTag level={topic.level} />
                     </li>
                   ))}
-                  {communityInCategory(category.id).map((article) => (
-                    <li key={article.slug}>
-                      <Link to={topicPath(article.slug)}>{article.title} <Users size={12} className="learn-community-mark" aria-label="Community article" /></Link>
-                      <LevelTag level={article.level} />
-                    </li>
-                  ))}
                 </ul>
+                {!expanded && categoryEntries.length > visible.length && (
+                  <button className="learn-category-more" type="button" onClick={() => setSelectedCategory(category.id)}>Browse all {categoryEntries.length} guides <ArrowRight size={13} /></button>
+                )}
               </section>
+                );
+              })()
             ))}
-          </div>
+            </div>
+            {entries.filter(matches).length === 0 && <p className="learn-no-results">No guides match “{query}”. Try a broader term or clear your search.</p>}
+          </section>
 
           <aside className="learn-write-cta">
             <div>

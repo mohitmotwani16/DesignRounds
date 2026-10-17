@@ -26,10 +26,10 @@ function GoogleMark() {
   );
 }
 
-export default function SignInPage({ next, error: initialError }) {
+export default function SignInPage({ next, error: initialError, email: initialEmail = "" }) {
   const { setUser, googleAuth } = useAuth();
   const [step, setStep] = useState("email");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(() => (initialError && GOOGLE_ERRORS[initialError]) || "");

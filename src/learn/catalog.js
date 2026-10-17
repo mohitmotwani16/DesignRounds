@@ -128,6 +128,30 @@ export const CATEGORIES = [
     ],
   },
   {
+    id: "data-engineering",
+    title: "Data engineering",
+    blurb: "Move data from operational sources into trusted, queryable products with reliable pipelines and clear ownership.",
+    topics: [
+      { slug: "data-engineering-architecture", title: "Data Engineering Architecture: From Sources to Trusted Data Products", short: "Data engineering architecture", level: "Intermediate", description: "Design an end-to-end data platform: ingestion, lake and warehouse layers, batch and streaming pipelines, data quality, governance, and serving." },
+    ],
+  },
+  {
+    id: "machine-learning",
+    title: "Machine learning systems",
+    blurb: "Connect data, training, features, model deployment, online inference and feedback into a system that can be operated.",
+    topics: [
+      { slug: "machine-learning-system-architecture", title: "Machine Learning System Architecture: Data to Production Models", short: "ML system architecture", level: "Advanced", description: "How production ML systems connect data pipelines, training, feature stores, model registries, deployment, online serving, and drift monitoring." },
+    ],
+  },
+  {
+    id: "ai-architecture",
+    title: "AI application architecture",
+    blurb: "Build useful AI products around models with retrieval, tools, safety, evaluation and reliable user-facing behavior.",
+    topics: [
+      { slug: "ai-application-architecture", title: "AI Application Architecture: Retrieval, Tools and Guardrails", short: "AI application architecture", level: "Advanced", description: "Design an AI application around foundation models: request orchestration, retrieval-augmented generation, tools, safety, evaluation, and cost controls." },
+    ],
+  },
+  {
     id: "operations",
     title: "Observability & operations",
     blurb: "Running systems in production: seeing what they do, shipping changes safely and scaling capacity.",

@@ -23,6 +23,7 @@ import SignInPage from "./pages/SignIn.jsx";
 const WorkspaceRoute = lazy(() => import("./workspace/Workspace.jsx"));
 const LearnWritePage = lazy(() => import("./pages/LearnWrite.jsx"));
 const AdminPage = lazy(() => import("./pages/Admin.jsx"));
+const InvitePage = lazy(() => import("./pages/Invite.jsx"));
 const loadingScreen = <FullPageMessage title="Loading…"><LoaderCircle size={18} className="spin" /></FullPageMessage>;
 
 // `authStatus` lets the prerenderer render public pages as a signed-out visitor.
@@ -59,7 +60,7 @@ function Routes() {
     if (auth.status === "signed-in") {
       return <Redirect to={params.get("next") || "/library"} />;
     }
-    return <SignInPage next={params.get("next")} error={params.get("error")} />;
+    return <SignInPage next={params.get("next")} error={params.get("error")} email={params.get("email") || ""} />;
   }
 
   const needsAuth = path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/workspace/") || path.startsWith("/start/")
@@ -118,6 +119,8 @@ function Page({ path, onStart }) {
   if (path === "/admin") return <Suspense fallback={loadingScreen}><AdminPage /></Suspense>;
   const reviewed = /^\/admin\/articles\/([0-9a-f-]+)$/.exec(path)?.[1];
   if (reviewed) return <Suspense fallback={loadingScreen}><AdminPage key={reviewed} articleId={reviewed} /></Suspense>;
+  const invitation = /^\/invite\/([A-Za-z0-9_-]+)$/.exec(path)?.[1];
+  if (invitation) return <Suspense fallback={loadingScreen}><InvitePage token={invitation} /></Suspense>;
 
   const topic = /^\/learn\/([a-z0-9-]+)$/.exec(path)?.[1];
   if (topic && topicMeta(topic)) return <LearnTopicPage key={topic} slug={topic} />;
