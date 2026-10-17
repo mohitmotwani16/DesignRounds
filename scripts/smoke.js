@@ -28,6 +28,9 @@ const { createApp } = await import("../server/app.js");
 const { close, query } = await import("../server/db.js");
 const { prompts } = await import("../src/data/prompts.js");
 const { recommendedFreeRound } = await import("../src/data/free-rounds.js");
+const { filterFillerWords } = await import("../server/modules/ai/communication.js");
+const { interviewerTask } = await import("../server/modules/ai/tasks/interviewer.js");
+const { communicationInput, interviewTranscript } = await import("../server/modules/interviews.js");
 
 const app = await createApp({ serveFrontend: false });
 const server = app.listen(0);
@@ -55,6 +58,36 @@ async function step(name, fn) {
 
 let failed = false;
 try {
+  await step("answer context preserves verbatim text and filters fillers", async () => {
+    const original = "Um, so I would I would put a cache in front of the database, and, uh, shard by user id.";
+    assert.equal(filterFillerWords(original), "so I would I would put a cache in front of the database, and shard by user id.");
+    assert.match(original, /\bum\b.*\buh\b/i, "the original answer remains available for exact quotes");
+
+    const prompt = interviewerTask.buildUser({
+      prompt: { title: "Cache design", difficulty: "Intermediate", description: "Design a cache.", requirements: [] },
+      guide: null,
+      design: { text: "Components (0): none" },
+      state: { stage: "high_level", covered: [], summary: "" },
+      turns: [{
+        role: "learner",
+        kind: "audio",
+        content: "Um, we'd use Redis, uh, to cache hot reads.",
+        delivery: { hesitations: 2, fillerPhrases: 0, longPauses: 0, repeats: 0 },
+        audio_duration_ms: 5000,
+        answer_context: JSON.stringify({ filteredContent: "we'd use Redis to cache hot reads", technicalContext: "Use Redis for hot-read caching." }),
+      }],
+      trigger: "reply",
+      selected: null,
+      changes: null,
+      candidates: [],
+      hints: { used: 0, limit: 3 },
+    });
+    assert.match(prompt, /Previously extracted technical context: Use Redis for hot-read caching\./);
+    assert.match(prompt, /Learner \(spoken answer/);
+    assert.match(prompt, /we'd use Redis to cache hot reads/);
+    assert.doesNotMatch(prompt, /Um, we'd use Redis/);
+  });
+
   await step("health and readiness", async () => {
     assert.equal((await call("GET", "/api/health")).status, 200);
     const ready = await call("GET", "/api/health/ready");
@@ -227,9 +260,14 @@ try {
     assert.equal(sent.body.allowance.turns.used, usedBefore + 1, "a voice answer is one reply");
 
     const [stored] = await query(
-      `select t.content, a.mime_type, a.size_bytes, octet_length(a.data) as bytes, a.stt_model, a.delivery, a.transcribed_at
+      `select t.content, t.answer_context, a.mime_type, a.size_bytes, octet_length(a.data) as bytes, a.stt_model, a.delivery, a.transcribed_at
          from interview_turns t join interview_audio a on a.turn_id = t.id where t.id = $1`, [mine.id]);
     assert.match(stored.content, /shard by user id/, "the transcript is the turn's content server-side");
+    const answerContext = typeof stored.answer_context === "string" ? JSON.parse(stored.answer_context) : stored.answer_context;
+    assert.ok(answerContext.technicalContext.includes("shard by user id"), "technical context is extracted for later interviewer turns");
+    assert.ok(answerContext.communicationGaps.includes("hedging"), "communication gaps are stored separately");
+    assert.ok(!/\bum\b|\buh\b/i.test(answerContext.filteredContent), "the interviewer-facing copy removes common spoken fillers");
+    assert.match(stored.content, /\bum\b.*\buh\b/i, "filler filtering never overwrites the verbatim transcript");
     assert.deepEqual([stored.mime_type, stored.size_bytes, Number(stored.bytes), stored.stt_model], ["audio/webm", webm.length, webm.length, "fake"]);
     assert.ok(stored.transcribed_at);
     const delivery = typeof stored.delivery === "string" ? JSON.parse(stored.delivery) : stored.delivery;
@@ -243,6 +281,7 @@ try {
     const thread = JSON.stringify((await call("GET", `/api/v1/sessions/${round.id}/interview`)).body);
     assert.ok(!thread.includes("shard by user id"), "the transcript is never sent to the client");
     assert.ok(!thread.includes(body.data.slice(0, 40)), "nor is the recording");
+    assert.ok(!thread.includes("technicalContext") && !thread.includes("communicationGaps"), "private segregated context is never sent to the client");
 
     const long = Buffer.concat([webm, Buffer.alloc(1024 * 1024)]).toString("base64");
     assert.equal((await call("POST", url, audio({ data: long, durationMs: 115_000 }))).status, 201, "a near-limit recording is over the general 600kb body limit but accepted");
@@ -253,6 +292,9 @@ try {
 
     const text = await call("POST", `/api/v1/sessions/${round.id}/interview/messages`, { requestId: crypto.randomUUID(), content: "I'd shard by user id." });
     assert.equal(text.status, 201, "text still works after a voice answer");
+    const typedTurn = await query("select answer_context from interview_turns where session_id = $1 and kind = 'message' order by seq desc limit 1", [round.id]);
+    const typedContext = typeof typedTurn[0].answer_context === "string" ? JSON.parse(typedTurn[0].answer_context) : typedTurn[0].answer_context;
+    assert.equal(typedContext.filteredContent, "I'd shard by user id.", "typed text is preserved by the filler filter");
 
     // The interviewer's private communication notes are kept on each answer, never sent.
     const notes = await query("select kind, communication from interview_turns where session_id = $1 and role = 'learner' and kind in ('audio', 'message') order by seq", [round.id]);
@@ -274,6 +316,12 @@ try {
     assert.ok(communication && communication.summary && communication.workOn.length, "the review has a communication section");
     assert.deepEqual([communication.stats.spokenAnswers, communication.stats.typedAnswers], [2, 1]);
     assert.ok(communication.stats.wordsPerMinute > 0 && communication.stats.hesitationsPerMinute > 0);
+    const contextInput = await communicationInput(round.id);
+    const spokenContext = contextInput.answers.find((answer) => answer.spoken);
+    assert.match(spokenContext.technicalContext, /shard by user id/);
+    assert.ok(spokenContext.communicationGaps.includes("hedging"));
+    assert.match(spokenContext.filteredContent, /shard by user id/);
+    assert.match(await interviewTranscript(round.id), /Extracted technical context:.*shard by user id/);
 
     // Recordings are cleared after 30 days; the transcript and numbers stay.
     await query("update interview_audio set transcribed_at = now() - interval '31 days' where turn_id = $1", [mine.id]);

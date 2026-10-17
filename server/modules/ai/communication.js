@@ -19,6 +19,23 @@ export const GAP_SIGNALS = ["hedging", "gave_up", "over_explaining", "under_expl
 
 export const describeSignals = () => SIGNAL_IDS.map((id) => `- ${id}: ${SIGNALS[id]}`).join("\n");
 
+const FILLER_WORDS = /(?:^|[,;]\s*|\s+)(?:um+|uh+|erm+|er|hmm+|ah+|mhm+|you know|i mean|kind of|sort of|basically|literally)\b(?:[,;]\s*|\s+|$)/gi;
+
+// Keep the stored transcript untouched; this version is only for technical context.
+export function filterFillerWords(value) {
+  return String(value || "")
+    .replace(FILLER_WORDS, " ")
+    .replace(/^\s*[,;]\s*|\s*[,;]\s*$/g, " ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/([,;])(?:\s*[,;])+/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function parseAnswerContext(value) {
+  return typeof value === "string" ? JSON.parse(value) : value ?? null;
+}
+
 // One line of delivery numbers for a spoken answer, as the models see it.
 export function describeDelivery(delivery, durationMs) {
   if (!delivery) return "";

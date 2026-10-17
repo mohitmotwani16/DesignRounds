@@ -4,7 +4,7 @@ import { clean } from "../context.js";
 import { policy, policyVersion } from "../prompts/policy.js";
 import { list, oneOf, text } from "../schema.js";
 
-export const communicationTemplateVersion = `communication-v1/${policyVersion}`;
+export const communicationTemplateVersion = `communication-v2/${policyVersion}`;
 
 const quote = text(160, "The learner's own words where this showed, under 15 words, quoted exactly from their answer; empty if it can't be pinned to one place.");
 
@@ -36,6 +36,7 @@ How to judge:
 - Use the interviewer's private notes as evidence from the moment, but form your own overall view: one hedged answer is not a habit; the same pattern across answers is.
 - Judge each answer against the question it answered. A long answer to a broad question is not over-explaining; "no" to a yes/no question is not giving up.
 - Spoken answers were transcribed automatically: fillers are kept on purpose, but mis-heard technical terms are transcription errors, never the learner's fault. A few fillers are normal speech. Use the delivery numbers for pace, fillers and pauses rather than guessing from the text.
+- The filler-reduced copy and previously identified communication gaps are supporting signals only. Use the verbatim answer for any exact quote, and never penalize a learner because a filler was removed from the copy.
 - Typed answers have no delivery; judge only clarity, structure and length there.
 - Be honest and specific, and kind. Each point to work on must name a habit you actually saw and give a technique that fixes it. Never comment on accent, grammar of a non-native speaker, or technical correctness.
 - Examples quote the learner's own words exactly, under 15 words. Never quote the interviewer.
@@ -50,8 +51,17 @@ function buildUser({ prompt, answers, stats }) {
     const note = answer.note && (answer.note.signals?.length || answer.note.note)
       ? `\n  Interviewer's private note: ${[answer.note.signals?.join(", "), clean(answer.note.note, 240)].filter(Boolean).join(" — ")}`
       : "";
+    const filtered = answer.filteredContent !== answer.content
+      ? `\n  Filler-reduced answer: ${clean(answer.filteredContent, 2500)}`
+      : "";
+    const technicalContext = answer.technicalContext
+      ? `\n  Extracted technical context (not a communication score): ${clean(answer.technicalContext, 900)}`
+      : "";
+    const gaps = answer.communicationGaps?.length
+      ? `\n  Previously identified communication gaps: ${answer.communicationGaps.join(", ")}`
+      : "";
     return `${index + 1}. Question: ${clean(answer.question, 600) || "(the learner spoke first)"}
-  Learner (${answer.spoken ? "spoken" : "typed"})${delivery}: ${clean(answer.content, 2500)}${note}`;
+  Learner (${answer.spoken ? "spoken" : "typed"})${delivery} — verbatim: ${clean(answer.content, 2500)}${filtered}${technicalContext}${gaps}${note}`;
   }).join("\n\n");
   return `<round>
 Design problem: ${clean(prompt.title, 200)}
