@@ -87,7 +87,7 @@ export const roundPath = (id) => `/system-design/${id}`;
 export const trackPath = (id) => `/library/${id}`;
 
 // Routes that require an account: never indexed.
-const PRIVATE = /^\/(signin|welcome|profile|start|workspace|admin|learn\/write)(\/|$)/;
+const PRIVATE = /^\/(signin|welcome|profile|start|workspace|admin|invite|learn\/write)(\/|$)/;
 
 // Every indexable URL, for the sitemap and the prerenderer.
 export function publicPaths() {

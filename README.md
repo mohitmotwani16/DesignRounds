@@ -13,7 +13,8 @@ DesignRounds is a practice portal for system design interviews. Learners pick a 
 - **AI final review:** after finishing a round, learners request a rubric-based review: an overall score out of 100, six scored dimensions, strengths, risks, next steps, and (Plus) a decision-by-decision analysis of whether each choice was justified, needed, and right-sized. Reviews are capped per round and per month by plan. Free users see scores and the top strength and risk; Plus users see everything.
 
 - **Community handbook:** signed-in learners can draft and preview articles before submitting them. Admins review submissions, exchange feedback with authors, and publish approved work to the Learn handbook.
-- **Memberships:** admins can grant Free or Plus from `/admin` after a learner has signed in once. Plus access requires an expiry date and is active through that date in UTC; existing Plus accounts are backfilled through 2028-01-01.
+- **Memberships and invitations:** admins can search existing users, change Free/Plus access, grant or remove admin status, and email a Free or expiring Plus invitation from `/admin`. Invitees verify the invited email, then accept their one-time link within 14 days. New accounts receive a welcome email after their first successful sign-in.
+- **Admin bootstrap:** the migration promotes `designrounds.app@gmail.com` to admin while preserving any existing account data. Additional bootstrap admins can be configured with `ADMIN_EMAILS`; admins can manage other existing accounts in the admin UI.
 
 The AI interviewer and payments are not built yet. Plus rounds can be browsed but not started on a Free account (use the dev plan switch to test them).
 
@@ -31,7 +32,7 @@ This starts the API on http://localhost:8787 and the web app on http://localhost
 **No setup is needed for local development:**
 
 - **Database:** an embedded Postgres ([PGlite](https://pglite.dev), Postgres 17 like production) is created in `.data/pglite` on first run, and migrations in `server/migrations` are applied automatically. To reset all local data, stop the server and delete `.data/`. If the project lives in a synced folder such as OneDrive, set `PGLITE_DIR` in `.env` to a folder outside it (for example `%LOCALAPPDATA%\designrounds\pglite`); sync tools lock and corrupt live database files.
-- **Email:** with no email provider configured, the sign-in code is printed in the API terminal and also shown on the sign-in screen (development only).
+- **Email:** configure SMTP or Resend to deliver sign-in codes, first-login welcomes, and invitations. With no provider configured outside production, sign-in codes are printed in the API terminal and shown on the sign-in screen; invitation and welcome messages are logged locally.
 - **Google:** optional. Without `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, the Google button redirects back with a clear setup message; email OTP still works. See below.
 - **AI:** with no AI key, a built-in fake provider returns clearly labelled sample reviews, so every screen works offline. Add a free Gemini key (below) for real reviews.
 - **Plans:** the account menu has a **Dev: switch to Plus / Free** item for testing plan-dependent features. It never exists in production; set `DEV_TOOLS=false` to hide it locally.
@@ -100,7 +101,7 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `DATABASE_URL` | Use a hosted Postgres instead of the embedded one. Free tiers from [Neon](https://neon.tech) or [Supabase](https://supabase.com) work; paste the connection string and restart. The schema is created automatically. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Send real sign-in emails over SMTP. A Gmail account with an [app password](https://myaccount.google.com/apppasswords) works for development. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Send email through [Resend](https://resend.com) instead. Without a verified domain, Resend only delivers to your own address. |
-| `ADMIN_EMAILS` | Comma-separated bootstrap admins. Existing admins can manage other admins and grant dated Plus access from `/admin`. |
+| `ADMIN_EMAILS` | Comma-separated bootstrap admins. Existing admins can manage user roles and dated Plus access, and send account or Plus invitations from `/admin`. |
 | `VERCEL_DEPLOY_HOOK_URL` | Optional production deploy hook used to rebuild prerendered handbook pages after publication changes. |
 | `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | AI provider for reviews (see above). Unset means the fake provider in development and AI disabled in production. |
 | `AI_REVIEW_EFFORT`, `AI_REVIEW_MAX_TOKENS`, `AI_REVIEW_TIMEOUT_MS` | Optional tuning for review generation. |

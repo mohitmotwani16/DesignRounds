@@ -3,9 +3,9 @@ import express from "express";
 import { z } from "zod";
 import { query, queryOne } from "../db.js";
 import { devToolsEnabled, isProduction } from "../flags.js";
-import { deliveryMode, sendLoginCode } from "../email.js";
+import { deliveryMode, sendLoginCode, sendWelcomeEmail } from "../email.js";
 import { INTEREST_OPTIONS, interestLabel } from "../../src/data/interests.js";
-import { HttpError, createLimiter, parse, route } from "../http.js";
+import { afterResponse, HttpError, createLimiter, parse, route } from "../http.js";
 import { planFor } from "./plans.js";
 
 const SESSION_DAYS = 30;
@@ -54,6 +54,45 @@ const deleteAccountBody = z.object({ confirmEmail: emailSchema });
 
 const hashCode = (email, code) => crypto.createHmac("sha256", codeSecret).update(`${email}:${code}`).digest("hex");
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+
+async function welcomeFirstLogin(user) {
+  let claimed;
+  try {
+    claimed = await queryOne(
+      `update users set welcome_email_claimed_at = now()
+        where id = $1 and welcome_email_sent_at is null
+          and (welcome_email_claimed_at is null or welcome_email_claimed_at < now() - interval '15 minutes')
+        returning email, display_name`,
+      [user.id]
+    );
+  } catch (error) {
+    console.error("[email] couldn't schedule first-login welcome:", error.message);
+    return;
+  }
+  if (!claimed) return;
+  const delivery = sendWelcomeEmail(claimed.email, claimed.display_name).then(async () => {
+    try {
+      await query(
+        "update users set welcome_email_sent_at = now(), welcome_email_claimed_at = null where id = $1 and welcome_email_sent_at is null",
+        [user.id]
+      );
+    } catch (error) {
+      console.error("[email] couldn't record first-login welcome delivery:", error.message);
+    }
+  }).catch(async (error) => {
+    console.error("[email] failed to send first-login welcome:", error.message);
+    try {
+      await query("update users set welcome_email_claimed_at = null where id = $1 and welcome_email_sent_at is null", [user.id]);
+    } catch (releaseError) {
+      console.error("[email] couldn't release first-login welcome claim:", releaseError.message);
+    }
+  });
+  try {
+    afterResponse(delivery);
+  } catch (error) {
+    console.error("[email] couldn't schedule first-login welcome:", error.message);
+  }
+}
 
 function safeEqual(a, b) {
   const left = Buffer.from(a);
@@ -285,6 +324,7 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
     [email]
   );
   await createSession(res, user, req.get("user-agent"));
+  await welcomeFirstLogin(user);
   res.json({ user: toPublicUser(user) });
 }));
 
@@ -389,6 +429,7 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
   }
 
   await createSession(res, user, req.get("user-agent"));
+  await welcomeFirstLogin(user);
   clearOAuth();
   const destination = user.onboarded_at ? next : `/welcome?next=${encodeURIComponent(next)}`;
   res.redirect(destination);
