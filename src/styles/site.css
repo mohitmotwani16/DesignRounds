@@ -625,6 +625,13 @@
 .auth-page.site .text-input:focus, .auth-page.site select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .auth-page.site .code-input { font-family: var(--font-mono); font-size: 24px; letter-spacing: 0.4em; text-align: center; }
 .auth-page.site .auth-submit { width: 100%; margin-top: 18px; }
+.auth-page.site .btn-google { color: var(--ink); background: var(--surface); border-color: var(--line-strong); box-shadow: var(--shadow-sm); text-decoration: none; }
+.auth-page.site .btn-google:hover { border-color: var(--ink-4); background: var(--bg-sunken); }
+.auth-page.site .btn-google .google-mark { flex: none; }
+.auth-page.site .auth-divider { margin: 22px 0 4px; display: flex; align-items: center; gap: 12px; color: var(--ink-4); font-size: 12px; }
+.auth-page.site .auth-divider::before, .auth-page.site .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.auth-page.site .auth-divider span { flex: none; }
+.auth-page.site .auth-card form .auth-submit { margin-top: 14px; }
 .auth-page.site .text-button { color: var(--accent-text); }
 .auth-page.site .auth-footnote { color: var(--ink-4); }
 .auth-page.site .form-error { color: var(--danger); }

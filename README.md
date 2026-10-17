@@ -5,7 +5,7 @@ DesignRounds is a practice portal for system design interviews. Learners pick a 
 ## What's in this version
 
 - **Practice library:** 49 rounds across six disciplines (SDE, Data engineering, ML & AI, Platform, Distributed systems, Frontend & mobile). 28 rounds (57%) are free. You can filter by discipline, access, level, time, and topic, and search the requirements text.
-- **Accounts:** passwordless email sign-in. You enter your email, then type the 6-digit code that was sent to it. Browsing the library is public, but starting or resuming a round requires signing in. New users set up a profile with name, target role, experience, and headline.
+- **Accounts:** Google sign-in (OAuth) plus passwordless email OTP as a fallback. Browsing the library is public, but starting or resuming a round requires signing in. New users set up a profile with name, target role, experience, and headline.
 - **Profile:** practice history with resume/complete/delete actions, profile editing, sign out (here or on all devices), and account deletion.
 - **Canvas:** 247 components (about 140 generic system-design blocks in 12 categories plus about 110 technology logos), zones/boundaries, text labels, and decision notes. Connections are labeled and can be sync/async and one-way/two-way. It also has an inspector panel, inline rename, undo/redo, copy/paste/duplicate, box selection, snap-to-grid, and a minimap.
 - **Saving:** designs autosave to the database. Saves use optimistic versioning, so a stale tab can't overwrite newer work, and periodic checkpoints are stored as diagram versions. A finished round becomes read-only and can be reopened.
@@ -29,8 +29,32 @@ This starts the API on http://localhost:8787 and the web app on http://localhost
 
 - **Database:** an embedded Postgres ([PGlite](https://pglite.dev), Postgres 17 like production) is created in `.data/pglite` on first run, and migrations in `server/migrations` are applied automatically. To reset all local data, stop the server and delete `.data/`. If the project lives in a synced folder such as OneDrive, set `PGLITE_DIR` in `.env` to a folder outside it (for example `%LOCALAPPDATA%\designrounds\pglite`); sync tools lock and corrupt live database files.
 - **Email:** with no email provider configured, the sign-in code is printed in the API terminal and also shown on the sign-in screen (development only).
+- **Google:** optional. Without `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, the Google button redirects back with a clear setup message; email OTP still works. See below.
 - **AI:** with no AI key, a built-in fake provider returns clearly labelled sample reviews, so every screen works offline. Add a free Gemini key (below) for real reviews.
 - **Plans:** the account menu has a **Dev: switch to Plus / Free** item for testing plan-dependent features. It never exists in production; set `DEV_TOOLS=false` to hide it locally.
+
+## Set up Google sign-in
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
+2. Go to **APIs & Services → OAuth consent screen**. Choose **External** (unless you only need Google Workspace users), fill in the app name and support email, and save. For local testing you can keep the app in **Testing** and add your Google account under **Test users**.
+3. Go to **APIs & Services → Credentials → Create credentials → OAuth client ID**. Application type: **Web application**.
+4. Under **Authorized JavaScript origins**, add:
+   - `http://localhost:5173` (local Vite app — open this URL, not `:8787`)
+   - your production origin, e.g. `https://your-domain.example`
+5. Under **Authorized redirect URIs**, add exactly:
+   - `http://localhost:5173/api/v1/auth/google/callback`
+   - `https://designrounds.in/api/v1/auth/google/callback` (production)
+   - each Vercel preview origin you want to test, e.g. `https://your-branch-….vercel.app/api/v1/auth/google/callback`
+6. Copy the **Client ID** and **Client secret** into `.env`:
+   ```env
+   GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=...
+   ```
+7. Restart `npm run dev` (the API does not reload `.env` on change). On `/signin`, **Continue with Google** should open Google’s account picker.
+
+If the same person later uses email OTP with the same address (or the reverse), they land on the same account. New Google users still go through `/welcome`; their Google display name is prefilled.
+
+**Production:** set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Vercel (see table below), redeploy, and register the production redirect URI in Google Cloud. While the OAuth app is in **Testing**, only accounts listed as **Test users** can sign in; publish the consent screen when you are ready for everyone.
 
 ## Set up AI reviews (free Gemini key)
 
@@ -76,7 +100,10 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | AI provider for reviews (see above). Unset means the fake provider in development and AI disabled in production. |
 | `AI_REVIEW_EFFORT`, `AI_REVIEW_MAX_TOKENS`, `AI_REVIEW_TIMEOUT_MS` | Optional tuning for review generation. |
 | `DEV_TOOLS` | Set to `false` to hide developer tools such as the plan switch. Always off in production. |
-| `AUTH_SECRET` | Secret for hashing sign-in codes. **Required in production.** |
+| `VOICE_ANSWERS` | Voice answers in the live interviewer (record up to 2 minutes). On in development, off in production unless set to `true`. |
+| `GROQ_API_KEY` | Speech-to-text for voice answers (Groq Whisper). Optional locally (a fake transcriber is used); required in production for voice answers. `STT_MODEL` / `STT_BASE_URL` override the defaults. |
+| `AUTH_SECRET` | Secret for hashing sign-in codes and signing OAuth state. **Required in production.** |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client. Both required together; omit both to disable Google sign-in. |
 | `APP_ORIGIN`, `TRUST_PROXY`, `PORT` | Deployment settings for running behind a proxy or on a custom domain. |
 
 ## Project layout
@@ -88,7 +115,7 @@ server/                 Express API (modular monolith)
   flags.js              environment flags (production, dev tools)
   db.js                 PGlite / Postgres adapter + migration runner
   email.js              SMTP / Resend / console code delivery
-  modules/identity.js   email OTP sign-in, sessions, profile, account deletion
+  modules/identity.js   Google OAuth + email OTP sign-in, sessions, profile, account deletion
   modules/catalog.js    public prompt catalog: search, filters, facets, cursor pagination (CDN-cached)
   modules/practice.js   practice rounds, diagram saving, entitlement checks
   modules/reviews.js    AI review requests, credits and caps, plan-based presentation
@@ -118,6 +145,7 @@ Public pages are real URLs, prerendered to static HTML on every build, so search
 - **Content:** free round pages combine the brief with three public sections of the interviewer guide (scope and scale, common mistakes, deep-dive questions) via `server/content/guide-excerpts.js`. The other guide sections stay server-only. Long-form guides live in `src/content/guides.js`.
 - **Plus rounds are locked.** Their public page is a teaser (title, description, level, time, concepts). Their brief (requirements, prerequisites, expected outcome) lives only in `server/content/round-briefs.js`, and their guide excerpts are never bundled. Signed-in Plus members get the full content from `GET /api/v1/rounds/:id` (401 signed out, 403 on Free); a started round's brief comes with its session. `check:build` fails if any Plus-only text reaches the build.
 - **Checks:** `npm run check:build` (also in CI) fails on private guide or Plus-round text in the build, sitemap URLs without pages, missing, duplicate or over-long titles and descriptions, wrong canonicals, missing or extra `<h1>`, or invalid JSON-LD.
+- **IndexNow (Bing and others):** after every successful production deploy, `.github/workflows/indexnow.yml` runs `scripts/indexnow.mjs`. It fingerprints each sitemap page's visible content and submits only new, changed or removed URLs to `api.indexnow.org`; the fingerprints are kept in the Actions cache between runs. The key file is `public/<key>.txt` (its name and content are the key); to rotate it, replace that file with a new 32-hex key file. Preview a run with `node scripts/indexnow.mjs --dry-run`. Google does not use IndexNow; it reads `sitemap.xml`.
 
 ## Security notes
 
@@ -160,8 +188,11 @@ Vercel Cron (daily) ──► /api/v1/internal/maintenance
 | `AUTH_SECRET` | random 32 bytes (hex) | a different random value |
 | `CRON_SECRET` | random 32 bytes (hex) | – |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Resend key; `DesignRounds <no-reply@designrounds.in>` | same |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth web client for **designrounds.in** (redirect `https://designrounds.in/api/v1/auth/google/callback`) | optional; same client only if preview redirect URIs are registered in Google Cloud |
 | `AI_API_KEY`, `AI_MODEL` (`AI_BASE_URL`) | AI provider | same, or unset to disable AI |
 | `APP_ORIGIN` | `https://designrounds.in` | – |
+
+After the first deploy that includes migration `006_google_auth.sql`, Google sign-in is live once the variables above are set and Google Cloud has the matching redirect URI. Email OTP continues to work if Google is unset.
 
 Do **not** set `NODE_ENV` in Vercel: it makes the build skip dev dependencies. Vercel deployments always run in production mode anyway (see `server/flags.js`).
 

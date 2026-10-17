@@ -3,19 +3,41 @@ import { ArrowLeft, ArrowRight, Check, Layers2, LoaderCircle, Mail, ShieldCheck 
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Logo } from "../components/site.jsx";
-import { navigate, safeNext } from "../router.js";
+import { Link, navigate, safeNext } from "../router.js";
 
-export default function SignInPage({ next }) {
-  const { setUser } = useAuth();
+const GOOGLE_ERRORS = {
+  google_unconfigured: "Google sign-in isn't set up yet. Use email, or add Google OAuth credentials to .env.",
+  google_cancelled: "Google sign-in was cancelled. You can try again or use email.",
+  google_failed: "Google sign-in failed. Try again, or use email instead.",
+  google_state: "Google sign-in expired. Please try again.",
+  google_unverified: "Google didn't verify that email address. Use a verified Google account, or sign in with email.",
+  google_link_conflict: "This email is already linked to a different Google account. Sign in with email instead.",
+  rate_limited: "Too many sign-in attempts. Try again in a few minutes.",
+};
+
+function GoogleMark() {
+  return (
+    <svg className="google-mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" />
+      <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z" />
+      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" />
+    </svg>
+  );
+}
+
+export default function SignInPage({ next, error: initialError }) {
+  const { setUser, googleAuth } = useAuth();
   const [step, setStep] = useState("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => (initialError && GOOGLE_ERRORS[initialError]) || "");
   const [devCode, setDevCode] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const codeRef = useRef(null);
   const destination = safeNext(next);
+  const googleHref = `/api/v1/auth/google?next=${encodeURIComponent(destination)}`;
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -69,14 +91,26 @@ export default function SignInPage({ next }) {
       <section className="auth-card" aria-labelledby="auth-title">
         <span className="auth-icon">{step === "email" ? <Mail size={20} /> : <ShieldCheck size={20} />}</span>
         {step === "email" ? (
-          <form onSubmit={sendCode}>
+          <>
             <h1 id="auth-title">Sign in to practice</h1>
-            <p className="auth-lede">Enter your email and we'll send you a 6-digit code. No password needed. New here? This also creates your account.</p>
-            <label className="field-label" htmlFor="signin-email">Email address</label>
-            <input id="signin-email" className="text-input" type="email" autoComplete="email" inputMode="email" required autoFocus placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
-            {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="btn btn-primary btn-lg auth-submit" disabled={busy || !email}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Email me a code <ArrowRight size={15} /></button>
-          </form>
+            {googleAuth ? (
+              <>
+                <p className="auth-lede">Continue with Google, or use a one-time email code. New here? Either option creates your account.</p>
+                <a className="btn btn-google btn-lg auth-submit" href={googleHref}>
+                  <GoogleMark /> Continue with Google
+                </a>
+                <div className="auth-divider" role="separator" aria-label="or"><span>or use email</span></div>
+              </>
+            ) : (
+              <p className="auth-lede">Enter your email and we'll send you a 6-digit code. No password needed. New here? This also creates your account.</p>
+            )}
+            <form onSubmit={sendCode}>
+              <label className="field-label" htmlFor="signin-email">Email address</label>
+              <input id="signin-email" className="text-input" type="email" autoComplete="email" inputMode="email" required placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
+              {error && <p className="form-error" role="alert">{error}</p>}
+              <button className="btn btn-ghost btn-lg auth-submit" disabled={busy || !email}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Email me a code <ArrowRight size={15} /></button>
+            </form>
+          </>
         ) : (
           <form onSubmit={verify}>
             <h1 id="auth-title">Check your email</h1>
@@ -103,7 +137,7 @@ export default function SignInPage({ next }) {
           </form>
         )}
       </section>
-      <p className="auth-footnote">Signing in keeps your designs saved to your account so you can resume on any device.</p>
+      <p className="auth-footnote">Signing in keeps your designs saved to your account so you can resume on any device. By continuing, you agree to our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>
     </main>
   );
 }

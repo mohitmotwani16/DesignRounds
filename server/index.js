@@ -5,12 +5,13 @@ import { close, driver } from "./db.js";
 import { deliveryMode } from "./email.js";
 import { devToolsEnabled } from "./flags.js";
 import { describeAi } from "./modules/ai/config.js";
+import { describeSpeech } from "./modules/ai/speech.js";
 
 const port = Number(process.env.PORT || 8787);
 const app = await createApp();
 
 const server = app.listen(port, () => {
-  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  ai=${describeAi()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
+  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  ai=${describeAi()}  stt=${describeSpeech()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
 });
 
 // Graceful shutdown: stop accepting connections, let in-flight requests finish (up

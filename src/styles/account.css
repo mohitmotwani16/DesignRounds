@@ -44,6 +44,13 @@ select.text-input { padding-right: 8px; cursor: pointer; }
 .auth-lede strong { color: var(--fg-36425a); }
 .auth-card form > .field-label { display: block; margin-bottom: 7px; }
 .auth-submit { width: 100%; height: 44px; margin-top: 18px; font-size: 13.5px; }
+.btn-google { color: var(--fg-253146); background: var(--bg-ffffff); border-color: var(--bd-e3e6eb); box-shadow: 0 1px 0 rgba(22, 32, 48, .04); text-decoration: none; }
+.btn-google:hover { border-color: var(--bd-c9ced8); background: var(--bg-f8f9fb); }
+.btn-google .google-mark { flex: none; }
+.auth-divider { margin: 22px 0 4px; display: flex; align-items: center; gap: 12px; color: var(--fg-8790a0); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--bd-e6e8ed); }
+.auth-divider span { flex: none; }
+.auth-card form .auth-submit { margin-top: 14px; }
 .code-input { height: 52px; font-size: 24px; font-weight: 600; letter-spacing: 12px; text-align: center; }
 .code-input::placeholder { color: var(--fg-c8cdd5); letter-spacing: 12px; }
 .auth-secondary { margin-top: 16px; display: flex; justify-content: space-between; gap: 10px; }
