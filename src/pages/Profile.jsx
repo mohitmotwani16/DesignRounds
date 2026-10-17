@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, CircleCheck, Clock3, LoaderCircle, LogOut, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { interestLabel } from "../data/interests.js";
 import { findPrompt, getTrack } from "../data/prompts.js";
 import { promptIcon } from "../components/ui.jsx";
 import { SiteFooter } from "../components/site.jsx";
@@ -88,7 +89,7 @@ export default function ProfilePage({ onStart }) {
         <span className="profile-avatar" aria-hidden="true">{initials(user.displayName || user.email)}</span>
         <div className="profile-identity">
           <h1>{user.displayName || "Your profile"}</h1>
-          <p>{[user.headline, user.targetRole, user.experienceLevel].filter(Boolean).join(" · ") || user.email}</p>
+          <p>{[user.headline, interestSummary(user), user.experienceLevel].filter(Boolean).join(" · ") || user.email}</p>
         </div>
         <span className="plan-badge">{user.plan === "plus" ? `Plus plan · through ${user.planExpiresAt}` : "Free plan"}</span>
       </header>
@@ -183,6 +184,11 @@ export default function ProfilePage({ onStart }) {
       <SiteFooter />
     </main>
   );
+}
+
+function interestSummary(user) {
+  const labels = (user.interests ?? []).map(interestLabel).filter(Boolean);
+  return labels.length ? labels.join(", ") : user.targetRole;
 }
 
 function initials(name) {

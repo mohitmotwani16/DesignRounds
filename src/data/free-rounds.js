@@ -1,18 +1,12 @@
+import { practiceTracks } from "./interests.js";
 import { prompts } from "./prompts.js";
 
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
-const ROLE_TRACKS = {
-  "Software engineer": "software-engineering",
-  "Data engineer": "data-engineering",
-  "ML / AI engineer": "machine-learning",
-  "Platform / SRE": "platform-infrastructure",
-  "Frontend / mobile engineer": "frontend-mobile",
-};
 const EXPERIENCE_LEVELS = { "Student / new grad": 0, "1–3 years": 0, "3–6 years": 1, "6–10 years": 2, "10+ years": 2 };
 export const DEFAULT_TRACK = "software-engineering";
 const rank = (prompt) => Math.max(0, LEVELS.indexOf(prompt.difficulty));
 
-export const trackForUser = (user) => ROLE_TRACKS[user?.targetRole] || DEFAULT_TRACK;
+export const trackForUser = (user) => practiceTracks(user)[0] || DEFAULT_TRACK;
 export const levelForUser = (user) => EXPERIENCE_LEVELS[user?.experienceLevel] ?? 0;
 
 export function recommendRounds(trackId, { done = new Set(), level = 0 } = {}) {

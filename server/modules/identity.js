@@ -4,6 +4,7 @@ import { z } from "zod";
 import { query, queryOne } from "../db.js";
 import { devToolsEnabled, isProduction } from "../flags.js";
 import { deliveryMode, sendLoginCode, sendWelcomeEmail } from "../email.js";
+import { INTEREST_OPTIONS, interestLabel } from "../../src/data/interests.js";
 import { afterResponse, HttpError, createLimiter, parse, route } from "../http.js";
 import { planFor } from "./plans.js";
 
@@ -40,11 +41,14 @@ const emailSchema = z.string().trim().toLowerCase().max(254).email();
 const requestCodeBody = z.object({ email: emailSchema });
 const verifyCodeBody = z.object({ email: emailSchema, code: z.string().trim().regex(/^\d{6}$/, "must be 6 digits") });
 const optionalText = (max) => z.string().trim().max(max).transform((value) => value || null).nullable().optional();
+const interestIds = INTEREST_OPTIONS.map((option) => option.id);
 const profileBody = z.object({
   displayName: z.string().trim().min(1).max(60).optional(),
   headline: optionalText(120),
   targetRole: optionalText(60),
   experienceLevel: optionalText(40),
+  interests: z.array(z.enum(interestIds)).max(interestIds.length).optional()
+    .transform((ids) => (ids ? [...new Set(ids)] : undefined)),
 }).strict();
 const deleteAccountBody = z.object({ confirmEmail: emailSchema });
 
@@ -162,6 +166,7 @@ export function toPublicUser(row) {
     displayName: row.display_name,
     headline: row.headline,
     targetRole: row.target_role,
+    interests: row.interests ?? [],
     experienceLevel: row.experience_level,
     plan: planFor(row),
     planExpiresAt,
@@ -454,13 +459,19 @@ identityRouter.get("/me", requireUser, (req, res) => {
 
 identityRouter.patch("/me", requireUser, route(async (req, res) => {
   const body = parse(profileBody, req.body);
-  const columns = { displayName: "display_name", headline: "headline", targetRole: "target_role", experienceLevel: "experience_level" };
+  const columns = { displayName: "display_name", headline: "headline", targetRole: "target_role", experienceLevel: "experience_level", interests: "interests" };
   const sets = [];
   const values = [];
   for (const [key, column] of Object.entries(columns)) {
     if (body[key] === undefined) continue;
     values.push(body[key]);
     sets.push(`${column} = $${values.length}`);
+  }
+  // Keep the single role column in step with the first pick so older readers
+  // still see something, and clearing every role does not resurrect it.
+  if (body.interests !== undefined && body.targetRole === undefined) {
+    values.push(interestLabel(body.interests[0]));
+    sets.push(`target_role = $${values.length}`);
   }
   if (body.displayName) sets.push("onboarded_at = coalesce(onboarded_at, now())");
   if (!sets.length) return res.json({ user: toPublicUser(req.user) });
