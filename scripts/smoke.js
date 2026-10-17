@@ -9,7 +9,18 @@ import os from "node:os";
 import path from "node:path";
 
 const dataDir = await mkdtemp(path.join(os.tmpdir(), "designrounds-smoke-"));
-Object.assign(process.env, { PGLITE_DIR: dataDir, AI_PROVIDER: "fake", CRON_SECRET: "smoke-secret", DEV_TOOLS: "true", ADMIN_EMAILS: "admin@example.com", GROQ_API_KEY: "" });
+Object.assign(process.env, {
+  PGLITE_DIR: dataDir,
+  AI_PROVIDER: "fake",
+  CRON_SECRET: "smoke-secret",
+  DEV_TOOLS: "true",
+  ADMIN_EMAILS: "admin@example.com",
+  GROQ_API_KEY: "",
+  // A developer's .env must not turn Google sign-in on for this test. Blank
+  // values are kept by loadEnvFile, which does not override existing variables.
+  GOOGLE_CLIENT_ID: " ",
+  GOOGLE_CLIENT_SECRET: " ",
+});
 for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", "NODE_ENV", "VERCEL", "VERCEL_ENV", "VOICE_ANSWERS"]) delete process.env[key];
 
 const { createApp } = await import("../server/app.js");
@@ -300,6 +311,13 @@ try {
     const replay = await call("POST", `/api/v1/sessions/${session.id}/reviews`, { requestId });
     assert.equal(replay.body.reused, true);
     assert.equal(replay.body.review.id, review.body.review.id);
+  });
+
+  await step("new questions are queued for a reference answer pool", async () => {
+    const rows = await query("select status, count(*)::int as n from answer_pools group by status");
+    const pending = rows.find((row) => row.status === "pending");
+    assert.equal(pending?.n, prompts.length);
+    assert.equal((await call("GET", "/api/v1/internal/maintenance", undefined, { Authorization: "Bearer smoke-secret" })).body.answerPools.built, 0);
   });
 
   await step("maintenance requires the cron secret", async () => {

@@ -19,6 +19,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "ai:check": "node scripts/ai-check.js",
     "ai:eval": "node scripts/ai-eval.js",
+    "answers:build": "node scripts/build-answer-pools.js",
+    "test:answers": "node --test server/modules/answers/answers.test.js",
     "theme": "node scripts/theme-tokens.mjs"
   },
   "dependencies": {

@@ -13,6 +13,7 @@ import { reviewTask, reviewTemplateVersion } from "./ai/tasks/review.js";
 import { requireUser } from "./identity.js";
 import { communicationInput, interviewTranscript } from "./interviews.js";
 import { hasFullFeedback, limitsFor, planFor } from "./plans.js";
+import { referencePoolFor } from "./answers/store.js";
 import { ownedSession, promptById } from "./practice.js";
 
 const MIN_COMPONENTS = 3;
@@ -193,7 +194,8 @@ reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
   const diagramHash = fingerprint(`${design.text}
 ${transcript}`);
   const guide = guideFor(prompt.id);
-  const templateVersion = reviewTemplateVersion(guide);
+  const pool = await referencePoolFor(prompt.id);
+  const templateVersion = reviewTemplateVersion(guide, pool);
 
   // Unchanged design under the same rubric: return the existing review, free of charge.
   const existing = await queryOne(
@@ -241,7 +243,7 @@ ${transcript}`);
     : Promise.resolve(null);
   let output;
   try {
-    output = await runTask(reviewTask, { prompt, design, guide, transcript }, { userId: req.user.id, sessionId: session.id });
+    output = await runTask(reviewTask, { prompt, design, guide, transcript, pool }, { userId: req.user.id, sessionId: session.id });
   } catch (error) {
     await communication;
     await settle(pending, { status: "failed", errorCode: error instanceof AiError ? error.code : "INTERNAL" });

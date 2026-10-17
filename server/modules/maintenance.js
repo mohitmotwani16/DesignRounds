@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import express from "express";
 import { query } from "../db.js";
+import { isProduction } from "../flags.js";
 import { HttpError, route } from "../http.js";
+import { processAnswerPools } from "./answers/worker.js";
 
 // Housekeeping run by the scheduler (Vercel Cron, daily). It deletes rows nothing reads
 // any more. The run also counts as database activity, which keeps free-tier databases
@@ -39,6 +41,11 @@ maintenanceRouter.get("/internal/maintenance", route(async (req, res) => {
   if (!authorized(req)) throw new HttpError(404, "NOT_FOUND", "No such endpoint.");
   const started = Date.now();
   const deleted = await runMaintenance();
-  console.log(`[maintenance] deleted ${JSON.stringify(deleted)} in ${Date.now() - started}ms`);
-  res.json({ ok: true, deleted });
+  // Production cron is what drains the queue on Vercel. Local maintenance and
+  // tests stay offline unless ANSWER_POOLS=build.
+  const answerPools = process.env.ANSWER_POOLS === "build" || (isProduction && process.env.ANSWER_POOLS !== "off")
+    ? await processAnswerPools({ limit: 2 })
+    : { built: 0, failed: 0 };
+  console.log(`[maintenance] deleted ${JSON.stringify(deleted)} pools=${JSON.stringify(answerPools)} in ${Date.now() - started}ms`);
+  res.json({ ok: true, deleted, answerPools });
 }));
