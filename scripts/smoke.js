@@ -211,6 +211,27 @@ try {
     const text = await call("POST", `/api/v1/sessions/${round.id}/interview/messages`, { requestId: crypto.randomUUID(), content: "I'd shard by user id." });
     assert.equal(text.status, 201, "text still works after a voice answer");
 
+    // The interviewer's private communication notes are kept on each answer, never sent.
+    const notes = await query("select kind, communication from interview_turns where session_id = $1 and role = 'learner' and kind in ('audio', 'message') order by seq", [round.id]);
+    const signalsOf = (row) => (typeof row.communication === "string" ? JSON.parse(row.communication) : row.communication)?.signals ?? [];
+    assert.ok(signalsOf(notes[0]).includes("hedging"), "a hesitant spoken answer is noted");
+    assert.ok(signalsOf(notes.at(-1)).includes("clear"), "a clear typed answer is noted");
+    const visible = JSON.stringify((await call("GET", `/api/v1/sessions/${round.id}/interview`)).body);
+    assert.ok(!visible.includes("Sample note") && !visible.includes("hedging"), "notes never reach the client during the round");
+
+    // The final review adds communication feedback, separate from the design score.
+    const node = (id, kind, label) => ({ id, type: "systemNode", position: { x: 0, y: 0 }, data: { kind, label, note: "" } });
+    const diagram = { nodes: [node("n1", "client", "Client"), node("n2", "service", "API"), node("n3", "postgres", "DB")], edges: [{ id: "e1", source: "n1", target: "n2" }, { id: "e2", source: "n2", target: "n3" }] };
+    const current = (await call("GET", `/api/v1/sessions/${round.id}`)).body.session;
+    assert.equal((await call("PUT", `/api/v1/sessions/${round.id}/diagram`, { version: current.diagramVersion, diagram })).status, 200);
+    assert.equal((await call("PATCH", `/api/v1/sessions/${round.id}`, { status: "completed" })).status, 200);
+    const reviewed = await call("POST", `/api/v1/sessions/${round.id}/reviews`, { requestId: crypto.randomUUID() });
+    assert.equal(reviewed.status, 201, JSON.stringify(reviewed.body));
+    const communication = reviewed.body.review.communication;
+    assert.ok(communication && communication.summary && communication.workOn.length, "the review has a communication section");
+    assert.deepEqual([communication.stats.spokenAnswers, communication.stats.typedAnswers], [2, 1]);
+    assert.ok(communication.stats.wordsPerMinute > 0 && communication.stats.hesitationsPerMinute > 0);
+
     // Recordings are cleared after 30 days; the transcript and numbers stay.
     await query("update interview_audio set transcribed_at = now() - interval '31 days' where turn_id = $1", [mine.id]);
     assert.ok((await call("GET", "/api/v1/internal/maintenance", undefined, { Authorization: "Bearer smoke-secret" })).body.deleted.voiceRecordings >= 1);

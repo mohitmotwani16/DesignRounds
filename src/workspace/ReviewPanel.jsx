@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, RefreshCw, Sparkles, Target } from "lucide-react";
+import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, MessageSquareText, RefreshCw, Sparkles, Target } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 
@@ -219,6 +219,8 @@ function ReviewResult({ review, onFocusNode, labelFor }) {
 
       {review.reasoning && <ReasoningSection reasoning={review.reasoning} full={full} lockedCount={locked?.decisions} onFocusNode={onFocusNode} labelFor={labelFor} />}
 
+      {review.communication && <CommunicationSection communication={review.communication} />}
+
       <section className="review-section">
         <h4><CircleCheck size={14} /> {full ? "Strengths" : "Top strength"}</h4>
         {review.strengths.map((strength) => (
@@ -340,6 +342,72 @@ function ReasoningSection({ reasoning, full, lockedCount, onFocusNode, labelFor 
       ) : (
         <p className="review-locked-line"><LockKeyhole size={12} /> Plus analyses {lockedCount ? `each of your ${plural(lockedCount, "key decision")}` : "your key decisions"}: whether it was justified, actually needed, and right-sized for the problem, with the questions an interviewer would ask.</p>
       )}
+    </section>
+  );
+}
+
+const COMMUNICATION_RATINGS = {
+  strong: ["strong", "Strong communicator"],
+  solid: ["solid", "Clear"],
+  developing: ["developing", "Getting there"],
+  needs_work: ["missing", "Needs work"],
+};
+
+const ISSUE_LABELS = {
+  hedging: "Hedging",
+  gave_up: "Giving up too early",
+  over_explaining: "Over-explaining",
+  under_explaining: "Under-explaining",
+  unclear: "Unclear ideas",
+  rambling: "Rambling",
+  off_topic: "Off the question",
+  filler_words: "Filler words",
+  pace: "Pace",
+  pauses: "Long pauses",
+};
+
+function paceLabel(wordsPerMinute) {
+  if (!wordsPerMinute) return null;
+  if (wordsPerMinute < 100) return `${wordsPerMinute} words/min (slow)`;
+  if (wordsPerMinute > 180) return `${wordsPerMinute} words/min (fast)`;
+  return `${wordsPerMinute} words/min`;
+}
+
+// How the learner explained themselves in the interview, judged separately from the
+// design. Delivery numbers (pace, fillers, pauses) come from spoken answers only.
+function CommunicationSection({ communication }) {
+  const [ratingClass, ratingLabel] = COMMUNICATION_RATINGS[communication.rating] || COMMUNICATION_RATINGS.solid;
+  const stats = communication.stats || {};
+  const facts = [
+    stats.spokenAnswers ? `${plural(stats.spokenAnswers, "spoken answer")}` : null,
+    stats.typedAnswers ? `${plural(stats.typedAnswers, "typed answer")}` : null,
+    stats.spokenAnswers ? paceLabel(stats.wordsPerMinute) : null,
+    stats.spokenAnswers && stats.hesitationsPerMinute != null ? `${stats.hesitationsPerMinute} um/uh per min` : null,
+    stats.spokenAnswers && stats.longPauses ? plural(stats.longPauses, "long pause") : null,
+  ].filter(Boolean);
+  return (
+    <section className="review-section review-communication">
+      <h4><MessageSquareText size={14} /> Communication</h4>
+      <div className={`review-communication-head rating-${ratingClass}`}>
+        <span className="review-rating-pill">{ratingLabel}</span>
+        {facts.length > 0 && <span className="review-communication-facts">{facts.join(" · ")}</span>}
+      </div>
+      <p className="review-reasoning-summary">{communication.summary}</p>
+      {communication.strengths.map((strength) => (
+        <div key={strength.point} className="review-point">
+          <strong><CircleCheck size={13} className="review-communication-icon good" /> {strength.point}</strong>
+          {strength.example && <p className="review-quote">“{strength.example}”</p>}
+        </div>
+      ))}
+      {communication.workOn.map((item) => (
+        <div key={item.point} className="review-point">
+          <span className="review-severity severity-medium">{ISSUE_LABELS[item.issue] || "Work on"}</span>
+          <strong>{item.point}</strong>
+          {item.example && <p className="review-quote">“{item.example}”</p>}
+          <p><strong>Try:</strong> {item.tip}</p>
+        </div>
+      ))}
+      {!stats.spokenAnswers && <p className="review-locked-line">Answer out loud with the mic next time to get feedback on pace, filler words and pauses too.</p>}
     </section>
   );
 }

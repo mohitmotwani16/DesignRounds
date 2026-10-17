@@ -109,7 +109,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     return () => window.clearTimeout(timer);
   }, [enabled, structureKey, sessionId, settleSave, selectedIdRef, onProactiveTurn]);
 
-  return { ...data, pending, pendingAudio, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
+  return { ...data, sessionId, pending, pendingAudio, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
 }
 
 function blobToBase64(blob) {

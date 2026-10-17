@@ -56,6 +56,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   const voice = interview.voice && voiceAvailable;
   const recorder = useVoiceRecorder({ onRecorded: interview.sendAudio });
   const recording = recorder.status === "recording";
+  const voiceTip = useVoiceTip(interview.sessionId, voice && canSend);
 
   useEffect(() => {
     const list = listRef.current;
@@ -72,10 +73,16 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
     if (sendError?.intent === "message") setDraft((current) => current || sendError.draft);
   }, [sendError]);
 
+  function startRecording() {
+    voiceTip.hide();
+    recorder.start();
+  }
+
   async function submit(intent = "message") {
     // A hint request may carry the draft as context for what the learner is stuck on.
     const content = draft.trim();
     if (intent === "message" && !content) return;
+    voiceTip.hide();
     setDraft("");
     await interview.send(content, intent);
   }
@@ -129,6 +136,9 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
                 <button aria-label="Don't attach the selected component" onClick={onClearSelected}><X size={13} /></button>
               </div>
             )}
+            {voiceTip.visible && !recording && (
+              <p className="voice-tip" role="note"><Mic size={12} /> Tip: answer out loud with the mic, like in a real interview. Your review will include feedback on how you explain.</p>
+            )}
             {recording ? (
               <RecordingBar elapsed={recorder.elapsed} onCancel={recorder.cancel} onSend={recorder.send} />
             ) : (
@@ -140,19 +150,27 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
                 value={draft}
                 maxLength={2000}
                 disabled={!canSend && !pending}
-                onChange={(event) => setDraft(event.target.value)}
-                onFocus={() => { interview.typingRef.current = true; }}
+                onChange={(event) => { setDraft(event.target.value); voiceTip.offer(); }}
+                onFocus={() => { interview.typingRef.current = true; voiceTip.offer(); }}
                 onBlur={() => { interview.typingRef.current = false; }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (canSend) submit(); }
                 }}
               />
-              {/* Like a messaging app: the mic stands in for Send while the box is empty. */}
-              {voice && !draft.trim() && !pending ? (
-                <button aria-label="Record a voice answer" title="Record a voice answer (up to 2 minutes)" disabled={!canSend || recorder.status === "requesting"} onClick={recorder.start}>
+              {/* The mic stays available while typing (a typed draft is kept); with an
+                  empty box it is the main action, like a messaging app. */}
+              {voice && !pending && (
+                <button
+                  className={`${draft.trim() ? "voice-secondary" : ""}${voiceTip.visible ? " voice-attention" : ""}`}
+                  aria-label="Record a voice answer"
+                  title="Answer out loud (up to 2 minutes)"
+                  disabled={!canSend || recorder.status === "requesting"}
+                  onClick={startRecording}
+                >
                   {recorder.status === "requesting" ? <LoaderCircle size={16} className="spin" /> : <Mic size={16} />}
                 </button>
-              ) : (
+              )}
+              {(!voice || draft.trim() || pending) && (
                 <button aria-label="Send message" disabled={!canSend || !draft.trim()} onClick={() => submit()}>{pending ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />}</button>
               )}
             </div>
@@ -168,6 +186,30 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
       </div>
     </>
   );
+}
+
+// A one-line nudge toward answering out loud: once per round, the first time the
+// learner starts writing. It fades on its own and never needs dismissing.
+const VOICE_TIP_MS = 15_000;
+
+function useVoiceTip(sessionId, available) {
+  const [visible, setVisible] = useState(false);
+  const timer = useRef(0);
+  const key = `designrounds:voice-tip:${sessionId}`;
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const hide = () => { window.clearTimeout(timer.current); setVisible(false); };
+  const offer = () => {
+    if (!available || visible || !sessionId) return;
+    try {
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, "1");
+    } catch {
+      // Without storage the tip may show again next visit; that's harmless.
+    }
+    setVisible(true);
+    timer.current = window.setTimeout(() => setVisible(false), VOICE_TIP_MS);
+  };
+  return { visible: visible && available, offer, hide };
 }
 
 const kindLabels = { hint: "Hint", hint_request: "Asked for a hint" };

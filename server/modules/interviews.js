@@ -73,7 +73,7 @@ function presentTurn(row) {
   return turn;
 }
 
-const TURNS_WITH_AUDIO = `select t.*, a.duration_ms as audio_duration_ms
+const TURNS_WITH_AUDIO = `select t.*, a.duration_ms as audio_duration_ms, a.delivery
   from interview_turns t left join interview_audio a on a.turn_id = t.id`;
 
 function presentState(state) {
@@ -133,7 +133,7 @@ async function readAllowance(conn, user, sessionId, state) {
 }
 
 async function recentTurns(sessionId, summarizedThrough) {
-  const rows = await query("select * from interview_turns where session_id = $1 and seq > $2 order by seq desc limit $3", [sessionId, summarizedThrough, RECENT_TURNS]);
+  const rows = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 and t.seq > $2 order by t.seq desc limit $3`, [sessionId, summarizedThrough, RECENT_TURNS]);
   return rows.reverse();
 }
 
@@ -141,9 +141,14 @@ function openingMessage(prompt) {
   return `Let's work through "${prompt.title}" together. Before you draw much, start with the requirements: who uses this system, what are the core operations, and roughly what scale should we design for? Ask me anything about the brief along the way.`;
 }
 
-// Saves the interviewer's turn and the state it implies, and settles the credit.
-async function saveInterviewerTurn({ session, state, output, trigger, design, creditId, hint }) {
+// Saves the interviewer's turn and the state it implies, and settles the credit. The
+// interviewer's private note on how the learner communicated is kept on the learner's turn.
+async function saveInterviewerTurn({ session, state, output, trigger, design, creditId, hint, learnerTurnId = null }) {
   return transaction(async (conn) => {
+    const note = output.communication;
+    if (learnerTurnId && note && (note.signals.length || note.note)) {
+      await conn.query("update interview_turns set communication = $2::jsonb where id = $1", [learnerTurnId, JSON.stringify({ signals: [...new Set(note.signals)], note: note.note })]);
+    }
     const seq = await nextSeq(conn, session.id);
     const nodeIds = output.nodeIds.filter((id) => design.componentIds.has(id));
     const turn = await conn.queryOne(
@@ -206,6 +211,46 @@ export async function interviewTranscript(sessionId) {
   const speaker = (turn) => (turn.role !== "learner" ? "Interviewer" : turn.kind === "audio" ? "Learner (spoken)" : "Learner");
   const lines = turns.reverse().map((turn) => `${speaker(turn)}: ${turn.kind === "audio" && !turn.content ? "(voice answer, not transcribed)" : clean(turn.content, 800)}`);
   return [state.summary ? `Earlier: ${clean(state.summary, 3000)}` : "", ...lines].filter(Boolean).join("\n").slice(0, 12_000);
+}
+
+// Everything the communication feedback needs from a round: each learner answer with
+// the question it answered, the interviewer's private note and, when spoken, the
+// delivery numbers; plus round-level numbers computed here rather than by a model.
+// Null when the learner said too little to judge.
+const MIN_ANSWERS_FOR_COMMUNICATION = 2;
+
+export async function communicationInput(sessionId) {
+  const rows = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [sessionId]);
+  const answers = [];
+  let question = "";
+  for (const row of rows) {
+    if (row.role === "interviewer") { question = row.content; continue; }
+    if (row.kind !== "message" && row.kind !== "audio") continue;
+    if (row.kind === "audio" && !row.content) continue;
+    answers.push({ question, spoken: row.kind === "audio", content: row.content, durationMs: row.audio_duration_ms, delivery: row.delivery, note: row.communication });
+  }
+  if (answers.length < MIN_ANSWERS_FOR_COMMUNICATION) return null;
+
+  const spoken = answers.filter((answer) => answer.spoken && answer.delivery);
+  const sum = (key) => spoken.reduce((total, answer) => total + (answer.delivery[key] || 0), 0);
+  const speakingMs = sum("speakingMs");
+  const minutes = speakingMs / 60_000;
+  const signalCounts = {};
+  for (const answer of answers) for (const signal of answer.note?.signals ?? []) signalCounts[signal] = (signalCounts[signal] || 0) + 1;
+  return {
+    answers,
+    stats: {
+      answers: answers.length,
+      spokenAnswers: spoken.length,
+      typedAnswers: answers.length - spoken.length,
+      speakingSeconds: Math.round(speakingMs / 1000),
+      wordsPerMinute: minutes >= 0.25 ? Math.round(sum("words") / minutes) : null,
+      hesitationsPerMinute: minutes >= 0.25 ? Math.round((sum("hesitations") / minutes) * 10) / 10 : null,
+      longPauses: sum("longPauses"),
+      repeats: sum("repeats"),
+      signals: signalCounts,
+    },
+  };
 }
 
 export const interviewsRouter = express.Router();
@@ -296,7 +341,7 @@ async function replyToLearner({ req, session, reserved, hint = false }) {
     { userId: req.user.id, sessionId: session.id }
   );
   if (!data.message.trim()) throw new AiError("INVALID_OUTPUT", "The interviewer returned an empty reply.");
-  return saveInterviewerTurn({ session, state: reserved.state, output: data, trigger, design, creditId: reserved.creditId, hint });
+  return saveInterviewerTurn({ session, state: reserved.state, output: data, trigger, design, creditId: reserved.creditId, hint, learnerTurnId: hint ? null : reserved.learner.id });
 }
 
 // A retried request returns the turns the first attempt produced.
