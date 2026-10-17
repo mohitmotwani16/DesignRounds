@@ -126,26 +126,26 @@ function MemberList() {
     } finally {
       setBusyId("");
     }
+  }
 
-    async function changeRole(member) {
-      if (member.isAdmin && !window.confirm(`Remove admin access for ${member.email}?`)) return;
-      setBusyRoleId(member.id);
-      setError("");
-      setNotice("");
-      try {
-        if (member.isAdmin) {
-          await api.revokeAdmin(member.id);
-          setNotice(`${member.email} no longer has admin access.`);
-        } else {
-          await api.grantAdmin(member.email);
-          setNotice(`${member.email} is now an admin.`);
-        }
-        await load(email.trim().toLowerCase());
-      } catch (roleError) {
-        setError(roleError.message);
-      } finally {
-        setBusyRoleId("");
+  async function changeRole(member) {
+    if (member.isAdmin && !window.confirm(`Remove admin access for ${member.email}?`)) return;
+    setBusyRoleId(member.id);
+    setError("");
+    setNotice("");
+    try {
+      if (member.isAdmin) {
+        await api.revokeAdmin(member.id);
+        setNotice(`${member.email} no longer has admin access.`);
+      } else {
+        await api.grantAdmin(member.email);
+        setNotice(`${member.email} is now an admin.`);
       }
+      await load(email.trim().toLowerCase());
+    } catch (roleError) {
+      setError(roleError.message);
+    } finally {
+      setBusyRoleId("");
     }
   }
 
