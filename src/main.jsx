@@ -9,9 +9,17 @@ import "./styles/workspace.css";
 import "./styles/account.css";
 import "./styles/site.css";
 import App from "./App.jsx";
+import { loadTopic } from "./learn/topics.js";
 
-createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// A Learn topic's body is its own chunk: load it before the first render so the
+// prerendered article is replaced by the same article, not a loading state.
+const topic = /^\/learn\/([a-z0-9-]+)\/?$/.exec(window.location.pathname)?.[1];
+const ready = topic ? loadTopic(topic).catch(() => null) : Promise.resolve();
+
+ready.then(() => {
+  createRoot(document.getElementById("root")).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+});

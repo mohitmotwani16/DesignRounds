@@ -1,5 +1,5 @@
 import { findPrompt, getTrack, prompts, tracks } from "./data/prompts.js";
-import { GUIDES } from "./content/guides.js";
+import { LEARN_PATH, LEARN_UPDATED, TOPICS, categoryById, topicMeta, topicPath } from "./learn/catalog.js";
 
 // Search and sharing metadata for every route: title, description, canonical URL,
 // robots, Open Graph and JSON-LD. Used by the build-time prerenderer (baked into the
@@ -95,7 +95,8 @@ export function publicPaths() {
     "/library",
     ...tracks.map((track) => trackPath(track.id)),
     ...prompts.map((prompt) => roundPath(prompt.id)),
-    ...GUIDES.map((guide) => guide.path),
+    LEARN_PATH,
+    ...TOPICS.map((topic) => topicPath(topic.slug)),
     "/about",
     "/privacy",
     "/terms",
@@ -190,29 +191,51 @@ export function routeMeta(path) {
     };
   }
 
-  const guide = GUIDES.find((item) => item.path === path);
-  if (guide) {
+  if (path === LEARN_PATH) {
     return {
       ...base,
-      title: fitTitle(`${guide.title} | DesignRounds`, guide.title),
-      description: guide.description,
+      title: "System Design Handbook: Concepts, Patterns and Trade-offs",
+      description: `Free, in-depth guides to ${TOPICS.length} system design concepts with diagrams and real-world examples: caching, sharding, load balancing, Kafka, consensus and more.`,
+      jsonLd: [
+        {
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "System Design Handbook",
+          url: absolute(path),
+          hasPart: TOPICS.map((topic) => ({ "@type": "TechArticle", headline: topic.title, url: absolute(topicPath(topic.slug)) })),
+        },
+        breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH]]),
+      ],
+    };
+  }
+
+  const learnTopic = path.startsWith(`${LEARN_PATH}/`) ? topicMeta(path.slice(LEARN_PATH.length + 1)) : null;
+  if (learnTopic) {
+    const category = categoryById(learnTopic.category);
+    const guide = category.id === "interview";
+    return {
+      ...base,
+      title: fitTitle(`${learnTopic.title} | DesignRounds`, learnTopic.title, `${learnTopic.short} Explained | DesignRounds`, `${learnTopic.short} Explained`),
+      description: clamp(learnTopic.description),
       ogType: "article",
       jsonLd: [
         {
           "@context": "https://schema.org",
-          "@type": "Article",
-          headline: guide.title,
-          description: guide.description,
+          "@type": guide ? "Article" : "TechArticle",
+          headline: learnTopic.title,
+          description: learnTopic.description,
           url: absolute(path),
           mainEntityOfPage: absolute(path),
-          datePublished: guide.published,
-          dateModified: guide.updated,
+          datePublished: learnTopic.published ?? LEARN_UPDATED,
+          dateModified: LEARN_UPDATED,
+          ...(guide ? {} : { about: learnTopic.short, proficiencyLevel: learnTopic.level === "Advanced" ? "Expert" : "Beginner" }),
           author: organization,
           publisher: organization,
           image: SITE.image,
           inLanguage: "en",
+          isAccessibleForFree: true,
         },
-        breadcrumbs([["Home", "/"], ["Guides", "/guide/system-design-interview"], [guide.title, path]]),
+        breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH], [category.title, `${LEARN_PATH}#${category.id}`], [learnTopic.short, path]]),
       ],
     };
   }

@@ -189,7 +189,7 @@ function RoundContent({ prompt, content }) {
       <section>
         <h2>What a complete answer covers</h2>
         <p>{expectedOutcome}</p>
-        <p>There is no single correct design. A strong answer meets the requirements at the stated scale and explains the trade-offs behind each choice. New to the format? Read <Link to="/guide/system-design-interview">how to prepare for a system design interview</Link>.</p>
+        <p>There is no single correct design. A strong answer meets the requirements at the stated scale and explains the trade-offs behind each choice. New to the format? Read <Link to="/learn/system-design-interview">how to prepare for a system design interview</Link>.</p>
       </section>
     </>
   );
