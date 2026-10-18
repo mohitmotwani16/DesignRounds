@@ -1,10 +1,29 @@
+import * as vertex from "./anthropic-vertex.js";
 import { aiConfig } from "./config.js";
 import { AiError } from "./errors.js";
+import { googleAccessToken } from "./gcp-auth.js";
 import { contentFromChunk, takeStreamLines } from "./openai-stream.js";
 
 const MAX_TRANSPORT_RETRIES = 2;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const rejectedReasoning = new Set();
+const OPENAI_STYLE = new Set(["openai-compat", "gemini-vertex"]);
+
+// Gemini on Vertex signs in with a short-lived Google Cloud token; other
+// OpenAI-compatible APIs take a static key.
+async function requestHeaders() {
+  if (aiConfig.provider !== "gemini-vertex") return { Authorization: `Bearer ${aiConfig.apiKey}`, "Content-Type": "application/json" };
+  try {
+    return { Authorization: `Bearer ${await googleAccessToken()}`, "Content-Type": "application/json" };
+  } catch (error) {
+    throw new AiError("AUTH", "Could not authenticate with Google Cloud.", { cause: String(error?.message || error).slice(0, 600) });
+  }
+}
+
+// Vertex's OpenAI-compatible endpoint names Google's models with a publisher prefix.
+function apiModel(model) {
+  return aiConfig.provider === "gemini-vertex" && !model.includes("/") ? `google/${model}` : model;
+}
 
 // Tries the requested effort, then "low", when a model rejects a faster setting
 // such as "none". A rejection is remembered so the next reply does not pay for it.
@@ -46,9 +65,9 @@ async function openAiCompatible(request) {
   throw lastError;
 }
 
-async function openAiCompatibleOnce({ messages, jsonSchema, effort, maxTokens, timeoutMs }) {
+async function openAiCompatibleOnce({ model, messages, jsonSchema, effort, maxTokens, timeoutMs }) {
   const body = {
-    model: aiConfig.model,
+    model: apiModel(model),
     messages,
     max_tokens: maxTokens,
     response_format: { type: "json_schema", json_schema: { name: jsonSchema.name, schema: jsonSchema.schema, strict: true } },
@@ -60,11 +79,12 @@ async function openAiCompatibleOnce({ messages, jsonSchema, effort, maxTokens, t
     try {
       response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${aiConfig.apiKey}`, "Content-Type": "application/json" },
+        headers: await requestHeaders(),
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
+      if (error instanceof AiError) throw error;
       if (error.name === "TimeoutError") throw new AiError("TIMEOUT", "AI request timed out.", { attempts: attempt + 1 });
       if (attempt < MAX_TRANSPORT_RETRIES) { await sleep(retryDelay(null, attempt)); continue; }
       throw new AiError("NETWORK", "Could not reach the AI provider.", { cause: error.message, attempts: attempt + 1 });
@@ -76,7 +96,7 @@ async function openAiCompatibleOnce({ messages, jsonSchema, effort, maxTokens, t
       return {
         text: typeof choice?.message?.content === "string" ? choice.message.content : "",
         finishReason: choice?.finish_reason ?? null,
-        model: payload.model || aiConfig.model,
+        model: payload.model || model,
         inputTokens: payload.usage?.prompt_tokens ?? null,
         outputTokens: payload.usage?.completion_tokens ?? null,
         attempts: attempt + 1,
@@ -100,7 +120,11 @@ function providerFailure(response, detail, attempts) {
 // A failure before the first token is retried; a stream that breaks after that is not,
 // because the caller may already have shown the text.
 export async function* streamComplete(request) {
-  if (aiConfig.provider !== "openai-compat") throw new AiError("DISABLED", "No AI provider is configured.");
+  if (aiConfig.provider === "anthropic-vertex") {
+    yield* vertex.streamComplete(request);
+    return;
+  }
+  if (!OPENAI_STYLE.has(aiConfig.provider)) throw new AiError("DISABLED", "No AI provider is configured.");
   let lastError;
   const plans = reasoningPlan(request.effort);
   for (let index = 0; index < plans.length; index += 1) {
@@ -120,9 +144,9 @@ export async function* streamComplete(request) {
 }
 
 async function* streamCompleteOnce(request) {
-  const { messages, jsonSchema, effort, maxTokens, timeoutMs } = request;
+  const { model: requestedModel, messages, jsonSchema, effort, maxTokens, timeoutMs } = request;
   const body = {
-    model: aiConfig.model,
+    model: apiModel(requestedModel),
     messages,
     max_tokens: maxTokens,
     stream: true,
@@ -135,11 +159,12 @@ async function* streamCompleteOnce(request) {
     try {
       response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${aiConfig.apiKey}`, "Content-Type": "application/json" },
+        headers: await requestHeaders(),
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
+      if (error instanceof AiError) throw error;
       if (error.name === "TimeoutError") throw new AiError("TIMEOUT", "AI request timed out.", { attempts: attempt + 1 });
       if (attempt < MAX_TRANSPORT_RETRIES) { await sleep(retryDelay(null, attempt)); continue; }
       throw new AiError("NETWORK", "Could not reach the AI provider.", { cause: error.message, attempts: attempt + 1 });
@@ -157,7 +182,7 @@ async function* streamCompleteOnce(request) {
       const payload = await response.json();
       const piece = contentFromChunk(payload);
       if (piece.text) yield { type: "delta", text: piece.text };
-      yield { type: "end", finishReason: piece.finishReason, model: piece.model || aiConfig.model, inputTokens: piece.inputTokens, outputTokens: piece.outputTokens, attempts: attempt + 1 };
+      yield { type: "end", finishReason: piece.finishReason, model: piece.model || requestedModel, inputTokens: piece.inputTokens, outputTokens: piece.outputTokens, attempts: attempt + 1 };
       return;
     }
 
@@ -165,7 +190,7 @@ async function* streamCompleteOnce(request) {
     const decoder = new TextDecoder();
     let pending = "";
     let finishReason = null;
-    let model = aiConfig.model;
+    let model = requestedModel;
     let inputTokens = null;
     let outputTokens = null;
     let yielded = false;
@@ -202,7 +227,9 @@ async function* streamCompleteOnce(request) {
   }
 }
 
+// `request` is { model, messages, jsonSchema, effort, maxTokens, timeoutMs }.
 export async function complete(request) {
-  if (aiConfig.provider === "openai-compat") return openAiCompatible(request);
+  if (aiConfig.provider === "anthropic-vertex") return vertex.complete(request);
+  if (OPENAI_STYLE.has(aiConfig.provider)) return openAiCompatible(request);
   throw new AiError("DISABLED", "No AI provider is configured.");
 }

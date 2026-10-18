@@ -39,7 +39,8 @@ async function recordUsage(entry) {
   } catch (error) {
     console.error("[ai] could not record usage:", error.message);
   }
-  console.log(`[ai] ${entry.task} ${entry.outcome} model=${entry.model} in=${entry.inputTokens ?? "?"} out=${entry.outputTokens ?? "?"} ${entry.latencyMs}ms`);
+  const cached = entry.cachedInputTokens ? ` cached=${entry.cachedInputTokens}` : "";
+  console.log(`[ai] ${entry.task} ${entry.outcome} model=${entry.model} in=${entry.inputTokens ?? "?"}${cached} out=${entry.outputTokens ?? "?"} ${entry.latencyMs}ms`);
 }
 
 // Runs one AI task: builds its messages, calls the provider for schema-constrained
@@ -67,13 +68,13 @@ export async function runTask(task, input, { userId, sessionId, meter = true } =
     const started = Date.now();
     let completion;
     try {
-      completion = await complete({ messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs });
+      completion = await complete({ model: settings.model, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs });
     } catch (error) {
-      await recordUsage({ ...meta, model: aiConfig.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
+      await recordUsage({ ...meta, model: settings.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
       if (error.detail) console.error(`[ai] ${task.name} ${error.code}:`, JSON.stringify(error.detail));
       throw error;
     }
-    const usage = { model: completion.model, attempts: completion.attempts, inputTokens: completion.inputTokens, outputTokens: completion.outputTokens, latencyMs: Date.now() - started };
+    const usage = { model: completion.model, attempts: completion.attempts, inputTokens: completion.inputTokens, cachedInputTokens: completion.cachedInputTokens, outputTokens: completion.outputTokens, latencyMs: Date.now() - started };
     const parsed = completion.finishReason === "length"
       ? { ok: false, problem: "the reply was cut off before the JSON was complete; be more concise" }
       : parseOutput(task, completion.text);
@@ -134,12 +135,13 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
     const extractor = createMessageExtractor();
     let text = "";
     let finishReason = null;
-    let model = aiConfig.model;
+    let model = settings.model;
     let attempts = 1;
     let inputTokens = null;
+    let cachedInputTokens = null;
     let outputTokens = null;
     try {
-      for await (const event of streamComplete({ messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
+      for await (const event of streamComplete({ model: settings.model, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
         if (event.type === "delta") {
           text += event.text;
           forward(extractor.push(event.text));
@@ -148,15 +150,16 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
           model = event.model;
           attempts = event.attempts;
           inputTokens = event.inputTokens;
+          cachedInputTokens = event.cachedInputTokens;
           outputTokens = event.outputTokens;
         }
       }
     } catch (error) {
-      await recordUsage({ ...meta, model: aiConfig.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
+      await recordUsage({ ...meta, model: settings.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
       if (error.detail) console.error(`[ai] ${task.name} ${error.code}:`, JSON.stringify(error.detail));
       throw error;
     }
-    const usage = { model, attempts, inputTokens, outputTokens, latencyMs: Date.now() - started };
+    const usage = { model, attempts, inputTokens, cachedInputTokens, outputTokens, latencyMs: Date.now() - started };
     const parsed = finishReason === "length"
       ? { ok: false, problem: "the reply was cut off before the JSON was complete; be more concise" }
       : parseOutput(task, text);

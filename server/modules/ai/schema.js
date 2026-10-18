@@ -41,6 +41,23 @@ export function toJsonSchema(schema) {
   }
 }
 
+// Claude's structured outputs reject numeric bounds and array sizes above one, so
+// those move into the description, where the model still reads them. The zod schema
+// keeps enforcing them when the reply is parsed.
+export function toClaudeSchema(schema) {
+  const { minimum, maximum, minItems, ...out } = schema;
+  if (out.properties) out.properties = Object.fromEntries(Object.entries(out.properties).map(([key, value]) => [key, toClaudeSchema(value)]));
+  if (out.items) out.items = toClaudeSchema(out.items);
+  const notes = [];
+  if (minimum !== undefined && maximum !== undefined) notes.push(`Between ${minimum} and ${maximum}.`);
+  else if (minimum !== undefined) notes.push(`At least ${minimum}.`);
+  else if (maximum !== undefined) notes.push(`At most ${maximum}.`);
+  if (minItems > 1) notes.push(`At least ${minItems} items.`);
+  else if (minItems !== undefined) out.minItems = minItems;
+  if (notes.length) out.description = [out.description, ...notes].filter(Boolean).join(" ");
+  return out;
+}
+
 // Short, model-readable description of why output failed validation.
 export function describeIssues(error) {
   return error.issues.slice(0, 8).map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`).join("; ");
