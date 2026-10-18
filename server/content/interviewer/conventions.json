@@ -9,7 +9,11 @@
     "maxAssessmentsPerTurn": 4,
     "stageOverrunFactor": 1.5,
     "wrapUpAt": 0.95,
-    "activityGapCapMs": 300000
+    "activityGapCapMs": 300000,
+    "minCanvasComponents": 3,
+    "minCanvasConnections": 2,
+    "drawCooldownTurns": 2,
+    "maxDrawRequestsPerItem": 3
   },
   "guided": {
     "maxFollowUpsPerItem": 3,
