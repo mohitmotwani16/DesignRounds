@@ -300,7 +300,7 @@ try {
     assert.equal(sent.body.allowance.turns.used, usedBefore + 1, "a voice answer is one reply");
 
     const [stored] = await query(
-      `select t.content, t.answer_context, a.mime_type, a.size_bytes, octet_length(a.data) as bytes, a.stt_model, a.delivery, a.transcribed_at
+      `select t.content, t.answer_context, a.mime_type, a.size_bytes, octet_length(a.data) as bytes, a.storage_key, a.stt_model, a.delivery, a.transcribed_at
          from interview_turns t join interview_audio a on a.turn_id = t.id where t.id = $1`, [mine.id]);
     assert.match(stored.content, /shard by user id/, "the transcript is the turn's content server-side");
     const answerContext = typeof stored.answer_context === "string" ? JSON.parse(stored.answer_context) : stored.answer_context;
@@ -308,7 +308,9 @@ try {
     assert.ok(answerContext.communicationGaps.includes("hedging"), "communication gaps are stored separately");
     assert.ok(!/\bum\b|\buh\b/i.test(answerContext.filteredContent), "the interviewer-facing copy removes common spoken fillers");
     assert.match(stored.content, /\bum\b.*\buh\b/i, "filler filtering never overwrites the verbatim transcript");
-    assert.deepEqual([stored.mime_type, stored.size_bytes, Number(stored.bytes), stored.stt_model], ["audio/webm", webm.length, webm.length, "fake"]);
+    assert.deepEqual([stored.mime_type, stored.size_bytes, stored.stt_model], ["audio/webm", webm.length, "fake"]);
+    if (stored.storage_key) assert.equal(stored.bytes, null, "with R2 configured, bytes live in object storage");
+    else assert.equal(Number(stored.bytes), webm.length, "without R2, bytes stay in Postgres");
     assert.ok(stored.transcribed_at);
     const delivery = typeof stored.delivery === "string" ? JSON.parse(stored.delivery) : stored.delivery;
     assert.deepEqual([delivery.hesitations, delivery.repeats, delivery.longPauses], [2, 1, 1], "delivery numbers come from the word timings");
@@ -366,8 +368,10 @@ try {
     // Recordings are cleared after 30 days; the transcript and numbers stay.
     await query("update interview_audio set transcribed_at = now() - interval '31 days' where turn_id = $1", [mine.id]);
     assert.ok((await call("GET", "/api/v1/internal/maintenance", undefined, { Authorization: "Bearer smoke-secret" })).body.deleted.voiceRecordings >= 1);
-    const [purged] = await query("select data, purged_at, delivery from interview_audio where turn_id = $1", [mine.id]);
-    assert.ok(purged.data === null && purged.purged_at && purged.delivery);
+    const [purged] = await query("select data, storage_key, purged_at, delivery from interview_audio where turn_id = $1", [mine.id]);
+    assert.ok(purged.data === null && purged.storage_key === null && purged.purged_at && purged.delivery);
+    const [transcriptRow] = await query("select content from interview_turns where id = $1", [mine.id]);
+    assert.match(transcriptRow.content, /shard by user id/, "the verbatim transcript outlives the recording");
 
     assert.equal((await call("DELETE", `/api/v1/sessions/${round.id}`)).status, 200);
     assert.equal((await query("select 1 from interview_audio where turn_id = $1", [mine.id])).length, 0, "deleting the round deletes the recording");
