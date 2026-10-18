@@ -80,7 +80,7 @@ function availableCurveball({ curveballs, items, focus, canvas }) {
   return (canvas ? ready.sort((a, b) => seededJitter(canvas.seed, b.id) - seededJitter(canvas.seed, a.id)) : ready)[0] ?? null;
 }
 
-const DEFAULT_MOVES = ["probe", "challenge", "clarify", "explain", "acknowledge_advance", "move_on", "redirect"];
+const DEFAULT_MOVES = ["probe", "listen", "challenge", "clarify", "explain", "acknowledge_advance", "move_on", "redirect"];
 
 // Whether an item may not start yet because its part isn't on the canvas. After a few
 // ignored requests the interviewer stops insisting, so a round can't stall forever.
@@ -89,7 +89,9 @@ function awaitingDrawing(item, canvas, conventions) {
     && item.drawRequests < conventions.maxDrawRequestsPerItem);
 }
 
-export function plan({ items, state, conventions, agenda, curveballs = [], pacing, minutes, turn = {}, trigger = "reply", addedKinds = [], canvas = null }) {
+// `conversation` is { lastMove, questionStreak }: the interviewer's last move and how
+// many of its latest messages in a row asked something.
+export function plan({ items, state, conventions, agenda, curveballs = [], pacing, minutes, turn = {}, trigger = "reply", addedKinds = [], canvas = null, conversation = null }) {
   const clock = clockOf({ state, pacing, minutes });
   const focus = focusItem(items, state, canvas);
   const next = nextPendingItem(items, state.stage, focus?.itemId, canvas);
@@ -149,6 +151,8 @@ export function plan({ items, state, conventions, agenda, curveballs = [], pacin
     if (!allowed.includes("wrap_up")) allowed.push("wrap_up");
   }
   if (state.stage === "wrap_up" && !allowed.includes("wrap_up") && trigger !== "hint") allowed.push("wrap_up");
+  // Letting them keep going is one beat, not a habit: never twice in a row.
+  if (conversation?.lastMove === "listen") allowed = allowed.filter((move) => move !== "listen");
 
   if (canvas && trigger !== "hint" && !allowed.includes("hint")) {
     const thin = canvas.components < conventions.minCanvasComponents || canvas.connections < conventions.minCanvasConnections;
@@ -175,6 +179,7 @@ export function plan({ items, state, conventions, agenda, curveballs = [], pacin
     pinnedAssumptions: state.assumptions.map((entry) => entry.clarificationId).filter((id) => id && id !== "custom"),
     curveball,
     drawTarget,
+    questionStreak: conversation?.questionStreak ?? 0,
     canvas: canvas ? { components: canvas.components, connections: canvas.connections, drawn: [...canvas.drawn], undrawn: [...canvas.needs].filter((id) => !canvas.drawn.has(id)) } : null,
   };
 }

@@ -150,6 +150,8 @@ async function runCase(entry) {
     stage: state.stage,
     moves: Object.fromEntries([...new Set(interviewer.map((row) => row.move))].map((move) => [move, interviewer.filter((row) => row.move === move).length])),
     multiQuestionMessages: interviewer.filter((row) => questionCount(row.content) > 1).length,
+    // A real interviewer reacts, appreciates and lets the candidate build; not every message is a question.
+    questionShare: interviewer.length ? interviewer.filter((row) => questionCount(row.content) > 0).length / interviewer.length : 0,
     rejectedMoves: count("move_rejected"),
     fallbacks: count("fallback_used"),
     droppedAssessments: events.filter((event) => event.type === "assessment_dropped").reduce((sum, event) => sum + (event.payload.count ?? 0), 0),
@@ -164,6 +166,7 @@ async function runCase(entry) {
   }
   const sources = [...learner.map((row) => ({ turnSeq: row.seq, kind: row.kind, spoken: row.kind === "audio", text: row.content })), ...learner.filter((row) => row.answer_context?.filteredContent).map((row) => ({ turnSeq: row.seq, kind: row.kind, spoken: row.kind === "audio", text: row.answer_context.filteredContent }))];
   for (const item of items) for (const evidence of item.evidence) if (evidence.source !== "note" && !matchQuote(evidence.quote, sources)) failures.push(`unverified quote on ${item.item_id}`);
+  if (interviewer.length >= 6 && metrics.questionShare > 0.85) failures.push(`${Math.round(metrics.questionShare * 100)}% of interviewer messages were questions`);
   if (metrics.fallbacks > Math.max(1, interviewer.length * 0.2)) failures.push(`${metrics.fallbacks} templated fallbacks (moves rejected twice)`);
   // Canvas checks: a deep dive opens only on a drawn part (unless the candidate ignored
   // every request to draw it), and there's no wrap-up on a canvas too thin to review.
@@ -218,7 +221,7 @@ try {
       const result = await runCase(entry);
       results.push(result);
       const { metrics } = result;
-      console.log(`${result.failures.length ? "FAIL" : "PASS"}  ${entry.id.padEnd(24)} coverage ${metrics.requiredCoverage.toFixed(2)}  stage ${metrics.stage.padEnd(12)} moves ${JSON.stringify(metrics.moves)}  ${Math.round((Date.now() - started) / 1000)}s`);
+      console.log(`${result.failures.length ? "FAIL" : "PASS"}  ${entry.id.padEnd(24)} coverage ${metrics.requiredCoverage.toFixed(2)}  questions ${Math.round(metrics.questionShare * 100)}%  stage ${metrics.stage.padEnd(12)} moves ${JSON.stringify(metrics.moves)}  ${Math.round((Date.now() - started) / 1000)}s`);
       for (const failure of result.failures) console.log(`      - ${failure}`);
     } catch (error) {
       results.push({ id: entry.id, failures: [error.message] });

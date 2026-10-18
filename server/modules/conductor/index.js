@@ -22,7 +22,7 @@ import { clockOf, focusItem, nextPendingItem, plan as makePlan, tickPlan } from 
 import * as store from "./store.js";
 import { conductorTask } from "./task.js";
 import { WRAP_UP_TEXT, accrueActiveMs, decideTick } from "./ticks.js";
-import { validateOutput } from "./validate.js";
+import { validateOutput, questionCount } from "./validate.js";
 
 // The Interview Conductor (docs/design/interview-conductor.md): runs one live round.
 // Each turn is PLAN (code) -> one model call -> VALIDATE (code) -> APPLY (code). The
@@ -194,6 +194,17 @@ function signalsFor({ session, record, round, turns }) {
   });
 }
 
+// The shape of the conversation so far, so the interviewer doesn't only ask questions.
+function conversationOf(turns) {
+  const said = turns.filter((turn) => turn.role === "interviewer" && turn.move && !["nudge", "time_check"].includes(turn.move));
+  let questionStreak = 0;
+  for (const turn of [...said].reverse()) {
+    if (questionCount(turn.content) === 0) break;
+    questionStreak += 1;
+  }
+  return { lastMove: said.at(-1)?.move ?? null, questionStreak };
+}
+
 function addedKinds(snapshot, diagram) {
   return diffSnapshots(snapshot, snapshotOf(diagram), diagram).added.map((entry) => entry.kind);
 }
@@ -209,6 +220,7 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
     items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes,
     turn: { kind: reserved.learner.kind, text: learnerText(reserved.learner) }, trigger, addedKinds: addedKinds(round.snapshot, session.diagram),
     canvas: signalsFor({ session, record, round, turns }),
+    conversation: conversationOf(turns),
   });
   const selected = selectedNodeId && design.labels.has(selectedNodeId) ? { id: selectedNodeId, label: design.labels.get(selectedNodeId) } : null;
   const { verified, data, flags } = await converse({ ctx, session, user, turns, plan, trigger, learner: reserved.learner, selected, onDelta, onReset });

@@ -50,6 +50,7 @@ export function fakeConductorReply({ plan, learnerText = "", trigger = "reply", 
     probe: "(Sample interviewer) Can you be more specific about how that works when traffic grows tenfold?",
     wrap_up: "(Sample interviewer) Let's wrap up. Summarise your design, the biggest risk in it, and what you'd improve.",
     ask_to_draw: "(Sample interviewer) Before we go further, put that part on the canvas so we can look at it together.",
+    listen: "(Sample interviewer) Okay, so writes land in the database first and the cache fills on reads. That works. Keep going.",
     stay_silent: "",
   }[move] ?? `(Sample interviewer) ${openers[focusItemId] ?? "Tell me more about that."}`;
   return {

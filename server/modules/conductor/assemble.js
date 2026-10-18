@@ -52,6 +52,7 @@ export function renderPlan({ plan, trigger, items, selected, changes, rejection 
     plan.curveball ? `Curveball available: ${plan.curveball.id}, opens ${plan.curveball.agendaItemId}.` : "",
     plan.canvas ? `Canvas: ${plan.canvas.components} components, ${plan.canvas.connections} connections. Parts already drawn: ${plan.canvas.drawn.join(", ") || "none"}. Parts not drawn yet: ${plan.canvas.undrawn.join(", ") || "none"}.` : "",
     plan.drawTarget ? `Before ${plan.drawTarget} can start, its part must be on the canvas: if you move on, ask the candidate to draw it (move ask_to_draw, focusItemId ${plan.drawTarget}); the deep dive starts once it is drawn.` : "",
+    plan.questionStreak >= 3 && !plan.allowedMoves.includes("hint") ? `Your last ${plan.questionStreak} messages all asked something. Unless you need an answer right now, don't ask this time: say back how you understand their design, say what's working, or invite them to keep building${plan.allowedMoves.includes("listen") ? " (move listen)" : ""}.` : "",
     plan.allowedMoves.length === 3 && plan.allowedMoves[0] === "ask_to_draw" ? "The candidate has been talking without drawing: ask them to put what they described on the canvas before going further." : "",
     selected ? `The candidate has this component selected: [${selected.id}] "${clean(selected.label, 120)}".` : "",
     changes ? `Changes on the canvas since you last looked:\n${changes}` : "",

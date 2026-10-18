@@ -3,8 +3,10 @@
 export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
 
 // Moves the model may pick. `stay_silent` exists only for ticks: after a look at the
-// canvas the model may decide nothing needs asking.
-export const MODEL_MOVES = ["open", "probe", "challenge", "clarify", "explain", "hint", "acknowledge_advance", "move_on", "redirect", "curveball", "wrap_up", "ask_to_draw", "stay_silent"];
+// canvas the model may decide nothing needs asking. `listen` asks nothing: the
+// interviewer reacts (says back what they understood, appreciates something that's good)
+// and lets the candidate keep going, as people do in a real interview.
+export const MODEL_MOVES = ["open", "probe", "challenge", "clarify", "explain", "hint", "acknowledge_advance", "move_on", "redirect", "curveball", "wrap_up", "ask_to_draw", "listen", "stay_silent"];
 // Moves the application writes from templates, never the model.
 export const TEMPLATE_MOVES = ["nudge", "time_check"];
 
@@ -30,6 +32,7 @@ export const KIND_FOR_MOVE = {
   curveball: "question",
   wrap_up: "wrap_up",
   ask_to_draw: "question",
+  listen: "acknowledgement",
   nudge: "nudge",
   time_check: "time_check",
 };

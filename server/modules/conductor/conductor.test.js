@@ -40,7 +40,14 @@ test("plan: the open item is the focus; budgets come from the conventions", () =
   assert.equal(result.nextItemId, "req.api");
   assert.equal(result.budget.followUps, 1);
   assert.equal(result.budget.hints, 3);
-  assert.deepEqual(result.allowedMoves, ["probe", "challenge", "clarify", "explain", "acknowledge_advance", "move_on", "redirect"]);
+  assert.deepEqual(result.allowedMoves, ["probe", "listen", "challenge", "clarify", "explain", "acknowledge_advance", "move_on", "redirect"]);
+});
+
+test("plan: letting the candidate keep going is allowed, but never twice in a row", () => {
+  const items = ledger({ "req.scale": { status: "open" } });
+  assert.ok(planFor(items, baseState(), { conversation: { lastMove: "probe", questionStreak: 3 } }).allowedMoves.includes("listen"));
+  assert.equal(planFor(items, baseState(), { conversation: { lastMove: "probe", questionStreak: 3 } }).questionStreak, 3);
+  assert.ok(!planFor(items, baseState(), { conversation: { lastMove: "listen", questionStreak: 0 } }).allowedMoves.includes("listen"));
 });
 
 test("plan: no follow-ups left means no probe; a used challenge means no challenge", () => {
@@ -181,6 +188,13 @@ test("apply: a probe spends a follow-up and keeps the item open", () => {
   assert.equal(item(result, "deep.codegen").followUps, 1);
   assert.equal(item(result, "deep.codegen").status, "open");
   assert.equal(result.state.ledgerVersion, 1);
+});
+
+test("apply: listening spends no follow-up and keeps the item open", () => {
+  const result = apply(ledger({ "deep.codegen": { status: "open" } }), baseState({ stage: "deep_dive", focusItemId: "deep.codegen" }), { move: "listen", focusItemId: "deep.codegen" });
+  assert.equal(item(result, "deep.codegen").followUps, 0);
+  assert.equal(item(result, "deep.codegen").status, "open");
+  assert.equal(result.state.focusItemId, "deep.codegen");
 });
 
 test("apply: acknowledge closes an adequately answered item and opens the next", () => {
