@@ -5,8 +5,10 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
+import { copyFileSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const dataDir = await mkdtemp(path.join(os.tmpdir(), "designrounds-conductor-"));
 Object.assign(process.env, {
@@ -24,11 +26,19 @@ Object.assign(process.env, {
 });
 for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", "VERTEX_PROJECT_ID", "NODE_ENV", "VERCEL", "VERCEL_ENV", "VOICE_ANSWERS", "PROBLEM_PACKS_AUTOPUBLISH"]) delete process.env[key];
 
+// Every question ships a pack file; this round uses a copy of them with one free question
+// left out, so building, reviewing and publishing a pack is exercised too.
+const { fullPrompts } = await import("../server/modules/rounds.js");
+const { guideFor } = await import("../server/modules/ai/guides.js");
+const prompt = fullPrompts.find((entry) => entry.access === "free" && guideFor(entry.id));
+const packCopy = await mkdtemp(path.join(os.tmpdir(), "designrounds-packs-"));
+const shippedPacks = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "server", "content", "packs");
+for (const file of readdirSync(shippedPacks).filter((name) => name.endsWith(".json") && name !== `${prompt.id}.json`)) copyFileSync(path.join(shippedPacks, file), path.join(packCopy, file));
+process.env.PROBLEM_PACKS_DIR = packCopy;
+
 const { createApp } = await import("../server/app.js");
 const { close, query, queryOne } = await import("../server/db.js");
 const { readPackFiles } = await import("../server/modules/pks/index.js");
-const { fullPrompts } = await import("../server/modules/rounds.js");
-const { guideFor } = await import("../server/modules/ai/guides.js");
 const { isAnonymousKind } = await import("../server/modules/ai/components.js");
 const { canvasComponents, itemDrawn } = await import("../server/modules/conductor/canvas.js");
 
@@ -74,7 +84,6 @@ const waitFor = async (check, what) => {
 
 // A question with a guide and no hand-authored pack, so this run builds its own.
 const filePacks = new Set(readPackFiles().map((entry) => entry.promptId));
-const prompt = fullPrompts.find((entry) => entry.access === "free" && guideFor(entry.id) && !filePacks.has(entry.id));
 let failed = false;
 let round;
 let packVersion;
