@@ -1,0 +1,582 @@
+{
+  "opening": "Let's design the feature flag and release system for a mobile app. You can start wherever you'd like.",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "scale",
+        "users",
+        "dau",
+        "traffic",
+        "qps"
+      ],
+      "answer": "Assume we have 10 million Daily Active Users, and the app checks for config updates on startup."
+    },
+    {
+      "id": "req.targeting",
+      "topics": [
+        "target",
+        "rules",
+        "segments",
+        "percentage"
+      ],
+      "answer": "We need to target users by percentage rollout, app version, OS version, and custom segments like 'beta testers'."
+    },
+    {
+      "id": "req.network",
+      "topics": [
+        "network",
+        "offline",
+        "latency"
+      ],
+      "answer": "Users will often have poor or no connectivity, and fetching flags should not block the app from launching."
+    },
+    {
+      "id": "req.backend",
+      "topics": [
+        "backend",
+        "api",
+        "release frequency"
+      ],
+      "answer": "The backend deploys multiple times a day, while the mobile app is submitted to the app stores every two weeks."
+    },
+    {
+      "id": "req.experiments",
+      "topics": [
+        "experiments",
+        "ab testing",
+        "analytics"
+      ],
+      "answer": "Yes, we use flags for A/B testing, so we need to know if a user was actually exposed to a feature."
+    }
+  ],
+  "clarificationPolicy": "Assume standard mobile constraints where users update apps infrequently and network access is completely unreliable.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "goals",
+          "requirements",
+          "scope",
+          "update",
+          "versions"
+        ]
+      },
+      "goal": "Identify the need for targeted rollouts, kill switches, and API backward compatibility.",
+      "opener": "What key capabilities does this system need to provide for the mobile and backend teams?",
+      "evidence": {
+        "strong": "Clearly separates mobile release lifecycles from backend lifecycles and identifies offline support and backward compatibility as core needs.",
+        "adequate": "Lists feature toggling and staggered rollouts but misses API compatibility or offline constraints.",
+        "weak": "Treats the mobile app like a web app, assuming instant updates and constant connectivity."
+      },
+      "misconceptions": [
+        {
+          "id": "instant_updates",
+          "pattern": "Believing users update the app immediately when a new version is released.",
+          "challenge": "How long does it usually take for your entire user base to migrate to a new app store release?"
+        }
+      ],
+      "probes": [
+        "How will the backend handle traffic from users who haven't updated the app in six months?"
+      ],
+      "hints": [
+        "Think about what happens if a bug is found in the mobile code after it's approved by the app store.",
+        "Consider how a web deployment differs from a mobile deployment regarding user control."
+      ],
+      "moveOnSummary": "Noted the requirements for staging rollouts, offline access, and handling stale app versions.",
+      "learnTopics": [
+        "mobile-release-engineering",
+        "feature-flags"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "mobile",
+          "feature-flags",
+          "api-gateway"
+        ],
+        "keywords": [
+          "flow",
+          "fetch",
+          "config",
+          "evaluate"
+        ]
+      },
+      "goal": "Establish the end-to-end flow from the flag management system to the mobile client.",
+      "opener": "Walk me through the lifecycle of a feature flag, from when a product manager creates it to when the mobile app uses it.",
+      "evidence": {
+        "strong": "Draws a clear boundary between the management interface, the config delivery service, and the client SDK.",
+        "adequate": "Shows the mobile app pulling configs from a backend service, but blends management and delivery layers.",
+        "weak": "Misses the delivery mechanism entirely or proposes fetching flags from a generic database on every request."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What triggers the mobile app to fetch new flags?",
+        "Where are the flag rules stored before the app requests them?"
+      ],
+      "hints": [
+        "We need an administrative side to define the rules, and a delivery side for the app to consume them.",
+        "Should the app poll for changes, or fetch on startup?"
+      ],
+      "moveOnSummary": "Outlined the basic fetch and evaluate architecture between client and flag service.",
+      "learnTopics": [
+        "feature-flags",
+        "api-design"
+      ]
+    },
+    {
+      "id": "hl.api_compat",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "microservice",
+          "mobile"
+        ],
+        "keywords": [
+          "versioning",
+          "api",
+          "backward compatible",
+          "old app"
+        ]
+      },
+      "goal": "Establish a strategy for old mobile apps communicating with newly updated backend services.",
+      "opener": "If we change a backend response payload for a new feature, how do we ensure users on an older app version don't experience crashes?",
+      "evidence": {
+        "strong": "Proposes explicit API versioning (path or header) and additive schema changes, supported by a minimum version enforcement strategy.",
+        "adequate": "Mentions API versioning but lacks a clear deprecation policy or minimum version enforcement.",
+        "weak": "Suggests forcing all users to upgrade whenever the backend changes."
+      },
+      "misconceptions": [
+        {
+          "id": "force_upgrade",
+          "pattern": "Relying on forced app updates to avoid managing API versions.",
+          "challenge": "What happens to our daily active users metric if we force an upgrade every time the backend changes?"
+        }
+      ],
+      "probes": [
+        "How do we route an old app's request to the correct backend logic?",
+        "Is there a point where we stop supporting an old API version entirely?"
+      ],
+      "hints": [
+        "Think about how we can make our API endpoints aware of which client is calling them.",
+        "What happens if we only add fields to a JSON response instead of renaming them?"
+      ],
+      "moveOnSummary": "Established an API versioning and backward compatibility strategy.",
+      "learnTopics": [
+        "api-design",
+        "mobile-release-engineering"
+      ]
+    },
+    {
+      "id": "deep.eval_location",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "evaluate",
+          "rules",
+          "device",
+          "server",
+          "payload"
+        ]
+      },
+      "goal": "Evaluate the trade-offs between evaluating flag rules on the server versus on the device.",
+      "opener": "Where should the decision of whether a user gets a feature happen: calculated on the backend, or evaluated within the app?",
+      "evidence": {
+        "strong": "Compares payload size, offline capabilities, and security. Chooses client-side for speed/offline, or server-side if rules are complex/secret.",
+        "adequate": "Picks one approach and justifies it, but misses the trade-offs of the alternative.",
+        "weak": "Fails to distinguish between fetching rules and fetching resolved booleans."
+      },
+      "misconceptions": [
+        {
+          "id": "server_eval_offline",
+          "pattern": "Designing server-side evaluation but claiming it works perfectly offline.",
+          "challenge": "If the backend calculates the boolean for the user, how do their flags update if they cross into a new target segment while offline?"
+        }
+      ],
+      "probes": [
+        "If we evaluate on the device, what exactly does the server send in its response?",
+        "Are there any targeting rules we wouldn't want to send to the client?"
+      ],
+      "hints": [
+        "If the server evaluates, it sends `feature_x: true`. If the client evaluates, what does the server send instead?",
+        "Consider what happens if a user's location changes while they have no network connection."
+      ],
+      "moveOnSummary": "Discussed the trade-offs of client-side vs server-side flag evaluation.",
+      "learnTopics": [
+        "feature-flags",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "deep.offline_defaults",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "local-cache",
+          "mobile"
+        ],
+        "keywords": [
+          "offline",
+          "no network",
+          "cache",
+          "default",
+          "fallback"
+        ]
+      },
+      "goal": "Design a fallback mechanism for when the flag service is unreachable, especially on first launch.",
+      "opener": "What happens if a user installs the app and opens it for the very first time while in airplane mode?",
+      "evidence": {
+        "strong": "Details embedding default flag configurations in the app binary and falling back to them when the network and local cache fail.",
+        "adequate": "Mentions caching previous configs, but forgets the first-launch scenario.",
+        "weak": "Assumes the app will just block or crash until the network is available."
+      },
+      "misconceptions": [
+        {
+          "id": "cache_first_launch",
+          "pattern": "Assuming the cache handles offline state on a brand-new installation.",
+          "challenge": "On a fresh install, the local cache is empty. What value does the flag return?"
+        }
+      ],
+      "probes": [
+        "How do we ensure the codebase knows what the default value should be?",
+        "How long should we wait for the network before falling back to the cache?"
+      ],
+      "hints": [
+        "Before the app makes its first network request, it needs a source of truth.",
+        "Could we package anything inside the app bundle itself?"
+      ],
+      "moveOnSummary": "Addressed local caching and binary-embedded defaults for offline resilience.",
+      "learnTopics": [
+        "offline-first-sync",
+        "cache-strategies"
+      ]
+    },
+    {
+      "id": "deep.kill_switch",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "admin",
+          "feature-flags"
+        ],
+        "keywords": [
+          "crash",
+          "disable",
+          "turn off",
+          "revert"
+        ]
+      },
+      "goal": "Quickly disable a problematic feature without requiring an app store update.",
+      "opener": "Let's say a newly released feature causes a crash exclusively on Android 12 devices. How do we stop the bleeding?",
+      "evidence": {
+        "strong": "Uses the admin tool to instantly flip the flag for the specific segment (Android 12), which updates clients on their next fetch.",
+        "adequate": "Turns off the flag entirely for everyone to stop the crash.",
+        "weak": "Suggests rolling back the code and submitting a new build to the app store."
+      },
+      "misconceptions": [
+        {
+          "id": "revert_binary",
+          "pattern": "Believing a code revert is the primary way to fix a live mobile issue.",
+          "challenge": "Given that app store review can take 24 hours, how do we protect the users opening the app right now?"
+        }
+      ],
+      "probes": [
+        "How quickly will the Android 12 users see the fix?",
+        "What happens to iOS users while we are turning this off for Android?"
+      ],
+      "hints": [
+        "We have a feature flag system. How can we use its targeting rules to solve this?",
+        "How do the crashing devices find out we changed the rule?"
+      ],
+      "moveOnSummary": "Explained the workflow for utilizing targeted kill switches in an emergency.",
+      "learnTopics": [
+        "feature-flags",
+        "incident-management"
+      ]
+    },
+    {
+      "id": "deep.exposure",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "clickstream"
+        ],
+        "keywords": [
+          "analytics",
+          "experiment",
+          "saw feature",
+          "events"
+        ]
+      },
+      "goal": "Track flag exposure accurately for A/B testing and analytics.",
+      "opener": "If we use a flag to run an A/B test, how does the data science team know if a user was actually exposed to the new feature?",
+      "evidence": {
+        "strong": "Fires an exposure event only when the code path gated by the flag is executed, not just when the config is fetched.",
+        "adequate": "Logs an event when the flag config is fetched from the server.",
+        "weak": "Assumes that being in the target segment automatically means the user saw the feature."
+      },
+      "misconceptions": [
+        {
+          "id": "fetch_equals_exposure",
+          "pattern": "Logging exposure when the device downloads the flag rules.",
+          "challenge": "What if the user downloads the flag config but never navigates to the screen where the feature lives?"
+        }
+      ],
+      "probes": [
+        "Does downloading the configuration mean the user experienced the change?",
+        "How do we handle the volume of analytics events if a flag is checked inside a list view loop?"
+      ],
+      "hints": [
+        "Think about the difference between 'having permission' to see a feature and 'actually seeing' it.",
+        "Where exactly in the client code should the analytics event trigger?"
+      ],
+      "moveOnSummary": "Differentiated between config fetch and actual feature exposure for analytics.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.cleanup",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "admin"
+        ],
+        "keywords": [
+          "tech debt",
+          "old flags",
+          "stale",
+          "cleanup",
+          "remove"
+        ]
+      },
+      "goal": "Define a process for removing old flags to prevent code bloat and config payload growth.",
+      "opener": "Over a year, we might create hundreds of flags. How do we manage the accumulation of these flags?",
+      "evidence": {
+        "strong": "Proposes automated tooling to detect unused flags in code, alerting on stale flags, and removing them from the payload.",
+        "adequate": "Mentions that developers should manually delete old code periodically.",
+        "weak": "Ignores the cost of stale flags or suggests keeping them forever."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does keeping old flags impact the mobile app's performance?",
+        "How can we enforce flag cleanup in our development lifecycle?"
+      ],
+      "hints": [
+        "Think about what happens to the size of the network payload if flags are never deleted.",
+        "Could we use expiration dates or code analysis tools?"
+      ],
+      "moveOnSummary": "Discussed strategies for flag lifecycle management and technical debt.",
+      "learnTopics": [
+        "feature-flags",
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "deep.sdk_failsafe",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "mobile",
+          "feature-flags"
+        ],
+        "keywords": [
+          "crash loop",
+          "failsafe",
+          "sdk crash"
+        ]
+      },
+      "goal": "Handle fatal errors within the configuration delivery mechanism itself.",
+      "opener": "What happens if a bug in the feature flag SDK itself causes the app to crash on startup before fetching new rules?",
+      "evidence": {
+        "strong": "Implements a failsafe mode that disables the SDK and uses bundled defaults after consecutive startup crashes.",
+        "adequate": "Relies on an external remote config not tied to the feature flags to turn off the feature flags.",
+        "weak": "Assumes an app update is the only solution."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How can the app detect it's crashing repeatedly on launch?"
+      ],
+      "hints": [
+        "Consider keeping a counter of startup attempts.",
+        "Is there a way to bypass the SDK entirely if it fails to initialize?"
+      ],
+      "moveOnSummary": "Explored failsafe mechanisms for SDK startup crashes.",
+      "learnTopics": [
+        "incident-management",
+        "mobile-release-engineering"
+      ]
+    },
+    {
+      "id": "deep.forced_upgrade",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "mobile",
+          "api-gateway"
+        ],
+        "keywords": [
+          "force update",
+          "deprecated",
+          "unsupported"
+        ]
+      },
+      "goal": "Design a mechanism to forcefully upgrade clients when backend compatibility can no longer be maintained.",
+      "opener": "If we absolutely must break an old API because a third-party dependency is shutting down, how do we handle users on the old app?",
+      "evidence": {
+        "strong": "Designs a hard-blocking update screen driven by a minimum supported version API.",
+        "adequate": "Returns an error that shows a generic message to the user.",
+        "weak": "Allows the app to crash or show broken UI."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the client know it is no longer supported?",
+        "What should the user see when this happens?"
+      ],
+      "hints": [
+        "If the old API endpoint is gone, what else can we return?",
+        "Think about checking a minimum version on startup."
+      ],
+      "moveOnSummary": "Designed a forced upgrade mechanism for deprecated versions.",
+      "learnTopics": [
+        "mobile-release-engineering",
+        "api-design"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Identify the primary scaling limits of the design.",
+      "opener": "Looking at your complete design, what is the biggest risk or bottleneck if our daily active user count 10x's tomorrow?",
+      "evidence": {
+        "strong": "Points to the config fetching endpoint on startup causing a thundering herd, and suggests caching (CDN/Edge) or jitter.",
+        "adequate": "Identifies database read load but proposes generic scaling without specific mobile context.",
+        "weak": "Struggles to find a bottleneck or focuses on a non-critical path."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to the backend at 9 AM when a push notification goes out to millions of users?"
+      ],
+      "hints": [
+        "If every app fetches flags on startup, consider the traffic spikes.",
+        "How can we serve static configuration rules closer to the users?"
+      ],
+      "moveOnSummary": "Identified read-heavy traffic spikes and caching solutions as the main scaling concern.",
+      "learnTopics": [
+        "caching",
+        "cdn",
+        "latency-vs-throughput"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "startup_crash",
+      "after": "deep.kill_switch",
+      "prompt": "What if the crash is inside the SDK logic that fetches the flags, meaning the app crashes before it ever receives the kill switch?",
+      "agendaItemId": "deep.sdk_failsafe"
+    },
+    {
+      "id": "third_party_deprecation",
+      "after": "deep.offline_defaults",
+      "prompt": "What if a third-party API provider we rely on shuts down an endpoint that our oldest supported app versions still depend on directly?",
+      "agendaItemId": "deep.forced_upgrade"
+    }
+  ],
+  "vocabulary": [
+    "kill switch",
+    "staged rollout",
+    "canary",
+    "semantic versioning",
+    "backward compatible",
+    "tombstone",
+    "SDK",
+    "exposure event",
+    "thundering herd"
+  ],
+  "alternatives": [
+    {
+      "choice": "Client-side evaluation",
+      "whenBetter": "When fast app launch times, offline resilience, and reducing backend compute load are the top priorities."
+    },
+    {
+      "choice": "Server-side evaluation",
+      "whenBetter": "When targeting rules are highly complex, require large datasets, or contain sensitive information that shouldn't be sent to the device."
+    },
+    {
+      "choice": "API Versioning via Headers",
+      "whenBetter": "When keeping a clean, unified routing layer in REST APIs is preferred over having explicit version numbers in the URL path."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive and Resilient",
+      "outline": "The candidate clearly separates the admin workflow from the delivery mechanism. They design a client SDK that fetches rule payloads, evaluates them locally for offline resilience, and falls back to binary-embedded defaults if needed. They thoroughly address backward compatibility using explicit API versioning and demonstrate how to utilize targeted kill switches. They also distinguish between config fetching and exposure events for analytics."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but Fragile",
+      "outline": "The candidate establishes a working fetch mechanism for flags and understands the concept of toggling features. They acknowledge the need for backward compatibility but lack a rigorous deprecation or versioning policy. They might rely entirely on network calls for evaluation, missing the edge cases of first-launch offline usage or the distinction between fetching and actual exposure."
+    },
+    {
+      "band": "weak",
+      "label": "Web-centric approach",
+      "outline": "The candidate treats the mobile application like a continuous deployment web app. They assume users are always online and will instantly receive code updates, entirely missing the need for backward compatibility, offline defaults, or staged rollouts. The design lacks a caching strategy and forces synchronous server checks for every feature gate."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.35,
+    "deep_dive": 0.4,
+    "wrap_up": 0.1
+  }
+}

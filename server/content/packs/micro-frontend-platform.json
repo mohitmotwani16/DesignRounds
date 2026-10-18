@@ -1,0 +1,605 @@
+{
+  "opening": "Welcome! Today we're going to design the platform architecture for a large web application built using micro-frontends. Whenever you're ready, feel free to start.",
+  "clarifications": [
+    {
+      "id": "scale.teams",
+      "topics": [
+        "teams",
+        "developers",
+        "engineers"
+      ],
+      "answer": "We have around 30 independent teams, each owning 1 or 2 micro-frontends."
+    },
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "traffic",
+        "users",
+        "qps",
+        "scale"
+      ],
+      "answer": "The application serves about 10,000 requests per second globally at peak."
+    },
+    {
+      "id": "scale.views",
+      "topics": [
+        "layout",
+        "page",
+        "sections"
+      ],
+      "answer": "A typical user view composes 3 to 5 distinct micro-frontends at once."
+    },
+    {
+      "id": "constraints.frameworks",
+      "topics": [
+        "framework",
+        "react",
+        "vue",
+        "angular",
+        "technology"
+      ],
+      "answer": "Teams generally use React, but some legacy sections use Angular, and we shouldn't force a strict rewrite."
+    },
+    {
+      "id": "scope.seo",
+      "topics": [
+        "seo",
+        "search",
+        "indexing"
+      ],
+      "answer": "The public-facing marketing pages need SEO, but the logged-in user dashboard does not."
+    },
+    {
+      "id": "constraints.browser",
+      "topics": [
+        "browser",
+        "support",
+        "mobile"
+      ],
+      "answer": "Assume modern evergreen browsers on desktop and mobile; no need to support legacy browsers like IE11."
+    }
+  ],
+  "clarificationPolicy": "Assume standard enterprise constraints; prioritize developer autonomy without sacrificing end-user performance or app stability.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "user",
+          "users"
+        ],
+        "keywords": [
+          "independent",
+          "teams",
+          "deploy",
+          "autonomy"
+        ]
+      },
+      "goal": "Identify the core needs: developer autonomy via independent deployments and a consistent end-user experience.",
+      "opener": "What are the primary goals and constraints we are trying to satisfy with this platform?",
+      "evidence": {
+        "strong": "Extracts the tension between team autonomy and user performance, clearly defining scope boundaries.",
+        "adequate": "Lists the requirements from the prompt but misses the performance or isolation nuances.",
+        "weak": "Dives into architecture without identifying why we need micro-frontends in the first place."
+      },
+      "misconceptions": [
+        {
+          "id": "microservices-confusion",
+          "pattern": "Confusing micro-frontends with backend microservices.",
+          "challenge": "How does this backend separation translate to what the user's browser actually downloads and renders?"
+        }
+      ],
+      "probes": [
+        "What does independent deployment mean for the user experience?"
+      ],
+      "hints": [
+        "Consider the two main personas here: the developer and the end-user.",
+        "What happens if a team wants to deploy a fix right now without talking to anyone else?"
+      ],
+      "moveOnSummary": "Defined the scope focusing on independent deployments and runtime consistency.",
+      "learnTopics": [
+        "micro-frontends",
+        "frontend-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "cdn",
+          "web-server",
+          "registry"
+        ],
+        "keywords": [
+          "shell",
+          "host",
+          "remote",
+          "app",
+          "layout"
+        ]
+      },
+      "goal": "Map out the high-level relationship between the host shell, the remote micro-frontends, and the deployment registry.",
+      "opener": "Can you walk me through the high-level architecture of how the application loads in the browser?",
+      "evidence": {
+        "strong": "Draws a clear boundary between the shell application (auth, layout) and the remote fragments, including a registry or CDN for asset discovery.",
+        "adequate": "Shows a shell and child apps but lacks a clear mechanism for how the shell finds the children.",
+        "weak": "Reinvents a monolith or relies purely on iframes without a host shell."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the shell know where to find the JavaScript bundle for Team A's section?",
+        "Where is the top-level routing handled?"
+      ],
+      "hints": [
+        "Think about what HTML is served first to the browser.",
+        "Who owns the global navigation and authentication state?"
+      ],
+      "moveOnSummary": "Outlined a shell application that loads remote modules from a CDN based on a manifest.",
+      "learnTopics": [
+        "micro-frontends",
+        "frontend-system-design-interview",
+        "cdn"
+      ]
+    },
+    {
+      "id": "hl.routing",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "router",
+          "client"
+        ],
+        "keywords": [
+          "routing",
+          "url",
+          "history",
+          "navigation"
+        ]
+      },
+      "goal": "Define the routing strategy, differentiating between host-level routing and app-level routing.",
+      "opener": "How does navigation work when a user clicks a link that crosses team boundaries?",
+      "evidence": {
+        "strong": "Differentiates between top-level routing managed by the shell and internal routing managed by the micro-frontend.",
+        "adequate": "Mentions routing but assumes a single global router that every team must update.",
+        "weak": "Ignores routing entirely, breaking the browser's back button and history state."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if a micro-frontend needs its own sub-routes?"
+      ],
+      "hints": [
+        "Who should own the URL bar?",
+        "How do you prevent collisions if two teams define the same route path?"
+      ],
+      "moveOnSummary": "Established a two-tier routing system with shell-level prefix matching.",
+      "learnTopics": [
+        "micro-frontends"
+      ]
+    },
+    {
+      "id": "deep.composition",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "web-server",
+          "cdn"
+        ],
+        "keywords": [
+          "module federation",
+          "import maps",
+          "runtime",
+          "build-time",
+          "webpack"
+        ]
+      },
+      "goal": "Detail the specific mechanism used to compose the application at runtime.",
+      "opener": "How exactly are the different teams' JavaScript bundles composed into a single running application?",
+      "evidence": {
+        "strong": "Evaluates runtime composition via Module Federation or import maps, explaining the mechanics of remote entry resolution.",
+        "adequate": "Chooses a runtime method but lacks depth on how the browser actually resolves the dependencies.",
+        "weak": "Proposes build-time NPM packages, completely violating the independent deployment requirement."
+      },
+      "misconceptions": [
+        {
+          "id": "build-time-coupling",
+          "pattern": "Believing NPM packages allow independent deployments.",
+          "challenge": "If Team A updates their NPM package, how does that change reach the live production site?"
+        }
+      ],
+      "probes": [
+        "How does the host app execute the remote code?",
+        "What format are these bundles served in?"
+      ],
+      "hints": [
+        "Think about modern bundler features that allow dynamic code loading.",
+        "How does Webpack 5 handle sharing code between separate builds?"
+      ],
+      "moveOnSummary": "Chose a runtime composition mechanism like Module Federation to enable independent deploys.",
+      "learnTopics": [
+        "micro-frontends",
+        "rendering-strategies"
+      ]
+    },
+    {
+      "id": "deep.dependencies",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "registry",
+          "cdn"
+        ],
+        "keywords": [
+          "shared",
+          "dependencies",
+          "react",
+          "singleton",
+          "vendor"
+        ]
+      },
+      "goal": "Design a strategy to share heavy libraries without causing version conflicts or redundant downloads.",
+      "opener": "If multiple teams use React and the same design system, how do you prevent the user from downloading these libraries multiple times?",
+      "evidence": {
+        "strong": "Proposes singletons for core libraries, defines a strict sharing contract, and handles fallback if versions mismatch.",
+        "adequate": "Mentions sharing libraries via a CDN or bundler but misses the singleton requirement for stateful frameworks.",
+        "weak": "Forces every micro-frontend to bundle its own dependencies, leading to massive performance hits."
+      },
+      "misconceptions": [
+        {
+          "id": "share-everything",
+          "pattern": "Attempting to share every single library across all teams.",
+          "challenge": "What happens to team autonomy if they have to coordinate updating a minor utility library?"
+        }
+      ],
+      "probes": [
+        "React crashes if two copies are running. How do you guarantee only one copy is instantiated?",
+        "How is the design system package distributed and versioned?"
+      ],
+      "hints": [
+        "Module Federation has a 'shared' configuration. How does it work?",
+        "Consider the difference between libraries that maintain internal state and pure utility libraries."
+      ],
+      "moveOnSummary": "Set up shared dependency singletons for core frameworks while letting teams bundle specific utilities.",
+      "learnTopics": [
+        "micro-frontends",
+        "frontend-system-design-interview"
+      ]
+    },
+    {
+      "id": "deep.isolation",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "monitoring-dashboard",
+          "alerting"
+        ],
+        "keywords": [
+          "error boundaries",
+          "fallback",
+          "css",
+          "shadow dom",
+          "crash"
+        ]
+      },
+      "goal": "Ensure failures in one micro-frontend do not cascade to the shell or other micro-frontends.",
+      "opener": "Let's say Team A ships a bug that causes an unhandled JavaScript exception. What happens to the rest of the page?",
+      "evidence": {
+        "strong": "Uses framework Error Boundaries to catch render errors, provides graceful fallbacks, and uses CSS modules or Shadow DOM for style isolation.",
+        "adequate": "Mentions catching errors but misses style leakage or infinite loop protections.",
+        "weak": "Allows a single broken component to white-screen the entire application."
+      },
+      "misconceptions": [
+        {
+          "id": "global-try-catch",
+          "pattern": "Believing window.onerror is sufficient to recover the UI.",
+          "challenge": "If a React component throws during render, how does a global error handler restore the rest of the component tree?"
+        }
+      ],
+      "probes": [
+        "How do you prevent Team B's CSS from overwriting Team A's buttons?",
+        "What if a micro-frontend takes 10 seconds to respond?"
+      ],
+      "hints": [
+        "How does React natively handle component crashes?",
+        "How can you scope CSS so it doesn't leak globally?"
+      ],
+      "moveOnSummary": "Applied error boundaries and scoped CSS to strictly isolate micro-frontend failures.",
+      "learnTopics": [
+        "micro-frontends",
+        "frontend-security",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.communication",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "event-bus",
+          "local-cache"
+        ],
+        "keywords": [
+          "events",
+          "state",
+          "custom events",
+          "pub-sub",
+          "props"
+        ]
+      },
+      "goal": "Establish a decoupled contract for cross-micro-frontend communication.",
+      "opener": "How do two micro-frontends on the same page share state or communicate with each other?",
+      "evidence": {
+        "strong": "Proposes a decoupled event bus or explicit prop passing via the shell, avoiding shared global state.",
+        "adequate": "Suggests storing state in local storage or the URL without a clear notification mechanism.",
+        "weak": "Tries to share a single global state store across independent builds, tightly coupling all teams."
+      },
+      "misconceptions": [
+        {
+          "id": "shared-redux",
+          "pattern": "Using a single global Redux store for all teams.",
+          "challenge": "If Team A changes their state shape, how do you prevent Team B's code from breaking?"
+        }
+      ],
+      "probes": [
+        "How do you ensure the event payloads don't introduce tight coupling?",
+        "What if the receiving micro-frontend hasn't loaded yet when the event fires?"
+      ],
+      "hints": [
+        "How do native DOM elements communicate?",
+        "Consider a publish-subscribe pattern isolated to the browser."
+      ],
+      "moveOnSummary": "Designed a decoupled event bus for cross-app communication.",
+      "learnTopics": [
+        "micro-frontends",
+        "pub-sub",
+        "design-patterns"
+      ]
+    },
+    {
+      "id": "deep.deployment",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "registry",
+          "deployer"
+        ],
+        "keywords": [
+          "manifest",
+          "ci/cd",
+          "rollback",
+          "versions",
+          "pipeline"
+        ]
+      },
+      "goal": "Design the deployment lifecycle, from code push to updating the registry/manifest.",
+      "opener": "Walk me through the exact steps when a team clicks deploy. How does their new code reach the live shell?",
+      "evidence": {
+        "strong": "Describes building assets, uploading to a CDN with content hashes, and updating a central manifest that the shell fetches dynamically.",
+        "adequate": "Mentions deploying to a CDN but is vague on how the shell discovers there is a new version.",
+        "weak": "Requires rebuilding the entire shell app to deploy a child micro-frontend."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you roll back a bad deployment instantly?",
+        "How does the shell fetch the latest manifest without caching stale versions?"
+      ],
+      "hints": [
+        "The shell needs to know the exact URL of the new JavaScript file.",
+        "Where is the mapping between the section name and its bundle URL stored?"
+      ],
+      "moveOnSummary": "Outlined a manifest-driven deployment flow with content-hashed CDN assets.",
+      "learnTopics": [
+        "ci-cd-pipelines",
+        "deployment-strategies",
+        "micro-frontends"
+      ]
+    },
+    {
+      "id": "deep.ssr",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "web-server",
+          "client"
+        ],
+        "keywords": [
+          "ssr",
+          "server",
+          "seo",
+          "node",
+          "hydration"
+        ]
+      },
+      "goal": "Adapt the architecture for Server-Side Rendering.",
+      "opener": "How would you extend this architecture to support Server-Side Rendering for the marketing pages?",
+      "evidence": {
+        "strong": "Discusses Server-Side Module Federation or Edge Side Includes, managing streams and hydration mismatches.",
+        "adequate": "Knows SSR is required for SEO but struggles with how to fetch remote fragments on the server.",
+        "weak": "States SSR is completely impossible with micro-frontends."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the Node server load the remote micro-frontends?",
+        "How do you handle hydration on the client if the server composed it?"
+      ],
+      "hints": [
+        "Module Federation works on Node.js as well.",
+        "Think about how a proxy or CDN could stitch HTML together before sending it to the browser."
+      ],
+      "moveOnSummary": "Discussed Server-Side Module Federation or streaming to support SSR.",
+      "learnTopics": [
+        "rendering-strategies",
+        "micro-frontends"
+      ]
+    },
+    {
+      "id": "deep.versions",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "client"
+        ],
+        "keywords": [
+          "versions",
+          "skew",
+          "major",
+          "minor",
+          "conflict"
+        ]
+      },
+      "goal": "Handle version conflicts for shared dependencies gracefully.",
+      "opener": "How do you handle the situation where Team A needs React 18, but Team B is stuck on React 17?",
+      "evidence": {
+        "strong": "Explains how bundlers can isolate versions if required, while acknowledging the severe performance penalty of loading two Reacts.",
+        "adequate": "Mentions they will just have to load both, but doesn't explain the runtime mechanics.",
+        "weak": "Mandates that all teams must upgrade at exactly the same time, removing autonomy."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the DOM handle having two different React trees?"
+      ],
+      "hints": [
+        "What happens if the shell strict-requires React 18, and a child asks for React 17?",
+        "Is it possible to scope framework instances so they don't collide on the global object?"
+      ],
+      "moveOnSummary": "Addressed version skew by allowing multiple versions with a known performance penalty.",
+      "learnTopics": [
+        "micro-frontends"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "complexity",
+          "overhead",
+          "bundle size",
+          "debugging"
+        ]
+      },
+      "goal": "Evaluate the systemic cost of micro-frontends compared to a monolith.",
+      "opener": "Looking at the platform you've designed, what is the biggest pain point or trade-off you've introduced for the engineering team?",
+      "evidence": {
+        "strong": "Identifies operational complexity, potential bundle size bloat, and the difficulty of cross-team debugging or testing.",
+        "adequate": "Mentions performance overhead but misses the developer experience challenges.",
+        "weak": "Claims there are no downsides and it is purely better than a monolith."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do developers test their micro-frontend locally in the context of the whole app?"
+      ],
+      "hints": [
+        "Think about what happens when a bug spans multiple team boundaries.",
+        "How does a new developer get the entire application running on their laptop?"
+      ],
+      "moveOnSummary": "Summarized the trade-offs, particularly operational complexity and debugging friction.",
+      "learnTopics": [
+        "micro-frontends",
+        "monolith-vs-microservices"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "ssr-seo",
+      "after": "deep.composition",
+      "prompt": "The marketing team has made SEO a top priority. How does your composition strategy handle server-side rendering?",
+      "agendaItemId": "deep.ssr"
+    },
+    {
+      "id": "version-skew",
+      "after": "deep.dependencies",
+      "prompt": "Team C needs to update to a major new version of the shared UI library, but Team D isn't ready and won't be for months. How do you handle this version skew?",
+      "agendaItemId": "deep.versions"
+    }
+  ],
+  "vocabulary": [
+    "Module Federation",
+    "import maps",
+    "Webpack",
+    "Shadow DOM",
+    "single-spa",
+    "iframe",
+    "BFF",
+    "micro-frontend",
+    "Edge Side Includes",
+    "singleton"
+  ],
+  "alternatives": [
+    {
+      "choice": "Build-time composition via NPM packages.",
+      "whenBetter": "When the application is relatively small, teams coordinate well, and strict tree-shaking for performance outweighs independent deployability."
+    },
+    {
+      "choice": "Iframe-based isolation.",
+      "whenBetter": "When embedding entirely untrusted third-party code where absolute security and style/script isolation are strictly required, regardless of the performance hit."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Manifest-driven Federation",
+      "outline": "The candidate clearly separated the host shell from the remotes, using Module Federation for runtime composition. They proposed a centralized manifest to allow independent deployments without rebuilding the shell. They deeply understood the nuances of shared dependency singletons, implemented React Error Boundaries for robust isolation, and recognized the inherent debugging complexity this architecture introduces."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic Runtime Composition",
+      "outline": "The candidate understood the need for runtime composition and independent deployments. They set up a shell app that fetches remote scripts, but were slightly vague on how dependencies are shared, leading to potential duplicate bundle downloads. They mentioned error boundaries but missed CSS isolation, and their deployment flow required manual manifest updates."
+    },
+    {
+      "band": "weak",
+      "label": "Reinvented Monolith",
+      "outline": "The candidate proposed packaging each team's code as NPM packages and rebuilding the shell application for every release. This completely violated the primary requirement of independent deployments. They struggled to articulate how routing would work across boundaries and did not have a plan for isolating runtime failures."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

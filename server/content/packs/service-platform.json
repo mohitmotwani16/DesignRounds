@@ -1,0 +1,520 @@
+{
+  "opening": "Let's design our new internal developer platform today. Whenever you are ready, please start by defining the scope and what we need to build.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "teams",
+        "scale",
+        "engineers"
+      ],
+      "answer": "We have around 100 product teams managing about 300 existing services."
+    },
+    {
+      "id": "scope.infrastructure",
+      "topics": [
+        "kubernetes",
+        "runtime",
+        "hosting",
+        "aws"
+      ],
+      "answer": "Assume the actual runtime environments like Kubernetes clusters already exist; we are building the platform that provisions and deploys to them."
+    },
+    {
+      "id": "scope.ci_runner",
+      "topics": [
+        "runner",
+        "actions",
+        "jenkins",
+        "execution"
+      ],
+      "answer": "We don't need to build the CI/CD runner execution engine from scratch. We can assume integration with an existing tool like GitHub Actions."
+    },
+    {
+      "id": "req.existing_services",
+      "topics": [
+        "migration",
+        "existing",
+        "brownfield"
+      ],
+      "answer": "We want to bring the 300 existing services into the platform's catalog for visibility, even if they don't immediately adopt the new deployment templates."
+    },
+    {
+      "id": "req.tech_stack",
+      "topics": [
+        "languages",
+        "stacks",
+        "polyglot"
+      ],
+      "answer": "We officially support three core stacks for our golden paths, but teams can theoretically run anything as long as it is containerised."
+    }
+  ],
+  "clarificationPolicy": "For any unstated requirements, make a sensible assumption suitable for a mid-sized enterprise and state it explicitly.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scaffold",
+          "deploy",
+          "provision",
+          "catalog",
+          "boundaries"
+        ]
+      },
+      "goal": "Define the platform boundaries, distinguishing between self-service provisioning and underlying infrastructure.",
+      "opener": "What core capabilities does this platform need to provide to our product engineering teams?",
+      "evidence": {
+        "strong": "Explicitly separates the control plane, catalog, and provisioning workflows from the runtime cloud infrastructure.",
+        "adequate": "Lists required features like service creation, pipelines, and a central catalog.",
+        "weak": "Focuses entirely on building a custom Jenkins alternative or rewriting Kubernetes."
+      },
+      "misconceptions": [
+        {
+          "id": "build_everything",
+          "pattern": "Assuming they must design a container orchestration system or CI runner from scratch.",
+          "challenge": "If we already use a cloud provider's managed Kubernetes, how does that change the platform's scope?"
+        }
+      ],
+      "probes": [
+        "How do existing services interact with the platform?"
+      ],
+      "hints": [
+        "Think about what a developer needs to go from 'I have an idea' to 'My service is running in production'.",
+        "What elements of the software lifecycle should we standardise across all our teams?"
+      ],
+      "moveOnSummary": "Agreed on a control plane providing scaffolding, a catalog, and deployment standardisation.",
+      "learnTopics": [
+        "internal-developer-platform",
+        "platform-engineering-roadmap"
+      ]
+    },
+    {
+      "id": "hl.catalog",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "dashboard",
+          "registry",
+          "database",
+          "api-gateway"
+        ],
+        "keywords": [
+          "catalog",
+          "backstage",
+          "ownership",
+          "metadata",
+          "portal"
+        ]
+      },
+      "goal": "Establish a single source of truth for service ownership, metadata, and lifecycle state.",
+      "opener": "How will the platform keep track of all the services, their owners, and their current state?",
+      "evidence": {
+        "strong": "Designs a central catalog backed by a database, decoupled from the provisioning engine, serving as a unified portal.",
+        "adequate": "Includes a database or registry for services but tangles it with deployment state or provisioning queues.",
+        "weak": "Relies solely on querying Git repositories or Kubernetes clusters in real-time for service existence."
+      },
+      "misconceptions": [
+        {
+          "id": "realtime_query",
+          "pattern": "Querying live infrastructure on every page load to discover services.",
+          "challenge": "What happens to the developer portal's performance if it has to query all the Git repositories live to show the dashboard?"
+        }
+      ],
+      "probes": [
+        "How does an existing, legacy service get added to this catalog?"
+      ],
+      "hints": [
+        "If I need to find who owns the 'payment-gateway' service, where does that query go?",
+        "Should the catalog own the state, or ingest it from somewhere else?"
+      ],
+      "moveOnSummary": "Established a central service catalog with ownership metadata.",
+      "learnTopics": [
+        "internal-developer-platform",
+        "monolith-vs-microservices"
+      ]
+    },
+    {
+      "id": "hl.provisioning",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "worker",
+          "ci-cd",
+          "queue"
+        ],
+        "keywords": [
+          "provision",
+          "scaffold",
+          "bootstrap",
+          "repo",
+          "pipeline"
+        ]
+      },
+      "goal": "Design the asynchronous workflow that takes a template request and generates repositories, infrastructure, and pipelines.",
+      "opener": "Walk me through the system flow when a developer clicks 'Create New Service' using a golden path template.",
+      "evidence": {
+        "strong": "Uses an asynchronous, event-driven orchestrator to handle repository creation, IaC provisioning, and catalog registration independently.",
+        "adequate": "Shows an API call that does scaffolding but treats it synchronously, risking timeouts.",
+        "weak": "Treats scaffolding as a simple local file copy script without considering infrastructure or cloud provider latency."
+      },
+      "misconceptions": [
+        {
+          "id": "sync_provisioning",
+          "pattern": "Making synchronous blocking calls to external providers during service creation.",
+          "challenge": "What happens to the developer's request if the cloud provider's API takes 3 minutes to provision the database?"
+        }
+      ],
+      "probes": [
+        "How do we handle a failure halfway through the provisioning process?"
+      ],
+      "hints": [
+        "Creating repositories and infrastructure takes time. How should the API gateway handle the request?",
+        "Consider using an orchestrator or message queue for these external tasks."
+      ],
+      "moveOnSummary": "Designed an asynchronous provisioning workflow using an orchestrator.",
+      "learnTopics": [
+        "message-queues",
+        "infrastructure-as-code"
+      ]
+    },
+    {
+      "id": "deep.templates",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "worker",
+          "t-gh-actions",
+          "t-terraform"
+        ],
+        "keywords": [
+          "day 2",
+          "update",
+          "drift",
+          "version",
+          "pr",
+          "shared"
+        ]
+      },
+      "goal": "Solve the challenge of propagating changes to templates across hundreds of already-provisioned services.",
+      "opener": "Scaffolding solves day one. How do the existing services get an update if we need to change a convention in the base deployment template?",
+      "evidence": {
+        "strong": "Distinguishes between one-time scaffolding and shared modules, proposing automated pull requests or centralised module versioning for updates.",
+        "adequate": "Suggests versioning templates but struggles with the mechanics of applying updates to older services safely.",
+        "weak": "Assumes teams will manually copy-paste updates or that changing the template magically applies to all generated code."
+      },
+      "misconceptions": [
+        {
+          "id": "magic_updates",
+          "pattern": "Believing that changing a template file automatically updates instantiated code in 300 repos without a rollout mechanism.",
+          "challenge": "Once the code is scaffolded into the team's repository, how does that repository know the original template was changed?"
+        }
+      ],
+      "probes": [
+        "How do we ensure an automated template update doesn't break a team's service?",
+        "What if a team ignores the automated pull request for weeks?"
+      ],
+      "hints": [
+        "If we copy files during creation, they immediately drift. Could we reference a versioned module instead?",
+        "If we must copy files, how can a centralised bot push changes to all repositories?"
+      ],
+      "moveOnSummary": "Addressed template lifecycle using shared modules and automated updates.",
+      "learnTopics": [
+        "infrastructure-as-code",
+        "internal-developer-platform",
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "deep.escape_hatches",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "api-gateway",
+          "t-kubernetes"
+        ],
+        "keywords": [
+          "escape hatch",
+          "custom",
+          "override",
+          "inflexible",
+          "eject"
+        ]
+      },
+      "goal": "Balance standardisation with team autonomy by providing supported ways to deviate from defaults.",
+      "opener": "A team needs to customise their deployment pipeline in a way the golden path doesn't support. How does the platform handle this safely?",
+      "evidence": {
+        "strong": "Provides explicit extension points, or allows teams to fork the template while clearly demarcating loss of platform support.",
+        "adequate": "Allows overrides via a configuration file but lacks boundaries on what can be safely overridden.",
+        "weak": "Forces all teams to use identical pipelines with no escape hatch, or allows complete wild-west modification."
+      },
+      "misconceptions": [
+        {
+          "id": "total_lockdown",
+          "pattern": "Refusing any customisation to enforce standardisation.",
+          "challenge": "What happens when the core product team needs a specific sidecar proxy to launch their new feature, but the platform team is backlogged for weeks?"
+        }
+      ],
+      "probes": [
+        "If they deviate from the golden path, who is responsible when their deployment breaks?"
+      ],
+      "hints": [
+        "Can we design the template to accept optional modules or configuration parameters?",
+        "If a team ejects from the template entirely, how does the catalog reflect their new tier of support?"
+      ],
+      "moveOnSummary": "Discussed providing safe escape hatches and clear boundaries of platform support.",
+      "learnTopics": [
+        "internal-developer-platform",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.guardrails",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "ci-cd",
+          "api-gateway",
+          "webhook"
+        ],
+        "keywords": [
+          "opa",
+          "policy",
+          "conftest",
+          "compliance",
+          "linting"
+        ]
+      },
+      "goal": "Enforce organisational policies automatically without requiring manual review gates.",
+      "opener": "How do we ensure that services created or modified by teams comply with our security and reliability standards?",
+      "evidence": {
+        "strong": "Implements policy-as-code hooked into the CI/CD pipeline or admission controllers to block non-compliant changes.",
+        "adequate": "Suggests running static analysis scripts in CI/CD pipelines.",
+        "weak": "Relies on manual pull request reviews by the platform team."
+      },
+      "misconceptions": [
+        {
+          "id": "manual_gates",
+          "pattern": "Putting the platform team in the critical path for approvals.",
+          "challenge": "If the platform team has to approve every infrastructure change, won't they become a bottleneck for all product teams?"
+        }
+      ],
+      "probes": [
+        "At what stage in the deployment lifecycle should these policies be evaluated?"
+      ],
+      "hints": [
+        "How can we evaluate configuration files programmatically before they are applied?",
+        "Look into tools like Open Policy Agent or admission controllers."
+      ],
+      "moveOnSummary": "Incorporated policy-as-code to enforce guardrails automatically.",
+      "learnTopics": [
+        "observability",
+        "infrastructure-as-code"
+      ]
+    },
+    {
+      "id": "deep.iac",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "t-terraform",
+          "t-kubernetes",
+          "deployer",
+          "drift-monitor"
+        ],
+        "keywords": [
+          "state",
+          "terraform",
+          "crossplane",
+          "gitops",
+          "drift"
+        ]
+      },
+      "goal": "Manage infrastructure provisioning at scale, tracking state and detecting drift.",
+      "opener": "When a team provisions a database through our self-service API, how is the actual infrastructure state managed and reconciled?",
+      "evidence": {
+        "strong": "Describes a control loop like GitOps or uses isolated state files per service to minimise blast radius.",
+        "adequate": "Mentions Terraform or Pulumi but uses a single monolithic state file for the whole platform.",
+        "weak": "Fails to mention state management or assumes API calls to AWS are fire-and-forget."
+      },
+      "misconceptions": [
+        {
+          "id": "shared_state",
+          "pattern": "Using one large state file for all 300 services.",
+          "challenge": "If the state gets corrupted during a deployment, how many services are impacted?"
+        }
+      ],
+      "probes": [
+        "What happens if someone manually changes a database configuration in the cloud console?"
+      ],
+      "hints": [
+        "How does the deployment tool know what infrastructure currently exists?",
+        "Consider how GitOps tools reconcile desired state with actual state."
+      ],
+      "moveOnSummary": "Designed an IaC strategy with isolated state and drift detection.",
+      "learnTopics": [
+        "infrastructure-as-code",
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "deep.cve",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "orchestrator",
+          "worker"
+        ],
+        "keywords": [
+          "patch",
+          "cve",
+          "mass update",
+          "rollout"
+        ]
+      },
+      "goal": "Design a mass-update and deployment mechanism that is safe and visible.",
+      "opener": "How do we roll out a critical patch to all services simultaneously without causing mass outages?",
+      "evidence": {
+        "strong": "Proposes an automated pipeline that applies the fix, waits for CI to pass, and uses phased rollouts.",
+        "adequate": "Suggests a script to update all repositories but doesn't handle CI/CD failures gracefully.",
+        "weak": "Manually asks 100 teams to update their code."
+      },
+      "misconceptions": [
+        {
+          "id": "blind_deploy",
+          "pattern": "Forcing a deployment of 300 services instantly without health checks.",
+          "challenge": "What if the new patch breaks compatibility with 10% of our applications?"
+        }
+      ],
+      "probes": [
+        "How do we track which services have successfully deployed the patch and which are failing?"
+      ],
+      "hints": [
+        "Can we leverage the CI/CD pipelines we already built to validate the patch?",
+        "How would you roll this out progressively rather than all at once?"
+      ],
+      "moveOnSummary": "Detailed a phased rollout strategy for platform-wide updates.",
+      "learnTopics": [
+        "deployment-strategies",
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "scale",
+          "future"
+        ]
+      },
+      "goal": "Critically evaluate the platform's abstractions and potential bottlenecks.",
+      "opener": "Looking at the platform as a whole, what is the biggest operational risk if adoption doubles next year?",
+      "evidence": {
+        "strong": "Identifies risks related to template maintenance burden, configuration drift, or platform team support load.",
+        "adequate": "Points out technical bottlenecks like the provisioning orchestrator's throughput.",
+        "weak": "Claims the system will scale perfectly without issues."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How will we measure whether the platform is actually helping product teams?"
+      ],
+      "hints": [
+        "Think about the human element: managing updates, handling support requests.",
+        "What metrics would prove the platform is a success?"
+      ],
+      "moveOnSummary": "Reviewed platform bottlenecks and success metrics.",
+      "learnTopics": [
+        "internal-developer-platform",
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cve_twist",
+      "after": "deep.templates",
+      "prompt": "A critical CVE is found in the base Docker image used by all our services. The security team says it must be patched in production within 24 hours. How does your platform orchestrate this?",
+      "agendaItemId": "deep.cve"
+    }
+  ],
+  "vocabulary": [
+    "Backstage",
+    "Crossplane",
+    "OPA",
+    "Golden Path",
+    "IaC",
+    "GitOps",
+    "Scaffolding"
+  ],
+  "alternatives": [
+    {
+      "choice": "GitOps (Pull-based) vs CI/CD (Push-based)",
+      "whenBetter": "GitOps is better for strict drift reconciliation and security, while Push-based is simpler to start with existing CI tools."
+    },
+    {
+      "choice": "Shared Libraries/Modules vs Scaffolded Code",
+      "whenBetter": "Shared modules are better for enforcing updates and compliance; Scaffolded code is better for providing a starting point when teams need total ownership and decoupling."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Decoupled control plane with clear lifecycle management",
+      "outline": "Outlines a decoupled control plane utilising an orchestrator for asynchronous provisioning. Clearly distinguishes between Day 1 scaffolding and Day 2 lifecycle management by leveraging versioned Terraform modules or automated PRs. Introduces OPA for guardrails and explicitly defines escape hatches for teams needing custom configurations."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional API with basic scaffolding",
+      "outline": "Builds a functional self-service portal that triggers CI/CD jobs to scaffold repositories. Successfully covers the service catalog and basic provisioning but struggles with how to push updates to existing templates gracefully, often defaulting to manual team interventions."
+    },
+    {
+      "band": "weak",
+      "label": "File-copy API missing ownership bounds",
+      "outline": "Treats the platform as a simple file-copying API or a UI over Jenkins. Misses the concepts of ongoing ownership, policy enforcement, or drift. Leaves the platform team as a manual bottleneck for infrastructure approvals."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

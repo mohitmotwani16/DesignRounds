@@ -1,0 +1,520 @@
+{
+  "opening": "Welcome. Today we need you to design a leader election mechanism for a service cluster. Whenever you're ready, you can start exploring the requirements.",
+  "clarifications": [
+    {
+      "id": "scale.cluster",
+      "topics": [
+        "cluster",
+        "nodes",
+        "size",
+        "how many"
+      ],
+      "answer": "Assume the core service cluster that needs a leader typically has 3 to 7 nodes."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "failover",
+        "speed",
+        "time",
+        "downtime"
+      ],
+      "answer": "Failover should complete within a few seconds. A brief pause in leadership is acceptable."
+    },
+    {
+      "id": "req.workload",
+      "topics": [
+        "workload",
+        "writes",
+        "reads",
+        "followers",
+        "tasks"
+      ],
+      "answer": "The leader orchestrates tasks and writes to a central database. Followers either serve reads or sit on standby."
+    },
+    {
+      "id": "env.network",
+      "topics": [
+        "network",
+        "partitions",
+        "drops",
+        "reliability"
+      ],
+      "answer": "Assume a standard data center network. Network partitions and packet drops can and do happen."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about constraints not covered here, ask them to make a sensible assumption based on typical highly available backend clusters.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "nodes",
+          "failover",
+          "consistency",
+          "seconds",
+          "split-brain"
+        ]
+      },
+      "goal": "Establish the size of the cluster and the strictness of the single-leader requirement.",
+      "opener": "What are the main requirements and constraints you want to establish before we design the election process?",
+      "evidence": {
+        "strong": "Asks about cluster size, failover latency, and explicitly mentions preventing split-brain.",
+        "adequate": "Establishes the single-leader need and basic node counts, but misses strict timing or split-brain concerns.",
+        "weak": "Dives straight into proposing an algorithm without sizing the problem or asking about failure tolerances."
+      },
+      "misconceptions": [
+        {
+          "id": "massive_scale",
+          "pattern": "Believing the cluster contains thousands of nodes that all need to participate in the election.",
+          "challenge": "Do we need all thousands of nodes to vote in the election, or just a small core group?"
+        }
+      ],
+      "probes": [
+        "What happens to the cluster while the election is taking place?",
+        "Are we dealing with a handful of nodes or thousands?"
+      ],
+      "hints": [
+        "Consider how long the system can operate without a leader.",
+        "Think about what the followers are doing during normal operation."
+      ],
+      "moveOnSummary": "We agreed on a small node cluster requiring failover within a few seconds and strict single-leader guarantees.",
+      "learnTopics": [
+        "leader-election",
+        "availability",
+        "cap-theorem"
+      ]
+    },
+    {
+      "id": "high_level.components",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "cluster",
+          "t-etcd",
+          "t-consul"
+        ],
+        "keywords": [
+          "consensus",
+          "store",
+          "leader",
+          "follower",
+          "lease",
+          "raft"
+        ]
+      },
+      "goal": "Define the overarching architecture: either a self-contained Raft cluster or stateless nodes relying on an external consensus store.",
+      "opener": "At a high level, what components are involved in electing and maintaining a leader?",
+      "evidence": {
+        "strong": "Decides between an external consensus store like etcd versus internal Raft, and explains the trade-offs of the choice.",
+        "adequate": "Adds a consensus store or generic election module but is vague on its exact responsibilities.",
+        "weak": "Assumes a simple database flag can act as the leader lock without considering node death or leases."
+      },
+      "misconceptions": [
+        {
+          "id": "simple_flag",
+          "pattern": "Using a standard relational database and a boolean flag for leadership without heartbeats.",
+          "challenge": "If the node holding the true flag crashes permanently, how does the flag ever get released for others?"
+        }
+      ],
+      "probes": [
+        "Will you build the consensus logic directly into the nodes, or use an off-the-shelf system?",
+        "What happens on startup when no leader exists?"
+      ],
+      "hints": [
+        "How do distributed systems usually agree on a single value reliably?",
+        "You could use an existing tool like etcd or Zookeeper, or implement a protocol like Raft."
+      ],
+      "moveOnSummary": "The candidate laid out an architecture using a consensus mechanism for leases.",
+      "learnTopics": [
+        "consensus",
+        "leader-election"
+      ]
+    },
+    {
+      "id": "deep.election",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "leader",
+          "service",
+          "t-etcd"
+        ],
+        "keywords": [
+          "heartbeat",
+          "timeout",
+          "random",
+          "election",
+          "lease",
+          "ttl"
+        ]
+      },
+      "goal": "Detail how nodes decide an election is needed and how one node wins it.",
+      "opener": "How does the cluster detect that the current leader has failed, and how is a new one chosen?",
+      "evidence": {
+        "strong": "Describes heartbeats, randomised election timeouts to prevent collisions, and gathering a majority of votes or acquiring a lease.",
+        "adequate": "Mentions timeouts and voting, but misses timeout randomisation, risking election ties.",
+        "weak": "Proposes a simple ping mechanism without a formal voting phase or lease expiration."
+      },
+      "misconceptions": [
+        {
+          "id": "ip_sort",
+          "pattern": "Nodes just pinging each other and assuming the lowest IP address among the alive ones is the leader.",
+          "challenge": "What if two nodes experience different network delays and have different views of who is currently alive?"
+        }
+      ],
+      "probes": [
+        "What happens if two followers notice the leader is dead at the exact same time?",
+        "How does a node constantly prove to the others that it is still alive?"
+      ],
+      "hints": [
+        "If nodes use the exact same timeout duration, they might tie in the election.",
+        "Think about using a randomised delay before a follower starts a new election."
+      ],
+      "moveOnSummary": "The design includes heartbeats and randomised timeouts to reliably elect a new leader.",
+      "learnTopics": [
+        "leader-election",
+        "consensus"
+      ]
+    },
+    {
+      "id": "deep.split_brain",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "network",
+          "cluster"
+        ],
+        "keywords": [
+          "partition",
+          "split-brain",
+          "majority",
+          "quorum",
+          "minority"
+        ]
+      },
+      "goal": "Ensure the system cannot elect two leaders during a network partition.",
+      "opener": "Imagine a network partition splits our cluster into two halves. How do we ensure both halves don't simultaneously elect a leader?",
+      "evidence": {
+        "strong": "Explains majority quorum; ensures the minority side cannot gather enough votes and forces its leader to step down.",
+        "adequate": "Mentions needing more than half the nodes to win an election, but is unclear on what the old leader on the minority side does.",
+        "weak": "Suggests relying on a secondary ping or an external arbitrator without understanding quorum principles."
+      },
+      "misconceptions": [
+        {
+          "id": "even_nodes",
+          "pattern": "Designing a cluster with an even number of nodes without a tie-breaker mechanism.",
+          "challenge": "If we have 4 nodes and they are partitioned into two isolated pairs, which side wins the election?"
+        }
+      ],
+      "probes": [
+        "If the network splits exactly in half, how do we break the tie?",
+        "Why is it generally recommended to have an odd number of nodes in a consensus cluster?"
+      ],
+      "hints": [
+        "A candidate node needs to know it has the support of the majority of the total cluster.",
+        "If there are 5 nodes in total, how many votes are required to win an election?"
+      ],
+      "moveOnSummary": "The candidate correctly identified that a majority quorum prevents split-brain scenarios.",
+      "learnTopics": [
+        "quorums",
+        "cap-theorem",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "deep.fencing",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "storage",
+          "t-postgres"
+        ],
+        "keywords": [
+          "term",
+          "epoch",
+          "fencing",
+          "stale",
+          "version",
+          "cas"
+        ]
+      },
+      "goal": "Prevent a deposed leader from successfully modifying downstream state after a new leader is elected.",
+      "opener": "What happens if a deposed leader, who was just delayed by a network pause, wakes up and tries to write to our downstream database?",
+      "evidence": {
+        "strong": "Attaches monotonically increasing term or epoch numbers to the leader; the database rejects writes with older epochs.",
+        "adequate": "Mentions epochs or versioning but relies on the leader checking its own status rather than enforcing fencing at the resource.",
+        "weak": "Assumes the new leader will politely tell the old leader to stop, or ignores downstream state corruption."
+      },
+      "misconceptions": [
+        {
+          "id": "polite_step_down",
+          "pattern": "Believing a deposed leader will always voluntarily stop what it is doing before the new leader takes action.",
+          "challenge": "What if the old leader issues a write just before it loses its lease, but the network delays the packet until after a new leader is elected?"
+        }
+      ],
+      "probes": [
+        "What if the old leader's network was just delayed, and its old write arrives at the database right now?",
+        "How does the downstream database objectively know which leader is the legitimate one?"
+      ],
+      "hints": [
+        "The new leader needs a way to announce that its authority is newer than the old leader's.",
+        "Think about attaching a version or term number to every write sent to the database."
+      ],
+      "moveOnSummary": "The candidate used epoch numbers as fencing tokens at the database level to reject stale writes.",
+      "learnTopics": [
+        "optimistic-vs-pessimistic-locking",
+        "leader-election"
+      ]
+    },
+    {
+      "id": "deep.tuning",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "clock"
+        ],
+        "keywords": [
+          "gc pause",
+          "blip",
+          "cpu spike",
+          "timeout",
+          "tuning",
+          "millisecond"
+        ]
+      },
+      "goal": "Balance the trade-off between fast failover and spurious elections caused by transient issues.",
+      "opener": "How would you tune the timeouts to achieve fast failover without triggering unnecessary elections?",
+      "evidence": {
+        "strong": "Identifies the trade-off between heartbeat frequency, election timeout, and the risk of false positives from GC pauses or network jitter.",
+        "adequate": "Knows that shorter timeouts mean faster failover but mentions high load as the only downside.",
+        "weak": "Suggests aggressive 1-millisecond timeouts without considering network latency or CPU overhead."
+      },
+      "misconceptions": [
+        {
+          "id": "zero_latency",
+          "pattern": "Making timeouts as tight as network latency allows.",
+          "challenge": "What happens to our cluster stability if the leader experiences a 50-millisecond garbage collection pause?"
+        }
+      ],
+      "probes": [
+        "What is the cost of setting the heartbeat timeout to 10 milliseconds?",
+        "How do garbage collection pauses on the node affect your timeout choice?"
+      ],
+      "hints": [
+        "A very short timeout means fast failover but a high risk of false alarms.",
+        "Consider the typical duration of a GC pause or a transient network blip."
+      ],
+      "moveOnSummary": "We discussed balancing failover speed against the risk of spurious elections.",
+      "learnTopics": [
+        "retries-and-timeouts",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "deep.discovery",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway",
+          "service-discovery"
+        ],
+        "keywords": [
+          "redirect",
+          "forward",
+          "discover",
+          "watch",
+          "cache",
+          "proxy"
+        ]
+      },
+      "goal": "Explain how clients or followers route their requests to the active leader.",
+      "opener": "Once a new leader is elected, how do the other nodes and clients find out who to talk to?",
+      "evidence": {
+        "strong": "Explains whether followers watch a consensus key or the leader broadcasts its victory, and gracefully handles client redirects.",
+        "adequate": "Mentions reading the new leader's address from a store on every request.",
+        "weak": "Assumes a hardcoded configuration or a standard load balancer that magically knows who won."
+      },
+      "misconceptions": [
+        {
+          "id": "client_polling",
+          "pattern": "Clients polling every single node continuously to find out who the leader is.",
+          "challenge": "How does that discovery approach scale as we add hundreds of clients and more nodes?"
+        }
+      ],
+      "probes": [
+        "If a client contacts a follower by mistake, how does it find the leader?",
+        "Does the leader announce itself, or do the others poll for it?"
+      ],
+      "hints": [
+        "Followers could watch the consensus store for changes to the leader key.",
+        "A reverse proxy or API gateway could keep track of the current leader and route traffic."
+      ],
+      "moveOnSummary": "Clients and followers discover the leader by watching the consensus store or handling redirect responses.",
+      "learnTopics": [
+        "service-discovery",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "deep.clocks",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "clock",
+          "service"
+        ],
+        "keywords": [
+          "clock",
+          "drift",
+          "time",
+          "ntp",
+          "monotonic"
+        ]
+      },
+      "goal": "Address the dangers of relying on synchronised wall-clocks in distributed systems.",
+      "opener": "How does your lease mechanism behave if the leader's physical clock starts drifting significantly?",
+      "evidence": {
+        "strong": "Uses monotonic time locally or relies entirely on the consensus store's logical terms rather than distributed wall-clock time.",
+        "adequate": "Mentions NTP but assumes clocks will always be closely synchronised enough for leases.",
+        "weak": "Assumes perfect time synchronisation across nodes and relies on absolute timestamps for expiry."
+      },
+      "misconceptions": [
+        {
+          "id": "perfect_ntp",
+          "pattern": "Thinking NTP guarantees exact and constant time across all nodes at all times.",
+          "challenge": "NTP keeps clocks close, but what if a node is temporarily disconnected from the NTP server and its clock drifts by a few seconds?"
+        }
+      ],
+      "probes": [
+        "What happens if a node's NTP sync fails and its clock jumps forward by a minute?",
+        "How can we measure the passage of time without relying on wall-clock time?"
+      ],
+      "hints": [
+        "Consider the difference between wall-clock time and monotonic time on a server.",
+        "The consensus store's term number acts as a logical clock that never drifts."
+      ],
+      "moveOnSummary": "The candidate recognised the danger of clock drift and shifted to logical epochs or monotonic time.",
+      "learnTopics": [
+        "clocks-and-ordering"
+      ]
+    },
+    {
+      "id": "wrap_up.review",
+      "stage": "wrap_up",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "bottleneck",
+          "failure",
+          "recap"
+        ]
+      },
+      "goal": "Summarize the design's handling of the core failure modes.",
+      "opener": "Looking back at the design, how well does it meet the requirement to gracefully handle node failures and network partitions?",
+      "evidence": {
+        "strong": "Confidently traces a partition scenario end-to-end, showing quorum loss and epoch fencing protecting the database.",
+        "adequate": "Summarises the normal election flow and basic failover, but struggles to recap the split-brain protection.",
+        "weak": "Introduces new mechanisms at the last minute or gets confused by their own election design."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Can you walk me through the exact sequence of events when the leader is isolated by a switch failure?"
+      ],
+      "hints": [
+        "Start from the moment the heartbeats fail to reach the majority.",
+        "Follow the old leader's actions and the followers' actions simultaneously."
+      ],
+      "moveOnSummary": "The candidate provided a solid recap of the election and fencing processes.",
+      "learnTopics": [
+        "leader-election"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "clock_drift",
+      "after": "deep.fencing",
+      "prompt": "Our lease expiry relies on time. What if the leader's physical clock starts running slower than the followers' clocks?",
+      "agendaItemId": "deep.clocks"
+    }
+  ],
+  "vocabulary": [
+    "Raft",
+    "Paxos",
+    "Zab",
+    "epoch",
+    "fencing token",
+    "split-brain",
+    "quorum",
+    "lease",
+    "etcd",
+    "Consul",
+    "Zookeeper",
+    "heartbeat",
+    "monotonic"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using an external consensus store (like etcd/Zookeeper) vs implementing Raft internally.",
+      "whenBetter": "An external store is better for simpler implementation and leveraging proven tech; internal Raft is better for self-contained deployments without external dependencies."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Quorum and epochs",
+      "outline": "The candidate clearly separates the election mechanism from downstream fencing. They use a consensus store like etcd to manage leases with randomised timeouts, explain majority quorum to prevent split-brain during partitions, and attach strictly increasing epoch numbers to leader writes so the database can reject stale operations."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic leases",
+      "outline": "The candidate sets up a lease mechanism with heartbeats, either via a consensus store or basic Raft concepts. They understand that network partitions require a majority quorum. However, they rely on the deposed leader stepping down voluntarily, missing the need for strict epoch fencing at the downstream database."
+    },
+    {
+      "band": "weak",
+      "label": "Naive flag",
+      "outline": "The candidate treats leader election as a simple race to set a boolean flag in a standard database. They do not implement heartbeats or leases, meaning a crashed leader permanently locks the cluster. They ignore split-brain and provide no mechanism to stop a stale leader from corrupting data."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

@@ -1,0 +1,542 @@
+{
+  "opening": "Let's design an API rate limiter today. Whenever you're ready, feel free to start by walking me through how you'd approach this system.",
+  "clarifications": [
+    {
+      "id": "scale.qps",
+      "topics": [
+        "qps",
+        "traffic",
+        "scale",
+        "requests per second"
+      ],
+      "answer": "We expect around 100,000 requests per second at peak across the API fleet."
+    },
+    {
+      "id": "scale.servers",
+      "topics": [
+        "servers",
+        "fleet",
+        "instances"
+      ],
+      "answer": "The API gateway fleet currently consists of 50 servers."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "overhead",
+        "performance"
+      ],
+      "answer": "The rate limiter should add no more than 1 to 2 milliseconds to the overall request latency."
+    },
+    {
+      "id": "req.rules",
+      "topics": [
+        "rules",
+        "tiers",
+        "quotas",
+        "limits",
+        "customers"
+      ],
+      "answer": "Different customers have different quotas based on their pricing tier, ranging from 10 requests per second to 10,000 per minute."
+    },
+    {
+      "id": "req.identifier",
+      "topics": [
+        "key",
+        "identify",
+        "user",
+        "authentication"
+      ],
+      "answer": "Every request contains an API key in the header. We rate limit based on this key."
+    },
+    {
+      "id": "req.consistency",
+      "topics": [
+        "strict",
+        "accuracy",
+        "over-admission",
+        "consistency"
+      ],
+      "answer": "We want to be fairly accurate, but occasionally allowing a few extra requests through during a sudden burst is acceptable if it keeps latency low."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not listed, tell them to make a reasonable assumption for a standard B2B SaaS platform and proceed.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "requirements",
+          "scale",
+          "latency",
+          "qps",
+          "users",
+          "assumptions"
+        ]
+      },
+      "goal": "Establish the scale, latency constraints, and basic functional requirements.",
+      "opener": "What requirements and constraints do you want to establish before we design the architecture?",
+      "evidence": {
+        "strong": "Proactively asks about traffic volume, latency overhead limits, distributed enforcement, and how users are identified.",
+        "adequate": "Identifies that the system needs to handle high scale and mentions latency, but may miss the exact fleet distribution or quota variance.",
+        "weak": "Starts drawing immediately without asking about scale or performance expectations."
+      },
+      "misconceptions": [
+        {
+          "id": "req.strictness",
+          "pattern": "Assuming rate limits must be perfectly accurate at the cost of latency.",
+          "challenge": "If enforcing a strict limit adds 50ms to every request, is that an acceptable trade-off for our API?"
+        }
+      ],
+      "probes": [
+        "How much latency do you think is acceptable for a rate limiting step?",
+        "What key will you use to track an individual client's usage?"
+      ],
+      "hints": [
+        "Think about what information we need to extract from an incoming request to limit it.",
+        "Consider the user experience. How fast does an API gateway need to process a request?"
+      ],
+      "moveOnSummary": "Agreed to design for 100k QPS across 50 servers with under 2ms latency.",
+      "learnTopics": [
+        "system-design-interview",
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "high_level.arch",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "client",
+          "service",
+          "load-balancer",
+          "rate-limiter"
+        ],
+        "keywords": [
+          "gateway",
+          "middleware",
+          "request path",
+          "intercept"
+        ]
+      },
+      "goal": "Place the rate limiter correctly in the request lifecycle to protect backend services.",
+      "opener": "Could you draw out the high-level path a request takes from the client to the backend?",
+      "evidence": {
+        "strong": "Places the rate limiter at the API gateway or as a fast middleware before requests reach heavy backend services. Includes a separate configuration store.",
+        "adequate": "Shows the rate limiter intercepting traffic, but may bundle it tightly inside the application logic rather than at the edge.",
+        "weak": "Places the rate limiter after the application servers, or routes all traffic through a single bottleneck component."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.hop",
+          "pattern": "Making the rate limiter a distinct synchronous network hop for every single service.",
+          "challenge": "If the rate limiter is a separate service, what happens to the latency of a typical API call?"
+        }
+      ],
+      "probes": [
+        "Where exactly does the rate limit check happen in this flow?",
+        "How are responses handled when a limit is exceeded?"
+      ],
+      "hints": [
+        "We want to protect our backend services from doing unnecessary work.",
+        "Consider using a component that naturally sits in front of all your API servers."
+      ],
+      "moveOnSummary": "Established a flow where the API gateway enforces limits before routing to backends.",
+      "learnTopics": [
+        "api-gateway",
+        "load-balancing"
+      ]
+    },
+    {
+      "id": "deep.algorithm",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter"
+        ],
+        "keywords": [
+          "token bucket",
+          "sliding window",
+          "leaky bucket",
+          "fixed window",
+          "algorithm"
+        ]
+      },
+      "goal": "Select and explain a rate limiting algorithm that handles bursts appropriately and is memory efficient.",
+      "opener": "Which rate limiting algorithm do you plan to use, and why does it fit our requirements?",
+      "evidence": {
+        "strong": "Compares at least two algorithms, selects token bucket or sliding window counter, and accurately explains memory footprint and burst behavior.",
+        "adequate": "Names a standard algorithm like fixed window or token bucket and explains how it works, but struggles with the memory or burst trade-offs.",
+        "weak": "Invents an inefficient custom counter or cannot explain how their chosen algorithm tracks time."
+      },
+      "misconceptions": [
+        {
+          "id": "algo.log",
+          "pattern": "Using sliding window log for high traffic.",
+          "challenge": "If a user has a limit of 10,000 requests per minute, how much memory does sliding window log use per user?"
+        }
+      ],
+      "probes": [
+        "How does your algorithm handle a massive burst of traffic at the exact boundary of a minute?",
+        "What data specifically needs to be stored for each API key?"
+      ],
+      "hints": [
+        "If I send all my allowed requests in the first second of the window, what should happen?",
+        "Look into 'token bucket' or 'sliding window counter' logic."
+      ],
+      "moveOnSummary": "Selected a suitable algorithm and defined the data stored per key.",
+      "learnTopics": [
+        "rate-limiting",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.storage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "in-memory-db",
+          "kv-store",
+          "distributed-cache",
+          "counter"
+        ],
+        "keywords": [
+          "redis",
+          "shared state",
+          "counters",
+          "centralized",
+          "memcached"
+        ]
+      },
+      "goal": "Design a fast, distributed data store capable of atomic counter updates across the fleet.",
+      "opener": "How are you storing and updating the counters for a distributed fleet of API servers?",
+      "evidence": {
+        "strong": "Uses a fast distributed cache like Redis, explicitly solves race conditions with Lua scripts or atomic increments, and understands the network overhead.",
+        "adequate": "Proposes Redis for centralized counting but relies on a standard read-then-write pattern, missing the race condition risk.",
+        "weak": "Uses a relational database for counting every request, or uses strictly local counters without addressing the fleet multiplier effect."
+      },
+      "misconceptions": [
+        {
+          "id": "store.race",
+          "pattern": "Reading the counter, checking the limit, and writing it back in three separate network calls.",
+          "challenge": "If two API servers receive requests for the same key at the exact same millisecond, what happens to the counter?"
+        }
+      ],
+      "probes": [
+        "How do you ensure counter updates are atomic?",
+        "What is the network latency of updating this central store for every request?"
+      ],
+      "hints": [
+        "Think about race conditions when multiple gateways process requests for the same API key simultaneously.",
+        "Redis has specific features to execute multiple commands atomically."
+      ],
+      "moveOnSummary": "Designed a Redis-backed counter storage using atomic operations.",
+      "learnTopics": [
+        "redis",
+        "caching",
+        "optimistic-vs-pessimistic-locking"
+      ]
+    },
+    {
+      "id": "deep.reliability",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "local-cache",
+          "api-gateway"
+        ],
+        "keywords": [
+          "fail open",
+          "fail closed",
+          "fallback",
+          "timeout",
+          "redis down"
+        ]
+      },
+      "goal": "Handle the failure of the centralized counter store safely, balancing API protection and availability.",
+      "opener": "What happens to the API requests if your centralized counter store goes down?",
+      "evidence": {
+        "strong": "Explicitly chooses fail-open to preserve API availability, and implements local memory counters as a temporary fallback to prevent total backend overload.",
+        "adequate": "Decides to fail-open so requests aren't dropped, but doesn't implement a fallback limit, leaving the backend vulnerable.",
+        "weak": "Fails closed, dropping all API traffic, or assumes the cache will never go down."
+      },
+      "misconceptions": [
+        {
+          "id": "rel.fail_closed",
+          "pattern": "Rejecting all traffic if the rate limiter dependency fails.",
+          "challenge": "If the rate limiter is down but our backend APIs are perfectly healthy, should our customers experience a total outage?"
+        }
+      ],
+      "probes": [
+        "If you fail open, how do you prevent the backend databases from being crushed by an attack?",
+        "How fast does the gateway timeout when trying to reach the failed store?"
+      ],
+      "hints": [
+        "What is more important for the business: perfect rate limit enforcement, or serving valid user requests?",
+        "Could the gateway do some basic limiting on its own without the central store?"
+      ],
+      "moveOnSummary": "Addressed dependency failure by failing open with a local fallback.",
+      "learnTopics": [
+        "availability",
+        "fallacies-of-distributed-computing",
+        "circuit-breaker"
+      ]
+    },
+    {
+      "id": "deep.scale_hotspots",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "shard",
+          "cluster"
+        ],
+        "keywords": [
+          "hot key",
+          "sharding",
+          "redis cluster",
+          "massive customer"
+        ]
+      },
+      "goal": "Handle extremely high traffic from a single entity without overloading a single storage partition.",
+      "opener": "If one huge customer sends massive traffic, how do you prevent their counter from creating a hotspot in your storage?",
+      "evidence": {
+        "strong": "Suggests local gateway caching of counter states for heavy hitters, or batching updates asynchronously to relieve the central node.",
+        "adequate": "Mentions Redis clustering but fails to realize that a single key always hashes to a single node regardless of cluster size.",
+        "weak": "Assumes adding more Redis nodes magically solves the problem of a single hot key."
+      },
+      "misconceptions": [
+        {
+          "id": "scale.shard_hotkey",
+          "pattern": "Believing sharding solves a hot key issue.",
+          "challenge": "If a key is hashed to determine its shard, won't all requests for 'customer_A' still hit the exact same machine?"
+        }
+      ],
+      "probes": [
+        "If all traffic for one API key hits one Redis node, what is the bottleneck?",
+        "Could the gateway batch its counts and sync them every 100 milliseconds?"
+      ],
+      "hints": [
+        "If a centralized store is too slow for millions of requests to one key, where else could we count them?",
+        "Think about counting locally in memory for a fraction of a second before updating Redis."
+      ],
+      "moveOnSummary": "Resolved hot keys using local batching or gateway-level approximations.",
+      "learnTopics": [
+        "hot-partitions",
+        "sharding"
+      ]
+    },
+    {
+      "id": "deep.rules_config",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "database",
+          "document-db"
+        ],
+        "keywords": [
+          "rules",
+          "config",
+          "quotas",
+          "admin",
+          "tiers"
+        ]
+      },
+      "goal": "Design a low-latency mechanism for gateways to retrieve and enforce customer-specific quotas.",
+      "opener": "How do the gateway servers know what the current rate limits are for each specific customer?",
+      "evidence": {
+        "strong": "Uses a separate configuration database pushed to local caches on the gateways, ensuring rules lookups don't add network hops.",
+        "adequate": "Stores rules in Redis alongside counters, adding slight overhead, but avoids querying a slow relational DB on the critical path.",
+        "weak": "Queries a relational database for the customer's tier on every incoming API request."
+      },
+      "misconceptions": [
+        {
+          "id": "config.db_lookup",
+          "pattern": "Fetching rules from a database synchronously per request.",
+          "challenge": "If rule data changes rarely, do we need to make a database call for every single API request?"
+        }
+      ],
+      "probes": [
+        "How frequently do a customer's quota rules actually change?",
+        "How can we get the rule lookup latency down to zero network hops?"
+      ],
+      "hints": [
+        "Configuration data is heavily read-biased and changes infrequently.",
+        "Consider caching the rules directly in the memory of the API gateway workers."
+      ],
+      "moveOnSummary": "Designed an eventual-consistency rule distribution system to local memory.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies"
+      ]
+    },
+    {
+      "id": "deep.multi_region",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cloud"
+        ],
+        "keywords": [
+          "global",
+          "multi-region",
+          "latency"
+        ]
+      },
+      "goal": "Adapt the limiter for multi-region deployment, trading off strict global accuracy for low local latency.",
+      "opener": "If we deploy our API fleet across three different continents, how do we synchronize limits, or do we?",
+      "evidence": {
+        "strong": "Identifies that cross-region synchronous counting violates latency requirements. Proposes eventual consistency sync or splitting quotas per region.",
+        "adequate": "Proposes asynchronous replication between regional Redis clusters but struggles with the race conditions that allows.",
+        "weak": "Attempts to use a single global database for counters, destroying the latency requirement."
+      },
+      "misconceptions": [
+        {
+          "id": "region.sync",
+          "pattern": "Synchronous global counting.",
+          "challenge": "What is the speed of light delay between an API gateway in Tokyo and a database in New York?"
+        }
+      ],
+      "probes": [
+        "If a user bounces between two regions, is it okay if they temporarily get double their quota?",
+        "How could we divide a user's global quota of 100/sec across regions mathematically?"
+      ],
+      "hints": [
+        "We cannot beat the speed of light. Local latency must be preserved.",
+        "Consider what happens if we just let each region enforce a fraction of the total limit."
+      ],
+      "moveOnSummary": "Discussed cross-region strategies, favoring local enforcement and eventual sync.",
+      "learnTopics": [
+        "geo-replication",
+        "cap-theorem",
+        "consistency-models"
+      ]
+    },
+    {
+      "id": "wrap_up.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "summary",
+          "tradeoffs",
+          "risk"
+        ]
+      },
+      "goal": "Critically evaluate the final architecture against the initial constraints.",
+      "opener": "Looking at the final design, what do you consider the biggest operational risk or bottleneck?",
+      "evidence": {
+        "strong": "Honestly critiques their design, identifying Redis connection limits, local cache staleness, or slight over-admission as deliberate, necessary trade-offs.",
+        "adequate": "Summarizes the components well but struggles to identify a real system weakness without prompting.",
+        "weak": "Claims the system is infinitely scalable and has no bottlenecks."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.perfect",
+          "pattern": "Believing a distributed system can be perfect.",
+          "challenge": "Every distributed system has a breaking point. What breaks first here if traffic spikes 10x?"
+        }
+      ],
+      "probes": [
+        "If we relaxed the strictness of the limits, how could we simplify the architecture further?",
+        "Are there any single points of failure left in this diagram?"
+      ],
+      "hints": [
+        "Think about the network overhead of our counter updates.",
+        "Reflect on our fail-open decision."
+      ],
+      "moveOnSummary": "Concluded the interview with a solid reflection on system limits.",
+      "learnTopics": [
+        "system-design-interview-questions"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "global.region",
+      "after": "deep.storage",
+      "prompt": "Our API is now wildly successful and we're deploying to three different continents. A customer's requests might hit gateways in Europe and the US simultaneously. How does the rate limiter handle this globally?",
+      "agendaItemId": "deep.multi_region"
+    }
+  ],
+  "vocabulary": [
+    "Token bucket",
+    "Leaky bucket",
+    "Fixed window",
+    "Sliding window log",
+    "Sliding window counter",
+    "Lua script",
+    "Fail-open",
+    "Fail-closed",
+    "Redis cluster",
+    "SPOF",
+    "B2B SaaS"
+  ],
+  "alternatives": [
+    {
+      "choice": "Local memory counters with periodic asynchronous sync.",
+      "whenBetter": "Better when extreme low latency is required or traffic is so high that centralized counters become an unavoidable bottleneck, and slight over-admission is acceptable."
+    },
+    {
+      "choice": "Fixed window algorithm instead of token bucket.",
+      "whenBetter": "Better when memory footprint must be kept absolutely minimal and boundary traffic spikes will not destabilize the backend services."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Atomic distributed approach",
+      "outline": "Chose the token bucket algorithm for its smooth burst handling. Positioned the limiter logic firmly in the API gateway. Used a Redis cluster for counter storage, employing Lua scripts to ensure read-and-decrement operations were fully atomic without race conditions. Explicitly addressed reliability by choosing to fail-open with an in-memory fallback limit if Redis became unavailable. Distributed customer quota rules via a background configuration service that cached data locally on the gateway to eliminate extra network hops."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard Redis implementation",
+      "outline": "Selected fixed window for simplicity and correctly placed the enforcement in the gateway. Chose a single Redis instance or basic cluster for centralized state, but initially relied on application-level read-then-write logic, needing a hint to identify the concurrency race condition. Acknowledged the need to fail-open if the cache died but did not specify a mechanism to protect the backend during that window. Rules were read directly from Redis rather than cached locally."
+    },
+    {
+      "band": "weak",
+      "label": "Synchronous database approach",
+      "outline": "Treated the rate limiter as a separate microservice behind the gateway, adding an entire network hop. Chose to store counts in a relational database using standard row updates, failing to account for high latency and massive lock contention under heavy load. Ignored the failure modes of the storage layer, assuming that if the database went down, the entire API should simply reject all traffic (fail-closed)."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.5,
+    "wrap_up": 0.15
+  }
+}

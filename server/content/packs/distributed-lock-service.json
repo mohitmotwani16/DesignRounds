@@ -1,0 +1,568 @@
+{
+  "opening": "Welcome. Today, I'd like you to design a distributed lock service. Where would you like to begin?",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "qps",
+        "throughput",
+        "scale",
+        "requests",
+        "traffic"
+      ],
+      "answer": "Assume we need to handle around 10,000 lock requests per second globally."
+    },
+    {
+      "id": "scale.locks",
+      "topics": [
+        "total",
+        "active",
+        "number of locks",
+        "amount"
+      ],
+      "answer": "Millions of distinct lock names exist over time, but expect about 100,000 to be actively held at any given moment."
+    },
+    {
+      "id": "perf.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "performance",
+        "fast"
+      ],
+      "answer": "Acquiring an uncontended lock should be as fast as possible, ideally under 10 milliseconds."
+    },
+    {
+      "id": "req.fairness",
+      "topics": [
+        "fair",
+        "order",
+        "queue",
+        "waiters",
+        "fifo"
+      ],
+      "answer": "Strict FIFO fairness isn't strictly required, but clients shouldn't be starved forever. Notifying waiters quickly is more important than perfect ordering."
+    },
+    {
+      "id": "req.resource",
+      "topics": [
+        "protect",
+        "target",
+        "resource",
+        "storage"
+      ],
+      "answer": "The locks protect various shared resources, like external databases or cloud file systems, which we do not directly control."
+    },
+    {
+      "id": "req.reentrancy",
+      "topics": [
+        "reentrant",
+        "recursive",
+        "twice"
+      ],
+      "answer": "You do not need to support reentrant locks for this design; a single, simple exclusive lock is sufficient."
+    }
+  ],
+  "clarificationPolicy": "Assume a standard enterprise environment where network partitions and process pauses are possible, and optimize for strict correctness over extreme throughput.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "requirements",
+          "scope",
+          "goals",
+          "assumptions"
+        ]
+      },
+      "goal": "Establish the core use case, the meaning of the lock, and failure boundaries.",
+      "opener": "What questions do you have about the requirements and scope of this service?",
+      "evidence": {
+        "strong": "Asks what the lock protects, if reentrancy is needed, and outlines strict correctness goals under failure.",
+        "adequate": "Asks basic questions about the number of locks but misses the implications of client crashes.",
+        "weak": "Jumps directly into drawing boxes without defining what the lock is meant to achieve."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if a client holds a lock but its process crashes before releasing it?"
+      ],
+      "hints": [
+        "Think about what exactly the client is locking.",
+        "Does a client need to acquire the same lock twice?"
+      ],
+      "moveOnSummary": "Established that the service needs exclusive, non-reentrant locks with crash recovery.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "throughput",
+          "capacity",
+          "latency"
+        ]
+      },
+      "goal": "Estimate the traffic and latency requirements to inform the architecture.",
+      "opener": "What scale of traffic and latency are you designing for?",
+      "evidence": {
+        "strong": "Estimates acquire/release QPS and notes that latency on uncontended locks must be very low.",
+        "adequate": "Pulls some QPS numbers but doesn't tie them back to the active concurrent locks.",
+        "weak": "Skips estimation entirely or assumes internet-scale billions of requests for a backend infrastructure lock."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Given your traffic estimates, what is your target latency for an acquire request?",
+        "How long do you expect a client to typically hold a lock?"
+      ],
+      "hints": [
+        "Think about how many microservices might be competing for locks at once.",
+        "If this is used to coordinate batch jobs or database migrations, is the traffic exceptionally high or moderate?"
+      ],
+      "moveOnSummary": "Agreed on reasonable QPS and low latency requirements.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "hl.api",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "service"
+        ],
+        "keywords": [
+          "acquire",
+          "release",
+          "renew",
+          "api",
+          "rpc",
+          "grpc"
+        ]
+      },
+      "goal": "Define a clear API for locking, unlocking, and renewing leases.",
+      "opener": "What does the API between the client library and the lock service look like?",
+      "evidence": {
+        "strong": "Defines an Acquire call with a TTL, a Renew call for keepalives, and a Release call that requires an ownership token.",
+        "adequate": "Mentions acquire and release but forgets parameters like TTL or the identifier needed to release securely.",
+        "weak": "Mentions generic CRUD database operations not tailored to locking semantics."
+      },
+      "misconceptions": [
+        {
+          "id": "missing-release-auth",
+          "pattern": "Believes simply passing the lock name to the Release endpoint is sufficient.",
+          "challenge": "How do you prevent Client B from accidentally or maliciously releasing Client A's lock?"
+        }
+      ],
+      "probes": [
+        "What parameters are needed for the acquire request?",
+        "How does the client tell the server it is still alive for long-running tasks?"
+      ],
+      "hints": [
+        "When you release a lock, how does the server know you are the legitimate holder?",
+        "What if the client needs to hold the lock for longer than the initial timeout?"
+      ],
+      "moveOnSummary": "Defined Acquire with a TTL, Renew for keepalive, and Release with an ownership token.",
+      "learnTopics": [
+        "api-design",
+        "distributed-locks"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "kv-store",
+          "t-etcd",
+          "t-redis"
+        ],
+        "keywords": [
+          "server",
+          "storage",
+          "lock node",
+          "architecture"
+        ]
+      },
+      "goal": "Outline the core components: client library, routing/service layer, and a consistent storage layer.",
+      "opener": "Could you walk me through the high-level components of the lock service?",
+      "evidence": {
+        "strong": "Separates the client library (handling keepalives) from stateless lock service nodes, backed by a distributed consensus store.",
+        "adequate": "Draws clients talking directly to a database, missing the client-side library's role or the abstraction of a lock service.",
+        "weak": "Uses a single relational database or a single cache node for everything, creating a single point of failure."
+      },
+      "misconceptions": [
+        {
+          "id": "stateless-servers-impossible",
+          "pattern": "Believes the lock service nodes must keep all lock state exclusively in their own local memory.",
+          "challenge": "If a lock service node crashes, how do the other nodes know about the locks it recently granted?"
+        }
+      ],
+      "probes": [
+        "Where is the lock state actually stored?",
+        "Who is responsible for renewing the lock: the core application code or a dedicated library?"
+      ],
+      "hints": [
+        "Consider providing a smart client library to hide the complexity of heartbeat renewals from application developers.",
+        "If you have multiple lock servers behind a load balancer, how do they share the current state?"
+      ],
+      "moveOnSummary": "Designed a high-level flow with smart clients, stateless lock servers, and a persistent store.",
+      "learnTopics": [
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.consensus",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-etcd",
+          "cluster",
+          "leader",
+          "replica"
+        ],
+        "keywords": [
+          "raft",
+          "paxos",
+          "consensus",
+          "majority",
+          "quorum"
+        ]
+      },
+      "goal": "Choose a backing store that provides strict consistency and partition tolerance to prevent split brain.",
+      "opener": "What kind of data store would you use to keep track of who holds which lock, and why?",
+      "evidence": {
+        "strong": "Chooses a consensus-backed store (like etcd) using Raft/Paxos, explaining that async replication can lose data during failovers and cause split brain.",
+        "adequate": "Chooses a distributed store but struggles to explain the exact replication mechanics or mentions Redlock without fully understanding its flaws.",
+        "weak": "Uses a standard relational database or single Redis node without addressing availability or consistency risks."
+      },
+      "misconceptions": [
+        {
+          "id": "async-replication-safe",
+          "pattern": "Believes that an asynchronously replicated key-value store is safe for strict locks.",
+          "challenge": "If the primary node crashes before replicating a lock acquisition to the replica, and the replica becomes the new primary, what happens to that lock?"
+        }
+      ],
+      "probes": [
+        "How does your chosen store handle a network partition between its own nodes?",
+        "Why not just use a standard Redis cluster?"
+      ],
+      "hints": [
+        "Strict correctness means we can't afford to lose a lock record during a primary node failover.",
+        "Have you heard of systems like ZooKeeper or etcd? What protocols do they use under the hood?",
+        "Consider a system that requires a majority quorum to acknowledge a write."
+      ],
+      "moveOnSummary": "Chose a consensus-based store like etcd to ensure consistency during failovers.",
+      "learnTopics": [
+        "consensus",
+        "distributed-locks",
+        "cap-theorem"
+      ]
+    },
+    {
+      "id": "deep.crashed_client",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "clock"
+        ],
+        "keywords": [
+          "lease",
+          "ttl",
+          "timeout",
+          "keepalive",
+          "heartbeat"
+        ]
+      },
+      "goal": "Prevent deadlocks by ensuring locks held by crashed clients are eventually released.",
+      "opener": "If a client acquires a lock and then the machine it's running on loses power abruptly, how does the system recover the lock?",
+      "evidence": {
+        "strong": "Proposes a lease mechanism with a TTL, paired with a background keepalive/heartbeat thread in the client library to renew it automatically.",
+        "adequate": "Mentions timeouts or TTLs on the lock, but doesn't detail how long-running tasks avoid expiring prematurely.",
+        "weak": "Suggests the server actively pinging the client, or relies solely on detecting TCP connection drops."
+      },
+      "misconceptions": [
+        {
+          "id": "tcp-keepalive-only",
+          "pattern": "Believes that the server can just safely release the lock when the client's TCP connection drops.",
+          "challenge": "What if a network partition drops the connection to the lock server, but the client is still alive and writing to the database?"
+        }
+      ],
+      "probes": [
+        "How do we choose the right timeout value?",
+        "What if the client's task legitimately takes longer than the timeout we chose?"
+      ],
+      "hints": [
+        "Can the lock have an expiration time?",
+        "If the timeout expires before the task completes, how can the client hold onto the lock safely?",
+        "Think about a background process in the client library that periodically extends the lock."
+      ],
+      "moveOnSummary": "Used leases with a TTL and a client-side keepalive heartbeat.",
+      "learnTopics": [
+        "distributed-locks",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "deep.paused_client",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "third-party-client",
+          "storage"
+        ],
+        "keywords": [
+          "fencing",
+          "token",
+          "gc pause",
+          "split brain",
+          "version"
+        ]
+      },
+      "goal": "Ensure strict mutual exclusion even if a client process pauses and its lease expires before it accesses the protected resource.",
+      "opener": "What happens if a client acquires a lock, but then experiences a garbage collection pause that lasts longer than its lease, and another client gets the lock in the meantime?",
+      "evidence": {
+        "strong": "Identifies that the lock service alone cannot prevent the paused client from writing to the resource; introduces monotonic fencing tokens checked by the resource.",
+        "adequate": "Recognizes the GC pause issue and suggests very long leases or client-side checks, but misses that the target resource itself must enforce the check.",
+        "weak": "Believes the lock service can forcibly kill the client or that checking the local clock will perfectly prevent the invalid write."
+      },
+      "misconceptions": [
+        {
+          "id": "client-local-check",
+          "pattern": "Believes a client can just check if its lease is still valid locally right before writing to the resource.",
+          "challenge": "What if the GC pause happens exactly between the client checking its lease and sending the write request over the network?"
+        }
+      ],
+      "probes": [
+        "How does the protected resource know which client is currently the legitimate lock holder?",
+        "Can we return any additional data from the acquire call to help the resource validate incoming requests?"
+      ],
+      "hints": [
+        "If the lock service thinks client B has the lock, but client A wakes up and thinks it still has it, who is in a position to reject client A's write?",
+        "Consider having the lock service return an incrementing number every time a lock is granted.",
+        "This is often solved using a concept called 'fencing tokens' passed to the storage layer."
+      ],
+      "moveOnSummary": "Used monotonically increasing fencing tokens validated by the protected resource.",
+      "learnTopics": [
+        "distributed-locks",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "deep.waiters",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "topic",
+          "queue"
+        ],
+        "keywords": [
+          "watch",
+          "notify",
+          "waiter",
+          "polling",
+          "pubsub"
+        ]
+      },
+      "goal": "Design an efficient mechanism for notifying clients when a locked resource becomes available.",
+      "opener": "If a client tries to acquire a lock that is currently held, how does it find out when the lock becomes available?",
+      "evidence": {
+        "strong": "Suggests a watch/notify mechanism using long polling or streams to avoid busy-waiting, often leveraging the consensus store's native watch capabilities.",
+        "adequate": "Suggests polling with exponential backoff, reducing load but increasing acquisition latency.",
+        "weak": "Suggests a tight infinite while-loop polling mechanism that would overwhelm the server."
+      },
+      "misconceptions": [
+        {
+          "id": "tight-polling",
+          "pattern": "Proposes a continuous while loop checking the lock status.",
+          "challenge": "If we have 1,000 clients waiting for a single lock, what happens to our server's CPU and network capacity?"
+        }
+      ],
+      "probes": [
+        "What are the trade-offs of polling versus server-push in this scenario?",
+        "How do you handle the thundering herd problem when the lock is finally released?"
+      ],
+      "hints": [
+        "Is there a way for the server to hold the request open until the lock is free?",
+        "Look into how systems like etcd or ZooKeeper handle client event notifications."
+      ],
+      "moveOnSummary": "Designed a watch mechanism or long polling to notify waiters without overwhelming the server.",
+      "learnTopics": [
+        "real-time-communication",
+        "distributed-locks"
+      ]
+    },
+    {
+      "id": "deep.clocks",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "clock",
+          "t-redis",
+          "service"
+        ],
+        "keywords": [
+          "redlock",
+          "ntp",
+          "clock drift",
+          "time"
+        ]
+      },
+      "goal": "Understand the dangers of relying on physical wall-clocks for distributed coordination.",
+      "opener": "How does clock drift on the server nodes affect our lease expirations?",
+      "evidence": {
+        "strong": "Explains that physical clocks can jump backward or forward, leading to premature lease expiry. Suggests using monotonic clocks or relying purely on consensus sequence numbers.",
+        "adequate": "Acknowledges the problem and suggests keeping clocks tightly synced, but doesn't fully grasp the distinction between wall time and monotonic time.",
+        "weak": "Assumes NTP keeps clocks perfectly synchronized at all times across all machines."
+      },
+      "misconceptions": [
+        {
+          "id": "ntp-perfect",
+          "pattern": "Believes NTP guarantees clocks are always perfectly synchronized across servers without jumps.",
+          "challenge": "NTP can sometimes step the clock forward or backward suddenly to correct drift. How does a sudden time jump affect our lock?"
+        }
+      ],
+      "probes": [
+        "If the server's clock jumps forward unexpectedly, what does the server believe about the client's lease?"
+      ],
+      "hints": [
+        "Think about the difference between measuring 'time of day' and using a 'stopwatch'.",
+        "If a lease expiry is tied to a specific wall-clock timestamp, a clock jump might instantly expire it."
+      ],
+      "moveOnSummary": "Noted the need to use monotonic clocks or sequence numbers instead of wall time.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "tradeoffs",
+          "recap"
+        ]
+      },
+      "goal": "Reflect on the final design's ability to handle network partitions and process pauses.",
+      "opener": "Looking at your final design, can you summarize how it guarantees that two clients never write to the resource at the same time?",
+      "evidence": {
+        "strong": "Clearly recaps the interaction between leases, the consensus store, and the fencing tokens at the storage level.",
+        "adequate": "Summarizes the components well but struggles to succinctly explain the end-to-end safety guarantee under failure.",
+        "weak": "Just lists the technologies used without tying them back to the requirements."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What is the biggest remaining bottleneck or point of failure in this architecture?"
+      ],
+      "hints": [
+        "Trace the path of a request during a network partition.",
+        "Review how fencing tokens solve the GC pause problem you discussed earlier."
+      ],
+      "moveOnSummary": "Summarized the architecture and strict safety guarantees.",
+      "learnTopics": [
+        "system-design-interview",
+        "availability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "clock-drift",
+      "after": "deep.crashed_client",
+      "prompt": "You mentioned leases and timeouts. What happens to our lock safety if the physical clock on the active lock server suddenly jumps forward due to an NTP sync?",
+      "agendaItemId": "deep.clocks"
+    }
+  ],
+  "vocabulary": [
+    "Raft",
+    "Paxos",
+    "etcd",
+    "ZooKeeper",
+    "Redlock",
+    "fencing token",
+    "split brain",
+    "lease",
+    "keepalive",
+    "TTL",
+    "monotonic",
+    "GC pause",
+    "thundering herd"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using a single Redis node (like a simple SetNX) instead of a consensus cluster.",
+      "whenBetter": "When lock correctness is purely an optimization to save work (e.g. avoiding generating a report twice), rather than a strict requirement for data integrity."
+    },
+    {
+      "choice": "Client busy-polling with exponential backoff instead of a server watch/notify mechanism.",
+      "whenBetter": "When locks are typically held for extremely short microsecond durations, and setting up long-lived watch streams adds unnecessary overhead."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Strong answer",
+      "outline": "The candidate quickly established the need for strict mutual exclusion and chose a consensus-backed store to prevent split-brain during failovers. They addressed crashed clients using leases with a client-side keepalive thread. Crucially, they identified the paused client (GC pause) problem independently and solved it by introducing monotonically increasing fencing tokens that the protected resource validates."
+    },
+    {
+      "band": "adequate",
+      "label": "Adequate answer",
+      "outline": "The candidate designed a workable lock service using leases to handle crashed clients. They understood the need for a distributed store to avoid a single point of failure but were shaky on the exact mechanics of consensus versus async replication. They needed hints to identify the paused client problem and didn't fully integrate fencing tokens with the external resource."
+    },
+    {
+      "band": "weak",
+      "label": "Weak answer",
+      "outline": "The candidate designed a single-node lock server without replication, leaving it as a severe single point of failure. They implemented simple TTLs but didn't address how a client could safely extend its lock for long-running tasks. They failed to recognize the risk of paused clients or network partitions, assuming clients and servers would always have perfect communication."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

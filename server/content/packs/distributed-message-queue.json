@@ -1,0 +1,660 @@
+{
+  "opening": "We are going to design a distributed message queue today. You can think of it as a foundational infrastructure piece for asynchronous communication. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.throughput",
+      "topics": [
+        "throughput",
+        "scale",
+        "qps",
+        "traffic"
+      ],
+      "answer": "We are aiming for very high throughput: assume up to 10 million messages per second globally."
+    },
+    {
+      "id": "scale.payload",
+      "topics": [
+        "size",
+        "payload",
+        "bytes"
+      ],
+      "answer": "The average message size is about 1 KB."
+    },
+    {
+      "id": "scale.retention",
+      "topics": [
+        "retention",
+        "store",
+        "keep",
+        "duration"
+      ],
+      "answer": "Messages should be retained for 7 days, regardless of whether they have been consumed."
+    },
+    {
+      "id": "req.topics",
+      "topics": [
+        "topics",
+        "number",
+        "count"
+      ],
+      "answer": "The system will host around 10,000 topics. Some will be very hot, others mostly idle."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "fast"
+      ],
+      "answer": "Producers expect low single-digit millisecond latency for acknowledgments."
+    },
+    {
+      "id": "req.ordering",
+      "topics": [
+        "order",
+        "fifo",
+        "sequence"
+      ],
+      "answer": "We need strict ordering for messages related to the same entity (e.g., a specific user ID), but not necessarily across the entire topic."
+    }
+  ],
+  "clarificationPolicy": "Assume standard enterprise requirements: high availability, horizontal scalability, and no single point of failure. If the candidate asks about something specific not listed, tell them to make a sensible assumption and state it.",
+  "agenda": [
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "throughput",
+          "qps",
+          "size",
+          "retention",
+          "bandwidth"
+        ]
+      },
+      "goal": "Establish the massive scale of the system, calculating the rough disk and network requirements.",
+      "opener": "Given the purpose of this queue, what kind of traffic and data volume do you think we should design for?",
+      "evidence": {
+        "strong": "Calculates bytes per second (~10GB/s) and total storage for 7 days, realizing that a single machine cannot handle the network I/O or storage.",
+        "adequate": "Identifies that throughput will be high and mentions that data needs to be split, but skips detailed math.",
+        "weak": "Does not estimate scale, or assumes the queue can fit in memory on a single database node."
+      },
+      "misconceptions": [
+        {
+          "id": "in-memory-only",
+          "pattern": "Assuming messages are deleted immediately upon consumption and don't need persistent disk storage.",
+          "challenge": "If a consumer is offline for a day, how does it get its messages when it comes back?"
+        }
+      ],
+      "probes": [
+        "How much storage will we need to keep this data for 7 days?"
+      ],
+      "hints": [
+        "Try multiplying the messages per second by the message size.",
+        "Using the peak messages per second and payload size you estimated, calculate the bandwidth. How much data is that over the full retention window?"
+      ],
+      "moveOnSummary": "Agreed on roughly 10GB/s ingress and the need for durable, horizontally scaled storage.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.pubsub",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "topic",
+          "queue"
+        ],
+        "keywords": [
+          "producer",
+          "consumer",
+          "topic",
+          "publish"
+        ]
+      },
+      "goal": "Outline the basic entities: producers, brokers/topics, and consumer groups.",
+      "opener": "Walk me through the high-level flow of a message from a producer to a consumer.",
+      "evidence": {
+        "strong": "Draws producers sending to named topics hosted on brokers, and consumer groups pulling messages independently.",
+        "adequate": "Draws producers, a queue cluster, and consumers, but might be vague on how multiple consumers read the same message.",
+        "weak": "Draws a point-to-point queue where a message is destroyed once one consumer reads it, missing the broadcast/group requirement."
+      },
+      "misconceptions": [
+        {
+          "id": "point-to-point",
+          "pattern": "Treating the system like a standard work queue (e.g., SQS) where only one worker gets a message.",
+          "challenge": "The brief mentions consumer groups reading independently. How do two different teams read the same stream of events?"
+        }
+      ],
+      "probes": [
+        "How do two different consumer applications get their own copy of the messages?"
+      ],
+      "hints": [
+        "Think about how publish-subscribe models work compared to a task queue.",
+        "If Team A and Team B both need to read Topic X, how does the broker know what to send them?"
+      ],
+      "moveOnSummary": "Established producers, topics on brokers, and independent consumer groups.",
+      "learnTopics": [
+        "pub-sub",
+        "message-queues",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "hl.storage",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "file-system",
+          "block-storage",
+          "service"
+        ],
+        "keywords": [
+          "disk",
+          "log",
+          "append",
+          "segment"
+        ]
+      },
+      "goal": "Decide how a broker actually stores the messages on disk.",
+      "opener": "At the broker level, how are these messages persisted efficiently?",
+      "evidence": {
+        "strong": "Describes an append-only log on local disk, split into segments, leveraging sequential I/O and zero-copy transfers.",
+        "adequate": "Mentions saving to disk in batches or using an embedded KV store.",
+        "weak": "Uses a standard relational database as the backend for the queue."
+      },
+      "misconceptions": [
+        {
+          "id": "random-io",
+          "pattern": "Using B-trees or complex indexing for message storage.",
+          "challenge": "Given we write 10GB/s, will random disk writes or heavy indexing keep up?"
+        }
+      ],
+      "probes": [
+        "What data structure is best for extremely fast, continuous writes?",
+        "How can we serve reads efficiently without killing disk performance?"
+      ],
+      "hints": [
+        "Consider the access pattern: we always write at the end, and usually read sequentially.",
+        "An append-only log file on disk allows for very fast sequential writes."
+      ],
+      "moveOnSummary": "Decided on append-only logs for efficient sequential disk I/O.",
+      "learnTopics": [
+        "write-ahead-log",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "deep.partitioning",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "shard",
+          "topic"
+        ],
+        "keywords": [
+          "partition",
+          "shard",
+          "key",
+          "hash"
+        ]
+      },
+      "goal": "Split topics into partitions to allow horizontal scaling while preserving local ordering by key.",
+      "opener": "How can we scale a single topic beyond the capacity of one broker machine, and what does that mean for message ordering?",
+      "evidence": {
+        "strong": "Splits topics into partitions distributed across brokers. Explains that producers hash a routing key to pick a partition, guaranteeing order per key but not globally.",
+        "adequate": "Mentions sharding the topic across brokers, but struggles to explain how ordering is maintained.",
+        "weak": "Fails to shard topics, creating a bottleneck on a single machine, or assumes global strict ordering is still possible at 10M qps."
+      },
+      "misconceptions": [
+        {
+          "id": "global-order",
+          "pattern": "Trying to maintain strict global ordering across a sharded topic.",
+          "challenge": "If we process writes on 50 different machines simultaneously, how do we establish a strict global sequence?"
+        }
+      ],
+      "probes": [
+        "If a user is updating their profile rapidly, how do we ensure those specific updates are processed in order?",
+        "Who decides which partition a message goes to?"
+      ],
+      "hints": [
+        "If we split a topic into 100 sub-queues, what happens to ordering?",
+        "What if the producer uses the user ID as a hash key to pick the sub-queue?"
+      ],
+      "moveOnSummary": "Partitioned topics for scale, using routing keys for local ordering.",
+      "learnTopics": [
+        "sharding",
+        "consistent-hashing",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "deep.replication",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "leader"
+        ],
+        "keywords": [
+          "replication",
+          "isr",
+          "ack",
+          "follower"
+        ]
+      },
+      "goal": "Ensure durability through replication and explicit acknowledgment policies.",
+      "opener": "If a broker dies right after acknowledging a write to the producer, how do we ensure the message isn't lost?",
+      "evidence": {
+        "strong": "Describes leader-follower replication per partition. Introduces an In-Sync Replica (ISR) set and explains that the leader only acks the producer after a quorum or all ISR members have written the data.",
+        "adequate": "Mentions data must be replicated before returning an ack, but lacks details on leader election or managing slow followers.",
+        "weak": "Assumes async replication is fine, completely missing the data loss requirement, or doesn't replicate at all."
+      },
+      "misconceptions": [
+        {
+          "id": "async-ack",
+          "pattern": "Acking the producer as soon as the data hits the leader's memory.",
+          "challenge": "If we ack the producer immediately, what happens if the leader loses power before replicating?"
+        }
+      ],
+      "probes": [
+        "What happens if one of our 3 replicas is experiencing a severe network slowdown?",
+        "Does the leader wait for that slow replica before acking the producer?"
+      ],
+      "hints": [
+        "We need copies on multiple machines. Who coordinates the write?",
+        "If the producer requires a guarantee, the leader must wait for some followers to confirm the write. What if we maintain a list of 'healthy' followers?"
+      ],
+      "moveOnSummary": "Configured leader-follower replication with an In-Sync Replica set for durable writes.",
+      "learnTopics": [
+        "replication",
+        "quorums",
+        "consensus"
+      ]
+    },
+    {
+      "id": "deep.leaderelection",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "leader",
+          "config",
+          "t-etcd"
+        ],
+        "keywords": [
+          "zookeeper",
+          "controller",
+          "raft",
+          "metadata"
+        ]
+      },
+      "goal": "Manage cluster state, detect failures, and reassign partition leaders safely.",
+      "opener": "How does the cluster detect that a broker has failed and safely promote a new leader for its partitions?",
+      "evidence": {
+        "strong": "Uses a metadata consensus store (like ZooKeeper or etcd) or a designated controller broker to track broker heartbeats and manage leader elections.",
+        "adequate": "Mentions heartbeats and electing a new leader from the followers, but is vague on split-brain prevention.",
+        "weak": "Assumes brokers somehow magically know who the leader is, or uses a centralized database that becomes a single point of failure."
+      },
+      "misconceptions": [
+        {
+          "id": "db-for-metadata",
+          "pattern": "Using a standard SQL database to track leaders.",
+          "challenge": "What happens if that single SQL database goes down? How does the cluster survive?"
+        }
+      ],
+      "probes": [
+        "How do we prevent two brokers from both thinking they are the leader of a partition?",
+        "Where is the 'source of truth' for which broker owns which partition?"
+      ],
+      "hints": [
+        "We need a highly available way to store cluster configuration.",
+        "Have you heard of systems like ZooKeeper, etcd, or Raft consensus?"
+      ],
+      "moveOnSummary": "Delegated metadata and leader election to a consensus-based controller.",
+      "learnTopics": [
+        "leader-election",
+        "consensus",
+        "gossip-protocol"
+      ]
+    },
+    {
+      "id": "deep.offsets",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "database",
+          "topic"
+        ],
+        "keywords": [
+          "offset",
+          "commit",
+          "cursor",
+          "resume"
+        ]
+      },
+      "goal": "Track consumer progress so they can resume safely after a crash.",
+      "opener": "How does a consumer resume reading from where it left off after it crashes?",
+      "evidence": {
+        "strong": "Explains consumers commit numerical offsets per partition. Stores these offsets in an internal compacted topic or a fast KV store, not on the consumer itself.",
+        "adequate": "Mentions storing a 'cursor' or index in a database so the consumer knows where it was.",
+        "weak": "Suggests deleting messages as soon as they are read, breaking the multi-consumer requirement."
+      },
+      "misconceptions": [
+        {
+          "id": "broker-push-state",
+          "pattern": "The broker maintains the state of every individual message for every consumer.",
+          "challenge": "If we have 10M messages a second and 50 consumers, updating individual message statuses will be 500M writes/sec. Can we simplify this?"
+        }
+      ],
+      "probes": [
+        "Where exactly is the consumer's current position stored?",
+        "If a partition is just an array of messages, what is the cheapest way to track where we are?"
+      ],
+      "hints": [
+        "Instead of tracking every single message, could we just track a single number?",
+        "Where should we store this number so it survives a consumer crash?"
+      ],
+      "moveOnSummary": "Consumers track progress by committing numerical offsets per partition.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "deep.semantics",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "at-least-once",
+          "exactly-once",
+          "idempotent",
+          "duplicate"
+        ]
+      },
+      "goal": "Handle the realities of network retries and duplicate messages.",
+      "opener": "If a consumer processes a message but crashes before saving its progress, it will read it again. How do we handle this?",
+      "evidence": {
+        "strong": "Defines at-least-once delivery. Explains that exactly-once is hard and typically requires idempotent consumers or transactional writes across the queue and the consumer's database.",
+        "adequate": "Understands the risk of duplicates and suggests making the consumer logic idempotent.",
+        "weak": "Believes the queue can easily guarantee a message is processed exactly once without any special consumer design."
+      },
+      "misconceptions": [
+        {
+          "id": "magic-exactly-once",
+          "pattern": "Assuming TCP or the broker simply prevents duplicate processing.",
+          "challenge": "If the consumer's database commit succeeds but the network drops the offset commit to the broker, the broker thinks it failed. What happens next?"
+        }
+      ],
+      "probes": [
+        "What happens if a producer sends a message, but the ack is lost in the network? What does the producer do?",
+        "How can the consumer application defend itself against seeing the same message twice?"
+      ],
+      "hints": [
+        "Think about network timeouts. The sender has to retry.",
+        "If you receive a 'charge credit card' message twice, how do you avoid double charging?"
+      ],
+      "moveOnSummary": "Acknowledged at-least-once delivery and the need for idempotent consumers.",
+      "learnTopics": [
+        "delivery-semantics",
+        "idempotency",
+        "outbox-pattern"
+      ]
+    },
+    {
+      "id": "deep.rebalance",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "cluster",
+          "client"
+        ],
+        "keywords": [
+          "rebalance",
+          "assign",
+          "coordinator",
+          "group"
+        ]
+      },
+      "goal": "Reassign partitions fairly when group membership changes.",
+      "opener": "What happens when you add a new consumer machine to an existing consumer group to help handle the load?",
+      "evidence": {
+        "strong": "Describes the rebalancing process: a group coordinator detects the new member, revokes some partitions from existing members, and assigns them to the new one.",
+        "adequate": "Understands that partitions must be redistributed so the new consumer gets work, but is fuzzy on the mechanics.",
+        "weak": "Thinks multiple consumers in a group can just pull from the same partition concurrently without coordination."
+      },
+      "misconceptions": [
+        {
+          "id": "concurrent-partition-read",
+          "pattern": "Having 5 consumers all competing to read messages from 1 partition.",
+          "challenge": "If multiple consumers read from the exact same partition simultaneously, how do we guarantee message ordering?"
+        }
+      ],
+      "probes": [
+        "Can two consumers in the same group read from the same partition at the same time?",
+        "Who tells the new consumer which partitions it is allowed to read?"
+      ],
+      "hints": [
+        "To maintain ordering, usually only one consumer in a group reads a specific partition.",
+        "If we have 10 partitions and add a 5th consumer, the work needs to be divided. How is that triggered?"
+      ],
+      "moveOnSummary": "Outlined consumer group rebalancing to distribute partitions.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "distributed-systems-roadmap"
+      ]
+    },
+    {
+      "id": "deep.availability_vs_durability",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "leader",
+          "replica",
+          "config"
+        ],
+        "keywords": [
+          "unclean",
+          "election",
+          "loss",
+          "lagging",
+          "availability"
+        ]
+      },
+      "goal": "Evaluate the trade-off between system availability and data durability during extreme failure.",
+      "opener": "If all replicas in the In-Sync Replica set die, do we wait for them to recover or promote a lagging replica?",
+      "evidence": {
+        "strong": "Clearly articulates the trade-off: waiting sacrifices availability, while promoting the lagger sacrifices durability.",
+        "adequate": "Recognizes that promoting the lagging replica causes data loss but struggles to articulate the availability impact of waiting.",
+        "weak": "Assumes a lagging replica can just be promoted without consequence."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which choice makes more sense for a general-purpose enterprise queue?"
+      ],
+      "hints": [
+        "If we wait, the partition goes offline for new writes.",
+        "If we promote the lagging replica, what happens to the acks already sent to the producer?"
+      ],
+      "moveOnSummary": "Discussed the unclean leader election trade-off.",
+      "learnTopics": [
+        "cap-theorem",
+        "availability",
+        "consistency-models"
+      ]
+    },
+    {
+      "id": "deep.backpressure",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "storage",
+          "block-storage",
+          "file-system"
+        ],
+        "keywords": [
+          "retention",
+          "full",
+          "capacity",
+          "evict",
+          "quota"
+        ]
+      },
+      "goal": "Protect broker resources from exhaustion due to slow consumers or traffic spikes.",
+      "opener": "How does the broker protect itself if retention threatens to fill up the disk?",
+      "evidence": {
+        "strong": "Suggests disk quotas, size-based retention limits alongside time-based ones, or applying backpressure to producers.",
+        "adequate": "Mentions alerting on disk space but relies on manual intervention rather than system protections.",
+        "weak": "Assumes the disk is infinite or that consumers will always eventually catch up."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to the cluster if a broker's disk reaches 100% capacity?"
+      ],
+      "hints": [
+        "Can we cap the total bytes a topic is allowed to store?",
+        "If the disk is getting full, should we still accept new messages from producers?"
+      ],
+      "moveOnSummary": "Explored disk capacity protections and backpressure.",
+      "learnTopics": [
+        "backpressure",
+        "capacity-planning",
+        "rate-limiting"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "bottleneck",
+          "improve",
+          "vulnerability"
+        ]
+      },
+      "goal": "Critique the design and identify operational bottlenecks.",
+      "opener": "Taking a step back, what do you think is the biggest operational bottleneck or vulnerability in your design?",
+      "evidence": {
+        "strong": "Identifies realistic limits, such as network bandwidth on broker nodes, hot partitions causing uneven load, or controller election latency.",
+        "adequate": "Summarizes the architecture and points out a generic bottleneck like 'the database'.",
+        "weak": "Claims the design has no bottlenecks and scales infinitely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if one specific routing key gets 90% of the traffic?"
+      ],
+      "hints": [
+        "Think about where the physical limits of hardware (like network cards) come into play."
+      ],
+      "moveOnSummary": "Concluded with a review of system limits and trade-offs.",
+      "learnTopics": [
+        "hot-partitions",
+        "scalability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "curve.unclean",
+      "after": "deep.replication",
+      "prompt": "What if all replicas in the In-Sync Replica set die, and the only surviving replica is lagging behind? Do we wait indefinitely for the ISR to recover, or do we promote the lagging replica and accept data loss?",
+      "agendaItemId": "deep.availability_vs_durability"
+    },
+    {
+      "id": "curve.slowconsumer",
+      "after": "deep.offsets",
+      "prompt": "A consumer group has a bug and stops committing offsets for 3 days, building a massive backlog. Because retention is 7 days, the disk fills up. How does the broker protect itself?",
+      "agendaItemId": "deep.backpressure"
+    }
+  ],
+  "vocabulary": [
+    "Kafka",
+    "ZooKeeper",
+    "etcd",
+    "ISR",
+    "In-Sync Replica",
+    "quorum",
+    "Raft",
+    "offset",
+    "partition",
+    "shard",
+    "idempotent"
+  ],
+  "alternatives": [
+    {
+      "choice": "Consumers pulling (Kafka model) rather than brokers pushing (RabbitMQ model)",
+      "whenBetter": "Pull is better for high throughput and allows diverse consumers to control their own pace (backpressure) without overwhelming them."
+    },
+    {
+      "choice": "Decoupled storage (Pulsar/Tiered Storage) rather than local broker disk",
+      "whenBetter": "When you need to scale compute (brokers) and storage independently, or when historical data retention needs to be very long and cheap (e.g., S3)."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive distributed log",
+      "outline": "The candidate confidently splits topics into partitions for scale. They use append-only logs for fast I/O and explain leader-follower replication using an ISR to guarantee durability without sacrificing too much latency. They use a consensus cluster for metadata and leader election. For consumers, they clearly separate the concepts of consumer groups, partition assignment, and offset commits, and they accurately describe the challenge of exactly-once semantics."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but fuzzy on edge cases",
+      "outline": "The candidate understands the core concepts: topics, sharding/partitioning, and replication. They know consumers need to save their progress. However, they might struggle to explain how the cluster safely handles a leader failure (split-brain) or might be vague on how a consumer group actively balances partitions when a new member joins."
+    },
+    {
+      "band": "weak",
+      "label": "Standard database masking as a queue",
+      "outline": "The candidate tries to use a standard relational database with a 'status' column to build the queue. They struggle to explain how this will handle 10 million writes per second, and fail to see how the requirement for multiple independent consumer groups makes row-level locking or deletion unworkable."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

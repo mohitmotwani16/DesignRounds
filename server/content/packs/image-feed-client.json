@@ -1,0 +1,542 @@
+{
+  "opening": "Welcome. Today we're going to design the client-side architecture for an image-heavy social feed. Whenever you're ready, feel free to start exploring the requirements or drawing on the canvas.",
+  "clarifications": [
+    {
+      "id": "scale.feed",
+      "topics": [
+        "items",
+        "scroll",
+        "volume",
+        "size"
+      ],
+      "answer": "The feed can contain thousands of items, and users might scroll through hundreds in a single session."
+    },
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "traffic",
+        "qps"
+      ],
+      "answer": "Assume millions of daily active users, but today we are focusing purely on a single user's client-side experience."
+    },
+    {
+      "id": "env.devices",
+      "topics": [
+        "devices",
+        "phones",
+        "hardware",
+        "memory"
+      ],
+      "answer": "Assume a significant portion of users are on mid-range or older mobile devices with limited RAM and CPU."
+    },
+    {
+      "id": "env.network",
+      "topics": [
+        "network",
+        "flaky",
+        "offline",
+        "connection",
+        "speed"
+      ],
+      "answer": "Users frequently experience slow or flaky connections, such as when commuting on a train."
+    },
+    {
+      "id": "scope.media",
+      "topics": [
+        "video",
+        "gif",
+        "media",
+        "types"
+      ],
+      "answer": "For now, focus purely on static images of various aspect ratios. We can ignore video or interactive embeds."
+    },
+    {
+      "id": "scope.actions",
+      "topics": [
+        "upload",
+        "like",
+        "comment",
+        "write"
+      ],
+      "answer": "The scope is strictly consuming the feed. You don't need to worry about creating posts, liking, or commenting today."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about a detail not covered here, ask them what assumption would make the problem most interesting while keeping it focused on client-side rendering and performance.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "requirements",
+          "feed",
+          "mobile",
+          "flaky",
+          "offline",
+          "constraints"
+        ]
+      },
+      "goal": "Define the boundaries of the client application and device constraints.",
+      "opener": "What do you think are the most critical constraints we need to design around for this client?",
+      "evidence": {
+        "strong": "Identifies memory, device capabilities, and network reliability as the primary bottlenecks for the client.",
+        "adequate": "Mentions that images are large and need to be optimized.",
+        "weak": "Focuses entirely on backend scaling without recognizing client-side limitations."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What aspects of the user's environment might make this app fail?",
+        "How does device memory play a role in an infinite feed?"
+      ],
+      "hints": [
+        "Think about where users physically are when browsing feeds.",
+        "Consider what happens when older phones try to load thousands of images."
+      ],
+      "moveOnSummary": "Agreed on focusing on memory constraints and network flakiness.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "mobile",
+          "desktop",
+          "web-server"
+        ],
+        "keywords": [
+          "view",
+          "controller",
+          "service",
+          "repository",
+          "api"
+        ]
+      },
+      "goal": "Outline the main client components and data flow from API to UI.",
+      "opener": "Could you lay out the high-level components you'd need on the client to fetch and render this feed?",
+      "evidence": {
+        "strong": "Draws a clear separation between the UI layer, data fetching layer, and caching layer.",
+        "adequate": "Shows a basic client component communicating with an API and an image store.",
+        "weak": "Draws a monolithic client box with no internal structure or separation of concerns."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the raw JSON data from the API turn into a rendered screen?",
+        "Where does caching fit into this high-level picture?"
+      ],
+      "hints": [
+        "Try breaking the client box down into UI, logic, and data layers.",
+        "Consider drawing the path of a single post from the network down to the screen."
+      ],
+      "moveOnSummary": "Established the basic client UI, API service, and cache components.",
+      "learnTopics": [
+        "frontend-system-design-interview"
+      ]
+    },
+    {
+      "id": "deep.virtualization",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "mobile",
+          "client",
+          "desktop",
+          "web-server"
+        ],
+        "keywords": [
+          "virtualization",
+          "recycler",
+          "memory",
+          "dom",
+          "scroll",
+          "reuse",
+          "windowing"
+        ]
+      },
+      "goal": "Explain how to render thousands of items without exhausting device memory.",
+      "opener": "If a user scrolls past a thousand posts, how does the application handle the view hierarchy to avoid crashing?",
+      "evidence": {
+        "strong": "Explicitly details view recycling or DOM virtualization, explaining how off-screen elements are detached and their memory reclaimed.",
+        "adequate": "Mentions virtualized lists or Recycler Views but lacks detail on how the data binding actually works.",
+        "weak": "Suggests rendering all items or continuously appending new elements without ever removing old ones."
+      },
+      "misconceptions": [
+        {
+          "id": "append_only",
+          "pattern": "We can just fetch items in pages and continuously append them to the end of the scroll container.",
+          "challenge": "What happens to the device memory and scrolling performance after the user scrolls down 100 pages?"
+        }
+      ],
+      "probes": [
+        "How do you map the feed data to the visual components on the screen?",
+        "What exactly happens to a view component when it scrolls out of the top of the screen?"
+      ],
+      "hints": [
+        "Think about how many items can actually fit on the screen at any one time.",
+        "Is there a way to reuse the visual elements that are no longer visible to the user?"
+      ],
+      "moveOnSummary": "Covered list virtualization and view recycling to bound memory usage.",
+      "learnTopics": [
+        "list-virtualization",
+        "frontend-state-management"
+      ]
+    },
+    {
+      "id": "deep.images",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cdn",
+          "image-store",
+          "t-fastly",
+          "t-cloudflare"
+        ],
+        "keywords": [
+          "resize",
+          "format",
+          "webp",
+          "avif",
+          "placeholder",
+          "blurhash",
+          "density"
+        ]
+      },
+      "goal": "Detail how images are requested at the correct resolution and rendered smoothly.",
+      "opener": "How do you ensure the client isn't wasting bandwidth or memory when loading these images?",
+      "evidence": {
+        "strong": "Uses device pixel ratio and screen width to request exact sizes from a CDN, employs modern formats, and uses blur hashes to prevent layout shifts.",
+        "adequate": "Requests smaller or compressed images from the server and uses basic color placeholders.",
+        "weak": "Downloads full-resolution original images and relies entirely on the client to scale them down."
+      },
+      "misconceptions": [
+        {
+          "id": "resize_client",
+          "pattern": "The client can simply download the original image and resize it to fit the screen.",
+          "challenge": "How much memory and bandwidth does downloading the original image consume before the resizing happens?"
+        }
+      ],
+      "probes": [
+        "How does the client know what specific image size to request from the network?",
+        "What does the user see in the UI during the milliseconds while the image is fetching?"
+      ],
+      "hints": [
+        "Consider the different screen densities and physical dimensions of various devices.",
+        "A CDN can do more than just serve static files if you pass the right query parameters.",
+        "Is there a way to show a very low-fidelity preview instantly to avoid a blank screen?"
+      ],
+      "moveOnSummary": "Designed an image optimization pipeline using CDN resizing and placeholders.",
+      "learnTopics": [
+        "image-optimization",
+        "cdn",
+        "core-web-vitals"
+      ]
+    },
+    {
+      "id": "deep.caching",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "local-cache",
+          "file-system",
+          "t-sqlite",
+          "in-memory-db"
+        ],
+        "keywords": [
+          "lru",
+          "memory",
+          "disk",
+          "evict",
+          "cache",
+          "blob"
+        ]
+      },
+      "goal": "Describe the client-side caching strategy for images and feed data.",
+      "opener": "Once an image is downloaded, how do you manage its lifecycle in the client's memory and storage?",
+      "evidence": {
+        "strong": "Proposes a two-tier cache with memory for immediate reuse and disk for persistence, using size-based LRU eviction.",
+        "adequate": "Mentions caching images to disk or memory but misses the two-tier structure or strict eviction nuances.",
+        "weak": "Provides no caching strategy, meaning images are re-downloaded if the user scrolls up and down."
+      },
+      "misconceptions": [
+        {
+          "id": "cache_everything",
+          "pattern": "We should cache every image the user sees permanently on disk so they never load twice.",
+          "challenge": "How do you prevent the app from consuming gigabytes of the user's limited phone storage over time?"
+        }
+      ],
+      "probes": [
+        "How do you decide which images to remove when device storage runs out?",
+        "What is the difference between caching in RAM versus caching on disk for this app?"
+      ],
+      "hints": [
+        "Think about what happens when the app is closed and then reopened later.",
+        "You might need different strategies for fast scrolling versus long-term offline availability."
+      ],
+      "moveOnSummary": "Mapped out a two-tier LRU caching strategy for memory and disk.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies",
+        "cache-eviction"
+      ]
+    },
+    {
+      "id": "deep.offline",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "retry",
+          "queue",
+          "local-cache",
+          "worker"
+        ],
+        "keywords": [
+          "prefetch",
+          "offline",
+          "flaky",
+          "retry",
+          "background",
+          "stale"
+        ]
+      },
+      "goal": "Handle flaky networks with prefetching and offline fallback states.",
+      "opener": "What happens to the user experience if the connection drops completely while they are scrolling?",
+      "evidence": {
+        "strong": "Prefetches upcoming items into the local cache ahead of the scroll position and gracefully displays stale cached data with a non-blocking retry mechanism.",
+        "adequate": "Shows an error message when offline and attempts basic retries.",
+        "weak": "Leaves the user stuck on a loading spinner endlessly when the network drops."
+      },
+      "misconceptions": [
+        {
+          "id": "blocking_ui",
+          "pattern": "We should block the UI and show a full-screen loading spinner while retrying the network request.",
+          "challenge": "How does blocking the UI impact the user if they just want to look at the posts they have already scrolled past?"
+        }
+      ],
+      "probes": [
+        "How can the client prepare for network drops before they actually happen?",
+        "If a background API request fails, how does the client recover without annoying the user?"
+      ],
+      "hints": [
+        "Consider fetching data slightly ahead of the user's current scroll position.",
+        "Think about standard backoff strategies when retrying failed network calls."
+      ],
+      "moveOnSummary": "Defined offline behavior using prefetching and background retries.",
+      "learnTopics": [
+        "offline-first-sync",
+        "retries-and-timeouts"
+      ]
+    },
+    {
+      "id": "deep.pagination",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "bff",
+          "service",
+          "client"
+        ],
+        "keywords": [
+          "cursor",
+          "pagination",
+          "next",
+          "token",
+          "offset"
+        ]
+      },
+      "goal": "Design an efficient API contract for fetching feed pages.",
+      "opener": "How does the client ask the server for the next set of items as the user scrolls?",
+      "evidence": {
+        "strong": "Chooses cursor-based pagination over offset pagination to prevent duplicate items when the live feed updates.",
+        "adequate": "Uses standard offset and limit pagination without addressing potential data shifting.",
+        "weak": "Fetches all items at once or lacks any pagination mechanism."
+      },
+      "misconceptions": [
+        {
+          "id": "offset_issues",
+          "pattern": "We can use standard limit and offset parameters to fetch the next page of the feed.",
+          "challenge": "If a user posts a new item at the top of the feed while we are fetching page two, what happens to the items we receive?"
+        }
+      ],
+      "probes": [
+        "What happens if new items are inserted at the top of the feed while the user is actively scrolling down?",
+        "What specific parameters are sent in the network request to the backend?"
+      ],
+      "hints": [
+        "An offset might skip or duplicate items if the underlying data changes between requests.",
+        "Is there a unique identifier we can use to mark the exact position the user reached?"
+      ],
+      "moveOnSummary": "Agreed on cursor-based pagination for robust feed loading.",
+      "learnTopics": [
+        "pagination",
+        "api-design"
+      ]
+    },
+    {
+      "id": "deep.media_expansion",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "video-store",
+          "transcoder",
+          "cdn"
+        ],
+        "keywords": [
+          "video",
+          "gif",
+          "autoplay",
+          "hls",
+          "streaming"
+        ]
+      },
+      "goal": "Adapt memory and network strategies for heavier animated media.",
+      "opener": "How would you handle animated media like GIFs or short auto-playing videos?",
+      "evidence": {
+        "strong": "Replaces bulky GIFs with modern video formats, ensures only one video plays at a time based on visibility, and streams rather than downloading whole files.",
+        "adequate": "Mentions stopping playback when off-screen but downloads full video files.",
+        "weak": "Treats videos exactly like images, leading to massive memory bloat and network congestion."
+      },
+      "misconceptions": [
+        {
+          "id": "play_all",
+          "pattern": "We can just auto-play all visible videos simultaneously to make the feed lively.",
+          "challenge": "How will older mobile processors handle decoding multiple video streams at the same time?"
+        }
+      ],
+      "probes": [
+        "How does auto-playing multiple videos impact device battery and processing power?",
+        "When exactly should a video start buffering, and when should it stop playing?"
+      ],
+      "hints": [
+        "Consider the scroll position and whether the video is completely visible to the user.",
+        "Animated GIFs are surprisingly large; modern video formats might be much more efficient."
+      ],
+      "moveOnSummary": "Adapted the design to handle heavy media through visibility checks and video formats.",
+      "learnTopics": [
+        "video-streaming-adaptive-bitrate"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "summary",
+          "hardest",
+          "risk"
+        ]
+      },
+      "goal": "Reflect on bottlenecks and summarize the architecture.",
+      "opener": "Looking at the whole system, what do you think is the hardest part to get right in practice?",
+      "evidence": {
+        "strong": "Synthesizes the challenges of balancing smooth scrolling with aggressive memory management and offline state handling.",
+        "adequate": "Summarizes the components drawn on the canvas and mentions performance.",
+        "weak": "Focuses on trivial details or fails to identify a meaningful technical challenge."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If you had to launch this in two weeks, what feature would you cut?",
+        "Which component carries the most risk of failing on older devices?"
+      ],
+      "hints": [
+        "Reflect on the memory management constraints we discussed earlier.",
+        "Think about the intersection of flaky networks and large media payloads."
+      ],
+      "moveOnSummary": "Wrapped up with a solid review of client-side performance trade-offs.",
+      "learnTopics": [
+        "frontend-system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "animated_media",
+      "after": "deep.images",
+      "prompt": "The product team wants to introduce looping, auto-playing short videos and GIFs into the feed. How does this change your media loading and memory management?",
+      "agendaItemId": "deep.media_expansion"
+    }
+  ],
+  "vocabulary": [
+    "virtualization",
+    "blurhash",
+    "LRU",
+    "cursor",
+    "CDN",
+    "WebP",
+    "AVIF",
+    "prefetch",
+    "DOM",
+    "RecyclerView"
+  ],
+  "alternatives": [
+    {
+      "choice": "Cursor vs Offset Pagination",
+      "whenBetter": "Cursor is better for real-time feeds to prevent duplicate items when the feed updates, while offset is acceptable for static lists."
+    },
+    {
+      "choice": "Service Worker vs Native Local Cache",
+      "whenBetter": "Service workers are ideal for Progressive Web Apps aiming for offline-first resilience, whereas native in-memory and disk caches are standard for iOS and Android applications."
+    },
+    {
+      "choice": "Prefetching vs On-Demand",
+      "whenBetter": "Prefetching provides a smoother UX on flaky networks but at the cost of wasted bandwidth and battery if the user stops scrolling."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive Client Architecture",
+      "outline": "The candidate immediately identified memory constraints and proposed a virtualized list architecture. They clearly separated the API pagination, using cursors to avoid duplicate items, from the rendering logic. For images, they leveraged an edge CDN to dynamically resize assets based on the device's screen density and format support. They implemented a layered LRU cache, using memory for speed and disk for persistence, and used blur hashes to prevent layout shifts. They also thoroughly addressed offline UX by prefetching upcoming pages."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard Feed Implementation",
+      "outline": "The candidate recognized the need for infinite scroll and mentioned virtual lists, though without deeply explaining view recycling or DOM management. They proposed standard offset pagination and understood that images needed to be compressed or resized to save bandwidth. They considered caching images locally but lacked a structured two-tier eviction strategy. The design covered the main requirements but left some edge cases around flaky networks and zero-latency placeholders unresolved."
+    },
+    {
+      "band": "weak",
+      "label": "Backend-Heavy Focus",
+      "outline": "The candidate focused mostly on standard backend API design rather than client-side constraints. They failed to mention virtualization, which would lead to out-of-memory errors on older devices as the view hierarchy grows endlessly. They also did not address image resizing or placeholders, risking significant layout shift and wasted bandwidth. The approach to offline states or local caching was either missing or trivial."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.1,
+    "high_level": 0.2,
+    "deep_dive": 0.6,
+    "wrap_up": 0.1
+  }
+}

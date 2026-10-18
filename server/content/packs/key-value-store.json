@@ -1,0 +1,548 @@
+{
+  "opening": "Welcome. Today I would like you to design a distributed key-value store. How would you like to begin?",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "throughput",
+        "qps",
+        "traffic"
+      ],
+      "answer": "Expect 100,000 requests per second at peak. Assume a 50/50 split between reads and writes."
+    },
+    {
+      "id": "scale.data",
+      "topics": [
+        "data",
+        "size",
+        "capacity"
+      ],
+      "answer": "We are storing 10 terabytes of data initially, but it will grow continuously."
+    },
+    {
+      "id": "requirements.availability",
+      "topics": [
+        "availability",
+        "failure",
+        "nodes"
+      ],
+      "answer": "Node failures are common. The system must continue to accept writes and serve reads even if a node goes down."
+    },
+    {
+      "id": "requirements.payload",
+      "topics": [
+        "size",
+        "payload",
+        "keys"
+      ],
+      "answer": "Keys are strings up to 256 bytes. Values are blobs up to 1 MB, averaging 10 KB."
+    },
+    {
+      "id": "requirements.consistency",
+      "topics": [
+        "consistency",
+        "stale"
+      ],
+      "answer": "The system must be highly available. Tunable consistency per request is desired, and eventual consistency is acceptable as the baseline."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about anything else, tell them to make a sensible assumption for a foundational infrastructure service and state it.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "user"
+        ],
+        "keywords": [
+          "read",
+          "write",
+          "throughput",
+          "latency",
+          "availability",
+          "consistency"
+        ]
+      },
+      "goal": "Establish the read/write mix, data sizes, and fundamental CAP trade-off.",
+      "opener": "What requirements and scale numbers do you want to design for?",
+      "evidence": {
+        "strong": "Identifies the need for high availability and partition tolerance, accepting eventual consistency.",
+        "adequate": "Gathers scale numbers but does not explicitly discuss the consistency versus availability trade-off.",
+        "weak": "Dives into components without defining how much data the system holds or what happens during a network partition."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If a network cable is cut between two halves of your cluster, should we reject writes or risk serving stale reads?"
+      ],
+      "hints": [
+        "Think about the CAP theorem. Which two properties is a system like Dynamo optimizing for?"
+      ],
+      "moveOnSummary": "The candidate gathered the scale requirements and established an AP design approach.",
+      "learnTopics": [
+        "cap-theorem",
+        "consistency-models",
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "load-balancer",
+          "cluster",
+          "kv-store"
+        ],
+        "keywords": [
+          "coordinator",
+          "cluster",
+          "routing",
+          "node"
+        ]
+      },
+      "goal": "Lay out the cluster architecture, showing how a client talks to a node acting as coordinator.",
+      "opener": "Walk me through the path of a put request from the client into your system.",
+      "evidence": {
+        "strong": "Shows any node can receive the request, act as coordinator, find the correct replicas, and manage the quorum.",
+        "adequate": "Uses a dedicated master or routing tier to direct traffic, introducing an unnecessary bottleneck.",
+        "weak": "Draws a single database box without showing how the distributed nodes interact."
+      },
+      "misconceptions": [
+        {
+          "id": "central-router",
+          "pattern": "Requiring a centralized load balancer or routing service to know where all data lives.",
+          "challenge": "If this central router goes down, how does the cluster continue to function?"
+        }
+      ],
+      "probes": [
+        "Does the client talk to a specific master node, or can it talk to any node?"
+      ],
+      "hints": [
+        "What if every node in the cluster knew the partitioning ring and could route requests itself?"
+      ],
+      "moveOnSummary": "The candidate described a decentralized architecture where any node can coordinate requests.",
+      "learnTopics": [
+        "api-gateway",
+        "load-balancing",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.partitioning",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "shard",
+          "database",
+          "kv-store"
+        ],
+        "keywords": [
+          "consistent hashing",
+          "partitioning",
+          "hash ring",
+          "virtual nodes",
+          "vnodes"
+        ]
+      },
+      "goal": "Explain consistent hashing with virtual nodes to distribute data and enable scaling.",
+      "opener": "How do you decide which node stores the data for a given key?",
+      "evidence": {
+        "strong": "Explains consistent hashing and virtual nodes, showing how adding a node only affects neighbours.",
+        "adequate": "Mentions consistent hashing but struggles to explain how data rebalances when a node is added.",
+        "weak": "Suggests modulo hashing, requiring a full cluster reshuffle on scaling."
+      },
+      "misconceptions": [
+        {
+          "id": "modulo",
+          "pattern": "Using key hash modulo N to find the node.",
+          "challenge": "What happens to existing data when we add a new node to the cluster?"
+        }
+      ],
+      "probes": [
+        "How do we prevent hot spots if one node happens to get a much larger range of the hash space?"
+      ],
+      "hints": [
+        "What if each physical machine appeared on the ring in multiple different places?"
+      ],
+      "moveOnSummary": "The candidate used consistent hashing with virtual nodes for partitioning.",
+      "learnTopics": [
+        "consistent-hashing",
+        "sharding",
+        "hot-partitions"
+      ]
+    },
+    {
+      "id": "deep.replication",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "database",
+          "kv-store"
+        ],
+        "keywords": [
+          "replication",
+          "quorum",
+          "sloppy quorum",
+          "preference list",
+          "r",
+          "w",
+          "n"
+        ]
+      },
+      "goal": "Describe replication factor, preference lists, and reading/writing to a quorum.",
+      "opener": "How does the system ensure data survives if the node holding it goes down?",
+      "evidence": {
+        "strong": "Defines replication factor N, explains tunable R and W quorums, and calculates R+W>N for strong consistency.",
+        "adequate": "Suggests replicating data to multiple nodes but does not articulate how reads and writes coordinate across them.",
+        "weak": "Has the coordinator ack the write before replicating, risking data loss on failure."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-all",
+          "pattern": "Writing synchronously to all replicas before acknowledging.",
+          "challenge": "If one replica has a failed disk and cannot write, does the entire put request fail?"
+        }
+      ],
+      "probes": [
+        "How many nodes need to acknowledge a write before we return success to the client?",
+        "What if we want to prioritize latency over consistency?"
+      ],
+      "hints": [
+        "Have you heard of the terms read quorum and write quorum?"
+      ],
+      "moveOnSummary": "The candidate defined a replication scheme using R and W quorums.",
+      "learnTopics": [
+        "replication",
+        "quorums",
+        "cap-theorem",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.conflict",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "conflict",
+          "concurrent",
+          "vector clock",
+          "timestamp",
+          "lww",
+          "last writer wins",
+          "versioning"
+        ]
+      },
+      "goal": "Handle concurrent writes using vector clocks or timestamps and explain how conflicts are resolved.",
+      "opener": "What happens if two clients write to the same key at exactly the same time?",
+      "evidence": {
+        "strong": "Proposes vector clocks to detect concurrent updates and passes both versions to the client to resolve.",
+        "adequate": "Chooses last-writer-wins with timestamps, explicitly acknowledging that some data will be lost.",
+        "weak": "Assumes a centralized lock or database will prevent conflicts, missing the distributed nature of the system."
+      },
+      "misconceptions": [
+        {
+          "id": "wall-clock",
+          "pattern": "Assuming physical timestamps across nodes are perfectly synchronized.",
+          "challenge": "What if the clock on node A is running 50 milliseconds faster than node B?"
+        }
+      ],
+      "probes": [
+        "If we accept both writes to remain available, how do we merge them later?"
+      ],
+      "hints": [
+        "Instead of relying on timestamps, can we track the history of updates using version numbers per node?"
+      ],
+      "moveOnSummary": "The candidate addressed conflict resolution using vector clocks.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "crdts",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.repair",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "batch-job"
+        ],
+        "keywords": [
+          "anti-entropy",
+          "merkle tree",
+          "hinted handoff",
+          "read repair",
+          "sync",
+          "catch up"
+        ]
+      },
+      "goal": "Explain how nodes catch up after a failure using hinted handoff and anti-entropy.",
+      "opener": "If a node is down for a few hours and then comes back up, how does it get the writes it missed?",
+      "evidence": {
+        "strong": "Combines hinted handoff for quick transient failure recovery with Merkle trees for background anti-entropy sync.",
+        "adequate": "Suggests a background process to compare data but does not optimize how the comparison is done.",
+        "weak": "Assumes the node just stays empty or relies entirely on read-repair."
+      },
+      "misconceptions": [
+        {
+          "id": "full-scan",
+          "pattern": "Scanning and comparing all keys between two nodes to find differences.",
+          "challenge": "If the nodes hold a terabyte of data each, how much network bandwidth will comparing all keys take?"
+        }
+      ],
+      "probes": [
+        "How can we quickly check if two nodes have exactly the same data without sending the data itself?"
+      ],
+      "hints": [
+        "Is there a data structure that hashes ranges of data into a tree to easily spot differences?"
+      ],
+      "moveOnSummary": "The candidate proposed Merkle trees and hinted handoff for replica repair.",
+      "learnTopics": [
+        "merkle-trees",
+        "gossip-protocol",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.membership",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "service-discovery"
+        ],
+        "keywords": [
+          "gossip",
+          "heartbeat",
+          "failure detection",
+          "membership",
+          "ping"
+        ]
+      },
+      "goal": "Explain how nodes discover each other and detect failures using a gossip protocol.",
+      "opener": "How does the cluster know which nodes are currently healthy and participating?",
+      "evidence": {
+        "strong": "Explains a decentralized gossip protocol where nodes exchange state and detect failures via missing heartbeats.",
+        "adequate": "Mentions heartbeats but relies on a central coordinator to manage cluster state.",
+        "weak": "Assumes static configuration where all nodes always know each other."
+      },
+      "misconceptions": [
+        {
+          "id": "central-registry",
+          "pattern": "Using a single registry database for all node health checks.",
+          "challenge": "If that single registry goes down, how do nodes know who is alive?"
+        }
+      ],
+      "probes": [
+        "How can nodes share this information without a central server?"
+      ],
+      "hints": [
+        "How does a rumor spread in a crowd without a central announcement?"
+      ],
+      "moveOnSummary": "The candidate explained cluster membership using a gossip protocol.",
+      "learnTopics": [
+        "gossip-protocol",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.storage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "file-system",
+          "database",
+          "storage"
+        ],
+        "keywords": [
+          "sstable",
+          "lsm tree",
+          "commit log",
+          "memtable",
+          "compaction",
+          "append only"
+        ]
+      },
+      "goal": "Design the single-node storage engine optimized for high write throughput.",
+      "opener": "What happens on disk when a node actually saves the value?",
+      "evidence": {
+        "strong": "Describes an LSM-tree approach with a commit log for durability, a memtable, and SSTables.",
+        "adequate": "Mentions writing to a file or a generic local database without detailing how it handles high write throughput.",
+        "weak": "Assumes values are just kept in memory, violating the durability requirement."
+      },
+      "misconceptions": [
+        {
+          "id": "in-place-update",
+          "pattern": "Updating the value directly in a file on disk.",
+          "challenge": "If we receive 10,000 writes per second, how will random disk seeks affect our throughput?"
+        }
+      ],
+      "probes": [
+        "How do we ensure the write is durable before acknowledging it, without blocking on slow disk operations?"
+      ],
+      "hints": [
+        "Can we append the write sequentially to a log and keep the latest values in memory?"
+      ],
+      "moveOnSummary": "The candidate designed a storage engine using append-only logs and memory tables.",
+      "learnTopics": [
+        "write-ahead-log",
+        "nosql-database-types"
+      ]
+    },
+    {
+      "id": "deep.splitbrain",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "network partition",
+          "split brain",
+          "network split",
+          "partition tolerance",
+          "datacenter outage"
+        ]
+      },
+      "goal": "Explain how quorums and hinted handoff behave during a network partition.",
+      "opener": "How does your replication strategy handle a strict network split?",
+      "evidence": {
+        "strong": "Explains that writes will succeed on the half that has the quorum of replicas, or if using sloppy quorums, temporary nodes will accept writes.",
+        "adequate": "Recognizes that reads might be stale but gets confused about whether writes will be accepted.",
+        "weak": "States the system will shut down or lose data."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If we need 2 acks for a write, and the 3 replicas are split 2 and 1 across the partition, which side accepts the write?"
+      ],
+      "hints": [
+        "Review your quorum formula. Can a write get enough acks if only a minority of replicas are reachable?"
+      ],
+      "moveOnSummary": "The candidate analyzed cluster behavior during a network partition.",
+      "learnTopics": [
+        "cap-theorem",
+        "quorums"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "tradeoffs",
+          "limitations",
+          "eventual consistency"
+        ]
+      },
+      "goal": "Summarize the design and acknowledge the main trade-offs, particularly around consistency.",
+      "opener": "We are almost out of time. Could you summarize the architecture and point out its biggest limitation?",
+      "evidence": {
+        "strong": "Clearly summarizes the partitioning and quorum approach, explicitly noting that concurrent writes require complex resolution.",
+        "adequate": "Recaps the components but struggles to identify a structural limitation in their design.",
+        "weak": "Introduces new components or changes the design entirely at the end."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What workload would this database be terrible for?"
+      ],
+      "hints": [
+        "Think about applications that require strict ACID transactions."
+      ],
+      "moveOnSummary": "The candidate summarized the design and its AP trade-offs.",
+      "learnTopics": [
+        "acid-vs-base",
+        "sql-vs-nosql"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "network-partition",
+      "after": "deep.replication",
+      "prompt": "Half of your cluster suddenly cannot talk to the other half due to a switch failure. Clients can still reach both halves. What happens to a put request?",
+      "agendaItemId": "deep.splitbrain"
+    }
+  ],
+  "vocabulary": [
+    "Dynamo",
+    "quorum",
+    "Merkle tree",
+    "gossip",
+    "hinted handoff",
+    "vector clock",
+    "consistent hashing",
+    "vnodes",
+    "SSTable",
+    "LSM tree",
+    "anti-entropy",
+    "sloppy quorum"
+  ],
+  "alternatives": [
+    {
+      "choice": "Last-writer-wins timestamp resolution instead of vector clocks.",
+      "whenBetter": "When the application does not care about lost updates or cannot handle merging conflicting versions, and clock drift is acceptable."
+    },
+    {
+      "choice": "Using a centralized configuration manager like ZooKeeper for membership.",
+      "whenBetter": "When cluster size is small and strong consistency of cluster metadata is preferred over the eventual consistency of gossip protocols."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Full Dynamo clone",
+      "outline": "The candidate quickly identified the AP requirements and proposed a decentralized architecture. They used consistent hashing with virtual nodes for partitioning. For replication, they explained tunable quorums and how sloppy quorums with hinted handoff maintain availability during transient failures. They addressed conflicts with vector clocks and detailed how Merkle trees synchronize divergent replicas."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic consistent hashing",
+      "outline": "The candidate successfully distributed data using consistent hashing and understood the need for replicating data to multiple nodes. However, they lacked depth on how to resolve concurrent writes, relying on basic timestamps, and struggled to explain how nodes recover missed writes beyond a simple full sync."
+    },
+    {
+      "band": "weak",
+      "label": "Centralized approach",
+      "outline": "The candidate struggled with the distributed nature of the problem, proposing a central routing node that tracks where every key lives. They suggested modulo hashing, which fails to meet the requirement for scaling without full reshuffles. They also missed the durability requirement, acknowledging writes before they were saved to disk."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

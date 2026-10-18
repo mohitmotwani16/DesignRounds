@@ -1,0 +1,543 @@
+{
+  "opening": "Hi, today we're going to design a service discovery system. Imagine we have a growing fleet of microservices that need to find and talk to each other. Where would you like to begin?",
+  "clarifications": [
+    {
+      "id": "scale.instances",
+      "topics": [
+        "scale",
+        "instances",
+        "nodes",
+        "size",
+        "fleet"
+      ],
+      "answer": "We have thousands of service instances. They churn constantly due to autoscaling and deployments."
+    },
+    {
+      "id": "reliability.control_plane",
+      "topics": [
+        "failure",
+        "outage",
+        "control plane",
+        "availability"
+      ],
+      "answer": "The discovery service might experience partial or complete outages. Existing traffic between services must continue."
+    },
+    {
+      "id": "scope.legacy",
+      "topics": [
+        "legacy",
+        "older clients",
+        "dns",
+        "compatibility"
+      ],
+      "answer": "Most clients can use our new SDK or a sidecar. We might have some legacy clients that only understand DNS."
+    },
+    {
+      "id": "latency.resolution",
+      "topics": [
+        "latency",
+        "speed",
+        "performance",
+        "overhead"
+      ],
+      "answer": "Endpoint resolution should add practically zero latency to the data path."
+    },
+    {
+      "id": "scope.regions",
+      "topics": [
+        "regions",
+        "datacenters",
+        "multi-region"
+      ],
+      "answer": "Let's stick to a single large region for now."
+    }
+  ],
+  "clarificationPolicy": "Assume a single region, and prioritize the availability of the data path over the absolute freshness of the endpoints.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "churn",
+          "availability",
+          "requirements",
+          "goals"
+        ]
+      },
+      "goal": "Establish the scale of the fleet and the critical requirement of data-plane availability during control-plane outages.",
+      "opener": "What are the key requirements and scale factors you want to consider for this system?",
+      "evidence": {
+        "strong": "Explicitly distinguishes the control plane from the data plane and sets a goal for data-plane survival.",
+        "adequate": "Mentions high availability and handles instance churn.",
+        "weak": "Focuses only on CRUD operations for endpoints without considering infrastructure failures."
+      },
+      "misconceptions": [
+        {
+          "id": "crud_only",
+          "pattern": "Treats the system as a standard web application database problem.",
+          "challenge": "If the registry database goes down, what happens to our running services?"
+        }
+      ],
+      "probes": [
+        "How often do you expect instances to register or deregister?",
+        "What happens to service-to-service calls if the discovery system crashes?"
+      ],
+      "hints": [
+        "Consider the difference between the control plane where instances register and the data path where services actually talk.",
+        "If the registry is down, can a client still use its last known list?"
+      ],
+      "moveOnSummary": "Agreed on thousands of instances with high churn, needing a resilient data path.",
+      "learnTopics": [
+        "availability",
+        "cap-theorem",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "client",
+          "registry",
+          "service-discovery",
+          "microservice"
+        ],
+        "keywords": [
+          "register",
+          "lookup",
+          "discover",
+          "api",
+          "flow"
+        ]
+      },
+      "goal": "Establish the basic registration and lookup flows between service instances and the registry.",
+      "opener": "Could you draw the high-level architecture showing how a new service instance registers and how a client finds it?",
+      "evidence": {
+        "strong": "Draws distinct registration and lookup paths, and introduces a sidecar or smart client.",
+        "adequate": "Connects client and server to a central registry.",
+        "weak": "Routes all data-path traffic through the registry like a proxy."
+      },
+      "misconceptions": [
+        {
+          "id": "registry_as_proxy",
+          "pattern": "Routes actual service-to-service requests through the registry.",
+          "challenge": "What would the network bandwidth and latency be if every request goes through the registry?"
+        }
+      ],
+      "probes": [
+        "Who is responsible for registering a new instance?",
+        "Does the client query the registry on every single API request?"
+      ],
+      "hints": [
+        "An instance usually registers on startup, or an orchestrator registers it.",
+        "Think about how you can avoid hitting the registry for every service-to-service call."
+      ],
+      "moveOnSummary": "Established the basic register and lookup flow with a central registry.",
+      "learnTopics": [
+        "service-discovery",
+        "monolith-vs-microservices",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "hl.health",
+      "stage": "high_level",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "health-check",
+          "metrics",
+          "monitoring-dashboard"
+        ],
+        "keywords": [
+          "health",
+          "heartbeat",
+          "probe",
+          "alive",
+          "ttl"
+        ]
+      },
+      "goal": "Define how the system detects and removes unhealthy instances.",
+      "opener": "How does the system know when an instance crashes or becomes unhealthy?",
+      "evidence": {
+        "strong": "Combines active heartbeats with a TTL in the registry.",
+        "adequate": "Uses heartbeats from the instance to the registry.",
+        "weak": "Assumes instances will politely deregister when crashing."
+      },
+      "misconceptions": [
+        {
+          "id": "polite_deregister",
+          "pattern": "Relies on a deregister API call during shutdown.",
+          "challenge": "What if the instance is OOM-killed or loses power unexpectedly?"
+        }
+      ],
+      "probes": [
+        "Who initiates the health check: the registry or the instance?",
+        "What happens if a network partition isolates a healthy instance from the registry?"
+      ],
+      "hints": [
+        "If an instance loses power, it can't tell the registry it's dying.",
+        "Consider having the instance send a periodic signal with a timeout."
+      ],
+      "moveOnSummary": "Using heartbeats with TTLs to age out dead instances.",
+      "learnTopics": [
+        "health-checks-failover",
+        "gossip-protocol",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.caching",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "local-cache",
+          "service-mesh",
+          "client"
+        ],
+        "keywords": [
+          "cache",
+          "ttl",
+          "fallback",
+          "stale",
+          "memory"
+        ]
+      },
+      "goal": "Design a resilient client-side caching strategy that survives control-plane outages.",
+      "opener": "If the registry goes completely offline for 10 minutes, how can we ensure services continue to communicate?",
+      "evidence": {
+        "strong": "Clients cache routing tables locally and ignore TTLs if the registry is unreachable, prioritizing stale data over downtime.",
+        "adequate": "Mentions client-side caching but might incorrectly evict entries when TTL expires during an outage.",
+        "weak": "Has no local cache, or fails all requests when the registry is down."
+      },
+      "misconceptions": [
+        {
+          "id": "strict_ttl",
+          "pattern": "Evicts endpoints strictly based on TTL even if the registry is unreachable.",
+          "challenge": "If the registry is down, is it better to try a stale endpoint or immediately fail the request?"
+        }
+      ],
+      "probes": [
+        "Where exactly is this cache stored?",
+        "What happens to the cache entries when their TTL expires but the registry is unreachable?"
+      ],
+      "hints": [
+        "Think about what happens in the client memory when it can't fetch updates.",
+        "In a failure scenario, is stale data better or worse than no data?"
+      ],
+      "moveOnSummary": "Clients will cache endpoints and fall back to last-known-good states during outages.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies",
+        "availability"
+      ]
+    },
+    {
+      "id": "deep.state_store",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "t-etcd",
+          "t-consul",
+          "kv-store",
+          "database",
+          "in-memory-db"
+        ],
+        "keywords": [
+          "consensus",
+          "raft",
+          "quorum",
+          "etcd",
+          "zookeeper",
+          "cp"
+        ]
+      },
+      "goal": "Determine the storage mechanism for the registry and handle split-brain or quorum loss.",
+      "opener": "Let's look at the registry itself. How would you store the endpoint data to ensure consistency across multiple registry nodes?",
+      "evidence": {
+        "strong": "Selects a CP store using consensus (like Raft), and explains quorum requirements for writes.",
+        "adequate": "Uses a distributed database and mentions replication.",
+        "weak": "Uses a single SQL database or an un-replicated cache."
+      },
+      "misconceptions": [
+        {
+          "id": "ap_store",
+          "pattern": "Uses an AP store like standard Redis or DynamoDB without considering split-brain for registrations.",
+          "challenge": "If a network partition happens in the registry cluster, how do we prevent conflicting registrations?"
+        }
+      ],
+      "probes": [
+        "How do the registry nodes replicate the data?",
+        "What happens if you have 5 registry nodes and 3 of them go down?"
+      ],
+      "hints": [
+        "Service discovery usually requires strong consistency for registrations to avoid split-brain.",
+        "Have you considered consensus algorithms like Raft or Paxos?"
+      ],
+      "moveOnSummary": "Using a consensus-backed distributed KV store for the registry.",
+      "learnTopics": [
+        "consensus",
+        "quorums",
+        "cap-theorem"
+      ]
+    },
+    {
+      "id": "deep.propagation",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "event-bus",
+          "stream",
+          "topic",
+          "websocket"
+        ],
+        "keywords": [
+          "watch",
+          "push",
+          "long polling",
+          "stream",
+          "gossip",
+          "notify"
+        ]
+      },
+      "goal": "Design an efficient mechanism to notify thousands of clients about endpoint changes without overwhelming the registry.",
+      "opener": "When a popular service scales up, how do we notify thousands of clients about the new endpoints without causing a thundering herd?",
+      "evidence": {
+        "strong": "Uses long-polling, gRPC streams, or a watch API to push changes, and handles reconnection jitter.",
+        "adequate": "Proposes pushing updates via WebSockets or simple polling.",
+        "weak": "Clients aggressively poll the registry every second."
+      },
+      "misconceptions": [
+        {
+          "id": "pubsub_broker",
+          "pattern": "Introduces Kafka or RabbitMQ just for endpoint updates.",
+          "challenge": "Does introducing a message broker add another single point of failure to the control plane?"
+        }
+      ],
+      "probes": [
+        "If all 10,000 clients lose connection to the registry and reconnect at once, what happens?",
+        "How do clients know they missed an update during a disconnection?"
+      ],
+      "hints": [
+        "Instead of clients asking 'any changes?' every second, can the server hold the request open?",
+        "If many clients reconnect simultaneously, how can we spread out the load?"
+      ],
+      "moveOnSummary": "Using a watch API with streams and jittered reconnections.",
+      "learnTopics": [
+        "real-time-communication",
+        "back-of-the-envelope-estimation",
+        "api-design"
+      ]
+    },
+    {
+      "id": "deep.outlier_detection",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "load-balancer",
+          "service-mesh",
+          "client",
+          "reverse-proxy"
+        ],
+        "keywords": [
+          "outlier",
+          "circuit breaker",
+          "retries",
+          "passive",
+          "latency"
+        ]
+      },
+      "goal": "Detect and avoid failing instances faster than the registry's heartbeat timeout.",
+      "opener": "If an instance drops off the network, the registry might take 30 seconds to fail its heartbeat. How can clients avoid sending traffic to it during that time?",
+      "evidence": {
+        "strong": "Proposes client-side passive health checking or outlier detection to temporarily penalize failing endpoints.",
+        "adequate": "Suggests aggressive retries on another instance.",
+        "weak": "Assumes the client must wait for the registry to update."
+      },
+      "misconceptions": [
+        {
+          "id": "fast_heartbeats",
+          "pattern": "Reduces the registry heartbeat TTL to 1 second to detect failures faster.",
+          "challenge": "What happens to the registry and network load if 10,000 instances heartbeat every second?"
+        }
+      ],
+      "probes": [
+        "If a client gets a connection refused error, what should it do with that endpoint?",
+        "How do you handle temporary network blips versus a dead process?"
+      ],
+      "hints": [
+        "Can the client itself keep track of which endpoints recently failed?",
+        "Think about concepts like circuit breakers or outlier detection."
+      ],
+      "moveOnSummary": "Added passive outlier detection on the client side to quickly avoid dead nodes.",
+      "learnTopics": [
+        "circuit-breaker",
+        "retries-and-timeouts",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "deep.dns_integration",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "dns",
+          "legacy",
+          "router"
+        ],
+        "keywords": [
+          "dns",
+          "a record",
+          "srv record",
+          "ttl"
+        ]
+      },
+      "goal": "Expose the registry data via a DNS interface and manage DNS caching limitations.",
+      "opener": "How would you expose our service discovery data to legacy clients that only speak DNS?",
+      "evidence": {
+        "strong": "Provides a DNS server facade in front of the registry, uses SRV records for ports, and keeps DNS TTLs low.",
+        "adequate": "Mentions returning A records for services.",
+        "weak": "Tries to sync the registry to a public DNS provider like Route53."
+      },
+      "misconceptions": [
+        {
+          "id": "high_dns_ttl",
+          "pattern": "Uses standard high TTLs for DNS.",
+          "challenge": "If a pod dies, how long will the legacy client keep sending traffic to the dead IP?"
+        }
+      ],
+      "probes": [
+        "How do we communicate the port number if we only use A records?",
+        "How do you handle client-side DNS caching behavior?"
+      ],
+      "hints": [
+        "DNS has a specific record type for services that includes port numbers.",
+        "Legacy operating systems might ignore very low TTLs. How does that impact routing?"
+      ],
+      "moveOnSummary": "Added a DNS facade with SRV records and low TTLs.",
+      "learnTopics": [
+        "dns"
+      ]
+    },
+    {
+      "id": "wrap_up.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "trade-offs",
+          "bottlenecks",
+          "risks"
+        ]
+      },
+      "goal": "Review the design and acknowledge the fundamental trade-offs made.",
+      "opener": "To wrap up, what do you consider the biggest trade-off or remaining risk in this architecture?",
+      "evidence": {
+        "strong": "Highlights the trade-off between endpoint freshness and data-plane availability.",
+        "adequate": "Summarizes the components and mentions caching.",
+        "weak": "Summarizes without identifying any trade-offs or limits."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Under what conditions would this system return a high error rate to users?"
+      ],
+      "hints": [
+        "Think about what happens during a prolonged network partition.",
+        "Is our client view of the world ever perfectly in sync with the registry?"
+      ],
+      "moveOnSummary": "Wrapped up with a solid understanding of consistency vs availability trade-offs.",
+      "learnTopics": [
+        "cap-theorem",
+        "availability",
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "dns_legacy",
+      "after": "deep.caching",
+      "prompt": "We just acquired a company with hundreds of legacy services that can only resolve dependencies via DNS. How do we integrate them?",
+      "agendaItemId": "deep.dns_integration"
+    }
+  ],
+  "vocabulary": [
+    "etcd",
+    "Consul",
+    "ZooKeeper",
+    "quorum",
+    "split-brain",
+    "Raft",
+    "sidecar",
+    "service mesh",
+    "SRV record",
+    "thundering herd"
+  ],
+  "alternatives": [
+    {
+      "choice": "Service Mesh or Sidecar proxy (e.g., Envoy) instead of smart clients.",
+      "whenBetter": "When dealing with polyglot environments where writing and maintaining a smart SDK in every language is too expensive."
+    },
+    {
+      "choice": "Orchestrator-based registration (e.g., Kubernetes) instead of self-registration.",
+      "whenBetter": "When running entirely in a managed container environment, removing the burden from the application code."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Resilient and scalable",
+      "outline": "The candidate clearly separates the control plane from the data plane. They design a consensus-backed registry and use a watch/stream mechanism to push updates to client-side caches or sidecars. They correctly identify that during a registry outage, clients must ignore TTLs and use stale data to preserve availability. They also implement passive outlier detection on the data path to quickly avoid crashed instances before the registry notices."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but basic",
+      "outline": "The design includes a central registry and clients query it. They add local caching with a TTL to reduce load. They use heartbeats for health checks. However, they might miss the nuance of ignoring TTLs during an outage, or struggle with how to efficiently push changes to thousands of clients without polling."
+    },
+    {
+      "band": "weak",
+      "label": "Fragile data path",
+      "outline": "Treats the registry as a proxy or requires clients to query the registry on every request. Lacks caching, making the entire system fail if the registry goes down. Does not account for instance crashes, relying only on graceful shutdown."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.35,
+    "deep_dive": 0.4,
+    "wrap_up": 0.1
+  }
+}

@@ -1,0 +1,526 @@
+{
+  "opening": "Hello. Today we are going to design a distributed unique ID generator. Let me know how you would like to begin.",
+  "clarifications": [
+    {
+      "id": "scale.throughput",
+      "topics": [
+        "throughput",
+        "qps",
+        "rate",
+        "speed"
+      ],
+      "answer": "We need to support generating up to 10,000 IDs per second per generator node."
+    },
+    {
+      "id": "scale.nodes",
+      "topics": [
+        "nodes",
+        "machines",
+        "generators",
+        "workers"
+      ],
+      "answer": "Assume we have up to 1,024 generator nodes distributed across our data centers."
+    },
+    {
+      "id": "req.format",
+      "topics": [
+        "format",
+        "size",
+        "type",
+        "string",
+        "length"
+      ],
+      "answer": "The ID must fit into a standard 64-bit integer so that it integrates easily into database columns."
+    },
+    {
+      "id": "req.sortability",
+      "topics": [
+        "sort",
+        "ordered",
+        "strict",
+        "time"
+      ],
+      "answer": "Rough time ordering is sufficient. Strict global chronological ordering is not required."
+    },
+    {
+      "id": "req.availability",
+      "topics": [
+        "availability",
+        "downtime",
+        "zookeeper",
+        "etcd",
+        "coordination"
+      ],
+      "answer": "If the coordination service goes down, existing nodes must continue generating IDs without interruption."
+    }
+  ],
+  "clarificationPolicy": "If asked about constraints not listed, encourage the candidate to make a sensible assumption based on a high-throughput, highly available distributed system.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "sortable",
+          "64-bit",
+          "throughput",
+          "requirements",
+          "qps"
+        ]
+      },
+      "goal": "Identify the exact format constraints, ordering needs, and system scale.",
+      "opener": "What specific constraints and scale numbers should we clarify before designing?",
+      "evidence": {
+        "strong": "Identifies the need for 64-bit size, asks about generation rate per node, and confirms if strict or rough ordering is needed.",
+        "adequate": "Asks about the general size of the ID and traffic volume, but misses the nuance of rough versus strict ordering.",
+        "weak": "Assumes a generic UUID or sequential counter approach without verifying the brief's constraints."
+      },
+      "misconceptions": [
+        {
+          "id": "uuid_assumption",
+          "pattern": "Assuming UUIDv4 solves the problem natively.",
+          "challenge": "Does standard UUIDv4 give us the time ordering that the requirements ask for?"
+        }
+      ],
+      "probes": [
+        "What data type should we use to store this ID in a relational database?",
+        "How many IDs per second do we anticipate needing?"
+      ],
+      "hints": [
+        "Consider how backend systems and databases prefer to index primary keys.",
+        "Think about the difference between strict global ordering and rough time ordering."
+      ],
+      "moveOnSummary": "Clarified a 64-bit integer format, rough time ordering, and high throughput per node.",
+      "learnTopics": [
+        "unique-id-generation",
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "high.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "id-generator",
+          "api-gateway",
+          "service"
+        ],
+        "keywords": [
+          "generator",
+          "node",
+          "app",
+          "cluster"
+        ]
+      },
+      "goal": "Propose an architecture with distributed generator nodes avoiding central bottlenecks.",
+      "opener": "Could you lay out the high-level components needed to generate these IDs across our data centers?",
+      "evidence": {
+        "strong": "Uses independent distributed generator nodes or embeds logic in applications, avoiding a central database bottleneck.",
+        "adequate": "Proposes a dedicated microservice for ID generation but relies heavily on central load balancers.",
+        "weak": "Designs a central database with auto-incrementing ranges that becomes a single point of failure."
+      },
+      "misconceptions": [
+        {
+          "id": "central_db",
+          "pattern": "Using a single relational database to issue all IDs.",
+          "challenge": "How well does a single database instance handle tens of thousands of write requests per second solely for ID generation?"
+        }
+      ],
+      "probes": [
+        "Where does the ID generation code actually execute?",
+        "What happens to latency if every ID request hits a central service?"
+      ],
+      "hints": [
+        "Could the generation logic run independently on multiple servers?",
+        "Consider the network overhead of requesting an ID remotely versus locally."
+      ],
+      "moveOnSummary": "Established distributed generator nodes that can operate independently.",
+      "learnTopics": [
+        "unique-id-generation",
+        "monolith-vs-microservices"
+      ]
+    },
+    {
+      "id": "deep.layout",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bits",
+          "timestamp",
+          "worker",
+          "sequence",
+          "epoch",
+          "snowflake"
+        ]
+      },
+      "goal": "Allocate the 64 bits to timestamp, worker ID, and sequence number, justifying the sizes.",
+      "opener": "How do you plan to structure the bits within the generated ID to ensure uniqueness and rough ordering?",
+      "evidence": {
+        "strong": "Clearly divides bits between a custom epoch, machine ID, and sequence. Calculates the lifespan, max workers, and max sequence correctly.",
+        "adequate": "Mentions timestamp, worker ID, and sequence segments but struggles with the exact bit math or limits.",
+        "weak": "Fails to structure the bits systematically, relying on random numbers or a basic global counter."
+      },
+      "misconceptions": [
+        {
+          "id": "unix_epoch",
+          "pattern": "Using standard Unix epoch milliseconds for the timestamp.",
+          "challenge": "Standard Unix time in milliseconds requires 41 bits and expires in 2039. How can we make our IDs last longer?"
+        }
+      ],
+      "probes": [
+        "How many years does your timestamp allocation give us before it overflows?",
+        "What happens if we need to scale to more workers than your bit allocation allows?"
+      ],
+      "hints": [
+        "Given the integer size we agreed on, consider how many bits you have available in total. If one bit is usually for the sign, how many are left?",
+        "If you need to generate 4000 IDs per millisecond, how many bits does the sequence part need?"
+      ],
+      "moveOnSummary": "Defined a Snowflake-style bit layout with a custom epoch, worker ID, and sequence number.",
+      "learnTopics": [
+        "unique-id-generation",
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "deep.worker_id",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "t-etcd",
+          "t-consul",
+          "database"
+        ],
+        "keywords": [
+          "assign",
+          "worker id",
+          "zookeeper",
+          "etcd",
+          "coordination"
+        ]
+      },
+      "goal": "Explain how worker IDs are safely assigned and persisted without making generation dependent on the registry.",
+      "opener": "How does each generator node obtain its unique worker ID safely?",
+      "evidence": {
+        "strong": "Uses a coordination service for assignment and caches the worker ID locally to survive registry downtime.",
+        "adequate": "Assigns IDs using a central registry but leaves a hard runtime dependency on it.",
+        "weak": "Hardcodes worker IDs in configuration files manually without a scalable management plan."
+      },
+      "misconceptions": [
+        {
+          "id": "registry_dependency",
+          "pattern": "Checking the registry on every ID generation.",
+          "challenge": "The brief requires generation to continue if coordination is down. Does this design meet that rule?"
+        }
+      ],
+      "probes": [
+        "What happens when a node restarts? Does it receive the same ID?",
+        "How do you ensure no two active nodes claim the same worker ID?"
+      ],
+      "hints": [
+        "Think about fetching the worker ID once at startup.",
+        "Consider what the node should do with the ID to survive a restart when the registry is offline."
+      ],
+      "moveOnSummary": "Designed a worker ID assignment flow using consensus systems and local caching.",
+      "learnTopics": [
+        "leader-election",
+        "consensus",
+        "service-discovery"
+      ]
+    },
+    {
+      "id": "deep.clock",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "clock",
+          "id-generator"
+        ],
+        "keywords": [
+          "ntp",
+          "clock skew",
+          "backwards",
+          "wait",
+          "leap second"
+        ]
+      },
+      "goal": "Handle system clocks moving backwards safely so duplicate IDs are never generated.",
+      "opener": "System clocks occasionally drift. What happens to your generator if the system clock synchronizes and moves backwards by a few milliseconds?",
+      "evidence": {
+        "strong": "Monitors the clock against the last used timestamp and pauses generation or returns an error until time catches up.",
+        "adequate": "Recognises that clocks can move backwards but offers a vague or untested mitigation strategy.",
+        "weak": "Assumes clocks only move forwards and overlooks the risk of duplicate IDs entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "clock_always_forward",
+          "pattern": "Assuming system time is strictly monotonic.",
+          "challenge": "If NTP adjusts the server clock back by 5 milliseconds, could we generate an ID identical to one we just made?"
+        }
+      ],
+      "probes": [
+        "How do we guarantee uniqueness if the timestamp part repeats?",
+        "What is the impact on the application if you decide to pause generation?"
+      ],
+      "hints": [
+        "If time goes back, the timestamp bit layout might match a previous millisecond.",
+        "We could block the request, or we could throw an exception. Which is safer?"
+      ],
+      "moveOnSummary": "Addressed clock rollback by tracking the last timestamp and pausing until time catches up.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "deep.throughput",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "id-generator"
+        ],
+        "keywords": [
+          "overflow",
+          "exhaust",
+          "sequence",
+          "millisecond"
+        ]
+      },
+      "goal": "Manage sequence overflow within a single millisecond safely.",
+      "opener": "What happens if a single node receives more ID requests in one millisecond than your sequence bits can represent?",
+      "evidence": {
+        "strong": "Detects sequence overflow and blocks the thread or spins in a loop until the next millisecond begins.",
+        "adequate": "Acknowledges the possibility of an overflow but does not have a clean mechanism to handle it.",
+        "weak": "Rolls the sequence back to zero within the same millisecond, creating duplicate IDs."
+      },
+      "misconceptions": [
+        {
+          "id": "sequence_rollover",
+          "pattern": "Simply resetting the sequence to zero when it maxes out.",
+          "challenge": "If you reset the sequence to zero while still in the exact same millisecond, what happens to ID uniqueness?"
+        }
+      ],
+      "probes": [
+        "How do you pause generation efficiently without crashing the application?",
+        "Would rejecting the request be better than forcing the thread to wait?"
+      ],
+      "hints": [
+        "If we have used all sequence numbers for the current millisecond, when does the next batch become available?",
+        "How can the generation logic safely wait for the clock to tick forward?"
+      ],
+      "moveOnSummary": "Handled sequence overflow by spinning or yielding until the next millisecond.",
+      "learnTopics": [
+        "rate-limiting",
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "deep.client_integration",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway",
+          "microservice"
+        ],
+        "keywords": [
+          "library",
+          "sdk",
+          "network call",
+          "latency",
+          "rpc"
+        ]
+      },
+      "goal": "Decide whether ID generation runs as an embedded SDK library or a standalone network service.",
+      "opener": "How do your applications interact with these generators to actually fetch an ID?",
+      "evidence": {
+        "strong": "Compares embedding code directly in apps versus calling a dedicated service over RPC, correctly noting latency differences.",
+        "adequate": "Selects one approach but does not fully weigh network latency against deployment complexity.",
+        "weak": "Treats the integration as magic without specifying the boundary between the app and the generator."
+      },
+      "misconceptions": [
+        {
+          "id": "rpc_always_slow",
+          "pattern": "Assuming internal network calls are fundamentally too slow for ID generation.",
+          "challenge": "With modern internal RPC systems, how much actual time does a network call add compared to our millisecond boundaries?"
+        }
+      ],
+      "probes": [
+        "What if you need to generate IDs in applications written in five different programming languages?",
+        "How does exposing this as a network service affect overall system latency?"
+      ],
+      "hints": [
+        "Think about the operational cost of maintaining embedded libraries in multiple languages.",
+        "If you build a dedicated network service, how do you load balance the requests?"
+      ],
+      "moveOnSummary": "Compared an embedded SDK against a dedicated RPC service.",
+      "learnTopics": [
+        "api-design",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.clock_rollback_recovery",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "hour",
+          "drift",
+          "operator",
+          "exception",
+          "recovery"
+        ]
+      },
+      "goal": "Define a recovery strategy for massive clock drift where waiting is impossible.",
+      "opener": "If the clock jumps back by a full hour, how does the system recover without pausing for an hour?",
+      "evidence": {
+        "strong": "Raises an alert, safely shuts down the affected node, and restarts it with a fresh worker ID.",
+        "adequate": "Throws an exception but relies on manual intervention rather than an auto-recovery mechanism.",
+        "weak": "Allows the node to hang indefinitely, blocking application progress for an hour."
+      },
+      "misconceptions": [
+        {
+          "id": "fake_time",
+          "pattern": "Jumping the timestamp forward artificially to cover the gap.",
+          "challenge": "If you jump forward to a fake time, what happens to the rough time ordering of our IDs?"
+        }
+      ],
+      "probes": [
+        "Can this specific node safely continue using its current worker ID?",
+        "Should the node continue running or self-terminate?"
+      ],
+      "hints": [
+        "If the current worker ID is tainted for the next hour, could we abandon it and get a fresh one?",
+        "Sometimes it is safer for a node to crash and restart cleanly."
+      ],
+      "moveOnSummary": "Planned to re-register for a new worker ID or terminate the node during large clock rollbacks.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "disaster-recovery"
+      ]
+    },
+    {
+      "id": "wrap.evaluation",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-offs",
+          "bottleneck",
+          "single point of failure",
+          "limitations"
+        ]
+      },
+      "goal": "Review how well the design meets the initial requirements and discuss any lingering trade-offs.",
+      "opener": "Looking at the initial requirements again, are there any constraints this design struggles to meet?",
+      "evidence": {
+        "strong": "Summarises layout trade-offs, acknowledges the limits of the custom epoch, and confirms high availability needs are met.",
+        "adequate": "Recaps the design without deep critical thought on its limitations.",
+        "weak": "Ends abruptly without evaluating the final architecture against the brief."
+      },
+      "misconceptions": [
+        {
+          "id": "perfect_system",
+          "pattern": "Claiming the system has zero points of failure or trade-offs.",
+          "challenge": "Is there any operational scenario where a major outage could cause duplicate IDs?"
+        }
+      ],
+      "probes": [
+        "What is the biggest operational limitation of this design?",
+        "How difficult would it be to change the bit layout later?"
+      ],
+      "hints": [
+        "Look back at the requirement to survive coordination service downtime.",
+        "Consider what happens decades from now when the custom epoch runs out."
+      ],
+      "moveOnSummary": "Evaluated the design's trade-offs and limits against the brief.",
+      "learnTopics": [
+        "system-design-interview",
+        "unique-id-generation"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "clock_jump",
+      "after": "deep.clock",
+      "prompt": "What if an operator mistakenly rolls the system clock backwards by a full hour? Pausing generation for an hour will cause a major outage.",
+      "agendaItemId": "deep.clock_rollback_recovery"
+    }
+  ],
+  "vocabulary": [
+    "Snowflake",
+    "NTP",
+    "epoch",
+    "ZooKeeper",
+    "etcd",
+    "UUIDv4",
+    "UUIDv7",
+    "monotonic"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using UUIDv7",
+      "whenBetter": "When a 128-bit string or large byte array is acceptable, and we want to remove the operational complexity of managing worker coordination entirely while keeping rough time ordering."
+    },
+    {
+      "choice": "Database Ticket Server",
+      "whenBetter": "When overall ID generation throughput is low enough that a central database cluster can handle it safely, avoiding custom bit manipulation."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Custom bit layout with fault-tolerant worker assignment",
+      "outline": "Allocated 64 bits clearly to a custom epoch, worker ID, and sequence. Used a coordination service like etcd for worker ID assignment, caching it locally to survive registry outages. Correctly handled NTP clock drift by tracking time and pausing generation if the clock moved backwards."
+    },
+    {
+      "band": "adequate",
+      "label": "Snowflake layout with partial fault tolerance",
+      "outline": "Described a Snowflake-like bit layout and understood the components. Assigned worker IDs via a database table but did not fully decouple the generation path from registry downtime. Mentioned clock skew but lacked a concrete, safe mechanism to handle it without risk."
+    },
+    {
+      "band": "weak",
+      "label": "Centralised database counter",
+      "outline": "Attempted to use a single database auto-incrementing counter, which fails the scalability and decentralisation requirements. Did not structure the bits into a layout or address system clock issues."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

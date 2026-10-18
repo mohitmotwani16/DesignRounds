@@ -1,0 +1,531 @@
+{
+  "opening": "We are designing a note-taking application today. Whenever you are ready, please walk me through how you would approach building it.",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "users",
+        "scale",
+        "traffic",
+        "dau"
+      ],
+      "answer": "Assume we have 10 million daily active users, each creating or editing about 5 notes per day."
+    },
+    {
+      "id": "scope.content",
+      "topics": [
+        "images",
+        "video",
+        "size",
+        "format"
+      ],
+      "answer": "Notes are text only for now. No images or attachments. A note will not exceed 100KB."
+    },
+    {
+      "id": "scope.sharing",
+      "topics": [
+        "collaborate",
+        "share",
+        "multiplayer"
+      ],
+      "answer": "This is a single-user system. A user has multiple devices, but does not share notes with other users."
+    },
+    {
+      "id": "resolution.strategy",
+      "topics": [
+        "conflicts",
+        "merge",
+        "overwrite",
+        "rules"
+      ],
+      "answer": "We want to avoid silently losing user text. If you can merge edits, great. Creating a conflicted copy is also perfectly acceptable."
+    },
+    {
+      "id": "latency.sync",
+      "topics": [
+        "latency",
+        "real-time",
+        "speed"
+      ],
+      "answer": "Syncing should feel fast when a device comes online, but it does not need to be real-time collaborative like Google Docs."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about a product feature not listed, default to the simplest version that still requires offline sync, and tell them to assume text-only single-user notes.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "offline",
+          "sync",
+          "scale",
+          "conflict"
+        ]
+      },
+      "goal": "Elicit the core offline capabilities and establish the constraints around note sizes and conflict resolution.",
+      "opener": "What key requirements and constraints are you designing for?",
+      "evidence": {
+        "strong": "Clarifies read/write patterns, offline constraints, data size, and asks about conflict resolution expectations before designing.",
+        "adequate": "Asks basic questions about scale and whether the app is mobile or web, but assumes the sync behaviour.",
+        "weak": "Starts drawing architecture without clarifying what offline-first means in this context."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What kind of conflict resolution behaviour would a user expect for their text notes?",
+        "How will the read/write ratio look when the device is entirely offline?"
+      ],
+      "hints": [
+        "Consider how many devices a single user might have.",
+        "Think about what happens if edits happen simultaneously on two disconnected devices."
+      ],
+      "moveOnSummary": "Establish the text-only scope, the 10M DAU scale, and the offline-first requirements.",
+      "learnTopics": [
+        "system-design-interview-questions",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "hl.local_storage",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "mobile",
+          "client",
+          "t-sqlite",
+          "database"
+        ],
+        "keywords": [
+          "local database",
+          "offline",
+          "cache",
+          "source of truth"
+        ]
+      },
+      "goal": "Establish that the primary data source for the UI must be a local database to ensure full offline capability.",
+      "opener": "How will the mobile application manage its data to ensure users can work without a connection?",
+      "evidence": {
+        "strong": "Positions a local database as the absolute source of truth for the UI, entirely decoupling local reads and writes from network availability.",
+        "adequate": "Uses a local cache that is read from when offline, but attempts to read from the network first when online.",
+        "weak": "Only stores data in memory or relies on network calls, failing the offline-first requirement."
+      },
+      "misconceptions": [
+        {
+          "id": "network_first",
+          "pattern": "The UI should fetch from the server and fall back to local storage if the network fails.",
+          "challenge": "If a user is on a spotty cellular connection, how does attempting a network request first affect the app's responsiveness?"
+        }
+      ],
+      "probes": [
+        "Where exactly does the UI read from when displaying the list of notes?",
+        "When the user hits save, where is that data written first?"
+      ],
+      "hints": [
+        "Think about how to guarantee the app responds instantly to user input.",
+        "Would standard HTTP requests block the UI if the connection is poor?"
+      ],
+      "moveOnSummary": "Use a local database on the client as the primary source of truth for the UI.",
+      "learnTopics": [
+        "offline-first-sync",
+        "caching"
+      ]
+    },
+    {
+      "id": "hl.sync_flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "service",
+          "queue",
+          "outbox"
+        ],
+        "keywords": [
+          "sync",
+          "push",
+          "pull",
+          "background",
+          "engine"
+        ]
+      },
+      "goal": "Outline the background flow of data between the local device and the server when connectivity is restored.",
+      "opener": "Walk me through the architecture of what happens in the background when a device comes back online.",
+      "evidence": {
+        "strong": "Separates the local read path from the network path, utilizing a local outbox to track pending mutations and a dedicated sync engine.",
+        "adequate": "Shows the client talking to a server API to sync, but couples the UI directly to the sync process instead of running it asynchronously.",
+        "weak": "Draws a standard web application architecture where the client makes synchronous CRUD calls to a remote database."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the app know which notes have been edited while offline?",
+        "What orchestrates the network calls so the main UI thread isn't blocked?"
+      ],
+      "hints": [
+        "If a user edits three different notes offline, how are those changes grouped and sent?",
+        "Consider using a queue on the device to hold changes until the network is ready."
+      ],
+      "moveOnSummary": "Introduce a local outbox and background sync engine to decouple the UI from the network.",
+      "learnTopics": [
+        "api-design",
+        "outbox-pattern"
+      ]
+    },
+    {
+      "id": "deep.sync_protocol",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-db"
+        ],
+        "keywords": [
+          "cursor",
+          "version",
+          "incremental",
+          "delta",
+          "timestamp"
+        ]
+      },
+      "goal": "Design an efficient delta-sync mechanism using cursors or version numbers to avoid full redownloads.",
+      "opener": "How do you ensure the device only downloads the notes that changed on the server since its last sync?",
+      "evidence": {
+        "strong": "Uses a monotonic server version or cursor for pulls, and pushes local operations, ensuring only deltas are transferred.",
+        "adequate": "Uses timestamps for incremental sync, recognizing the need to pull only recent changes, but overlooks edge cases with clock skew.",
+        "weak": "Suggests pulling the entire list of notes on every sync or relies purely on UI state rather than a robust log."
+      },
+      "misconceptions": [
+        {
+          "id": "device_timestamps",
+          "pattern": "We can just use the device's local timestamp to order events and pull changes.",
+          "challenge": "What happens to the sync logic if the user's phone clock is manually set two days in the past?"
+        }
+      ],
+      "probes": [
+        "How does the server efficiently query for all changes after the client's last known point?",
+        "Why might relying on device clock timestamps for delta queries be dangerous?"
+      ],
+      "hints": [
+        "What if the server maintained a single global counter for all changes to a user's account?",
+        "Think about how Kafka tracks consumer progress."
+      ],
+      "moveOnSummary": "Implement a cursor-based incremental sync using server-generated version numbers.",
+      "learnTopics": [
+        "pagination",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "deep.conflicts",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "conflict",
+          "lww",
+          "crdt",
+          "merge",
+          "vector",
+          "concurrent"
+        ]
+      },
+      "goal": "Provide a strategy for detecting and resolving concurrent offline edits to the same note.",
+      "opener": "If a user edits the same note on their phone and laptop while both are offline, what happens when they both reconnect?",
+      "evidence": {
+        "strong": "Articulates a clear conflict strategy, such as version vectors for detecting conflicts and creating a conflicted copy, or using CRDTs for automatic merging.",
+        "adequate": "Mentions concurrent edits will cause conflicts and uses a simple Last-Writer-Wins per field based on server time, accepting some data loss.",
+        "weak": "Assumes the last request to reach the server overwrites the database unconditionally, destroying the other device's work."
+      },
+      "misconceptions": [
+        {
+          "id": "server_wins_always",
+          "pattern": "The server just rejects the second edit if the note was changed.",
+          "challenge": "If the server rejects the laptop's edit, what happens to the text the user spent an hour writing offline?"
+        }
+      ],
+      "probes": [
+        "How exactly does the server detect that the incoming edit is based on an outdated version of the note?",
+        "If we choose to create a conflicted copy, how does that look in the database schema?"
+      ],
+      "hints": [
+        "How can the client tell the server which version of the note it was editing?",
+        "If we can't automatically merge two blocks of text safely, what is the best experience for the user?"
+      ],
+      "moveOnSummary": "Detect conflicts using version numbers and resolve them by branching into a conflicted copy to preserve user data.",
+      "learnTopics": [
+        "crdts",
+        "clocks-and-ordering",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "deep.idempotency",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "retry",
+          "api-gateway"
+        ],
+        "keywords": [
+          "idempotency",
+          "uuid",
+          "retry",
+          "duplicate"
+        ]
+      },
+      "goal": "Prevent duplicated data when network interruptions cause the client to retry sync operations.",
+      "opener": "What happens if the network drops right after the server saves a new note, but before the client receives the acknowledgement?",
+      "evidence": {
+        "strong": "Assigns client-generated UUIDs to operations in the outbox, allowing the server to recognize and safely ignore retried operations.",
+        "adequate": "Mentions the need for idempotency keys but implements them loosely, perhaps generating them at the API layer instead of the client.",
+        "weak": "Fails to anticipate retries or assumes the database will naturally prevent duplicates without unique constraints."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the server identify that this exact creation request was already processed?",
+        "Where specifically is the unique ID for a new note generated?"
+      ],
+      "hints": [
+        "What if the client generates the unique identifier before sending the request?",
+        "How can the database use this identifier to prevent duplicate rows?"
+      ],
+      "moveOnSummary": "Use client-generated UUIDs for operations so retries are safely ignored and idempotent.",
+      "learnTopics": [
+        "idempotency",
+        "retries-and-timeouts",
+        "unique-id-generation"
+      ]
+    },
+    {
+      "id": "deep.tombstones",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "storage"
+        ],
+        "keywords": [
+          "delete",
+          "tombstone",
+          "soft delete"
+        ]
+      },
+      "goal": "Ensure deleted notes are propagated correctly and not resurrected by other devices.",
+      "opener": "If a user deletes a note offline, how do you communicate that deletion to the server and their other devices?",
+      "evidence": {
+        "strong": "Explicitly models soft deletes with a tombstone flag and timestamp, ensuring the sync engine pulls the deletion record to clear it from other devices.",
+        "adequate": "Mentions keeping deleted records in the database with a flag, but may not clearly explain how the incremental sync processes them.",
+        "weak": "Proposes hard deleting the row on the device or server, which leads to the note being resurrected by another device that hasn't synced yet."
+      },
+      "misconceptions": [
+        {
+          "id": "hard_delete_sync",
+          "pattern": "When a user deletes a note, we just run a DELETE SQL query on the local DB, and then tell the server.",
+          "challenge": "If the local row is gone, how does the local sync engine know what to tell the server when the network eventually reconnects?"
+        }
+      ],
+      "probes": [
+        "If a note is hard deleted from the server, how does an offline laptop know to remove its local copy when it reconnects?",
+        "What data fields do you need on a tombstone record?"
+      ],
+      "hints": [
+        "Instead of removing the row entirely, could we just mark it as deleted?",
+        "How does the cursor-based sync logic handle notes that have a deleted flag?"
+      ],
+      "moveOnSummary": "Use tombstone records to soft-delete items so the deletion state syncs reliably across all devices.",
+      "learnTopics": [
+        "database-indexing",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "deep.catch_up",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "pagination",
+          "batch",
+          "catch up",
+          "limit",
+          "long offline"
+        ]
+      },
+      "goal": "Handle large payload sizes when a device syncs after a prolonged offline period.",
+      "opener": "How does your system handle a device that has been offline for several months and has thousands of server changes to pull?",
+      "evidence": {
+        "strong": "Implements pagination in the sync pull endpoint and batches local writes to keep memory usage low and prevent timeouts.",
+        "adequate": "Recognizes the payload might be too large and suggests increasing timeouts or compressing the payload.",
+        "weak": "Assumes the device can download all changes in one massive JSON response without issue."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if the connection drops halfway through downloading 5,000 changes?",
+        "How does pagination interact with the version cursor?"
+      ],
+      "hints": [
+        "How can we break the response into smaller, manageable chunks?",
+        "If we pull a small batch of notes at a time, what cursor value do we pass in the next request?"
+      ],
+      "moveOnSummary": "Paginate the sync pull response using the version cursor to handle massive catch-up syncs.",
+      "learnTopics": [
+        "pagination",
+        "batch-vs-stream-processing"
+      ]
+    },
+    {
+      "id": "deep.hard_deletes",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "scheduler"
+        ],
+        "keywords": [
+          "retention limit",
+          "sync horizon",
+          "expired cursor",
+          "full refresh",
+          "permanently delete",
+          "force sync"
+        ]
+      },
+      "goal": "Handle the interaction between offline tombstones and backend data retention limits.",
+      "opener": "If we physically delete tombstones from the server after 30 days for compliance, how do we prevent a device offline for 6 months from re-uploading those deleted notes as new?",
+      "evidence": {
+        "strong": "Suggests tracking a sync horizon; if a device's cursor is older than the retention limit, the server forces a full state refresh rather than incremental sync.",
+        "adequate": "Proposes checking the original creation date of the note to reject it, or keeping an anonymized hash of deleted IDs.",
+        "weak": "Assumes the server can just remember all deleted IDs forever, violating the compliance requirement."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the server know the device is sending a resurrected note versus a genuinely new note created entirely offline?",
+        "If a device hasn't synced in 6 months, can we trust its incremental cursor at all?"
+      ],
+      "hints": [
+        "What if the server simply refuses to sync incrementally with a cursor that is older than the tombstone retention period?",
+        "How could a 'full reset' work for an outdated device?"
+      ],
+      "moveOnSummary": "Use a sync horizon; if a device's cursor is too old, reject the incremental sync and force a full state refresh.",
+      "learnTopics": [
+        "disaster-recovery",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "review",
+          "bottleneck",
+          "end-to-end"
+        ]
+      },
+      "goal": "Review the final architecture and assess the candidate's understanding of their own system's trade-offs.",
+      "opener": "Looking at the final design, where do you see the biggest risks or limitations given the offline-first requirements?",
+      "evidence": {
+        "strong": "Identifies edge cases like clock skew or extremely large syncs, and practically discusses the trade-offs of their chosen conflict resolution strategy.",
+        "adequate": "Summarizes the data flow and confirms the basic requirements are met, but struggles to identify nuanced failure modes.",
+        "weak": "Cannot clearly trace how an offline edit on one device makes its way to another device safely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Can you trace a note creation from the phone while offline, through to it appearing on the laptop?",
+        "What happens if the background sync fails repeatedly?"
+      ],
+      "hints": [
+        "Summarize the flow of a concurrent edit.",
+        "Are there any single points of failure in the sync path?"
+      ],
+      "moveOnSummary": "Trace the end-to-end flow to verify the architecture meets the offline-first expectations safely.",
+      "learnTopics": [
+        "fallacies-of-distributed-computing"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "hard_delete_compliance",
+      "after": "deep.tombstones",
+      "prompt": "What if privacy regulations require us to permanently remove deleted notes from the server database after 30 days? How do we stop a device that has been offline for 6 months from resurrecting them?",
+      "agendaItemId": "deep.hard_deletes"
+    }
+  ],
+  "vocabulary": [
+    "CRDT",
+    "Tombstone",
+    "Outbox",
+    "SQLite",
+    "IndexedDB",
+    "LWW",
+    "Vector clock",
+    "Idempotency",
+    "Cursor"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using CRDTs for text merging instead of Last-Writer-Wins or conflicted copies.",
+      "whenBetter": "When the application requires granular, character-level merging of concurrent offline edits without user intervention, similar to Google Docs but operating asynchronously."
+    },
+    {
+      "choice": "State snapshot sync instead of an operation log (outbox).",
+      "whenBetter": "When individual notes are small, edits overwrite the whole content, and simply syncing the latest state of the note with a version number is vastly less complex than replaying a log of individual delta operations."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust Local-First Architecture",
+      "outline": "Designs a true local-first architecture using SQLite as the source of truth. Mutations are written to a local outbox queue. A background sync engine pushes outbox events with client-generated UUIDs for idempotency, and pulls server changes using a monotonic version cursor. Conflicts are handled gracefully by creating conflicted copies or using version vectors. Deletes are modeled explicitly using tombstones."
+    },
+    {
+      "band": "adequate",
+      "label": "Timestamp Sync with Fallbacks",
+      "outline": "Proposes a local cache that falls back to the network. Uses timestamps for incremental sync, which works most of the time but is vulnerable to clock skew. Employs a basic Last-Writer-Wins conflict strategy based on server receipt time. Mentions that deletes need a flag but is fuzzy on how the sync loop processes them efficiently."
+    },
+    {
+      "band": "weak",
+      "label": "Standard Web App Approach",
+      "outline": "Treats the system like a standard web app. Suggests the UI read from the network and only saves to local storage on failure. Proposes downloading the entire note list on every reconnect. Fails to account for retries duplicating records and suggests hard-deleting rows for removals."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.3,
+    "deep_dive": 0.45,
+    "wrap_up": 0.1
+  }
+}
