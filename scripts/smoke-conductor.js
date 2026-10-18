@@ -29,6 +29,8 @@ const { close, query, queryOne } = await import("../server/db.js");
 const { readPackFiles } = await import("../server/modules/pks/index.js");
 const { fullPrompts } = await import("../server/modules/rounds.js");
 const { guideFor } = await import("../server/modules/ai/guides.js");
+const { isAnonymousKind } = await import("../server/modules/ai/components.js");
+const { canvasComponents, itemDrawn } = await import("../server/modules/conductor/canvas.js");
 
 const app = await createApp({ serveFrontend: false });
 const server = app.listen(0);
@@ -274,6 +276,45 @@ try {
     for (const type of ["round_started", "mode_changed", "move_planned", "item_status_changed", "stage_changed", "time_warning", "tick_model", "tick_rate_limited"]) assert.ok(types.has(type), `missing event ${type}`);
     const usage = await query("select task, outcome from ai_usage where session_id = $1 and task = 'interviewer'", [round.id]);
     assert.ok(usage.length >= 6 && usage.every((row) => row.outcome === "ok"));
+  });
+
+  await step("the canvas: a deep dive waits for its part to be drawn, then opens on it", async () => {
+    const created = await call("POST", "/api/v1/sessions", { promptId: prompt.id, interviewMode: "realistic" });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    round = created.body.session;
+    await call("GET", `/api/v1/sessions/${round.id}/interview`);
+    // Skip ahead: requirements and high-level are done, nothing is on the canvas.
+    await query("update interview_agenda_items set status = 'answered', band = 'adequate' where session_id = $1 and stage <> 'deep_dive'", [round.id]);
+    await query("update interview_state set stage = 'deep_dive', focus_item_id = null where session_id = $1", [round.id]);
+
+    const talked = await sendMessage("So that's the whole design: the services, the storage and the cache, all talked through.");
+    assert.equal(talked.status, 201, JSON.stringify(talked.body));
+    const ask = await queryOne("select move, agenda_item_id from interview_turns where id = $1", [talked.body.turns[1].id]);
+    assert.equal(ask.move, "ask_to_draw", "an empty canvas gets a request to draw, not a deep dive");
+    assert.equal(talked.body.turns[1].asksToDraw, true, "the request is labelled in the conversation");
+    let ledger = await items();
+    assert.ok(ledger.filter((item) => item.stage === "deep_dive").every((item) => item.status === "pending"), "no deep dive opened on an undrawn part");
+    const target = ledger.find((item) => item.item_id === ask.agenda_item_id);
+    assert.ok(target && target.draw_requests >= 1, "the request is counted against the part it asks for");
+    assert.ok((await stateRow()).last_draw_ask_seq >= 1);
+
+    // They draw the part (and enough around it to review), and the deep dive opens on it.
+    const meta = (await queryOne("select pack from problem_packs where version = (select pack_version from interview_state where session_id = $1)", [round.id])).pack.agenda.find((item) => item.id === target.item_id);
+    const kind = meta.triggers.componentKinds.find((entry) => !isAnonymousKind(entry)) ?? meta.triggers.componentKinds[0];
+    const nodes = [["client", "Users"], ["api-gateway", "API gateway"], [kind, meta.triggers.keywords[0]]].map(([nodeKind, label], index) => ({ id: `d${index}`, type: "systemNode", position: { x: index * 140, y: 0 }, data: { kind: nodeKind, label } }));
+    const diagram = { nodes, edges: [{ id: "de0", source: "d0", target: "d1" }, { id: "de1", source: "d1", target: "d2" }] };
+    assert.ok(itemDrawn(meta, canvasComponents(diagram)));
+    const session = await call("GET", `/api/v1/sessions/${round.id}`);
+    assert.equal((await call("PUT", `/api/v1/sessions/${round.id}/diagram`, { version: session.body.session.diagramVersion, diagram })).status, 200);
+    const drew = await sendMessage("Done, it's on the canvas now.");
+    assert.equal(drew.status, 201, JSON.stringify(drew.body));
+    const opened = await queryOne("select move, agenda_item_id from interview_turns where id = $1", [drew.body.turns[1].id]);
+    assert.equal(opened.move, "open");
+    assert.equal(opened.agenda_item_id, target.item_id, "the deep dive opens on the part just drawn");
+    ledger = await items();
+    assert.equal(ledger.find((item) => item.item_id === target.item_id).status, "open");
+    const types = new Set((await query("select type from interview_events where session_id = $1", [round.id])).map((row) => row.type));
+    assert.ok(types.has("draw_requested"));
   });
 } catch (error) {
   failed = true;
