@@ -1,0 +1,571 @@
+{
+  "opening": "Let's design a monitoring system for our production machine learning models to ensure they remain accurate, fair, and reliable.",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "scale",
+        "traffic",
+        "qps",
+        "volume"
+      ],
+      "answer": "Assume we monitor about 100 production models handling a combined 10,000 predictions per second."
+    },
+    {
+      "id": "data.labels",
+      "topics": [
+        "labels",
+        "ground truth",
+        "delay",
+        "outcomes"
+      ],
+      "answer": "Ground truth outcomes can be delayed by up to 30 days."
+    },
+    {
+      "id": "scope.metrics",
+      "topics": [
+        "metrics",
+        "drift",
+        "performance",
+        "health"
+      ],
+      "answer": "We need to track data drift, model performance (when labels eventually arrive), and basic service health like latency and error rates."
+    },
+    {
+      "id": "data.privacy",
+      "topics": [
+        "privacy",
+        "pii",
+        "security",
+        "compliance"
+      ],
+      "answer": "Prediction requests may contain PII. The monitoring system must not expose this raw data to unauthorized operators."
+    },
+    {
+      "id": "scope.cohorts",
+      "topics": [
+        "cohorts",
+        "segments",
+        "slices",
+        "groups"
+      ],
+      "answer": "We need to slice performance metrics by cohorts, like geographic region or device type, to catch localized regressions."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about a constraint not listed, tell them to make a reasonable assumption that keeps the design focused on ML observability and data pipeline scaling.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "models",
+          "predictions",
+          "labels",
+          "drift",
+          "cohorts",
+          "delayed"
+        ]
+      },
+      "goal": "Establish what signals the system collects, the concept of delayed labels, and what insights it outputs.",
+      "opener": "What specific signals and metrics will our monitoring system need to collect and compute to satisfy the requirements?",
+      "evidence": {
+        "strong": "Clearly separates operational metrics (latency) from statistical ones (drift, accuracy) and explicitly calls out the challenge of delayed ground truth.",
+        "adequate": "Lists basic metrics like accuracy and drift, and mentions logging predictions and outcomes.",
+        "weak": "Focuses primarily on standard infrastructure metrics (CPU, memory) and misses ML-specific concerns like drift or delayed labels."
+      },
+      "misconceptions": [
+        {
+          "id": "req.sync_labels",
+          "pattern": "Assuming ground truth is available immediately after a prediction.",
+          "challenge": "What if the system is predicting whether a user will churn in the next 30 days?"
+        }
+      ],
+      "probes": [
+        "How will model owners know if a drop in performance is due to a new deployment or a change in user behavior?",
+        "What happens when ground truth isn't immediately available?"
+      ],
+      "hints": [
+        "Think about what information we have at prediction time versus what we learn later.",
+        "If a model predicts an event far in the future, what can we monitor today?"
+      ],
+      "moveOnSummary": "We will monitor system health, feature drift, and eventual model accuracy using delayed labels.",
+      "learnTopics": [
+        "ml-model-monitoring",
+        "ml-evaluation-metrics",
+        "observability"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "billion",
+          "storage",
+          "retention",
+          "bytes"
+        ]
+      },
+      "goal": "Estimate the ingest volume and storage requirements for prediction logs and delayed labels.",
+      "opener": "Given the traffic volume, how much data will we be ingesting and storing per day?",
+      "evidence": {
+        "strong": "Calculates daily log volume considering payload sizes, and notes the storage implications of retaining data until 30-day labels arrive.",
+        "adequate": "Estimates daily events and storage but misses the retention impact of delayed labels.",
+        "weak": "Struggles with basic arithmetic or wildly misjudges payload sizes for ML features."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How long do we need to keep the prediction data in hot storage if labels are significantly delayed?"
+      ],
+      "hints": [
+        "Multiply the estimated QPS by the seconds in a day.",
+        "Estimate an average size for a prediction payload with features and metadata."
+      ],
+      "moveOnSummary": "At 10k QPS, we are ingesting nearly a billion events a day, requiring terabytes of storage.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "logging",
+          "dashboard",
+          "warehouse"
+        ],
+        "keywords": [
+          "ingestion",
+          "pipeline",
+          "metrics",
+          "dashboard",
+          "flow",
+          "end-to-end"
+        ]
+      },
+      "goal": "Lay out an end-to-end flow from prediction generation to metric computation and visualization.",
+      "opener": "Walk me through the high-level architecture of how a prediction event flows through the system to eventually appear on a dashboard.",
+      "evidence": {
+        "strong": "Designs a decoupled architecture using message queues or event streams, separating the fast path for operational metrics from the slow path for evaluation metrics.",
+        "adequate": "Shows prediction services writing to a database or data lake, and a pipeline to compute metrics for dashboards.",
+        "weak": "Attempts to compute complex drift metrics synchronously on the prediction request path, or lacks a clear storage layer."
+      },
+      "misconceptions": [
+        {
+          "id": "hl.sync_computation",
+          "pattern": "Computing drift or joining labels synchronously within the model serving path.",
+          "challenge": "How will doing heavy metric calculations in the serving layer affect our prediction latency?"
+        }
+      ],
+      "probes": [
+        "How does the prediction service pass its logs to the monitoring system without degrading inference latency?",
+        "Where do the label events enter this architecture?"
+      ],
+      "hints": [
+        "Consider using an asynchronous mechanism so the model serving isn't blocked by monitoring.",
+        "We have two streams of data: predictions now, and labels later. Where do they meet?"
+      ],
+      "moveOnSummary": "We will use an event bus to ingest predictions and labels asynchronously into a data warehouse for metric computation.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "event-streaming-kafka",
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "deep.drift",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "drift-monitor",
+          "stream-processor",
+          "metrics"
+        ],
+        "keywords": [
+          "kl divergence",
+          "psi",
+          "distribution",
+          "baseline",
+          "proxy",
+          "reference"
+        ]
+      },
+      "goal": "Design a mechanism to detect data drift before labels arrive, comparing current traffic against baselines.",
+      "opener": "Since labels are delayed, how can we detect if a model's performance is degrading today?",
+      "evidence": {
+        "strong": "Proposes comparing live feature distributions to a reference baseline (like training data) using statistical tests (PSI, KL divergence) to detect covariate shift.",
+        "adequate": "Mentions monitoring the input features or output predictions for sudden changes without specific statistical methods.",
+        "weak": "Relies entirely on labels for performance, or suggests generic anomaly detection on latency/throughput instead of feature drift."
+      },
+      "misconceptions": [
+        {
+          "id": "drift.no_baseline",
+          "pattern": "Comparing today's data to yesterday's data as the only drift metric.",
+          "challenge": "What if the data gradually degrades over two weeks? Would day-to-day comparisons catch that?"
+        }
+      ],
+      "probes": [
+        "What do we compare the current production data against to know if it has drifted?",
+        "How do we handle models with hundreds of features? Computing distributions for all of them might be expensive."
+      ],
+      "hints": [
+        "Think about what the model was trained on. How can we use that information?",
+        "Are there specific statistical metrics used to compare two probability distributions?"
+      ],
+      "moveOnSummary": "We'll compute distribution metrics like PSI against a training baseline to catch feature drift early.",
+      "learnTopics": [
+        "ml-model-monitoring",
+        "ml-evaluation-metrics"
+      ]
+    },
+    {
+      "id": "deep.delayed_labels",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "warehouse",
+          "etl",
+          "database"
+        ],
+        "keywords": [
+          "join",
+          "ground truth",
+          "delayed",
+          "asynchronous",
+          "request id"
+        ]
+      },
+      "goal": "Architect a robust pipeline to join delayed labels with historical predictions using unique identifiers.",
+      "opener": "When the ground truth label finally arrives later, how does the system match it back to the original prediction?",
+      "evidence": {
+        "strong": "Uses unique request IDs attached to prediction logs, stores them in a data warehouse or lake, and runs periodic batch jobs to join incoming labels to historical predictions.",
+        "adequate": "Suggests joining on an ID but uses an in-memory or purely transactional DB approach that would struggle with the 30-day retention volume.",
+        "weak": "Fails to mention joining via a common identifier, or suggests keeping prediction requests open for 30 days."
+      },
+      "misconceptions": [
+        {
+          "id": "labels.hot_cache",
+          "pattern": "Keeping all predictions in Redis or a hot cache for 30 days waiting for labels.",
+          "challenge": "Given our volume of 1 billion events a day, how much RAM would a 30-day cache require?"
+        }
+      ],
+      "probes": [
+        "What kind of datastore is best suited for storing a month of historical data and performing large join operations?",
+        "How often should we run this join process? Real-time or batch?"
+      ],
+      "hints": [
+        "We need a way to link the prediction event and the label event. What kind of identifier can we use?",
+        "Consider analytical data stores built for heavy, large-scale joins."
+      ],
+      "moveOnSummary": "We will log a unique prediction ID and use a data warehouse to batch join incoming labels with 30-day-old predictions.",
+      "learnTopics": [
+        "data-warehouse-vs-data-lake",
+        "batch-vs-stream-processing",
+        "unique-id-generation"
+      ]
+    },
+    {
+      "id": "deep.cohorts",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "warehouse",
+          "timeseries-db",
+          "metrics"
+        ],
+        "keywords": [
+          "slice",
+          "dice",
+          "segment",
+          "demographics",
+          "version",
+          "tag"
+        ]
+      },
+      "goal": "Explain how the data model supports aggregating metrics by specific model versions and user cohorts.",
+      "opener": "Sometimes an overall metric looks fine, but a specific model version or user demographic is failing. How do we design our data model to support cohort analysis?",
+      "evidence": {
+        "strong": "Includes cohort tags and model versions as dimensions in an OLAP or time-series database, enabling fast group-by queries on arbitrary slices.",
+        "adequate": "Mentions logging the model version and user ID, but doesn't explicitly design for efficient aggregation querying.",
+        "weak": "Stores data in a way that requires full table scans to extract cohort metrics, or forgets to log model versions entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "cohorts.preaggregate_all",
+          "pattern": "Attempting to pre-calculate metrics for every possible combination of features.",
+          "challenge": "If we have 10 features with 10 values each, how many pre-aggregated metrics would we have to compute and store?"
+        }
+      ],
+      "probes": [
+        "What happens to our query performance if we want to filter metrics by mobile users in Canada?",
+        "How do we distinguish between an A/B test of Model V1 versus Model V2 in the dashboards?"
+      ],
+      "hints": [
+        "Think about what metadata needs to be attached to the prediction log payload at inference time.",
+        "What kind of database excels at aggregating data across many dimensions?"
+      ],
+      "moveOnSummary": "We'll append version and cohort tags to our prediction logs and use an OLAP database for efficient multi-dimensional querying.",
+      "learnTopics": [
+        "dimensional-modeling",
+        "time-series-databases",
+        "ab-testing-experimentation"
+      ]
+    },
+    {
+      "id": "deep.privacy",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "logging",
+          "stream",
+          "api-gateway",
+          "guardrails"
+        ],
+        "keywords": [
+          "pii",
+          "sampling",
+          "masking",
+          "anonymization",
+          "retention"
+        ]
+      },
+      "goal": "Ensure sensitive user data logged during inference is minimized or protected before reaching analysts.",
+      "opener": "Prediction requests often contain sensitive user data. How do we ensure this monitoring system doesn't create a massive privacy vulnerability?",
+      "evidence": {
+        "strong": "Proposes early redaction or hashing of PII before logging, role-based access control on the data warehouse, and strict retention policies.",
+        "adequate": "Mentions data masking or encrypting the database, but applies it late in the pipeline.",
+        "weak": "Ignores privacy concerns or assumes all operators should have access to raw prediction inputs."
+      },
+      "misconceptions": [
+        {
+          "id": "privacy.late_masking",
+          "pattern": "Masking data only at the dashboard layer.",
+          "challenge": "If we only mask data on the dashboard, what stops an engineer from querying the raw database directly?"
+        }
+      ],
+      "probes": [
+        "At what point in the data pipeline should we remove or hash the PII?",
+        "Do we need to store 100% of the prediction payloads for drift monitoring, or could we use another technique?"
+      ],
+      "hints": [
+        "Consider where the data is most vulnerable. Is it better to clean it at the source or at the destination?",
+        "Think about sampling rates. Do we need every single prediction to calculate a statistical distribution?"
+      ],
+      "moveOnSummary": "We will redact PII at the ingestion point and use sampling to minimize the sensitive data footprint.",
+      "learnTopics": [
+        "encryption",
+        "data-quality",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.anomaly_detection",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "alerting",
+          "metrics"
+        ],
+        "keywords": [
+          "anomaly",
+          "false positive",
+          "noise",
+          "explosion"
+        ]
+      },
+      "goal": "Design an alerting strategy that scales to thousands of cohorts without overwhelming operators with false positives.",
+      "opener": "If we have thousands of potential cohorts, how do we efficiently alert on regressions without causing an explosion of false positives?",
+      "evidence": {
+        "strong": "Proposes anomaly detection or composite alerting rules rather than static thresholds.",
+        "adequate": "Suggests hierarchical alerting or aggregating smaller cohorts to reduce noise.",
+        "weak": "Relies on manual threshold configuration for thousands of cohorts."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we configure thresholds for a cohort that only has a few events per day?"
+      ],
+      "hints": [
+        "Think about automated ways to detect a baseline deviation.",
+        "Is a static threshold practical for thousands of unique slices?"
+      ],
+      "moveOnSummary": "We will use automated anomaly detection instead of static thresholds for high-cardinality cohorts.",
+      "learnTopics": [
+        "observability",
+        "incident-management"
+      ]
+    },
+    {
+      "id": "deep.embedding_drift",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "drift-monitor",
+          "embedding"
+        ],
+        "keywords": [
+          "embedding",
+          "vector",
+          "llm",
+          "unstructured"
+        ]
+      },
+      "goal": "Identify how to monitor drift for unstructured ML inputs using embeddings.",
+      "opener": "What if the model takes in unstructured data, like raw text for an LLM or images? How do we calculate drift?",
+      "evidence": {
+        "strong": "Uses embedding distance metrics to compare new data embeddings against a reference distribution.",
+        "adequate": "Mentions tracking simple metadata like text length or keyword frequency.",
+        "weak": "Assumes unstructured data cannot be monitored for drift."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How can we convert raw text into a numerical format suitable for drift calculation?"
+      ],
+      "hints": [
+        "How do LLMs represent text internally?",
+        "Can we track changes in the distribution of vectors?"
+      ],
+      "moveOnSummary": "We will monitor the distribution of embeddings to detect drift in unstructured data.",
+      "learnTopics": [
+        "vector-databases",
+        "ml-model-monitoring"
+      ]
+    },
+    {
+      "id": "wrap.alerting",
+      "stage": "wrap_up",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "alerting",
+          "dashboard",
+          "on-call"
+        ],
+        "keywords": [
+          "pagerduty",
+          "slack",
+          "threshold",
+          "owner",
+          "actionable"
+        ]
+      },
+      "goal": "Define how actionable alerts are generated and routed to the correct model owner.",
+      "opener": "When a metric crosses a threshold, how do we ensure the alert is actionable and reaches the right team?",
+      "evidence": {
+        "strong": "Designs alerts that include the specific model version, cohort, and metric affected, and routes them based on model ownership tags.",
+        "adequate": "Mentions sending an email or Slack message when drift occurs, but lacks context in the alert payload.",
+        "weak": "Assumes a central ops team handles all alerts, missing the nuance that ML failures require model-specific context to debug."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If an engineer receives this alert at 3 AM, what information must be in the payload so they know what to do?",
+        "How does the system know which team owns which model?"
+      ],
+      "hints": [
+        "Think about the metadata we discussed earlier, like model versions.",
+        "Where can we store the mapping between a model ID and a team's contact info?"
+      ],
+      "moveOnSummary": "Alerts will be enriched with model version and cohort context, and routed using a model registry or ownership mapping.",
+      "learnTopics": [
+        "incident-management",
+        "observability",
+        "mlops-model-registry"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "deep.cohort_explosion",
+      "after": "deep.cohorts",
+      "prompt": "Users are complaining about an issue in a very specific cohort, but the aggregate metrics look fine. If we have thousands of potential cohorts, how do we efficiently alert on regressions without causing an explosion of false positives?",
+      "agendaItemId": "deep.anomaly_detection"
+    },
+    {
+      "id": "deep.unstructured_drift",
+      "after": "deep.drift",
+      "prompt": "What if the model takes in unstructured data, like raw text for an LLM or images? How do we calculate drift when we don't have simple numerical features?",
+      "agendaItemId": "deep.embedding_drift"
+    }
+  ],
+  "vocabulary": [
+    "PSI",
+    "KL divergence",
+    "Wasserstein distance",
+    "ground truth",
+    "cohort",
+    "concept drift",
+    "covariate shift",
+    "PII",
+    "request ID",
+    "OLAP"
+  ],
+  "alternatives": [
+    {
+      "choice": "Sampling instead of full logging",
+      "whenBetter": "When prediction volume is massive and calculating statistical drift doesn't require every single event, significantly saving storage costs."
+    },
+    {
+      "choice": "Stream processing for basic metrics",
+      "whenBetter": "When operational health (latency, error rates) needs sub-minute alerting, separating it from the slower batch process used for label joins."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Decoupled pipeline with robust ML observability",
+      "outline": "The candidate clearly separated operational metrics from ML evaluation metrics. They designed an asynchronous ingestion path using event streams, heavily utilized sampling and early PII masking, and stored data in an OLAP warehouse. They understood delayed ground truth, solving it with a request ID join strategy in batch. They explicitly named statistical drift techniques (PSI) and ensured all data was tagged with model versions and cohorts for actionable alerting."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic logging and DB joins",
+      "outline": "The candidate established a functional flow where predictions and labels are logged to a central database. They correctly identified the need to join on a common ID but proposed a transactional database that might struggle with 30-day retention at high scale. They mentioned drift and cohorts but were vague on the specific statistical methods or how to query the data efficiently."
+    },
+    {
+      "band": "weak",
+      "label": "Traditional infrastructure monitoring",
+      "outline": "The candidate treated the problem like a standard web service, focusing heavily on CPU, memory, and API latency. They missed the nuance of delayed ground truth, attempting to evaluate model accuracy synchronously on the request path. They did not separate model versions, making it impossible to detect regressions in new deployments, and ignored data privacy concerns entirely."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

@@ -1,0 +1,539 @@
+{
+  "opening": "Welcome! Today we are going to design a real-time analytics platform. Whenever you are ready, feel free to start laying out your approach or asking questions to narrow down the scope.",
+  "clarifications": [
+    {
+      "id": "scale.throughput",
+      "topics": [
+        "throughput",
+        "events per second",
+        "scale",
+        "qps",
+        "volume"
+      ],
+      "answer": "Expect around 1 million events per second globally at peak."
+    },
+    {
+      "id": "latency.freshness",
+      "topics": [
+        "freshness",
+        "latency",
+        "delay",
+        "real-time",
+        "dashboard"
+      ],
+      "answer": "Aggregates should appear on the dashboards within 10 seconds of the event being generated."
+    },
+    {
+      "id": "scope.regions",
+      "topics": [
+        "regions",
+        "geography",
+        "multi-region",
+        "producers"
+      ],
+      "answer": "The producers are spread across 3 major geographic regions."
+    },
+    {
+      "id": "data.duplicates",
+      "topics": [
+        "duplicates",
+        "retries",
+        "at-least-once",
+        "exactly-once"
+      ],
+      "answer": "Around 0.1% of incoming events will be duplicates due to client or network retries."
+    },
+    {
+      "id": "data.late",
+      "topics": [
+        "late events",
+        "offline",
+        "out of order",
+        "timestamp"
+      ],
+      "answer": "Events can arrive up to a few hours late if mobile clients lose connection, but most arrive within seconds."
+    },
+    {
+      "id": "data.payload",
+      "topics": [
+        "size",
+        "payload",
+        "schema",
+        "bytes"
+      ],
+      "answer": "Each event is roughly 1KB of JSON data."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not specified, ask them what they think is a reasonable assumption for a standard enterprise analytics platform and have them proceed with that.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "qps",
+          "latency",
+          "throughput",
+          "storage"
+        ]
+      },
+      "goal": "Establish the scale, throughput, and latency constraints of the system.",
+      "opener": "What main requirements and scale numbers do you want to establish before we start building?",
+      "evidence": {
+        "strong": "Calculates incoming bandwidth and storage requirements, and explicitly asks about data freshness vs correctness trade-offs.",
+        "adequate": "Asks for events per second and basic latency targets, writing them down on the canvas.",
+        "weak": "Starts drawing architecture immediately without bounding the problem or asking for scale constraints."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How much data volume does that translate to per day?",
+        "What are you assuming about the read traffic from the dashboards?"
+      ],
+      "hints": [
+        "Consider asking how many events we receive per second.",
+        "You might want to calculate the daily storage footprint based on the event size."
+      ],
+      "moveOnSummary": "Agreed on throughput, storage estimates, and the freshness target.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ingestion",
+          "stream",
+          "stream-processor",
+          "database",
+          "dashboard"
+        ],
+        "keywords": [
+          "pipeline",
+          "flow",
+          "ingest",
+          "process",
+          "store"
+        ]
+      },
+      "goal": "Create a coherent end-to-end pipeline from ingestion endpoints to the dashboard.",
+      "opener": "Could you walk me through the high-level path an event takes from the moment it is generated to showing up on a dashboard?",
+      "evidence": {
+        "strong": "Uses a durable message broker to decouple ingestion from a dedicated stream processor, which writes to an analytical store.",
+        "adequate": "Draws an API gateway, a queue, a processing service, and a database, but mixes up batch and stream concepts.",
+        "weak": "Connects an API gateway directly to a database, omitting message queues or stream processing layers entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "direct_db_write",
+          "pattern": "Writing events directly to the database from the API.",
+          "challenge": "What happens to the ingestion endpoints if the database slows down during a peak traffic spike?"
+        }
+      ],
+      "probes": [
+        "What decouples the fast producers from the downstream processors?",
+        "How do the dashboard clients retrieve this data?"
+      ],
+      "hints": [
+        "Think about what happens if the database goes down. Where do we hold the incoming events?",
+        "A durable message queue or event stream is usually placed right after ingestion."
+      ],
+      "moveOnSummary": "Established the high-level flow: API to Message Broker to Stream Processor to Database.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "deep.time_windows",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-flink",
+          "aggregator"
+        ],
+        "keywords": [
+          "window",
+          "event time",
+          "processing time",
+          "watermark",
+          "late"
+        ]
+      },
+      "goal": "Ensure the candidate groups events by when they happened, not when they arrived, and manages window closure.",
+      "opener": "How do you handle the time windowing for these metrics, especially given that some events might arrive out of order or late?",
+      "evidence": {
+        "strong": "Clearly distinguishes event time from processing time, and explains how watermarks dictate when a window is closed and emitted.",
+        "adequate": "Mentions event timestamps but struggles to explain exactly how the system knows when it is safe to calculate the final aggregate.",
+        "weak": "Groups data based on when the server receives it, corrupting metrics if there is network lag."
+      },
+      "misconceptions": [
+        {
+          "id": "processing_time_window",
+          "pattern": "Using the server's clock to define the time window.",
+          "challenge": "If a mobile client goes offline and uploads 5 minutes of buffered events all at once, which time window will they fall into?"
+        }
+      ],
+      "probes": [
+        "How does the system decide it has waited long enough for delayed events in a given minute?",
+        "What exactly do you do with an event that arrives three hours after its window was closed?"
+      ],
+      "hints": [
+        "Think about the difference between the timestamp on the event and the time the server receives it.",
+        "Look into 'watermarks' as a way to track the progress of event time."
+      ],
+      "moveOnSummary": "Discussed event-time semantics, watermarking, and late event policies.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks",
+        "clocks-and-ordering"
+      ]
+    },
+    {
+      "id": "deep.deduplication",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-flink",
+          "t-redis",
+          "cache"
+        ],
+        "keywords": [
+          "dedupe",
+          "exactly once",
+          "idempotent",
+          "retry",
+          "bloom filter"
+        ]
+      },
+      "goal": "Prevent duplicate events from inflating aggregates using internal state stores or idempotent database updates.",
+      "opener": "If a producer sends the exact same event twice due to a network retry, how does your system ensure it is only counted once?",
+      "evidence": {
+        "strong": "Uses a state store with a TTL to track seen event IDs in the stream processor, or leverages exactly-once transactional sinks.",
+        "adequate": "Proposes a Redis cache to check event IDs, but misses the performance impact or race conditions of an external call per event.",
+        "weak": "Assumes the message queue alone guarantees exactly-once delivery, or ignores deduplication entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "infinite_dedupe_state",
+          "pattern": "Storing all seen event IDs indefinitely in memory.",
+          "challenge": "Given our throughput, how much memory will storing every event ID take up over a week?"
+        }
+      ],
+      "probes": [
+        "Where exactly is the deduplication state stored?",
+        "How do you keep the deduplication state from growing infinitely over time?"
+      ],
+      "hints": [
+        "We only need to remember an event ID for as long as a duplicate might realistically arrive.",
+        "Can we keep this state local to the processing nodes to avoid network overhead?"
+      ],
+      "moveOnSummary": "Resolved deduplication using local state stores with a TTL and exactly-once processing concepts.",
+      "learnTopics": [
+        "delivery-semantics",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "deep.storage_olap",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "timeseries-db",
+          "database",
+          "t-druid",
+          "t-clickhouse"
+        ],
+        "keywords": [
+          "olap",
+          "columnar",
+          "slice and dice",
+          "pre-aggregate",
+          "druid"
+        ]
+      },
+      "goal": "Choose a serving layer optimized for fast, multi-dimensional analytical queries over time-series data.",
+      "opener": "What kind of database would you use to serve these dashboard queries within our latency target, and why?",
+      "evidence": {
+        "strong": "Selects a real-time OLAP or time-series database, explaining the benefits of columnar storage, data locality, and time-based partitioning.",
+        "adequate": "Chooses a NoSQL wide-column store or a generic relational DB, adding indexes on time and tenant IDs.",
+        "weak": "Uses a simple key-value store, struggling to explain how complex range queries and aggregations would perform."
+      },
+      "misconceptions": [
+        {
+          "id": "kv_for_analytics",
+          "pattern": "Using Redis or a basic Key-Value store to serve multi-dimensional dashboard queries.",
+          "challenge": "If a user wants to filter metrics by region, device type, and a specific time range, how does the key-value store execute that query efficiently?"
+        }
+      ],
+      "probes": [
+        "How is the data physically laid out on disk to make these aggregations fast?",
+        "How does the database handle older data that is rarely queried?"
+      ],
+      "hints": [
+        "Think about row-oriented versus columnar data formats.",
+        "Consider specialized databases designed specifically for real-time analytics and time-series."
+      ],
+      "moveOnSummary": "Selected an OLAP/Time-series database and discussed partitioning by time.",
+      "learnTopics": [
+        "time-series-databases",
+        "columnar-file-formats",
+        "data-warehouse-vs-data-lake"
+      ]
+    },
+    {
+      "id": "deep.cross_region",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cluster",
+          "t-kafka"
+        ],
+        "keywords": [
+          "global",
+          "cross-region",
+          "replicate",
+          "federated"
+        ]
+      },
+      "goal": "Design a strategy for merging data from multiple regions without violating latency or bandwidth constraints.",
+      "opener": "Since our producers are spread across three different regions, how do you get a globally unified view of the metrics on the dashboard?",
+      "evidence": {
+        "strong": "Trades off centralized processing versus regional pre-aggregation. Chooses to aggregate locally per region and federate queries or replicate small aggregated results globally.",
+        "adequate": "Proposes shipping all raw data over the public internet to a single central region for processing.",
+        "weak": "Ignores the multi-region aspect or assumes the database magically syncs instantly globally without bandwidth costs."
+      },
+      "misconceptions": [
+        {
+          "id": "free_cross_region",
+          "pattern": "Assuming cross-region replication of high-volume raw streams has negligible cost and latency.",
+          "challenge": "Given the scale we calculated earlier, what is the network cost and latency penalty of sending all raw events across the ocean?"
+        }
+      ],
+      "probes": [
+        "Are you sending raw events or pre-aggregated metrics across regions?",
+        "What happens to the dashboard if the link between two regions goes down?"
+      ],
+      "hints": [
+        "Consider doing the heavy processing close to where the data is generated.",
+        "The dashboards only need the final numbers, not every individual event."
+      ],
+      "moveOnSummary": "Addressed cross-region data transfer by doing regional pre-aggregation.",
+      "learnTopics": [
+        "geo-replication",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.replay",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "archive",
+          "storage",
+          "t-s3",
+          "batch-processor"
+        ],
+        "keywords": [
+          "replay",
+          "backfill",
+          "reprocess",
+          "raw data",
+          "lambda architecture"
+        ]
+      },
+      "goal": "Provide a durable mechanism to store raw events long-term and replay them if processing logic changes.",
+      "opener": "If we discover a bug in our aggregation logic that affected yesterday's data, how would you recalculate those metrics?",
+      "evidence": {
+        "strong": "Maintains a raw event archive in object storage, and describes running a separate batch or stream job to write corrected aggregates to a new table/namespace.",
+        "adequate": "Suggests increasing message queue retention to several days to replay directly from the broker.",
+        "weak": "Has no raw storage layer, meaning once data is aggregated, the underlying events are lost forever."
+      },
+      "misconceptions": [
+        {
+          "id": "kafka_forever",
+          "pattern": "Using the real-time message queue as a permanent historical archive.",
+          "challenge": "Storing months of raw data in the message broker is expensive. Is there a cheaper storage medium for data we rarely read?"
+        }
+      ],
+      "probes": [
+        "Where do you store the raw events cost-effectively for months?",
+        "When the replay finishes, how do you swap the dashboard to the corrected data without downtime?"
+      ],
+      "hints": [
+        "Think about object storage solutions for cheap, long-term archival.",
+        "You might need a parallel pipeline to process historical data without blocking real-time events."
+      ],
+      "moveOnSummary": "Established a raw event archive and a parallel replay/backfill strategy.",
+      "learnTopics": [
+        "batch-vs-stream-processing",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "deep.backfill_strategy",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "t-spark"
+        ],
+        "keywords": [
+          "overwrite",
+          "recalculate",
+          "blue green"
+        ]
+      },
+      "goal": "Explain the operational mechanics of swapping out corrupted data with backfilled data transparently.",
+      "opener": "Walk me through the mechanics of replacing the corrupted data in the serving layer once the backfill job finishes.",
+      "evidence": {
+        "strong": "Uses a blue-green deployment approach for data: writes backfill to a new table or partition, verifies it, then updates a view or pointer in the OLAP DB.",
+        "adequate": "Proposes running update/delete queries on the live serving database, but acknowledges performance hits.",
+        "weak": "Takes the dashboard offline while dropping and reloading the data."
+      },
+      "misconceptions": [
+        {
+          "id": "in_place_updates",
+          "pattern": "Using massive UPDATE queries in an OLAP database.",
+          "challenge": "OLAP databases are generally optimized for appends. How will a massive UPDATE affect real-time ingestion performance?"
+        }
+      ],
+      "probes": [
+        "How do we prevent users from seeing incomplete data while the backfill is writing?",
+        "How do you merge the backfilled historical data with the real-time data currently arriving?"
+      ],
+      "hints": [
+        "Consider writing the corrected data to an entirely separate location first.",
+        "Think about how you might atomically switch a pointer when the job is done."
+      ],
+      "moveOnSummary": "Outlined a safe data swap strategy using partitions or aliases.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "trade-off",
+          "single point of failure",
+          "limit"
+        ]
+      },
+      "goal": "Evaluate the design objectively, identifying physical limits and necessary compromises.",
+      "opener": "Looking at your final design, what do you consider the biggest compromise or weakest link in this architecture?",
+      "evidence": {
+        "strong": "Identifies realistic limits, such as the tension between allowed lateness and data freshness, or the cost of cross-region bandwidth.",
+        "adequate": "Names standard generic bottlenecks like 'the database might get slow' or 'we need to scale the stream processor'.",
+        "weak": "Claims the architecture has no compromises or single points of failure."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If traffic spiked by 10x suddenly, which component would fall over first?",
+        "What operational overhead are you taking on with these specific technology choices?"
+      ],
+      "hints": [
+        "Consider the trade-off you made between accuracy (waiting for late events) and latency (updating dashboards instantly).",
+        "Think about what happens during a severe network partition."
+      ],
+      "moveOnSummary": "Reviewed the architectural trade-offs and concluded the design round.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "bug_backfill",
+      "after": "deep.replay",
+      "prompt": "Let's say a bug in the stream processor caused all metrics to be undercounted for the last 24 hours. How do you replace the corrupted dashboard data without causing downtime for users?",
+      "agendaItemId": "deep.backfill_strategy"
+    }
+  ],
+  "vocabulary": [
+    "Flink",
+    "Druid",
+    "ClickHouse",
+    "Pinot",
+    "Kafka",
+    "Kinesis",
+    "watermark",
+    "event time",
+    "processing time",
+    "exactly-once",
+    "at-least-once",
+    "OLAP",
+    "deduplication",
+    "bloom filter",
+    "checkpointing"
+  ],
+  "alternatives": [
+    {
+      "choice": "Pre-aggregation in the stream processor (Flink) vs Raw ingestion into the OLAP database.",
+      "whenBetter": "Pre-aggregation is better to save storage costs and query latency when the dashboard queries are fixed. Raw ingestion is better if users need ad-hoc, flexible slice-and-dice queries across high-cardinality dimensions."
+    },
+    {
+      "choice": "Regional Processing vs Centralized Processing.",
+      "whenBetter": "Regional processing is better to save cross-region bandwidth costs and reduce ingestion latency. Centralized processing is better if the total volume is manageable and global joins on raw data are strictly required."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive stream and OLAP architecture",
+      "outline": "The candidate establishes a robust pipeline using Kafka and Flink, writing into an OLAP store like Druid or ClickHouse. They clearly articulate the difference between event time and processing time, using watermarks to handle late data gracefully. Deduplication is handled via Flink state with a TTL or exactly-once transactional sinks. A parallel S3 raw archive is included, and they explain a blue-green data deployment for safe backfills."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard queue to database",
+      "outline": "The candidate designs a functional flow using a message queue and a processing service, saving aggregates to a relational database. They understand the need for deduplication but might propose naive Redis checks that don't scale well. They recognize out-of-order data but struggle to explicitly define window closure mechanics like watermarks, relying instead on basic batching."
+    },
+    {
+      "band": "weak",
+      "label": "Direct writes without streaming mechanics",
+      "outline": "The candidate treats this as a standard CRUD problem, connecting API endpoints directly to a database without message queues or stream processors. They use processing time by default, resulting in corrupt metrics during network delays. They fail to handle duplicate deliveries and omit any strategy for storing raw data for replay."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

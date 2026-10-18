@@ -7,6 +7,7 @@ import { runTask } from "../ai/run.js";
 import { list, text } from "../ai/schema.js";
 import { renderPool } from "../answers/task.js";
 import { renderUniversal } from "../ucs/index.js";
+import { auditPack } from "./audit.js";
 import { finishPack, packContent, sanitizeContent, validatePack } from "./schema.js";
 
 // Builds a draft pack from a question's inputs with one strong-model call (task
@@ -61,9 +62,9 @@ function buildUser({ inputs, problems, previous }) {
 export function fakePackContent({ inputs }) {
   const scope = section(inputs.guide?.text, "Scope and scale").split("\n").map((part) => part.replace(/^[-*]\s*/, "").trim()).filter(Boolean).slice(0, 5);
   const facts = scope.length ? scope : ["Assume a few million daily users and a read-heavy workload."];
-  const item = (id, stage, dimension, weight, required, goal, opener, kinds = []) => ({
+  const item = (id, stage, dimension, weight, required, goal, opener, kinds = [], keywords = []) => ({
     id, stage, dimension, weight, required,
-    triggers: { componentKinds: kinds.filter((kind) => componentKinds().has(kind)), keywords: [] },
+    triggers: { componentKinds: kinds.filter((kind) => componentKinds().has(kind)), keywords },
     goal: `(Sample) ${goal}`,
     opener: `(Sample) ${opener}`,
     evidence: { strong: "(Sample) Specific, justified and tied to the requirements.", adequate: "(Sample) Plausible but missing a key detail.", weak: "(Sample) Vague or contradicts the requirements." },
@@ -80,11 +81,12 @@ export function fakePackContent({ inputs }) {
     agenda: [
       item("req.scope", "requirements", "requirements", 2, true, "Pin down users, core operations and scale.", "Who uses this, and what are the core operations?"),
       item("req.nfr", "requirements", "requirements", 1, false, "State latency, availability and consistency needs.", "What matters most: latency, availability or consistency?"),
-      item("hl.flow", "high_level", "architecture", 3, true, "An end-to-end flow for the core operations.", "Walk me through a request end to end.", ["api-gateway", "load-balancer"]),
-      item("hl.api", "high_level", "architecture", 1, false, "A clear API for the core operations.", "What does the API look like?"),
-      item("deep.data", "deep_dive", "data", 3, true, "Storage that fits the access patterns.", "How do you store the core data, and why that store?", ["sql-database", "nosql-database"]),
-      item("deep.scale", "deep_dive", "scalability", 3, true, "Handle the expected load and hot spots.", "What breaks first at ten times the traffic?", ["cache"]),
-      item("deep.failure", "deep_dive", "reliability", 2, false, "Survive the failure of any one component.", "What happens when a database node fails?"),
+      item("hl.flow", "high_level", "architecture", 3, true, "An end-to-end flow for the core operations.", "Walk me through a request end to end.", ["api-gateway", "load-balancer"], ["gateway", "load balancer", "flow"]),
+      item("hl.api", "high_level", "architecture", 1, false, "A clear API for the core operations.", "What does the API look like?", [], ["api", "endpoint", "rest"]),
+      item("deep.data", "deep_dive", "data", 3, true, "Storage that fits the access patterns.", "How do you store the core data, and why that store?", ["database", "kv-store"], ["database", "schema", "storage"]),
+      item("deep.scale", "deep_dive", "scalability", 3, true, "Handle the expected load and hot spots.", "What breaks first at ten times the traffic?", ["cache"], ["cache", "hot", "traffic"]),
+      item("deep.async", "deep_dive", "scalability", 2, false, "Move slow work off the request path.", "Which work can happen asynchronously, and how?", ["queue"], ["queue", "async", "worker"]),
+      item("deep.failure", "deep_dive", "reliability", 2, false, "Survive the failure of any one component.", "What happens when a database node fails?", ["load-balancer"], ["failover", "replica", "outage"]),
       item("wrap.tradeoffs", "wrap_up", "tradeoffs", 2, true, "Name the main trade-offs and what to improve.", "What are the biggest trade-offs in your design?"),
     ],
     curveballs: [],
@@ -118,12 +120,26 @@ export async function buildPack(inputs) {
   const task = await packBuildTask();
   let problems = [];
   let previous = null;
+  let best = null;
   for (let round = 1; round <= MAX_ROUNDS; round += 1) {
     const { data, model } = await runTask(task, { inputs, problems, previous }, { meter: true });
     const { content, warnings } = sanitizeContent(data);
     previous = content;
     const pack = finishPack(content, { promptId: inputs.promptId, inputsFingerprint: inputs.fingerprint, builder: `${BUILDER}/${model}` });
     problems = validatePack(pack);
+    // Structurally sound: now check how it behaves in the planner (deep-dive variety, and
+    // whether a candidate's focus can steer the deep dive). Those get a repair round
+    // too, but a pack that still misses one is kept, with the finding as a warning.
+    if (!problems.length) {
+      const behaviour = auditPack(inputs.promptId, pack).problems;
+      if (behaviour.length && round < MAX_ROUNDS) {
+        best = { pack, warnings: [...warnings, ...behaviour] };
+        problems = behaviour;
+        console.warn(`[pks] ${inputs.promptId} build round ${round}: ${behaviour.slice(0, 2).join("; ")}`);
+        continue;
+      }
+      warnings.push(...behaviour);
+    }
     if (!problems.length) {
       let consistency = null;
       try {
@@ -136,6 +152,8 @@ export async function buildPack(inputs) {
     }
     console.warn(`[pks] ${inputs.promptId} build round ${round} broke ${problems.length} rule(s): ${problems.slice(0, 3).join("; ")}`);
   }
+  // The last repair broke a rule, but an earlier round was sound: keep that one.
+  if (best) return { pack: best.pack, warnings: best.warnings, consistency: null };
   const error = new Error(`Pack for ${inputs.promptId} broke structural rules: ${problems.slice(0, 5).join("; ")}`);
   error.code = "INVALID_PACK";
   throw error;

@@ -1,0 +1,604 @@
+{
+  "opening": "Welcome! Today we are going to design a search autocomplete service. Whenever you are ready, how would you like to begin?",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "qps",
+        "traffic",
+        "scale",
+        "users",
+        "requests"
+      ],
+      "answer": "Assume roughly 50,000 completed searches per second, which generates about 300,000 autocomplete requests per second."
+    },
+    {
+      "id": "scale.data",
+      "topics": [
+        "size",
+        "words",
+        "storage",
+        "corpus",
+        "phrases"
+      ],
+      "answer": "The core index needs to cover about 100 million unique search phrases."
+    },
+    {
+      "id": "latency.target",
+      "topics": [
+        "latency",
+        "speed",
+        "performance",
+        "sla"
+      ],
+      "answer": "Suggestions must appear under 100ms end-to-end, so the backend should return results in under 50ms."
+    },
+    {
+      "id": "features.personalization",
+      "topics": [
+        "personalization",
+        "user",
+        "history",
+        "profile"
+      ],
+      "answer": "We will only use global popularity and freshness for ranking. No user-level personalization is required."
+    },
+    {
+      "id": "features.languages",
+      "topics": [
+        "language",
+        "i18n",
+        "english"
+      ],
+      "answer": "To keep things simple, let's assume the service only supports English."
+    },
+    {
+      "id": "features.freshness",
+      "topics": [
+        "freshness",
+        "trends",
+        "update",
+        "real-time",
+        "new words"
+      ],
+      "answer": "New viral queries should appear in autocomplete within a few minutes, while normal index updates can happen daily."
+    }
+  ],
+  "clarificationPolicy": "If a requirement isn't specified, state a reasonable assumption for a large-scale global search engine and proceed.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "user"
+        ],
+        "keywords": [
+          "qps",
+          "latency",
+          "scale",
+          "reads",
+          "writes",
+          "keystrokes"
+        ]
+      },
+      "goal": "Establish the highly read-heavy nature of the system and the strict latency constraints.",
+      "opener": "What are the most important constraints and scale numbers we need to design for?",
+      "evidence": {
+        "strong": "Derives the high read QPS by distinguishing completed searches from individual keystrokes, and notes the strict latency requirement.",
+        "adequate": "Asks about scale and latency but struggles to translate searches per second into the higher autocomplete read QPS.",
+        "weak": "Jumps into architecture without defining the expected load or latency targets."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the number of completed searches relate to the number of autocomplete requests?"
+      ],
+      "hints": [
+        "Think about how an autocomplete system actually fires requests as a user types.",
+        "Consider the ratio between a single completed search and the number of characters a user types to get there."
+      ],
+      "moveOnSummary": "Agreed on the read-heavy scale and strict latency bounds.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "high_level.api",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway"
+        ],
+        "keywords": [
+          "debounce",
+          "websocket",
+          "http",
+          "api"
+        ]
+      },
+      "goal": "Define how the client interacts with the backend efficiently without overwhelming it.",
+      "opener": "How will the client application communicate with our service as the user types?",
+      "evidence": {
+        "strong": "Suggests debouncing on the client and using standard HTTP with browser caching, or persistent WebSockets for reduced overhead.",
+        "adequate": "Mentions basic HTTP requests per keystroke but misses client-side optimizations.",
+        "weak": "Proposes sending a backend request instantly on every single keystroke without rate limiting or delays."
+      },
+      "misconceptions": [
+        {
+          "id": "every-keystroke",
+          "pattern": "Sending a backend request instantly on every keystroke.",
+          "challenge": "What happens to our QPS if a user types ten characters very quickly?"
+        }
+      ],
+      "probes": [
+        "Can we reduce the number of requests sent by a fast typist?"
+      ],
+      "hints": [
+        "What if the user types a full word very quickly?",
+        "Consider a client-side technique to delay the network request until typing pauses briefly."
+      ],
+      "moveOnSummary": "Using client debouncing and caching to reduce load before it hits the API.",
+      "learnTopics": [
+        "api-design",
+        "browser-caching"
+      ]
+    },
+    {
+      "id": "high_level.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "storage",
+          "stream"
+        ],
+        "keywords": [
+          "read path",
+          "write path",
+          "logs",
+          "index builder",
+          "aggregate"
+        ]
+      },
+      "goal": "Establish the separation between the fast read path and the asynchronous write/aggregation path.",
+      "opener": "Can you walk me through the high-level components for both serving suggestions and building the data?",
+      "evidence": {
+        "strong": "Clearly separates the query serving path from a background log aggregation and index building pipeline.",
+        "adequate": "Draws an index and a service but conflates the read and write paths or lacks a distinct aggregation layer.",
+        "weak": "Tries to write directly to the serving database on every search."
+      },
+      "misconceptions": [
+        {
+          "id": "direct-write",
+          "pattern": "Updating the autocomplete data store immediately on every search.",
+          "challenge": "How will the data store handle the write load if we update it synchronously for every query?"
+        }
+      ],
+      "probes": [
+        "How does the system know which phrases are popular?"
+      ],
+      "hints": [
+        "Where do we get the raw data to populate our suggestions?",
+        "Instead of updating popularity on every search, how could we process search logs offline?"
+      ],
+      "moveOnSummary": "Separated the architecture into a fast read path and an asynchronous index builder.",
+      "learnTopics": [
+        "hld-vs-lld",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "deep.trie",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "search-index",
+          "in-memory-db",
+          "service"
+        ],
+        "keywords": [
+          "trie",
+          "prefix",
+          "top-k",
+          "precompute",
+          "tree"
+        ]
+      },
+      "goal": "Design a fast data structure to retrieve suggestions by prefix.",
+      "opener": "How exactly will you store the suggestions so that prefix lookups return the top results in a few milliseconds?",
+      "evidence": {
+        "strong": "Proposes an in-memory Trie and explains precomputing the top-k suggestions at each node to guarantee O(1) or O(length) reads.",
+        "adequate": "Suggests a Trie but plans to traverse leaf nodes at query time to find and sort the top results.",
+        "weak": "Proposes a standard relational database and a LIKE query."
+      },
+      "misconceptions": [
+        {
+          "id": "sql-like",
+          "pattern": "Using a SQL database with a LIKE query.",
+          "challenge": "How will a B-tree index perform for LIKE queries when we need sub-10ms responses at our expected QPS?"
+        },
+        {
+          "id": "traverse-leaves",
+          "pattern": "Traversing the entire subtrie at query time to find top weights.",
+          "challenge": "If the user types a single letter, traversing all words starting with that letter and sorting them takes too long. How can we speed this up?"
+        }
+      ],
+      "probes": [
+        "How do we avoid sorting the suggestions when the user queries a very short prefix?"
+      ],
+      "hints": [
+        "What if we sacrifice some memory to make the reads faster?",
+        "Could we store the answer for a prefix directly on that prefix's node?"
+      ],
+      "moveOnSummary": "Using an in-memory Trie with precomputed top-k results at each node.",
+      "learnTopics": [
+        "typeahead-autocomplete",
+        "search-and-inverted-index"
+      ]
+    },
+    {
+      "id": "deep.caching",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cdn",
+          "cache",
+          "t-redis",
+          "local-cache"
+        ],
+        "keywords": [
+          "cdn",
+          "edge",
+          "redis",
+          "memcached",
+          "cache"
+        ]
+      },
+      "goal": "Reduce the read load on the core suggestion services using caching layers.",
+      "opener": "Given the massive read traffic, how can we protect our backend services and reduce latency further?",
+      "evidence": {
+        "strong": "Adds caching at multiple layers: client browser, CDN for short/popular prefixes, and a distributed cache before the application.",
+        "adequate": "Mentions a backend cache like Redis but misses edge or client-side caching.",
+        "weak": "Relies entirely on scaling the application servers to handle all reads."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Are there certain prefixes that get queried significantly more often than others?"
+      ],
+      "hints": [
+        "Where is the closest place to the user we could store the suggestions for common letters?",
+        "Consider how a CDN could serve static-like responses for popular prefixes."
+      ],
+      "moveOnSummary": "Implementing multi-layered caching at the client, CDN, and backend.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies",
+        "cdn"
+      ]
+    },
+    {
+      "id": "deep.trends",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-kafka",
+          "t-flink",
+          "stream"
+        ],
+        "keywords": [
+          "real-time",
+          "trends",
+          "freshness",
+          "merge",
+          "lambda"
+        ]
+      },
+      "goal": "Incorporate fast-moving trends into the suggestions without waiting for a full batch rebuild.",
+      "opener": "If a breaking news event happens right now, how do we ensure it appears in autocomplete within minutes?",
+      "evidence": {
+        "strong": "Designs a real-time stream processing path that maintains a small, short-lived trends index, merged with the main batch index at query time.",
+        "adequate": "Mentions streaming logs but struggles to explain how to combine the real-time data with the static index dynamically.",
+        "weak": "Suggests running the full batch rebuild every few minutes."
+      },
+      "misconceptions": [
+        {
+          "id": "frequent-rebuilds",
+          "pattern": "Rebuilding the entire dataset every few minutes.",
+          "challenge": "Building the main index takes hours. How can we get minutes-level freshness without rebuilding it all?"
+        }
+      ],
+      "probes": [
+        "How do we serve a query if the best answers are partly in the batch index and partly in the real-time index?"
+      ],
+      "hints": [
+        "What if we had two separate data structures: one huge static one, and one tiny real-time one?",
+        "How could the read API combine results from a static index and a real-time trends cache on the fly?"
+      ],
+      "moveOnSummary": "Merging a fast, stream-processed trends cache with the primary batch index at query time.",
+      "learnTopics": [
+        "batch-vs-stream-processing",
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "deep.sharding",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "shard",
+          "cluster",
+          "service"
+        ],
+        "keywords": [
+          "partition",
+          "hash",
+          "shard by prefix"
+        ]
+      },
+      "goal": "Distribute the large index across multiple machines.",
+      "opener": "If the index becomes too large to fit in the memory of a single machine, how would you partition the data?",
+      "evidence": {
+        "strong": "Proposes sharding by prefix range or hash, notes the trade-offs like uneven distribution, and suggests routing logic.",
+        "adequate": "Suggests consistent hashing but doesn't address how to route a specific prefix lookup to the correct node.",
+        "weak": "Suggests sharding by user ID or random hashing, which breaks prefix lookups."
+      },
+      "misconceptions": [
+        {
+          "id": "random-hash",
+          "pattern": "Hashing the query randomly across nodes.",
+          "challenge": "If words starting with 'app' are scattered randomly across ten nodes, how do we efficiently retrieve the overall top 10?"
+        }
+      ],
+      "probes": [
+        "If we shard by the first character, what happens to the shard holding words starting with 's' compared to 'z'?"
+      ],
+      "hints": [
+        "How can we route a request to the exact machine that holds words starting with that specific prefix?",
+        "Think about how a physical encyclopedia is split into multiple volumes by letter."
+      ],
+      "moveOnSummary": "Sharding the index by prefix to distribute the memory footprint.",
+      "learnTopics": [
+        "sharding",
+        "consistent-hashing"
+      ]
+    },
+    {
+      "id": "deep.updates",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "deployer",
+          "storage",
+          "search-index"
+        ],
+        "keywords": [
+          "downtime",
+          "swap",
+          "blue-green",
+          "rebuild"
+        ]
+      },
+      "goal": "Deploy a newly built batch index to the live servers without dropping traffic.",
+      "opener": "When the offline job finishes building the new index for the day, how do you load it into the serving machines without causing downtime?",
+      "evidence": {
+        "strong": "Describes a blue-green deployment strategy or an atomic pointer swap where servers load the new index into memory before switching traffic.",
+        "adequate": "Mentions updating nodes one by one to avoid total downtime, but risks serving inconsistent results during the rollout.",
+        "weak": "Suggests updating the index in place while it is actively serving read traffic."
+      },
+      "misconceptions": [
+        {
+          "id": "in-place-update",
+          "pattern": "Modifying the live index directly.",
+          "challenge": "If we lock the data structure to update it, what happens to the thousands of read requests coming in that second?"
+        }
+      ],
+      "probes": [
+        "How can a single server transition from the old index to the new index safely?"
+      ],
+      "hints": [
+        "What if a server holds two copies of the index in memory for a short transitional period?",
+        "Consider how we deploy new versions of an application without downtime."
+      ],
+      "moveOnSummary": "Using atomic swaps or blue-green deployments to update the index seamlessly.",
+      "learnTopics": [
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "deep.hot_shard",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "load-balancer",
+          "cache"
+        ],
+        "keywords": [
+          "hot partition",
+          "celebrity",
+          "spike"
+        ]
+      },
+      "goal": "Mitigate traffic spikes to a single shard caused by highly viral prefixes.",
+      "opener": "What if a specific prefix suddenly gets massive traffic and overwhelms the single shard it lives on?",
+      "evidence": {
+        "strong": "Identifies the hot partition problem and resolves it using dynamic replication, CDN caching, or adding a load balancing layer for replicas.",
+        "adequate": "Suggests adding more machines in general, without isolating how to replicate the specific hot data.",
+        "weak": "Assumes standard round-robin load balancing solves data-layer hot shards automatically."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we increase read capacity for just one specific shard that is under heavy load?"
+      ],
+      "hints": [
+        "If everyone is asking for the exact same prefix, how can we serve it from more than one machine?",
+        "Think about replication and short-lived caching."
+      ],
+      "moveOnSummary": "Handling hot partitions with targeted replication and edge caching.",
+      "learnTopics": [
+        "hot-partitions",
+        "replication"
+      ]
+    },
+    {
+      "id": "deep.filtering",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "service",
+          "ai-agent"
+        ],
+        "keywords": [
+          "filter",
+          "blocklist",
+          "offensive",
+          "pii"
+        ]
+      },
+      "goal": "Implement a mechanism to block inappropriate suggestions before they reach users.",
+      "opener": "How are you handling the filtering of offensive or inappropriate search suggestions?",
+      "evidence": {
+        "strong": "Integrates a blocklist filter during the offline index build and adds a fast validation check on the read path or trends pipeline.",
+        "adequate": "Suggests filtering on the client side or only in the offline batch.",
+        "weak": "Ignores the requirement or suggests manual review of all queries."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If a bad word trends in real-time, how do we block it before the daily batch runs?"
+      ],
+      "hints": [
+        "Where is the most efficient place to apply a blocklist?",
+        "Should we filter when reading from the user, or when building the index initially?"
+      ],
+      "moveOnSummary": "Applied a blocklist during index generation and real-time trend processing.",
+      "learnTopics": [
+        "data-quality"
+      ]
+    },
+    {
+      "id": "wrap_up.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "failure",
+          "summarize",
+          "trade-off"
+        ]
+      },
+      "goal": "Critically evaluate the final design for single points of failure or scale limits.",
+      "opener": "Looking at the system you've designed, what do you consider the biggest remaining bottleneck or risk?",
+      "evidence": {
+        "strong": "Points out specific trade-offs made, such as memory limits of the index, the complexity of the scatter-gather trend merging, or cache stampedes.",
+        "adequate": "Summarizes the system but gives a generic bottleneck like the database or the network.",
+        "weak": "Claims the system is infinitely scalable with no remaining bottlenecks."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to query latency if the trends stream processing falls behind?"
+      ],
+      "hints": [
+        "Consider the memory usage of precomputing top results for every single node.",
+        "Think about what happens when popular caches expire simultaneously."
+      ],
+      "moveOnSummary": "Reviewed trade-offs and acknowledged system boundaries.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "offensive-filtering",
+      "after": "deep.trends",
+      "prompt": "How do we ensure offensive or inappropriate terms don't accidentally get suggested, especially when they suddenly trend?",
+      "agendaItemId": "deep.filtering"
+    }
+  ],
+  "vocabulary": [
+    "trie",
+    "debounce",
+    "top-k",
+    "prefix",
+    "scatter-gather",
+    "lambda architecture",
+    "blue-green",
+    "stampede"
+  ],
+  "alternatives": [
+    {
+      "choice": "Sorted prefix tables in a Key-Value store (e.g., Redis ZSET).",
+      "whenBetter": "When operational simplicity is preferred over maximum custom performance, or the dataset size doesn't justify maintaining a custom in-memory Trie application."
+    },
+    {
+      "choice": "Traversing Trie leaves at query time instead of precomputing.",
+      "whenBetter": "When the depth of the Trie is very shallow, memory is severely constrained, or the rankings change so rapidly that precomputing them constantly is impossible."
+    },
+    {
+      "choice": "Client-side prefix caching only, skipping a CDN.",
+      "whenBetter": "When requests are highly personalized per user, making global caching at the edge less effective."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Trie with Trends Pipeline",
+      "outline": "The candidate defined the high read scale and strict latency accurately. They designed a fast read path using an in-memory Trie with precomputed top-k results, fronted by a CDN and an API gateway using client debouncing. They clearly separated the write path into an offline batch job for daily index rebuilds and a real-time stream processor (e.g., Flink/Kafka) to capture breaking trends. They addressed data updates using blue/green deployments and handled hot prefixes with targeted replication and edge caching."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic Trie with Batch Updates",
+      "outline": "The candidate recognized the need for a Trie to meet latency goals and separated the read and write paths. They proposed a daily batch rebuild of the index and added a basic distributed cache like Redis to protect the backend. However, they struggled with how to incorporate real-time trends seamlessly, lacking a clear merging strategy on the read path, and missed edge caching optimizations for popular prefixes."
+    },
+    {
+      "band": "weak",
+      "label": "Database LIKE Query",
+      "outline": "The candidate treated the problem like a standard CRUD application. They proposed querying a relational database using a LIKE wildcard on every keystroke. They did not utilize debouncing, caching, or specialized data structures, and proposed updating the main data store synchronously on every search, a design that would quickly fail at the required scale."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

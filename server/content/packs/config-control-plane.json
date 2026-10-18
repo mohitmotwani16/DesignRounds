@@ -1,0 +1,570 @@
+{
+  "opening": "Welcome. Today, we'd like you to design a configuration control plane. Whenever you're ready, you can start exploring the problem.",
+  "clarifications": [
+    {
+      "id": "scale.instances",
+      "topics": [
+        "scale",
+        "nodes",
+        "instances",
+        "fleet",
+        "size"
+      ],
+      "answer": "The fleet consists of roughly 100,000 service instances distributed across 5 global regions."
+    },
+    {
+      "id": "scale.changes",
+      "topics": [
+        "frequency",
+        "updates",
+        "changes",
+        "throughput",
+        "writes"
+      ],
+      "answer": "Engineers and automated systems publish about 500 configuration changes per day."
+    },
+    {
+      "id": "data.size",
+      "topics": [
+        "size",
+        "payload",
+        "format",
+        "mb",
+        "kb"
+      ],
+      "answer": "Configurations are JSON or YAML files, typically under 1MB each."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "propagation",
+        "time"
+      ],
+      "answer": "For a standard rollout, propagation taking a few minutes is fine. For an emergency rollback, we want it applied in under 30 seconds."
+    },
+    {
+      "id": "req.targeting",
+      "topics": [
+        "target",
+        "scope",
+        "granularity",
+        "subset"
+      ],
+      "answer": "We need to target changes by region, cluster, specific service, and sometimes a percentage of a service."
+    },
+    {
+      "id": "req.downtime",
+      "topics": [
+        "downtime",
+        "cp down",
+        "outage",
+        "failure"
+      ],
+      "answer": "The data plane must be entirely decoupled. Services must start and run normally even if the config control plane is offline for hours."
+    }
+  ],
+  "clarificationPolicy": "Assume a tier-0 infrastructure environment where safety and reliability are prioritized over propagation speed, and use standard microservice scaling assumptions.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "read",
+          "write",
+          "availability",
+          "offline",
+          "downtime"
+        ]
+      },
+      "goal": "Identify that reads heavily outnumber writes and that control plane availability must not impact the data plane.",
+      "opener": "What are the most critical requirements and constraints for a system that controls configuration for thousands of instances?",
+      "evidence": {
+        "strong": "Explicitly separates the control plane (authoring) from the data plane (consuming) and identifies the requirement for offline survival.",
+        "adequate": "Lists basic CRUD requirements for configs and notes the need for rollbacks.",
+        "weak": "Misses the scale of instances or assumes the control plane must have 100% uptime for services to function."
+      },
+      "misconceptions": [
+        {
+          "id": "cp-dependency",
+          "pattern": "Assuming services constantly query a central database for every config read.",
+          "challenge": "If your central database goes down, what happens to the thousands of services trying to read their config?"
+        }
+      ],
+      "probes": [
+        "How often do you expect configs to be updated versus read?",
+        "What happens to a service if it restarts while the control plane is down?"
+      ],
+      "hints": [
+        "Think about the ratio of authors making changes to instances applying those changes.",
+        "Consider what must happen if the config service crashes completely but user traffic to the services continues."
+      ],
+      "moveOnSummary": "Agreed on a read-heavy system where data plane resilience is paramount.",
+      "learnTopics": [
+        "system-design-roadmap",
+        "availability"
+      ]
+    },
+    {
+      "id": "hl.publishing",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "admin",
+          "api-gateway",
+          "config"
+        ],
+        "keywords": [
+          "publish",
+          "submit",
+          "version",
+          "schema",
+          "save"
+        ]
+      },
+      "goal": "Establish a secure API for operators to submit, validate, and store versioned configurations.",
+      "opener": "Walk me through what happens when an operator clicks 'publish' on a new configuration.",
+      "evidence": {
+        "strong": "Designs an API that accepts changes, runs synchronous validation, assigns a monotonic version, and persists to a durable store before returning.",
+        "adequate": "Shows an admin interface writing to a database, mentioning versioning.",
+        "weak": "Writes configuration directly to instances or lacks a persistent store."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we know who made a change and what they changed?",
+        "How do you ensure no two configs get the same version number concurrently?"
+      ],
+      "hints": [
+        "Consider what data needs to be saved alongside the configuration text for auditing.",
+        "Think about using a database sequence or timestamps for versioning."
+      ],
+      "moveOnSummary": "Designed the publishing and storage layer with versioning and validation.",
+      "learnTopics": [
+        "api-design",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "hl.propagation",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream",
+          "queue",
+          "service-mesh",
+          "client"
+        ],
+        "keywords": [
+          "push",
+          "pull",
+          "poll",
+          "watch",
+          "distribute",
+          "grpc"
+        ]
+      },
+      "goal": "Design a scalable mechanism to distribute configs from the control plane to thousands of instances.",
+      "opener": "Given your scale estimate, how do the service instances actually receive the new configuration once it's saved?",
+      "evidence": {
+        "strong": "Evaluates push vs pull, selecting long-polling, gRPC watches, or a distributed KV store (like etcd/ZooKeeper) to minimize connection overhead and latency.",
+        "adequate": "Proposes a basic polling mechanism or a pub/sub queue.",
+        "weak": "Proposes a synchronous HTTP push to every instance directly from the API, ignoring network partitions and dynamic IPs."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-push",
+          "pattern": "A central loop that sends HTTP requests to every instance IP.",
+          "challenge": "How do you manage the list of IPs as instances autoscale, and how long does it take to iterate through all those nodes?"
+        }
+      ],
+      "probes": [
+        "What is the network cost if all the instances you estimated poll every second?",
+        "How does a newly launched instance immediately get the latest config?"
+      ],
+      "hints": [
+        "Think about the difference between short polling and long polling or persistent connections.",
+        "Consider how distributed configuration tools like etcd or Consul distribute state."
+      ],
+      "moveOnSummary": "Established a watch-based or efficient polling propagation model.",
+      "learnTopics": [
+        "real-time-communication",
+        "pub-sub"
+      ]
+    },
+    {
+      "id": "deep.validation",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "function",
+          "admin",
+          "config"
+        ],
+        "keywords": [
+          "validate",
+          "schema",
+          "dry-run",
+          "syntax",
+          "lint"
+        ]
+      },
+      "goal": "Prevent bad configuration from reaching the distribution phase.",
+      "opener": "Before a configuration even begins to roll out, how can we ensure it won't crash the services?",
+      "evidence": {
+        "strong": "Describes a pipeline of schema validation, semantic validation, and dry-runs against a shadow instance.",
+        "adequate": "Mentions JSON schema validation and rejecting malformed inputs.",
+        "weak": "Assumes configuration is always correct if the API accepts it."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What if the JSON is valid, but a timeout value is accidentally set to 0?",
+        "How can we validate configuration that depends on the current state of a database?"
+      ],
+      "hints": [
+        "Are there ways to check the 'meaning' of the config, not just the syntax?",
+        "Could we test the config on a real instance without serving user traffic?"
+      ],
+      "moveOnSummary": "Added schema and semantic validation to the authoring pipeline.",
+      "learnTopics": [
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "deep.rollout",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "worker"
+        ],
+        "keywords": [
+          "canary",
+          "percentage",
+          "phases",
+          "target",
+          "subset",
+          "region"
+        ]
+      },
+      "goal": "Safely deploy changes to a subset of nodes before a global rollout.",
+      "opener": "We have a valid config, but we want to be cautious. How do you roll this out safely across the fleet you estimated?",
+      "evidence": {
+        "strong": "Designs a stateful rollout engine that targets a canary group, waits for a bake period, checks health, and then expands the rollout progressively (e.g., 1%, 10%, 100%).",
+        "adequate": "Mentions canary deployments or rolling out region by region.",
+        "weak": "Updates all instances simultaneously."
+      },
+      "misconceptions": [
+        {
+          "id": "instant-global",
+          "pattern": "Broadcasting the new version to all nodes at once.",
+          "challenge": "If this config causes a panic loop on startup, what happens to our global fleet?"
+        }
+      ],
+      "probes": [
+        "Where is the state of the rollout tracked?",
+        "How does a specific instance know whether it should apply version 2 or stick to version 1?"
+      ],
+      "hints": [
+        "Think of the rollout as a state machine.",
+        "How can you map an instance's identity (like its region or ID hash) to a specific config version?"
+      ],
+      "moveOnSummary": "Designed a staged rollout orchestrator to progressively target subsets of the fleet.",
+      "learnTopics": [
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "deep.rollback",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "alerting",
+          "health-check"
+        ],
+        "keywords": [
+          "rollback",
+          "revert",
+          "errors",
+          "monitor",
+          "health"
+        ]
+      },
+      "goal": "Automatically detect failure spikes caused by a bad config and revert the state.",
+      "opener": "A configuration change causes errors on 5% of the targeted instances. How is this caught and handled?",
+      "evidence": {
+        "strong": "Connects the rollout engine to the metrics/observability system, defining health gates. If errors spike, the engine automatically updates the target mapping back to the previous version.",
+        "adequate": "Mentions monitoring error rates and manually clicking a rollback button.",
+        "weak": "Has no mechanism to detect the failure or requires a forward-fix (writing a new config) instead of a fast revert."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the system distinguish a config error from a general network blip?",
+        "What is the exact mechanism to tell the broken instances to go back to the old version?"
+      ],
+      "hints": [
+        "Consider having the rollout orchestrator poll Prometheus or Datadog during the 'bake' period.",
+        "If instances are pulling config, what happens if we change their 'target version' back to the previous one in the database?"
+      ],
+      "moveOnSummary": "Integrated health checks for automated rollbacks.",
+      "learnTopics": [
+        "observability",
+        "incident-management"
+      ]
+    },
+    {
+      "id": "deep.resilience",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "local-cache",
+          "client",
+          "file-system"
+        ],
+        "keywords": [
+          "local",
+          "disk",
+          "fallback",
+          "offline",
+          "restart",
+          "agent",
+          "sidecar"
+        ]
+      },
+      "goal": "Ensure instances can start and run using cached config if the control plane is down.",
+      "opener": "The entire config control plane goes down. During this outage, a service instance crashes and restarts. What config does it use and how does it get it?",
+      "evidence": {
+        "strong": "Describes an SDK or sidecar that caches the last-known-good configuration to the local disk, reading it on boot before attempting to contact the control plane.",
+        "adequate": "Mentions caching config in memory, but realizes disk is needed upon prompting about a restart.",
+        "weak": "Instance fails to start because it blocks indefinitely waiting for the control plane."
+      },
+      "misconceptions": [
+        {
+          "id": "redis-cache",
+          "pattern": "Relying on a centralized Redis cache for fallback.",
+          "challenge": "If a network partition cuts off the whole region from the control plane and your Redis cluster, how does the instance start?"
+        }
+      ],
+      "probes": [
+        "How do you ensure the local file isn't corrupted?",
+        "How does the service know that the local config is 'good' and not the broken one that just caused it to crash?"
+      ],
+      "hints": [
+        "Where is the only place data survives a container restart but remains isolated to that instance?",
+        "Think about writing to a local file only after the service has successfully started and served traffic."
+      ],
+      "moveOnSummary": "Secured local resilience with last-known-good disk caching.",
+      "learnTopics": [
+        "caching",
+        "distributed-systems-roadmap"
+      ]
+    },
+    {
+      "id": "deep.datamodel",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-db"
+        ],
+        "keywords": [
+          "schema",
+          "json",
+          "immutable",
+          "audit",
+          "history",
+          "table"
+        ]
+      },
+      "goal": "Design a storage model that supports immutability, versioning, and fast lookups.",
+      "opener": "Let's look at the database storing these configurations. What does the schema look like?",
+      "evidence": {
+        "strong": "Designs immutable records with composite primary keys (service_id, version), includes metadata (author, timestamp, signature), and separates the 'target state' from the 'config history'.",
+        "adequate": "Proposes a single table with a JSON blob and a version column.",
+        "weak": "Updates rows in place, destroying the history of previous configurations."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you quickly find the 'active' version for a specific region?",
+        "If a security audit requires seeing who changed a value three months ago, how do we provide that?"
+      ],
+      "hints": [
+        "Is it better to update a row or insert a new one when a config changes?",
+        "Consider separating the table that stores the big JSON payloads from the table that tracks which version is currently active."
+      ],
+      "moveOnSummary": "Defined an immutable database schema for configurations.",
+      "learnTopics": [
+        "database-indexing",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "deep.sync_rollout",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "sync",
+          "coordinate",
+          "two-phase",
+          "lock"
+        ]
+      },
+      "goal": "Handle complex cross-service configuration dependencies.",
+      "opener": "How would you handle a change that needs to be synchronized across two different microservices simultaneously?",
+      "evidence": {
+        "strong": "Identifies that perfectly simultaneous updates are impossible in distributed systems, proposing backward-compatible changes (e.g., expand/contract pattern) instead of trying to build distributed locks.",
+        "adequate": "Attempts a two-phase commit or uses feature flags to toggle the change after propagation.",
+        "weak": "Believes the central orchestrator can update both simultaneously."
+      },
+      "misconceptions": [
+        {
+          "id": "simultaneous-update",
+          "pattern": "Assuming network messages arrive and process at the exact same millisecond.",
+          "challenge": "What happens if service A gets the update, but the network to service B drops for 10 seconds?"
+        }
+      ],
+      "probes": [
+        "Can we guarantee both services read the new config at the exact same millisecond?",
+        "How do API developers usually handle breaking schema changes without downtime?"
+      ],
+      "hints": [
+        "Think about the CAP theorem and network delays.",
+        "Instead of changing both at once, can Service A support both the old and new config temporarily?"
+      ],
+      "moveOnSummary": "Discussed the expand/contract pattern for distributed changes.",
+      "learnTopics": [
+        "cap-theorem",
+        "design-patterns"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "scale",
+          "point of failure",
+          "limit"
+        ]
+      },
+      "goal": "Critique the design to find the most likely breaking points at higher scale.",
+      "opener": "Looking at the whole system, what do you consider the biggest bottleneck or risk if the fleet grows to 1 million instances?",
+      "evidence": {
+        "strong": "Identifies the fan-out propagation layer (e.g., connection limits on API servers or etcd watchers) and discusses adding regional aggregators or proxies.",
+        "adequate": "Mentions database read limits and suggests caching.",
+        "weak": "Claims the system will scale infinitely as drawn."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How many open TCP connections can one of your distribution nodes handle?",
+        "If a global event causes all 1 million nodes to restart at once, what happens to your system?"
+      ],
+      "hints": [
+        "Think about the connection overhead of long-polling or watch streams.",
+        "What happens when every node tries to fetch its config on boot simultaneously?"
+      ],
+      "moveOnSummary": "Evaluated scaling limits and discussed regional aggregation.",
+      "learnTopics": [
+        "capacity-planning",
+        "load-balancing"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "curveball.sync",
+      "after": "deep.rollout",
+      "prompt": "What if two different microservices need a coordinated config change, and applying to one before the other causes a system-wide crash?",
+      "agendaItemId": "deep.sync_rollout"
+    }
+  ],
+  "vocabulary": [
+    "canary",
+    "blue-green",
+    "last-known-good",
+    "schema validation",
+    "semantic validation",
+    "dry-run",
+    "etcd",
+    "Consul",
+    "ZooKeeper",
+    "long-polling",
+    "gRPC watches",
+    "sidecar",
+    "expand and contract"
+  ],
+  "alternatives": [
+    {
+      "choice": "Pull with long-polling/watches instead of server-side push.",
+      "whenBetter": "When the fleet is massive and dynamic, as it avoids the control plane needing to track and dial every individual, constantly changing IP address."
+    },
+    {
+      "choice": "Distributed KV store (etcd/Consul) instead of a standard relational database for the read path.",
+      "whenBetter": "When high read throughput and native change-notification (watch) semantics are required directly out of the data layer."
+    },
+    {
+      "choice": "Sidecar process instead of a fat client SDK.",
+      "whenBetter": "When the fleet uses many different programming languages and you want to centralize the caching, polling, and last-known-good logic."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Resilient and Automated",
+      "outline": "Clearly decouples the control plane from the data plane. Uses a relational DB for immutable audit history and an etcd cluster or regional cache hierarchy for fast read propagation. Employs an automated rollout orchestrator that integrates with metrics for health-gated progressive rollouts. Critically, uses a sidecar or SDK that persists the 'last-known-good' config to local disk, ensuring 100% resilience to control plane downtime."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but Basic",
+      "outline": "Uses a standard database and an API gateway where clients pull config periodically. Includes versioning and an admin UI. Addresses offline survival by keeping config in memory, but requires prompting to realize a local disk cache is needed for restarts. Mentions canary deployments but leaves the health verification and rollback largely manual."
+    },
+    {
+      "band": "weak",
+      "label": "Tight Coupling",
+      "outline": "Treats config like standard CRUD data. Instances query the central database on every request or use a synchronous HTTP push loop. Lacks a robust local caching strategy, meaning instances fail to start if the database is down. No staged rollout engine, leading to instant global updates that risk fleet-wide outages."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

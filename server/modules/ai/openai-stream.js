@@ -1,3 +1,5 @@
+import { usageFrom } from "./pricing.js";
+
 // Incremental reader for an OpenAI-compatible server-sent event stream.
 // A chunk may end mid-line; the remainder is returned and must be passed back.
 export function takeStreamLines(buffer) {
@@ -24,5 +26,6 @@ export function contentFromChunk(payload) {
     model: payload.model || null,
     inputTokens: payload.usage?.prompt_tokens ?? null,
     outputTokens: payload.usage?.completion_tokens ?? null,
+    usage: payload.usage ? usageFrom(payload.usage) : null,
   };
 }

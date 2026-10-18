@@ -1,0 +1,487 @@
+{
+  "opening": "Let's design a low-latency ML model serving platform. How would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "traffic",
+        "requests",
+        "qps",
+        "scale",
+        "burst",
+        "spikes"
+      ],
+      "answer": "We handle around 10,000 requests per second globally, but traffic can suddenly burst up to 5x."
+    },
+    {
+      "id": "scale.models",
+      "topics": [
+        "models",
+        "how many",
+        "count",
+        "teams"
+      ],
+      "answer": "There are around 50 active models deployed by various teams, and they are updated weekly."
+    },
+    {
+      "id": "perf.latency",
+      "topics": [
+        "latency",
+        "p99",
+        "sla",
+        "speed",
+        "fast",
+        "target"
+      ],
+      "answer": "We target a p99 latency of 50 milliseconds for model inference."
+    },
+    {
+      "id": "scope.training",
+      "topics": [
+        "training",
+        "train",
+        "out of scope",
+        "pipeline"
+      ],
+      "answer": "Model training is out of scope. Assume the models are already trained and available as artifacts."
+    },
+    {
+      "id": "constraints.hardware",
+      "topics": [
+        "hardware",
+        "gpu",
+        "cpu",
+        "compute"
+      ],
+      "answer": "Assume most models are deep learning models that require GPUs for efficient inference."
+    }
+  ],
+  "clarificationPolicy": "Assume any detail not covered in the clarifications can be decided by you as long as you justify it.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "p99",
+          "latency",
+          "burst",
+          "canary",
+          "qps",
+          "sla"
+        ]
+      },
+      "goal": "Define the inference SLA, the scale, and the deployment needs.",
+      "opener": "What key requirements and scale numbers will drive your architecture for this serving platform?",
+      "evidence": {
+        "strong": "Identifies p99 latency constraints, bursty traffic patterns, and the critical need for safe deployments and rollbacks.",
+        "adequate": "Focuses on the functional requirements of serving a model but misses specific latency targets or the implications of traffic bursts.",
+        "weak": "Ignores latency targets entirely or gets distracted by model training requirements."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to the service during a traffic spike?",
+        "What SLA are we aiming for?"
+      ],
+      "hints": [
+        "Check the brief for latency and traffic patterns.",
+        "How are teams expecting to deploy new versions?"
+      ],
+      "moveOnSummary": "Identified p99 latency targets, burst traffic, and safe deployment needs.",
+      "learnTopics": [
+        "machine-learning-system-design-roadmap",
+        "latency-vs-throughput",
+        "availability"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "model-serving",
+          "model-registry",
+          "router",
+          "client"
+        ],
+        "keywords": [
+          "gateway",
+          "inference",
+          "registry",
+          "model",
+          "load balancer"
+        ]
+      },
+      "goal": "Establish the end-to-end flow from client to inference service, and model fetching from the registry.",
+      "opener": "Could you walk me through the high-level path of a request from the client to the model, and how the model gets there in the first place?",
+      "evidence": {
+        "strong": "Shows a clean split between the control plane (registry, deployer) and data plane (gateway, model server), with clear API routing.",
+        "adequate": "Connects clients to model servers but lacks a clear deployment or registry flow.",
+        "weak": "Missing key components like the model registry or a gateway to route requests."
+      },
+      "misconceptions": [
+        {
+          "id": "training-in-serving",
+          "pattern": "Including model training in the critical path of the serving system.",
+          "challenge": "Does the model need to be trained every time a user makes a request?"
+        }
+      ],
+      "probes": [
+        "How does the model server get the model weights?",
+        "Where do client requests land first?"
+      ],
+      "hints": [
+        "Think about where the trained models are stored.",
+        "How do we route a request to the right model version?"
+      ],
+      "moveOnSummary": "Outlined a clear separation between model registry/deployment and the inference request path.",
+      "learnTopics": [
+        "machine-learning-system-architecture",
+        "api-gateway",
+        "model-serving"
+      ]
+    },
+    {
+      "id": "deep.batching",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "gpu",
+          "queue",
+          "batch-processor"
+        ],
+        "keywords": [
+          "batching",
+          "dynamic batching",
+          "throughput",
+          "p99",
+          "wait time"
+        ]
+      },
+      "goal": "Balance GPU throughput with the p99 latency constraint through dynamic batching.",
+      "opener": "Where does batching happen, and what does it cost in latency?",
+      "evidence": {
+        "strong": "Explains dynamic batching parameters (batch size, max wait time), queues requests locally at the serving node, and calculates the latency budget.",
+        "adequate": "Mentions grouping requests before sending to the model, but lacks detail on time vs. size thresholds to protect p99 latency.",
+        "weak": "Confuses stream batching with offline batch jobs, or ignores the p99 latency constraint entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "offline-batching",
+          "pattern": "Believing batching requires a distributed queue like Kafka which adds too much latency.",
+          "challenge": "If we queue requests in a central broker before inference, how does that impact your latency target?"
+        }
+      ],
+      "probes": [
+        "How do you decide when to execute the batch?",
+        "What happens if only one request arrives in the queue?"
+      ],
+      "hints": [
+        "Think about how GPUs process data most efficiently.",
+        "What happens if we wait a few milliseconds to see if more requests arrive?"
+      ],
+      "moveOnSummary": "Uses dynamic batching at the serving node with size and time thresholds.",
+      "learnTopics": [
+        "model-serving",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.scaling",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cluster",
+          "t-kubernetes",
+          "container",
+          "load-balancer"
+        ],
+        "keywords": [
+          "autoscaling",
+          "warm pool",
+          "cold start",
+          "burst",
+          "hpa"
+        ]
+      },
+      "goal": "Handle sudden bursts without severe cold start penalties, avoiding scaling purely on CPU for GPU workloads.",
+      "opener": "Given your traffic estimates, how do you meet the latency targets during a sudden burst?",
+      "evidence": {
+        "strong": "Scales on queue depth or concurrency, keeps a warm pool of nodes with the model pre-loaded, and handles spikes via load shedding or fast auto-scaling.",
+        "adequate": "Uses standard autoscaling but might struggle with cold start times of downloading large models.",
+        "weak": "Scales on CPU utilization, leading to delayed scaling, or ignores cold starts entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "cpu-scaling",
+          "pattern": "Using CPU utilization to scale GPU-bound or I/O-bound inference servers.",
+          "challenge": "If the model runs entirely on the GPU, how will CPU utilization indicate that we need more instances?"
+        }
+      ],
+      "probes": [
+        "How long does it take to pull a 2GB model from the registry?",
+        "What happens to requests while new instances are spinning up?"
+      ],
+      "hints": [
+        "Models can take minutes to download. How can we hide this delay?",
+        "Instead of CPU, what metric tells us requests are backing up?"
+      ],
+      "moveOnSummary": "Scales on concurrency/queue depth and maintains a warm capacity pool.",
+      "learnTopics": [
+        "autoscaling",
+        "capacity-planning",
+        "containers-vs-virtual-machines"
+      ]
+    },
+    {
+      "id": "deep.rollout",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "router",
+          "api-gateway",
+          "deployer",
+          "ci-cd"
+        ],
+        "keywords": [
+          "canary",
+          "shadow",
+          "rollback",
+          "traffic split",
+          "version"
+        ]
+      },
+      "goal": "Implement canary and shadow deployments with automated rollback based on signals.",
+      "opener": "How does a canary deployment decide it needs to roll back to the previous version?",
+      "evidence": {
+        "strong": "Routes a percentage of traffic to the canary, compares error rates, latency, and prediction distributions to the baseline, and triggers an automated rollback on degradation.",
+        "adequate": "Routes traffic manually or mentions canary deployments without a clear automated rollback mechanism.",
+        "weak": "Updates instances in-place without version pinning, making quick rollback difficult."
+      },
+      "misconceptions": [
+        {
+          "id": "in-place-updates",
+          "pattern": "Overwriting the existing model container rather than deploying side-by-side.",
+          "challenge": "If the new model starts crashing, how quickly can we revert to the old one if we overwrote it?"
+        }
+      ],
+      "probes": [
+        "What specific metrics tell you the new model is worse?",
+        "How do you handle shadow traffic without double-charging the user?"
+      ],
+      "hints": [
+        "Consider running both model versions at the same time.",
+        "If we shadow traffic, what do we do with the shadow's response?"
+      ],
+      "moveOnSummary": "Uses a router for traffic splitting and automates rollback based on error and latency metrics.",
+      "learnTopics": [
+        "deployment-strategies",
+        "mlops-model-registry",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.observability",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "logging",
+          "event-bus",
+          "stream"
+        ],
+        "keywords": [
+          "telemetry",
+          "signals",
+          "distribution",
+          "asynchronous",
+          "drift"
+        ]
+      },
+      "goal": "Capture prediction inputs, outputs, latency, and errors for monitoring and future training without slowing down inference.",
+      "opener": "How does the system capture quality and performance signals without impacting serving latency?",
+      "evidence": {
+        "strong": "Emits logs asynchronously via a sidecar or event bus for predictions and features, separating the serving critical path from telemetry.",
+        "adequate": "Logs predictions to a database but might risk adding latency to the main request flow.",
+        "weak": "Performs synchronous writes to a database before returning the prediction to the user."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-logging",
+          "pattern": "Writing telemetry synchronously to a database during the inference request.",
+          "challenge": "What happens to user latency if the database writing the prediction logs experiences a slowdown?"
+        }
+      ],
+      "probes": [
+        "How do we tie a user's later action, like a click, back to the specific prediction?",
+        "What data volume are we generating with telemetry?"
+      ],
+      "hints": [
+        "Does the user need to wait for the log to be written before getting a response?",
+        "Consider fire-and-forget mechanisms or message queues."
+      ],
+      "moveOnSummary": "Uses asynchronous logging via a sidecar or event bus to avoid impacting serving latency.",
+      "learnTopics": [
+        "ml-model-monitoring",
+        "observability",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "deep.llm_serving",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "llm",
+          "gpu"
+        ],
+        "keywords": [
+          "llm",
+          "weights",
+          "memory",
+          "kv cache"
+        ]
+      },
+      "goal": "Mitigate extreme cold starts for massive models during traffic spikes.",
+      "opener": "If models take minutes to load, how do we handle a sudden burst without dropping requests?",
+      "evidence": {
+        "strong": "Proposes over-provisioning warm pools, load shedding, or multi-model hosting where models share GPU memory.",
+        "adequate": "Relies purely on queuing, accepting that some requests will eventually time out.",
+        "weak": "Assumes standard auto-scaling will solve it without addressing the 5-minute delay."
+      },
+      "misconceptions": [
+        {
+          "id": "fast-scaling",
+          "pattern": "Believing you can scale up a 100GB model instantly like a standard web server.",
+          "challenge": "Where is the bottleneck when spinning up a new node for a 100GB model?"
+        }
+      ],
+      "probes": [
+        "How do we keep clients waiting without timing out?"
+      ],
+      "hints": [
+        "Can we keep extra nodes running in advance?",
+        "What if we accept the request and process it asynchronously?"
+      ],
+      "moveOnSummary": "Proposed warm pools and asynchronous handling to mitigate slow LLM cold starts.",
+      "learnTopics": [
+        "llm-inference-serving",
+        "capacity-planning",
+        "autoscaling"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "architecture",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "limit",
+          "break",
+          "future"
+        ]
+      },
+      "goal": "Identify the limiting factors in the current design.",
+      "opener": "If traffic doubles over the next year and models become twice as large, where will this architecture break first?",
+      "evidence": {
+        "strong": "Identifies network I/O during model loading, GPU memory constraints, or gateway throughput, and proposes solutions.",
+        "adequate": "Points to a generic component like the database or load balancer without tying it to ML specific scaling issues.",
+        "weak": "Claims the system will scale infinitely without issues."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does network bandwidth affect model deployment at scale?"
+      ],
+      "hints": [
+        "Think about what happens when 100 nodes try to download a 5GB model at once."
+      ],
+      "moveOnSummary": "Identified model loading network constraints and GPU limits as future bottlenecks.",
+      "learnTopics": [
+        "capacity-planning",
+        "scalability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "large-model-cold-start",
+      "after": "deep.scaling",
+      "prompt": "What if the models are very large LLMs that take 5 minutes to load into GPU memory, and we still have to handle a sudden surge in traffic?",
+      "agendaItemId": "deep.llm_serving"
+    }
+  ],
+  "vocabulary": [
+    "p99",
+    "canary",
+    "shadow deployment",
+    "dynamic batching",
+    "cold start",
+    "warm pool",
+    "autoscaling",
+    "model registry",
+    "feature store",
+    "sidecar",
+    "telemetry"
+  ],
+  "alternatives": [
+    {
+      "choice": "Multi-model hosting vs dedicated deployments",
+      "whenBetter": "Multi-model hosting is better for many low-traffic models to save costs, while dedicated deployments are better for high-traffic, latency-sensitive models that need full GPU isolation."
+    },
+    {
+      "choice": "CPU vs GPU serving",
+      "whenBetter": "CPU serving is better for small, simple models where network overhead dwarfs inference time. GPU is better for deep learning and large batched requests."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust architecture with advanced ML scaling",
+      "outline": "Starts by clearly isolating the data plane and control plane. Uses dynamic batching and autoscaling based on queue depth to maximize GPU utilization while hitting the 50ms p99 SLA. Implements a sophisticated canary deployment strategy using an API gateway to split traffic, and captures telemetry asynchronously via an event bus to avoid impacting serving latency."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional serving path but generic scaling",
+      "outline": "Provides a functional model serving architecture. Mentions autoscaling but relies on CPU utilization, which might struggle with bursty GPU workloads. Uses a basic router for canary deployments but lacks detail on automated rollbacks. Captures logs synchronously, posing a risk to latency."
+    },
+    {
+      "band": "weak",
+      "label": "Misses critical ML latency and scaling constraints",
+      "outline": "Fails to pin model versions or use a model registry, treating updates as in-place changes. Does not address the p99 latency constraint or how to handle sudden bursts, missing batching and warm capacity strategies entirely."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

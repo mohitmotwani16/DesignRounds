@@ -1,0 +1,607 @@
+{
+  "opening": "Let's design a geo-replicated database. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.regions",
+      "topics": [
+        "regions",
+        "locations",
+        "how many"
+      ],
+      "answer": "Assume 3 to 5 distinct geographical regions, such as US East, Europe, and Asia."
+    },
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "qps",
+        "throughput",
+        "traffic",
+        "volume"
+      ],
+      "answer": "Each region handles about 100,000 read queries per second and 10,000 write queries per second."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "milliseconds",
+        "fast"
+      ],
+      "answer": "Local reads should return in under 5 milliseconds. Writes should be as fast as safely possible."
+    },
+    {
+      "id": "req.staleness",
+      "topics": [
+        "staleness",
+        "bound",
+        "visibility",
+        "delay"
+      ],
+      "answer": "Writes from any region must be visible in all other regions within 2 seconds during normal operation."
+    },
+    {
+      "id": "req.outage",
+      "topics": [
+        "outage",
+        "failure",
+        "data loss",
+        "durability",
+        "rpo"
+      ],
+      "answer": "If an entire region fails permanently, we must not lose any write that was previously acknowledged to the client."
+    },
+    {
+      "id": "req.conflict",
+      "topics": [
+        "conflict",
+        "concurrent",
+        "overwrite"
+      ],
+      "answer": "Assume different regions might occasionally update the exact same record at the exact same time."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about anything else, ask them what assumption forces them to make the most interesting architectural trade-offs.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "regions",
+          "latency",
+          "rpo",
+          "rto",
+          "scale",
+          "durability",
+          "staleness"
+        ]
+      },
+      "goal": "Define the boundaries of the problem, including the region count and data loss constraints.",
+      "opener": "What constraints and guarantees should we establish before building the architecture?",
+      "evidence": {
+        "strong": "Explicitly notes the zero data loss constraint on region failure and identifies the tension between write latency and cross-region durability.",
+        "adequate": "Lists basic requirements like read latency and regions but misses the strict data loss constraint until prompted.",
+        "weak": "Jumps straight into drawing components without defining what consistency or durability the database needs to provide."
+      },
+      "misconceptions": [
+        {
+          "id": "assume-cp",
+          "pattern": "Assuming all databases must be strictly consistent globally at all times.",
+          "challenge": "If we enforce global strict consistency, what happens to our latency requirements for users across the world?"
+        }
+      ],
+      "probes": [
+        "What happens to in-flight data if a whole region loses power?",
+        "How fast do reads need to be compared to writes?"
+      ],
+      "hints": [
+        "Consider what the client experiences when reading versus writing.",
+        "Think about the worst-case scenario: a region goes dark permanently."
+      ],
+      "moveOnSummary": "The candidate outlined the core requirements including the zero data loss constraint.",
+      "learnTopics": [
+        "availability",
+        "cap-theorem",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "req.workload",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "throughput",
+          "capacity",
+          "gigabytes",
+          "peak",
+          "read heavy"
+        ]
+      },
+      "goal": "Estimate the system's traffic and scale to inform storage and replication choices.",
+      "opener": "What kind of traffic load are we expecting this system to handle?",
+      "evidence": {
+        "strong": "Calculates overall QPS and uses the read-heavy ratio to justify keeping data close to users.",
+        "adequate": "Asks for QPS numbers but does not explicitly use them to drive design decisions.",
+        "weak": "Ignores traffic volumes and designs a solution that would bottleneck immediately at scale."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Given the QPS, what is the network bandwidth required between regions?"
+      ],
+      "hints": [
+        "Think about how many reads happen for every write.",
+        "Consider what 100k QPS means for CPU and network in a single region."
+      ],
+      "moveOnSummary": "The candidate estimated the workload and network requirements.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "high.topology",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "leader",
+          "replica",
+          "cluster"
+        ],
+        "keywords": [
+          "single-leader",
+          "multi-leader",
+          "active-active",
+          "topology",
+          "architecture"
+        ]
+      },
+      "goal": "Establish a top-level replication architecture that fits the cross-region read and write goals.",
+      "opener": "How will you arrange the primary nodes and replicas across our multiple regions?",
+      "evidence": {
+        "strong": "Evaluates single-leader against multi-leader, choosing an approach and clearly stating its latency impact on remote writers.",
+        "adequate": "Proposes a multi-leader setup for local writes but struggles to explain the coordination overhead.",
+        "weak": "Proposes a single-leader setup without realizing that remote regions will suffer massive write latency."
+      },
+      "misconceptions": [
+        {
+          "id": "magic-multi-master",
+          "pattern": "Believing multi-leader setups automatically solve cross-region latency without introducing new problems.",
+          "challenge": "If we accept writes locally in every region, what happens when two regions update the same key?"
+        }
+      ],
+      "probes": [
+        "If a user in Asia writes data, which specific node handles that write?",
+        "How does your topology handle the bounded visibility requirement?"
+      ],
+      "hints": [
+        "Does every region need a node capable of accepting writes?",
+        "Compare the user experience of a single global leader versus a leader in each region."
+      ],
+      "moveOnSummary": "The candidate established the high-level leader and replica topology.",
+      "learnTopics": [
+        "replication",
+        "geo-replication"
+      ]
+    },
+    {
+      "id": "high.paths",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "database",
+          "load-balancer"
+        ],
+        "keywords": [
+          "read path",
+          "write path",
+          "flow",
+          "route"
+        ]
+      },
+      "goal": "Trace the step-by-step flow of requests from the client through the database layer.",
+      "opener": "Can you walk me through the exact path of a read request and a write request?",
+      "evidence": {
+        "strong": "Details every hop, clearly separating local reads from potentially remote writes or local writes that require remote coordination.",
+        "adequate": "Describes the flow generally but glides over network boundaries or load balancing across regions.",
+        "weak": "Cannot articulate which node a client connects to or how the request enters the database cluster."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which component terminates the client connection?",
+        "Does the read path hit disk or memory first?"
+      ],
+      "hints": [
+        "Follow the bytes from the user's device to the database disk.",
+        "Where does the load balancer send a write if the local region is read-only?"
+      ],
+      "moveOnSummary": "The candidate mapped out the end-to-end read and write paths.",
+      "learnTopics": [
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.conflict",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "service"
+        ],
+        "keywords": [
+          "conflict",
+          "crdt",
+          "lww",
+          "merge",
+          "concurrent",
+          "vector clock"
+        ]
+      },
+      "goal": "Resolve concurrent updates to the same key from different regions deterministically.",
+      "opener": "If users in Europe and Asia update the same record at the exact same millisecond, how does the system decide the final state?",
+      "evidence": {
+        "strong": "Evaluates Last-Write-Wins against CRDTs or application-specific merges, noting the inevitable data loss risk of LWW.",
+        "adequate": "Proposes LWW with timestamps but misses the nuances of clock skew across different physical servers.",
+        "weak": "Assumes the database magically merges conflicting business logic or claims multi-leader doesn't experience conflicts."
+      },
+      "misconceptions": [
+        {
+          "id": "auto-merge",
+          "pattern": "Assuming databases automatically know how to merge conflicting business data without a defined strategy.",
+          "challenge": "If one update increments a counter and another sets a boolean status, how does the database combine those underlying bytes?"
+        }
+      ],
+      "probes": [
+        "How do we know which write actually happened first across different regions?",
+        "What if the application cannot tolerate dropping either update?"
+      ],
+      "hints": [
+        "Is wall-clock time perfectly reliable across different servers globally?",
+        "Are there specialized data structures designed specifically to handle concurrent merges?"
+      ],
+      "moveOnSummary": "The candidate formulated a conflict resolution strategy.",
+      "learnTopics": [
+        "crdts",
+        "clocks-and-ordering",
+        "consistency-models"
+      ]
+    },
+    {
+      "id": "deep.clocks",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "clock",
+          "database"
+        ],
+        "keywords": [
+          "truetime",
+          "hlc",
+          "logical clock",
+          "skew",
+          "ntp",
+          "timestamp"
+        ]
+      },
+      "goal": "Accurately order events across distinct regions despite physical clock skew.",
+      "opener": "Since regions are physically distant, how do we assign timestamps to events to guarantee a correct global order?",
+      "evidence": {
+        "strong": "Explains the unreliability of NTP and proposes Hybrid Logical Clocks or a TrueTime-like API with wait bounds.",
+        "adequate": "Mentions clock skew and suggests logical clocks, but struggles to explain how they track causality.",
+        "weak": "Relies entirely on standard system clocks and ignores the impact of clock drift on data consistency."
+      },
+      "misconceptions": [
+        {
+          "id": "ntp-perfect",
+          "pattern": "Assuming NTP synchronization eliminates all clock skew.",
+          "challenge": "What happens if a server experiences a temporary network partition from its NTP server and its local clock drifts by 50 milliseconds?"
+        }
+      ],
+      "probes": [
+        "How does a logical clock capture causality between events?",
+        "What happens to our latency if we have to wait out the clock uncertainty bound?"
+      ],
+      "hints": [
+        "Think about how we can use counters combined with physical time.",
+        "Look into how systems like Spanner handle time uncertainty."
+      ],
+      "moveOnSummary": "The candidate addressed physical clock skew using logical or synchronized clocks.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "distributed-sql"
+      ]
+    },
+    {
+      "id": "deep.consistency",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "cache"
+        ],
+        "keywords": [
+          "staleness",
+          "strong consistency",
+          "eventual consistency",
+          "read-your-writes",
+          "monotonic"
+        ]
+      },
+      "goal": "Define what users see when they read data shortly after it was written.",
+      "opener": "What specific read consistency guarantees does your system offer to a client making repeated requests?",
+      "evidence": {
+        "strong": "Defines strict models like bounded staleness, read-your-writes, or monotonic reads and explains how the system enforces them.",
+        "adequate": "Discusses eventual consistency generally but lacks specific mechanisms for preventing regression.",
+        "weak": "Confuses read consistency with replication durability, failing to answer what the client actually sees."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you ensure a user who just wrote data can immediately read it back from a replica?",
+        "What happens if a client reads from a replica that is lagging behind the leader?"
+      ],
+      "hints": [
+        "Could we track the latest write timestamp for a user session?",
+        "What if the read request is forced to wait until the replica catches up to a certain point?"
+      ],
+      "moveOnSummary": "The candidate detailed the read consistency models available to clients.",
+      "learnTopics": [
+        "consistency-models",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "deep.replication",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "cluster"
+        ],
+        "keywords": [
+          "quorum",
+          "commit",
+          "ack",
+          "paxos",
+          "raft",
+          "sync",
+          "async"
+        ]
+      },
+      "goal": "Ensure no acknowledged write is lost if the primary region suddenly vanishes.",
+      "opener": "How do we guarantee that a committed write survives a complete, permanent region outage?",
+      "evidence": {
+        "strong": "Discusses cross-region synchronous replication or quorum consensus, accurately noting the latency penalty on writes.",
+        "adequate": "Suggests asynchronous replication but corrects course to synchronous replication when reminded of the zero data loss rule.",
+        "weak": "Insists asynchronous replication prevents data loss or ignores the massive cross-region latency entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "async-is-safe",
+          "pattern": "Believing asynchronous replication to another region prevents data loss on abrupt failure.",
+          "challenge": "If the region loses power a millisecond after acknowledging the write but before replicating it, what happens to that data?"
+        }
+      ],
+      "probes": [
+        "What exactly happens on the critical path of a write before we return success to the client?",
+        "What is the physical network round-trip time between these regions?"
+      ],
+      "hints": [
+        "If we return success immediately upon writing locally, where does that data live at that exact moment?",
+        "How many remote regions must possess the data before we can safely tell the user it succeeded?"
+      ],
+      "moveOnSummary": "The candidate designed a durable replication protocol to handle region failures.",
+      "learnTopics": [
+        "replication",
+        "consensus",
+        "write-ahead-log"
+      ]
+    },
+    {
+      "id": "deep.failover",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "health-check",
+          "leader"
+        ],
+        "keywords": [
+          "failover",
+          "heartbeat",
+          "timeout",
+          "election"
+        ]
+      },
+      "goal": "Detect a region failure and safely resume serving traffic without human intervention.",
+      "opener": "Walk me through the automated recovery process from the exact second a region goes entirely offline.",
+      "evidence": {
+        "strong": "Describes heartbeats, leader election timeouts, and the redirection of client traffic, while acknowledging the delay before availability is restored.",
+        "adequate": "Mentions health checks and load balancer failover but glosses over the database's internal leader election mechanism.",
+        "weak": "Assumes the system instantaneously fails over with zero downtime or missing details on how failure is confirmed."
+      },
+      "misconceptions": [
+        {
+          "id": "instant-failover",
+          "pattern": "Believing failure detection and recovery happens in zero milliseconds.",
+          "challenge": "How long must a node miss heartbeats before we are certain it is dead rather than just slow?"
+        }
+      ],
+      "probes": [
+        "Who initiates the failover process?",
+        "How do you prevent a temporary network hiccup from triggering an unnecessary region failover?"
+      ],
+      "hints": [
+        "Think about timeouts and consensus among the remaining healthy nodes.",
+        "How does the global DNS or routing layer know the region is dead?"
+      ],
+      "moveOnSummary": "The candidate outlined the automated failover and health checking process.",
+      "learnTopics": [
+        "health-checks-failover",
+        "leader-election"
+      ]
+    },
+    {
+      "id": "deep.split_brain",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "health-check",
+          "load-balancer"
+        ],
+        "keywords": [
+          "partition",
+          "split brain",
+          "cap theorem",
+          "isolated"
+        ]
+      },
+      "goal": "Decide whether to favor availability or consistency during a network partition.",
+      "opener": "How does the isolated region behave when it receives read and write requests but cannot reach the rest of the cluster?",
+      "evidence": {
+        "strong": "Explicitly references the CAP theorem, choosing to either reject writes to maintain consistency or accept them and handle divergence later.",
+        "adequate": "Realizes the system cannot do both but struggles to articulate the exact mechanism for resolving the state once the network heals.",
+        "weak": "Believes the system can still process all requests normally and synchronously replicate them later without any conflict."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If we accept the write, what happens when the network heals and conflicts are found?",
+        "If we reject the write, what does the user experience look like?"
+      ],
+      "hints": [
+        "If a node cannot talk to the quorum, can it safely commit a distributed transaction?",
+        "Which is worse for this specific application: an error message or temporary data inconsistency?"
+      ],
+      "moveOnSummary": "The candidate resolved the partition scenario by intentionally choosing a side of the CAP tradeoff.",
+      "learnTopics": [
+        "cap-theorem",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "trade-offs",
+          "summary",
+          "conclusion"
+        ]
+      },
+      "goal": "Summarize the major decisions and identify the system's biggest remaining weakness.",
+      "opener": "If you had to point out the most significant bottleneck or tradeoff in your final design, what would it be?",
+      "evidence": {
+        "strong": "Accurately points to a fundamental distributed systems tradeoff made in the design, such as sacrificing local write speed for global durability.",
+        "adequate": "Summarizes the architecture but points out generic bottlenecks like CPU or network bandwidth.",
+        "weak": "Claims the system has no bottlenecks or fundamental weaknesses."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Under what specific conditions would this database perform terribly?",
+        "If we added ten more regions, which component would break first?"
+      ],
+      "hints": [
+        "Look at your conflict resolution and replication paths.",
+        "Think about latency versus consistency."
+      ],
+      "moveOnSummary": "The candidate summarized the architecture and its core tradeoffs.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "network-partition",
+      "after": "deep.failover",
+      "prompt": "A region is not dead, but its network link to the other regions is completely severed. The local load balancer still routes user traffic to it. What happens to reads and writes in this isolated region?",
+      "agendaItemId": "deep.split_brain"
+    }
+  ],
+  "vocabulary": [
+    "Paxos",
+    "Raft",
+    "CRDT",
+    "LWW",
+    "Last-Write-Wins",
+    "TrueTime",
+    "Hybrid Logical Clock",
+    "Vector clock",
+    "Quorum",
+    "Read-your-writes",
+    "Monotonic reads",
+    "RPO",
+    "RTO"
+  ],
+  "alternatives": [
+    {
+      "choice": "Multi-leader with local async commits.",
+      "whenBetter": "When low write latency is strictly prioritized over zero data loss during rare full region outages."
+    },
+    {
+      "choice": "Single global leader.",
+      "whenBetter": "When strong global consistency and strict transaction ordering are required, and remote write latency is acceptable."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Cross-region consensus with CRDTs",
+      "outline": "The candidate immediately identified that zero data loss on a region failure precludes asynchronous replication on the write path. They designed a multi-leader setup with a Paxos-based consensus group spanning regions to commit writes, accepting the cross-region latency penalty as required by the RPO. They thoroughly explored conflict resolution, opting for CRDTs for mergeable data types to avoid the data loss inherent in Last-Write-Wins, and clearly explained the resulting read consistencies."
+    },
+    {
+      "band": "adequate",
+      "label": "Multi-leader with synchronous adjustments",
+      "outline": "The candidate proposed a multi-leader architecture with asynchronous cross-region replication initially. When prompted about the zero data loss requirement, they correctly adjusted their design to require synchronous replication to at least one remote region before acknowledging writes. They handled concurrent writes using a Last-Write-Wins strategy but struggled slightly to explain how physical clock skew across regions impacts this approach."
+    },
+    {
+      "band": "weak",
+      "label": "Single-leader with missed constraints",
+      "outline": "The candidate drew a single-leader database in one region with read replicas in other regions. They did not resolve or adequately discuss the high latency penalty this imposes on remote writes. They assumed database-native asynchronous replication would magically prevent data loss during a full region outage and could not formulate a clear conflict resolution strategy when asked to consider a multi-leader alternative."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.3,
+    "deep_dive": 0.45,
+    "wrap_up": 0.1
+  }
+}

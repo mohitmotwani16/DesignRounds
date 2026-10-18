@@ -1,0 +1,561 @@
+{
+  "opening": "Let's design a safe deployment platform. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.deployments",
+      "topics": [
+        "scale",
+        "frequency",
+        "how often"
+      ],
+      "answer": "We expect hundreds of deployments per day across a fleet of thousands of microservices."
+    },
+    {
+      "id": "environments.stages",
+      "topics": [
+        "environment",
+        "stage",
+        "dev",
+        "prod"
+      ],
+      "answer": "We need to support staging, pre-prod, and production environments."
+    },
+    {
+      "id": "metrics.available",
+      "topics": [
+        "metric",
+        "telemetry",
+        "signal",
+        "datadog"
+      ],
+      "answer": "Assume we have a robust telemetry system providing golden signals like error rate and latency for all services."
+    },
+    {
+      "id": "scale.nodes",
+      "topics": [
+        "node",
+        "instance",
+        "server",
+        "size"
+      ],
+      "answer": "Assume tens of thousands of instances running globally."
+    },
+    {
+      "id": "constraints.mutability",
+      "topics": [
+        "mutable",
+        "immutable",
+        "artifact",
+        "build"
+      ],
+      "answer": "Artifacts must be completely immutable; once built, they should be deployable to any environment without modification."
+    }
+  ],
+  "clarificationPolicy": "For anything else, assume standard practices for a large-scale enterprise microservice architecture and state your assumptions.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "environments",
+          "rollout",
+          "rollback",
+          "canary",
+          "users",
+          "scale"
+        ]
+      },
+      "goal": "Identify the core capabilities needed: artifact promotion, progressive delivery, health analysis, and rollback.",
+      "opener": "What core features and workflows does our deployment platform need to support?",
+      "evidence": {
+        "strong": "Gathers requirements for immutable artifacts, multi-environment promotion, progressive rollout, and automated rollback triggers.",
+        "adequate": "Lists basic deployment steps and environments, but misses the need for automated rollback or progress health checks.",
+        "weak": "Focuses only on pushing code to a server without considering the safety aspects of the brief."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we handle different environments?",
+        "What triggers a rollback?"
+      ],
+      "hints": [
+        "Think about the lifecycle of a commit from CI to production.",
+        "How do we ensure a bad change doesn't take down the whole system?"
+      ],
+      "moveOnSummary": "Agreed on a scope covering immutable artifacts, progressive rollout, automated canary analysis, and audit history.",
+      "learnTopics": [
+        "deployment-strategies",
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "high.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "registry",
+          "deployer",
+          "database"
+        ],
+        "keywords": [
+          "pipeline",
+          "controller",
+          "repository"
+        ]
+      },
+      "goal": "Establish a clear flow from CI to an artifact registry, and a control plane orchestrating the rollout.",
+      "opener": "Can you walk me through the high-level architecture and data flow for a typical deployment?",
+      "evidence": {
+        "strong": "Separates CI from CD, uses a registry for immutable artifacts, and clearly shows a deployment controller interacting with environments and metrics.",
+        "adequate": "Shows a pipeline pushing code to servers, but might blur build and deploy phases or lack a distinct artifact registry.",
+        "weak": "Misses the control plane or assumes a single script directly copying files to servers."
+      },
+      "misconceptions": [
+        {
+          "id": "rebuild-per-env",
+          "pattern": "Rebuilding artifacts for each environment.",
+          "challenge": "If we rebuild the code for production, how do we guarantee it's the exact same code we tested in staging?"
+        }
+      ],
+      "probes": [
+        "Where does the built artifact live before it reaches production?",
+        "Which component decides to move to the next rollout wave?"
+      ],
+      "hints": [
+        "What happens after the CI pipeline finishes building the code?",
+        "We need a component to manage the state machine of the deployment."
+      ],
+      "moveOnSummary": "We have an artifact registry, a deployment controller, and connections to the target environment and metrics systems.",
+      "learnTopics": [
+        "ci-cd-pipelines",
+        "deployment-strategies",
+        "platform-engineering-roadmap"
+      ]
+    },
+    {
+      "id": "deep.progressive",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "deployer",
+          "orchestrator",
+          "service"
+        ],
+        "keywords": [
+          "canary",
+          "wave",
+          "blue-green",
+          "batch",
+          "pause"
+        ]
+      },
+      "goal": "Design a progressive rollout strategy that limits blast radius by deploying in increments and checking health.",
+      "opener": "How exactly does the platform roll out an update safely across the target instances?",
+      "evidence": {
+        "strong": "Defines a state machine for rollouts with staggered waves, bake times, and automated pauses based on health signals.",
+        "adequate": "Mentions progressive rollout or canary, but lacks clear progression rules or relies on manual approval between waves.",
+        "weak": "Updates all instances at once or uses a simple rolling restart without health gating."
+      },
+      "misconceptions": [
+        {
+          "id": "tiny-canary",
+          "pattern": "Deploying to one instance is a complete canary analysis.",
+          "challenge": "If we deploy to just one instance out of thousands, will it receive enough traffic to confidently detect a small increase in error rates?"
+        }
+      ],
+      "probes": [
+        "How do we decide the size of each deployment wave?",
+        "What happens if a wave fails halfway through?"
+      ],
+      "hints": [
+        "We shouldn't deploy to the entire fleet at once. How can we break it up?",
+        "Once a small subset has the new version, how long do we wait before moving forward?"
+      ],
+      "moveOnSummary": "We are using a wave-based canary rollout with defined bake times.",
+      "learnTopics": [
+        "deployment-strategies",
+        "availability"
+      ]
+    },
+    {
+      "id": "deep.database",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "deployer"
+        ],
+        "keywords": [
+          "schema",
+          "migration",
+          "rollback",
+          "expand and contract"
+        ]
+      },
+      "goal": "Handle stateful rollbacks, ensuring database schema changes do not break old application versions.",
+      "opener": "Suppose a deployment includes a database schema change, and we have to roll back the application. How do we ensure the old app version still works?",
+      "evidence": {
+        "strong": "Explains the expand-and-contract pattern for schema migrations, ensuring backward compatibility so the database is never rolled back.",
+        "adequate": "Recognizes the problem of schema rollbacks and suggests applying changes before code, but lacks a formal pattern for backward compatibility.",
+        "weak": "Suggests restoring the database from a backup or rolling back the schema directly, causing data loss."
+      },
+      "misconceptions": [
+        {
+          "id": "schema-rollback",
+          "pattern": "Rolling back the database schema along with the code.",
+          "challenge": "If we roll back the schema, what happens to all the user data written during the time the new version was active?"
+        }
+      ],
+      "probes": [
+        "If we drop a column in the new version, what happens to the application if we roll back?",
+        "How do we coordinate the timing of the schema migration and the application rollout?"
+      ],
+      "hints": [
+        "Can we make the database change in a way that both the old and new application versions understand?",
+        "Think about separating adding a column from removing a column into different deployment cycles."
+      ],
+      "moveOnSummary": "We'll use the expand and contract pattern for database migrations to ensure backward compatibility during rollbacks.",
+      "learnTopics": [
+        "data-contracts-schema-evolution",
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "deep.analysis",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "alerting",
+          "evaluation"
+        ],
+        "keywords": [
+          "golden signals",
+          "compare",
+          "baseline",
+          "errors"
+        ]
+      },
+      "goal": "Automate the decision to promote or roll back a release based on system metrics.",
+      "opener": "How does the deployment controller automatically determine if a canary is healthy or if it needs to roll back?",
+      "evidence": {
+        "strong": "Compares canary metrics against a baseline using statistical checks on error rates and latency.",
+        "adequate": "Looks at hardcoded thresholds rather than comparing against a baseline of the current production version.",
+        "weak": "Relies on manual metric inspection or generic endpoint health checks."
+      },
+      "misconceptions": [
+        {
+          "id": "compare-historical",
+          "pattern": "Comparing canary metrics to historical metrics from yesterday.",
+          "challenge": "Traffic patterns change day to day. How can we compare the canary to what the old version is doing right now?"
+        }
+      ],
+      "probes": [
+        "Which specific metrics are most important to watch?",
+        "How do you distinguish a bad release from a general traffic spike?"
+      ],
+      "hints": [
+        "Instead of fixed thresholds, what should we compare the canary's performance against?",
+        "What are the golden signals we should monitor during a rollout?"
+      ],
+      "moveOnSummary": "We'll use an automated canary analysis service that compares new version metrics against baseline metrics.",
+      "learnTopics": [
+        "observability",
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "deep.provenance",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "registry",
+          "kms"
+        ],
+        "keywords": [
+          "provenance",
+          "signing",
+          "immutable",
+          "supply chain"
+        ]
+      },
+      "goal": "Secure the deployment pipeline by ensuring only trusted, unmodified artifacts reach production.",
+      "opener": "How can we guarantee that the artifact being deployed to production is exactly the one built and tested in our CI pipeline?",
+      "evidence": {
+        "strong": "Implements cryptographic signing of artifacts in CI, validates signatures at deployment time, and ensures strict immutability in the registry.",
+        "adequate": "Mentions hashing or checksums to verify artifacts, or relies entirely on registry access controls.",
+        "weak": "Assumes artifacts are safe by default or relies on file naming conventions."
+      },
+      "misconceptions": [
+        {
+          "id": "trust-registry-name",
+          "pattern": "Re-building the docker image for production using the same git commit.",
+          "challenge": "If a dependency changes in the registry between the staging build and the prod build, how do we know the prod build is identical?"
+        }
+      ],
+      "probes": [
+        "What prevents an attacker from overwriting an image in the registry?",
+        "How does the deployment controller verify the artifact?"
+      ],
+      "hints": [
+        "How do we normally prove the authenticity of a digital document?",
+        "Can the CI pipeline attach a cryptographic proof to the artifact?"
+      ],
+      "moveOnSummary": "We will sign artifacts in CI and verify the signatures before deployment.",
+      "learnTopics": [
+        "ci-cd-pipelines",
+        "infrastructure-as-code"
+      ]
+    },
+    {
+      "id": "deep.scale",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "deployer",
+          "queue",
+          "worker"
+        ],
+        "keywords": [
+          "hundreds of services",
+          "concurrency",
+          "worker",
+          "bottleneck"
+        ]
+      },
+      "goal": "Scale the deployment control plane to handle hundreds of concurrent deployments safely.",
+      "opener": "With hundreds of services deploying multiple times a day, how does the deployment controller scale to handle the concurrent orchestration load?",
+      "evidence": {
+        "strong": "Decouples the control plane using async workers, queues, or a distributed state machine to handle concurrent deployments without blocking.",
+        "adequate": "Suggests horizontal scaling of the controller but doesn't detail how state or locks are managed.",
+        "weak": "Uses a single synchronous script or database lock that bottlenecks."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-deployments",
+          "pattern": "Running all deployments synchronously in a single process.",
+          "challenge": "If a canary bake takes 30 minutes, what happens to the controller's memory and connection pools if 500 deployments are running?"
+        }
+      ],
+      "probes": [
+        "How do we keep track of the state of a long-running deployment?",
+        "What happens if the deployment controller crashes halfway through a rollout?"
+      ],
+      "hints": [
+        "A deployment is a long-running process. How do we store its state?",
+        "How can we distribute the orchestration work across multiple machines?"
+      ],
+      "moveOnSummary": "We'll use a queue and a fleet of worker nodes to asynchronously manage deployment state machines.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "message-queues",
+        "scalability"
+      ]
+    },
+    {
+      "id": "deep.speed",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "hotfix",
+          "speed",
+          "fast track"
+        ]
+      },
+      "goal": "Design a mechanism to safely expedite critical changes or hotfixes.",
+      "opener": "How would you handle a situation where a critical hotfix needs to bypass the standard bake time, while still keeping some safety nets?",
+      "evidence": {
+        "strong": "Introduces emergency deployment pipelines with manual overrides, strict audit logging, and automated fast-track post-deployment checks.",
+        "adequate": "Suggests a 'skip canary' button but lacks auditing or risk controls.",
+        "weak": "Suggests manually ssh-ing into servers or editing the code directly in production."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Who should be allowed to trigger a hotfix?",
+        "How do we ensure the hotfix doesn't diverge from the main branch?"
+      ],
+      "hints": [
+        "Can we have a separate fast-track deployment path?",
+        "What approvals are needed to bypass standard safety checks?"
+      ],
+      "moveOnSummary": "We'll implement a fast-track pipeline with strict auditing and elevated approval requirements.",
+      "learnTopics": [
+        "incident-management",
+        "deployment-strategies"
+      ]
+    },
+    {
+      "id": "deep.metrics_failure",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "alerting"
+        ],
+        "keywords": [
+          "failure",
+          "fallback",
+          "pause"
+        ]
+      },
+      "goal": "Handle failure of a critical dependency during a rollout.",
+      "opener": "If the metrics system goes down during a deployment wave, what should the deployment controller do?",
+      "evidence": {
+        "strong": "Fails safe by automatically pausing the deployment, alerting an operator, and waiting for manual intervention or metrics recovery.",
+        "adequate": "Suggests pausing, but might try to rollback automatically without understanding that rolling back blind is also dangerous.",
+        "weak": "Ignores the failure and continues the deployment, or crashes the controller."
+      },
+      "misconceptions": [
+        {
+          "id": "auto-rollback-blind",
+          "pattern": "Automatically rolling back when metrics fail.",
+          "challenge": "If the new version is actually fine, but metrics are down, does an automatic rollback introduce unnecessary risk when we can't see what's happening?"
+        }
+      ],
+      "probes": [
+        "Is it safer to continue, pause, or roll back blindly?",
+        "How does the controller distinguish between a bad canary and a dead metrics system?"
+      ],
+      "hints": [
+        "If you are driving and suddenly go blind, do you keep driving, slam it into reverse, or hit the brakes?",
+        "Think about 'fail open' versus 'fail closed'."
+      ],
+      "moveOnSummary": "The system will fail safe by pausing deployments if metrics are unavailable.",
+      "learnTopics": [
+        "disaster-recovery",
+        "observability"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "tradeoffs",
+          "summary",
+          "bottleneck"
+        ]
+      },
+      "goal": "Review the design and acknowledge the main tradeoffs made for safety over speed.",
+      "opener": "Looking at the final platform, what is the biggest tradeoff you made, and what is its main bottleneck?",
+      "evidence": {
+        "strong": "Identifies that safe, wave-based deployments trade speed for reliability, and spots the controller database or metrics system as a bottleneck.",
+        "adequate": "Summarizes the design well but struggles to articulate a fundamental tradeoff.",
+        "weak": "Cannot identify any tradeoffs or bottlenecks."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If developers complain deployments are too slow, what could you tune?",
+        "What is the single point of failure in this design?"
+      ],
+      "hints": [
+        "Think about the bake times and waves.",
+        "What happens to deployments if the metrics system goes down?"
+      ],
+      "moveOnSummary": "We reviewed the tradeoff of deployment speed vs. safety.",
+      "learnTopics": [
+        "latency-vs-throughput",
+        "availability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "hotfix",
+      "after": "deep.progressive",
+      "prompt": "Developers are complaining that it takes too long for a simple typo fix to reach production. How can we speed this up without compromising safety?",
+      "agendaItemId": "deep.speed"
+    },
+    {
+      "id": "metrics-down",
+      "after": "deep.analysis",
+      "prompt": "Imagine your telemetry system goes down entirely. We have 50 deployments currently in their canary wave. What exactly does the deployment platform do?",
+      "agendaItemId": "deep.metrics_failure"
+    }
+  ],
+  "vocabulary": [
+    "canary",
+    "blue-green",
+    "spinnaker",
+    "argo",
+    "kubernetes",
+    "provenance",
+    "golden signals",
+    "expand and contract",
+    "immutability",
+    "blast radius",
+    "bake time"
+  ],
+  "alternatives": [
+    {
+      "choice": "Pull-based deployment (e.g., GitOps)",
+      "whenBetter": "Better for strict state reconciliation and preventing configuration drift in Kubernetes environments compared to a centralized push-based controller."
+    },
+    {
+      "choice": "Blue-Green Deployments",
+      "whenBetter": "Better for applications where running two different versions simultaneously is incompatible, or when instant rollback is prioritized over minimizing blast radius."
+    },
+    {
+      "choice": "Shadow traffic / Dark launching",
+      "whenBetter": "Better for highly critical services where even a small canary failure is too impactful, allowing testing with real user traffic without affecting responses."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Strong",
+      "outline": "The candidate designed a robust control plane that cleanly separated CI from CD. They used immutable, signed artifacts and implemented a state-machine driven progressive rollout. They correctly identified the need for expand/contract database migrations to preserve rollback safety, and utilized statistical comparisons of golden signals for automated canary analysis."
+    },
+    {
+      "band": "adequate",
+      "label": "Adequate",
+      "outline": "The candidate built a functional deployment pipeline and understood the need for canary rollouts. They grasped the basics of health-gated promotions using metrics but relied on static thresholds rather than baseline comparisons. They recognized the database schema rollback issue but lacked a concrete pattern to solve it without data loss."
+    },
+    {
+      "band": "weak",
+      "label": "Weak",
+      "outline": "The candidate designed a basic script-based deployment that pushed code directly to servers without a distinct artifact registry. They struggled with progressive rollouts, opting for an all-at-once approach, and didn't incorporate automated health checks, relying entirely on manual validation."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.45,
+    "wrap_up": 0.15
+  }
+}

@@ -15,13 +15,14 @@ import { promptById } from "../rounds.js";
 import { TOPICS } from "../../../src/learn/catalog.js";
 import { candidateSnapshot, conventions as ucsConventions, defaultMode, renderUniversal, ucsVersion } from "../ucs/index.js";
 import { applyTurn } from "./apply.js";
+import { canvasSignals } from "./canvas.js";
 import { assembleBlocks } from "./assemble.js";
 import { CLOSED, FOCUS_AREAS, KIND_FOR_MOVE, bandAtLeast } from "./moves.js";
 import { clockOf, focusItem, nextPendingItem, plan as makePlan, tickPlan } from "./plan.js";
 import * as store from "./store.js";
 import { conductorTask } from "./task.js";
 import { WRAP_UP_TEXT, accrueActiveMs, decideTick } from "./ticks.js";
-import { validateOutput } from "./validate.js";
+import { validateOutput, questionCount } from "./validate.js";
 
 // The Interview Conductor (docs/design/interview-conductor.md): runs one live round.
 // Each turn is PLAN (code) -> one model call -> VALIDATE (code) -> APPLY (code). The
@@ -181,6 +182,29 @@ function notesFor(data, learner, verified) {
   };
 }
 
+// What the canvas shows and where the candidate has taken the interview, for the planner.
+function signalsFor({ session, record, round, turns }) {
+  const learner = turns.filter((turn) => turn.role === "learner" && ["message", "audio"].includes(turn.kind) && turn.content);
+  return canvasSignals({
+    agenda: record.pack.agenda,
+    diagram: session.diagram,
+    learnerTexts: learner.map(learnerText),
+    seed: session.id,
+    learnerTurnsSinceAsk: learner.filter((turn) => turn.seq > (round.lastDrawAskSeq ?? 0)).length,
+  });
+}
+
+// The shape of the conversation so far, so the interviewer doesn't only ask questions.
+function conversationOf(turns) {
+  const said = turns.filter((turn) => turn.role === "interviewer" && turn.move && !["nudge", "time_check"].includes(turn.move));
+  let questionStreak = 0;
+  for (const turn of [...said].reverse()) {
+    if (questionCount(turn.content) === 0) break;
+    questionStreak += 1;
+  }
+  return { lastMove: said.at(-1)?.move ?? null, questionStreak };
+}
+
 function addedKinds(snapshot, diagram) {
   return diffSnapshots(snapshot, snapshotOf(diagram), diagram).added.map((entry) => entry.kind);
 }
@@ -195,6 +219,8 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const plan = makePlan({
     items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes,
     turn: { kind: reserved.learner.kind, text: learnerText(reserved.learner) }, trigger, addedKinds: addedKinds(round.snapshot, session.diagram),
+    canvas: signalsFor({ session, record, round, turns }),
+    conversation: conversationOf(turns),
   });
   const selected = selectedNodeId && design.labels.has(selectedNodeId) ? { id: selectedNodeId, label: design.labels.get(selectedNodeId) } : null;
   const { verified, data, flags } = await converse({ ctx, session, user, turns, plan, trigger, learner: reserved.learner, selected, onDelta, onReset });
@@ -256,6 +282,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       now, mode: round.mode, conventions, clock, timeWarnings: round.timeWarnings, stage: round.stage,
       lastTurn: last, lastLearnerAt, lastProactiveAt: round.lastProactiveAt, lastNudgeAt: round.lastNudgeAt,
       proactiveLeft: limits.proactiveChecksPerRound - round.proactiveChecks, focusExhausted,
+      canvasThin: design.componentCount < conventions.minCanvasComponents || design.edgeCount < conventions.minCanvasConnections,
       canvas: { unexplained: Boolean(mapped), itemId: mapped?.itemId ?? null, major: diff.added.length + diff.removed.length >= 3 || diff.edgeChanges >= 3, changedSinceLearner: diff.added.length + diff.removed.length + diff.edgeChanges > 0 },
     });
 
@@ -270,7 +297,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       const plan = { focusItemId: focus?.itemId ?? null, nextItemId: null, allowedMoves: [decision.move] };
       const result = decision.move === "wrap_up"
         ? applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: null, interviewerSeq: null } })
-        : { items, state: { stage: round.stage, focusItemId: round.focusItemId, assumptions: round.assumptions, stageStartedMs: round.stageStartedMs, hintsUsed: round.hintsUsed, clarificationsAsked: round.clarificationsAsked, ledgerVersion: round.ledgerVersion }, events: [] };
+        : { items, state: { stage: round.stage, focusItemId: round.focusItemId, assumptions: round.assumptions, stageStartedMs: round.stageStartedMs, hintsUsed: round.hintsUsed, clarificationsAsked: round.clarificationsAsked, ledgerVersion: round.ledgerVersion, lastDrawAskSeq: round.lastDrawAskSeq, componentsAtDrawAsk: round.componentsAtDrawAsk }, events: [] };
       const warnings = decision.move === "time_check" ? [...new Set([...round.timeWarnings, ...decision.alsoRecord])] : decision.move === "wrap_up" ? [...new Set([...round.timeWarnings, 1])] : round.timeWarnings;
       result.events.push({ type: decision.move === "time_check" ? "time_warning" : decision.move === "nudge" ? "nudge" : "stage_changed", payload: { threshold: decision.threshold ?? null } });
       try {
@@ -295,7 +322,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     if (!creditId) return { action: "none", reason: "not_now" };
     try {
       const turns = await store.recentTurns(session.id, round.summarizedThrough);
-      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes, trigger: "tick", turn: { kind: "tick", text: "" } });
+      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes, trigger: "tick", turn: { kind: "tick", text: "" }, canvas: signalsFor({ session, record, round, turns }) });
       const plan = tickPlan({ base, kind: decision.kind, itemId: decision.itemId, items });
       const changes = mapped ? `Added: [${mapped.entry.id}] ${mapped.entry.kind} "${mapped.entry.label}" (no note)` : "";
       const { verified, flags } = await converse({ ctx, session, user, turns, plan, trigger: `tick:${decision.kind}`, learner: null, changes });
@@ -357,7 +384,7 @@ export async function reviewLedger(sessionId, promptId) {
   const addendum = (await renderUniversal({ version: state.ucs_version, task: "review" })).map((block) => block.text).join("\n\n");
   const lines = items.map((item) => {
     const quotes = item.evidence.slice(0, 2).map((entry) => `"${clean(entry.quote, 120)}"`).join(" ");
-    return `- ${item.itemId} · ${item.stage} · ${item.dimension} · weight ${item.weight} · ${item.status} · ${item.band ?? "no band"}${item.hintLevel ? ` · ${item.hintLevel} hint(s)` : ""}${item.challenges ? ` · challenged` : ""}${quotes ? ` · ${quotes}` : ""}`;
+    return `- ${item.itemId} · ${item.stage} · ${item.dimension} · weight ${item.weight} · ${item.status} · ${item.band ?? "no band"}${item.hintLevel ? ` · ${item.hintLevel} hint(s)` : ""}${item.challenges ? ` · challenged` : ""}${item.drawRequests ? ` · asked to draw ${item.drawRequests}x` : ""}${quotes ? ` · ${quotes}` : ""}`;
   });
   const record = await getPack(promptId, state.pack_version);
   const packReview = renderProblem(record, { task: "review" }).filter((entry) => entry.id === "pks.review").map((entry) => entry.text).join("\n\n");

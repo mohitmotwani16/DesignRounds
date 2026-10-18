@@ -87,6 +87,8 @@ const db = { query, queryOne };
 
 function presentTurn(row) {
   const turn = { id: row.id, seq: row.seq, role: row.role, kind: row.kind, trigger: row.trigger, content: row.content, nodeIds: row.node_ids ?? [], createdAt: row.created_at };
+  // A request to draw is labelled in the conversation (the move itself is not private).
+  if (row.move === "ask_to_draw") turn.asksToDraw = true;
   // A voice answer shows only its duration: the transcript stays server-side (the
   // interviewer and the review read it) and the recording is never sent back.
   if (row.kind === "audio") Object.assign(turn, { content: "", audio: { durationMs: row.audio_duration_ms ?? null } });

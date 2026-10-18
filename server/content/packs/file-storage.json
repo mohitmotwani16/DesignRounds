@@ -1,0 +1,592 @@
+{
+  "opening": "Let's design a cloud file storage system like Dropbox or Google Drive. You can start wherever you'd like.",
+  "clarifications": [
+    {
+      "id": "scale.files",
+      "topics": [
+        "files",
+        "scale",
+        "count",
+        "volume"
+      ],
+      "answer": "We expect hundreds of millions of files across our user base, meaning storage is our dominant cost."
+    },
+    {
+      "id": "scale.size",
+      "topics": [
+        "size",
+        "gigabytes",
+        "megabytes",
+        "large"
+      ],
+      "answer": "Files range from a few megabytes up to many gigabytes."
+    },
+    {
+      "id": "scope.sync",
+      "topics": [
+        "sync",
+        "devices",
+        "offline",
+        "interruptions"
+      ],
+      "answer": "Files must sync across multiple devices per user, and any interrupted uploads must recover safely."
+    },
+    {
+      "id": "scope.sharing",
+      "topics": [
+        "sharing",
+        "permissions",
+        "collaborators",
+        "access"
+      ],
+      "answer": "Users can share files with collaborators, so we need basic access control boundaries."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not covered here, tell them to assume standard consumer cloud storage behavior, keeping the focus on reliable large file sync.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "features",
+          "sync",
+          "share",
+          "offline",
+          "upload"
+        ]
+      },
+      "goal": "Define the functional boundaries and core features of the file storage system.",
+      "opener": "What core features and workflows are you planning to support for the users?",
+      "evidence": {
+        "strong": "Asks about file size limits, offline capabilities, and sharing.",
+        "adequate": "Identifies upload, download, and cross-device sync.",
+        "weak": "Misses sync entirely or assumes only small files."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How are you handling users with multiple devices?",
+        "Are there any sharing or collaboration features?"
+      ],
+      "hints": [
+        "Think about what happens when you use Dropbox or Google Drive on your laptop and phone.",
+        "Do users only store files for themselves?"
+      ],
+      "moveOnSummary": "Agreed on upload, download, cross-device sync, and basic sharing.",
+      "learnTopics": [
+        "system-design-interview-questions"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "gb",
+          "tb",
+          "qps",
+          "storage per day",
+          "peak"
+        ]
+      },
+      "goal": "Identify the volume of data, user traffic, and storage needs.",
+      "opener": "How would you estimate the storage and traffic demands for this system?",
+      "evidence": {
+        "strong": "Estimates storage growth, read/write ratios for metadata vs blobs, and network bandwidth.",
+        "adequate": "Calculates total storage based on user counts.",
+        "weak": "Throws random numbers without tying them to file sizes or user counts."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What's the ratio of metadata reads to blob writes?",
+        "How much storage would we add per month?"
+      ],
+      "hints": [
+        "Start with the number of daily active users.",
+        "Multiply the average files per user by the average file size."
+      ],
+      "moveOnSummary": "Established the scale at hundreds of millions of files with heavy storage costs.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "block-storage",
+          "database",
+          "load-balancer"
+        ],
+        "keywords": [
+          "metadata",
+          "blob",
+          "client",
+          "storage"
+        ]
+      },
+      "goal": "Establish the main path for file uploads, downloads, and metadata management.",
+      "opener": "Can you lay out the high-level components needed when a user uploads a new file?",
+      "evidence": {
+        "strong": "Clearly separates metadata path from the blob storage path.",
+        "adequate": "Includes storage, a database, and application servers.",
+        "weak": "Routes all large file blobs through the main database or generic application servers."
+      },
+      "misconceptions": [
+        {
+          "id": "blobs_in_db",
+          "pattern": "Storing the actual file content in the relational database alongside metadata.",
+          "challenge": "How will your database perform when storing 10 GB video files?"
+        }
+      ],
+      "probes": [
+        "Which component handles the actual file bits versus the file name?",
+        "Where does the client connect to first?"
+      ],
+      "hints": [
+        "Consider separating where we store the file's name from where we store the file's bytes.",
+        "Object storage is usually cheaper for large blobs than a database."
+      ],
+      "moveOnSummary": "Separated metadata servers backed by a DB from block storage.",
+      "learnTopics": [
+        "object-storage",
+        "sql-vs-nosql"
+      ]
+    },
+    {
+      "id": "hl.data",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-db",
+          "t-postgres",
+          "wide-column"
+        ],
+        "keywords": [
+          "schema",
+          "table",
+          "version",
+          "file metadata"
+        ]
+      },
+      "goal": "Define the schema for files, folders, and versions, supporting a single source of truth.",
+      "opener": "How are you modeling the files and folders in the database?",
+      "evidence": {
+        "strong": "Uses a relational schema or strong consistency for metadata, tracks file versions, and models the folder hierarchy.",
+        "adequate": "Stores file metadata with version IDs.",
+        "weak": "Puts actual file content in the database or ignores file versioning entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "eventual_metadata",
+          "pattern": "Using an eventually consistent store for metadata without a plan for read-after-write.",
+          "challenge": "If a user creates a folder and immediately opens it, what happens if the read goes to a replica that hasn't synced?"
+        }
+      ],
+      "probes": [
+        "How do you represent a folder containing other folders?",
+        "How do we know which version of a file is the latest?"
+      ],
+      "hints": [
+        "Think about a standard file system's directory structure.",
+        "Each file needs a unique identifier separate from its path."
+      ],
+      "moveOnSummary": "Defined a strongly consistent metadata schema for files and versions.",
+      "learnTopics": [
+        "database-indexing",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "deep.upload_chunking",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "block-storage",
+          "t-s3",
+          "client",
+          "mobile"
+        ],
+        "keywords": [
+          "chunk",
+          "multipart",
+          "resume",
+          "offset",
+          "byte range"
+        ]
+      },
+      "goal": "Design a mechanism to reliably upload multi-gigabyte files that can resume after drops.",
+      "opener": "If a user is uploading a 10 GB file and their network drops at 9 GB, how does your system handle it?",
+      "evidence": {
+        "strong": "Splits files into blocks (e.g., 4MB), uploads in parallel, retries only failed blocks, and commits via a manifest.",
+        "adequate": "Mentions chunking or multipart upload for resuming.",
+        "weak": "Attempts to stream the whole file over one TCP connection with no resume capability."
+      },
+      "misconceptions": [
+        {
+          "id": "retry_whole_file",
+          "pattern": "If an upload fails, we just retry the whole file from the beginning.",
+          "challenge": "What happens if a user on a flaky connection tries to upload a 5 GB file?"
+        }
+      ],
+      "probes": [
+        "How does the server know when all the parts have arrived?",
+        "What size would you make the chunks and why?"
+      ],
+      "hints": [
+        "Is there a way to split the file before it leaves the client?",
+        "Look into how S3 handles multipart uploads."
+      ],
+      "moveOnSummary": "Used chunked, multipart uploads to allow resuming failed transfers.",
+      "learnTopics": [
+        "resumable-file-uploads"
+      ]
+    },
+    {
+      "id": "deep.direct_upload",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "block-storage",
+          "t-s3",
+          "auth-service",
+          "api-gateway"
+        ],
+        "keywords": [
+          "presigned",
+          "signed url",
+          "direct upload",
+          "s3"
+        ]
+      },
+      "goal": "Offload large file data transfers from application servers to storage directly.",
+      "opener": "How do you prevent your application servers from becoming a bottleneck during massive file uploads?",
+      "evidence": {
+        "strong": "Issues pre-signed URLs from the metadata service, allowing the client to PUT directly to object storage.",
+        "adequate": "Mentions uploading to object storage directly but vague on the security mechanism.",
+        "weak": "Routes multi-GB uploads through standard application servers, exhausting memory."
+      },
+      "misconceptions": [
+        {
+          "id": "app_server_passthrough",
+          "pattern": "The frontend sends the file to the backend, which streams it to storage.",
+          "challenge": "How much network bandwidth will your backend instances need if 1,000 users upload 1 GB files simultaneously?"
+        }
+      ],
+      "probes": [
+        "How do we ensure the user is authorized to write to that specific storage bucket location?",
+        "How does the metadata service know the direct upload succeeded?"
+      ],
+      "hints": [
+        "Can the client talk directly to the storage layer?",
+        "Most cloud providers offer temporary credentials or URLs for direct secure access."
+      ],
+      "moveOnSummary": "Used pre-signed URLs for direct client-to-storage uploads.",
+      "learnTopics": [
+        "object-storage",
+        "api-design"
+      ]
+    },
+    {
+      "id": "deep.sync_notifications",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "notification-service",
+          "push",
+          "queue"
+        ],
+        "keywords": [
+          "long polling",
+          "websocket",
+          "sync",
+          "notify",
+          "event"
+        ]
+      },
+      "goal": "Ensure devices quickly learn about changes made by other devices or users.",
+      "opener": "When a file is updated on one device, how do a user's other devices find out about the change?",
+      "evidence": {
+        "strong": "Uses WebSockets or long polling connected to a pub/sub system to push invalidations or change events.",
+        "adequate": "Mentions polling or push notifications to trigger a sync.",
+        "weak": "Relies on naive polling every minute, burning client battery and server CPU."
+      },
+      "misconceptions": [
+        {
+          "id": "fetch_all_metadata",
+          "pattern": "The client fetches the whole file list from the server every time a sync happens.",
+          "challenge": "If a user has 100,000 files and only one changed, how do we avoid transferring the whole list?"
+        }
+      ],
+      "probes": [
+        "How do we scale the connections if we have 10 million online devices?",
+        "What message queue or broker helps route the events to the right server?"
+      ],
+      "hints": [
+        "If a client wants to be notified immediately, what connection type should it use?",
+        "How does the server know which device is subscribed to which user's folders?"
+      ],
+      "moveOnSummary": "Designed a real-time notification service to trigger client syncs.",
+      "learnTopics": [
+        "real-time-communication",
+        "pub-sub"
+      ]
+    },
+    {
+      "id": "deep.conflicts",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "conflict",
+          "version",
+          "vector clock",
+          "conflicted copy",
+          "last writer wins"
+        ]
+      },
+      "goal": "Resolve cases where a file is edited concurrently on different offline devices.",
+      "opener": "What happens if a user edits the same file on their laptop and phone while both are offline, and then both reconnect?",
+      "evidence": {
+        "strong": "Uses version vectors or a server-side version counter to detect forks, creating a 'conflicted copy' for the user to resolve.",
+        "adequate": "Recognizes the conflict and explicitly defaults to last-writer-wins with history.",
+        "weak": "Overwrites data silently based on client wall-clock time."
+      },
+      "misconceptions": [
+        {
+          "id": "client_timestamp_wins",
+          "pattern": "We can use the client's timestamp to decide which edit is newer and discard the older one.",
+          "challenge": "What if the user actually wanted both sets of changes, or the client's clock is out of sync?"
+        }
+      ],
+      "probes": [
+        "How does the server definitively know the file was edited concurrently and not sequentially?",
+        "How do you communicate the conflict back to the user?"
+      ],
+      "hints": [
+        "What does Dropbox do when you and a friend edit the same document?",
+        "Can the server track which version the client started editing from?"
+      ],
+      "moveOnSummary": "Handled conflicts gracefully by creating conflicted copies.",
+      "learnTopics": [
+        "consistency-models",
+        "crdts"
+      ]
+    },
+    {
+      "id": "deep.deduplication",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "block-storage",
+          "database",
+          "service",
+          "t-s3"
+        ],
+        "keywords": [
+          "hash",
+          "dedupe",
+          "sha",
+          "content addressable"
+        ]
+      },
+      "goal": "Save storage costs by not storing identical file content twice.",
+      "opener": "If ten thousand users all upload the exact same popular video, how could we optimize our storage costs?",
+      "evidence": {
+        "strong": "Computes a hash of chunks on the client, checking if the block exists on the server before uploading.",
+        "adequate": "Hashes whole files to prevent storing duplicates.",
+        "weak": "Suggests scanning file names to find duplicates."
+      },
+      "misconceptions": [
+        {
+          "id": "filename_dedupe",
+          "pattern": "Deduplicating files based on their filename and size.",
+          "challenge": "What if two different users have completely different files that happen to both be named 'video.mp4'?"
+        }
+      ],
+      "probes": [
+        "How do we ensure privacy and security if one user can access a block uploaded by another?",
+        "When is the hash computed: on the client or the server?"
+      ],
+      "hints": [
+        "If we identify files by their content rather than their name, how would we do it?",
+        "Could the client ask the server 'do you already have this chunk' before sending it?"
+      ],
+      "moveOnSummary": "Applied chunk-level deduplication via content hashing to save storage.",
+      "learnTopics": [
+        "object-storage",
+        "optimistic-vs-pessimistic-locking"
+      ]
+    },
+    {
+      "id": "deep.sync_hierarchy",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-db"
+        ],
+        "keywords": [
+          "tree",
+          "namespace",
+          "folder",
+          "inode",
+          "rename"
+        ]
+      },
+      "goal": "Handle complex hierarchical metadata sync operations efficiently.",
+      "opener": "How does your metadata model handle moving or renaming a folder that contains thousands of nested files?",
+      "evidence": {
+        "strong": "Uses immutable file IDs and models folders as collections of IDs, so a folder rename is just one metadata update.",
+        "adequate": "Mentions updating the parent ID of the folder.",
+        "weak": "Attempts to rewrite the path for every nested file during a rename."
+      },
+      "misconceptions": [
+        {
+          "id": "path_as_primary_key",
+          "pattern": "Using the full file path as the primary key in the database.",
+          "challenge": "If a folder has a million files and the user renames the folder, how many database rows do you need to update?"
+        }
+      ],
+      "probes": [
+        "How do clients find out about the rename without downloading the whole tree again?",
+        "Are there race conditions if someone modifies a file inside a folder while it's being moved?"
+      ],
+      "hints": [
+        "In Linux, how does the file system represent directories and files?",
+        "A folder rename should ideally be an O(1) operation."
+      ],
+      "moveOnSummary": "Handled folder moves efficiently by using immutable IDs.",
+      "learnTopics": [
+        "database-indexing"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "limit",
+          "choke point",
+          "scale"
+        ]
+      },
+      "goal": "Identify the most fragile or constrained part of the final design.",
+      "opener": "Looking at your final architecture, where would you expect this system to struggle first as it grows?",
+      "evidence": {
+        "strong": "Identifies metadata database locks during massive folder deletions or high connection counts on the sync servers.",
+        "adequate": "Points out storage costs or network ingress as challenges.",
+        "weak": "Gives a generic answer about adding more servers."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If user traffic spikes 10x suddenly, which specific service fails first?",
+        "How would you monitor for that failure?"
+      ],
+      "hints": [
+        "Think about the stateful parts of your system.",
+        "Maintaining millions of open WebSockets requires a specific kind of tuning."
+      ],
+      "moveOnSummary": "Identified architectural bottlenecks and wrap up.",
+      "learnTopics": [
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "sync.offline_folder_rename",
+      "after": "deep.conflicts",
+      "prompt": "What if device A modifies a file inside a folder, but device B offline-renames that same folder?",
+      "agendaItemId": "deep.sync_hierarchy"
+    }
+  ],
+  "vocabulary": [
+    "resumable",
+    "presigned",
+    "chunking",
+    "deduplication",
+    "conflict resolution",
+    "last-writer-wins",
+    "vector clocks",
+    "long polling"
+  ],
+  "alternatives": [
+    {
+      "choice": "Long polling instead of WebSockets for sync notifications.",
+      "whenBetter": "When client connections are frequently dropped on mobile networks and maintaining millions of persistent connections is too expensive."
+    },
+    {
+      "choice": "Last-writer-wins instead of conflicted copies.",
+      "whenBetter": "For simple configuration files where keeping multiple forks creates confusion, provided a version history is retained."
+    },
+    {
+      "choice": "Rsync-like block delta uploads instead of fixed chunks.",
+      "whenBetter": "When files are frequently modified with tiny appends, saving bandwidth over uploading entire fixed chunks."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive sync with direct chunked uploads",
+      "outline": "Separates metadata from blobs, directly uploading to object storage via pre-signed URLs. Files are chunked for deduplication and resumability. Real-time sync notifications use WebSockets, and conflicts result in user-visible conflicted copies."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic separation of blob and metadata",
+      "outline": "Provides a functional metadata and blob separation. Files are uploaded via application servers, but chunking is mentioned for large files. Sync is handled via polling, and conflicts use last-writer-wins."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic file storage without resumability",
+      "outline": "Stores files directly in a relational database or routes massive blobs entirely through Node.js servers. Lacks resumability, real-time sync, and offline conflict handling."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

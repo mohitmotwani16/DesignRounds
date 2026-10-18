@@ -1,0 +1,525 @@
+{
+  "opening": "We need to design a feature store for our ML platform. Let's start by establishing what this system needs to do.",
+  "clarifications": [
+    {
+      "id": "scale.writes",
+      "topics": [
+        "write",
+        "update",
+        "ingestion",
+        "features"
+      ],
+      "answer": "Assume we have around 10,000 defined features. They are updated via batch jobs daily, and streaming pipelines processing 100,000 events per second."
+    },
+    {
+      "id": "scale.reads",
+      "topics": [
+        "read",
+        "inference",
+        "qps",
+        "online"
+      ],
+      "answer": "Online inference requires about 100,000 QPS across all active models."
+    },
+    {
+      "id": "latency.online",
+      "topics": [
+        "latency",
+        "sla",
+        "speed",
+        "budget"
+      ],
+      "answer": "Online serving must return feature vectors with a p99 latency under 10 milliseconds."
+    },
+    {
+      "id": "data.volume",
+      "topics": [
+        "storage",
+        "volume",
+        "history",
+        "offline"
+      ],
+      "answer": "The offline store needs to retain years of historical data, easily reaching petabyte scale."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "stale",
+        "delay"
+      ],
+      "answer": "Different features have different SLAs. Batch features can be a day old, but streaming features need to be queryable online within seconds of the event."
+    },
+    {
+      "id": "req.changes",
+      "topics": [
+        "change",
+        "update",
+        "mutate",
+        "version"
+      ],
+      "answer": "Feature definitions do change, but a change must not silently break a model currently running in production."
+    }
+  ],
+  "clarificationPolicy": "Assume a mature, enterprise-scale platform where dozens of distinct ML teams share the same infrastructure.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "offline",
+          "online",
+          "training",
+          "serving",
+          "inference"
+        ]
+      },
+      "goal": "Identify the dual nature of the system: low-latency online serving and high-throughput point-in-time historical reads.",
+      "opener": "Who are the primary clients of this system, and what are their distinct access patterns?",
+      "evidence": {
+        "strong": "Explicitly separates the needs of the online inference service (low latency, latest values) from the offline training pipelines (high throughput, historical values).",
+        "adequate": "Mentions both training and inference but blurs the performance requirements between them.",
+        "weak": "Focuses entirely on either the online or offline use case, treating the feature store as just a standard database."
+      },
+      "misconceptions": [
+        {
+          "id": "single_db",
+          "pattern": "Assuming one database can efficiently serve both petabyte-scale historical analytical scans and sub-10ms point reads.",
+          "challenge": "How will a single database handle massive analytical queries while strictly maintaining your tight latency budget for live inference?"
+        }
+      ],
+      "probes": [
+        "What are the latency expectations when a live model requests a user's features?",
+        "How large are the datasets requested during model training?"
+      ],
+      "hints": [
+        "Consider how a live web service accesses features versus how an Apache Spark training job does.",
+        "Think about the difference between looking up a user's current status and looking up their status from a specific day last year."
+      ],
+      "moveOnSummary": "Identified the need for an online store for fast inference and an offline store for historical training data.",
+      "learnTopics": [
+        "feature-store",
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "data-lake",
+          "kv-store",
+          "registry",
+          "batch-processor"
+        ],
+        "keywords": [
+          "offline store",
+          "online store",
+          "ingestion",
+          "materialize"
+        ]
+      },
+      "goal": "Define the end-to-end flow from feature definition to ingestion, and out to the two serving boundaries.",
+      "opener": "Can you walk me through the high-level architecture from the moment a data scientist defines a feature to when a model uses it?",
+      "evidence": {
+        "strong": "Draws a clear ingestion path feeding into an offline store (data lake/warehouse) and an online store (KV database), coordinated by a central registry.",
+        "adequate": "Includes offline and online storage components but relies on manual syncs or lacks a central registry for definitions.",
+        "weak": "Draws a monolithic storage system or misses the ingestion transformation pipelines entirely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does data physically move from the offline store into the online store?",
+        "Where are the definitions or metadata for these features stored?"
+      ],
+      "hints": [
+        "If I define a new feature, where do I save that definition?",
+        "Once a batch job calculates feature values, where must it write them so both training and inference can access them?"
+      ],
+      "moveOnSummary": "Outlined an architecture with a central registry, ingestion pipelines, an offline lake, and an online KV store.",
+      "learnTopics": [
+        "feature-store",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "deep.pit_joins",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "warehouse",
+          "data-lake",
+          "batch-job"
+        ],
+        "keywords": [
+          "point in time",
+          "leakage",
+          "time travel",
+          "as of",
+          "event time"
+        ]
+      },
+      "goal": "Explain how to construct historical training data without leaking future feature values.",
+      "opener": "When generating a training dataset, how do we join labels to features to ensure we don't leak future data into the model?",
+      "evidence": {
+        "strong": "Explains point-in-time correctness, detailing how each feature record needs an event timestamp, and queries use 'AS OF' joins or window functions to find the latest feature value prior to the label's timestamp.",
+        "adequate": "Mentions joining on timestamps to avoid leakage but struggles to explain the actual SQL or logic required to fetch the most recent prior value.",
+        "weak": "Joins labels directly to the latest available feature values, ignoring the label's temporal context."
+      },
+      "misconceptions": [
+        {
+          "id": "latest_value_join",
+          "pattern": "Joining a historical label (e.g., from last month) to the current latest feature value.",
+          "challenge": "If a user made a purchase last month, and we train on that event today, will the model see the user's features as they are today or as they were last month?"
+        }
+      ],
+      "probes": [
+        "What exact columns must exist on every feature row in the offline store to make this work?",
+        "How do you handle a scenario where the feature was updated three days before the label event, and then again one day after?"
+      ],
+      "hints": [
+        "Think about what information you need to attach to a feature value to know exactly when it became true.",
+        "Consider how you would write a SQL query to find the single most recent feature update that happened *before* a specific target timestamp."
+      ],
+      "moveOnSummary": "Resolved point-in-time joins by ensuring all offline features have event timestamps and using time-aware join logic.",
+      "learnTopics": [
+        "feature-store",
+        "slowly-changing-dimensions"
+      ]
+    },
+    {
+      "id": "deep.online_store",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "in-memory-db"
+        ],
+        "keywords": [
+          "latency",
+          "qps",
+          "get",
+          "redis",
+          "key value"
+        ]
+      },
+      "goal": "Design the online storage layer to meet strict latency and scale requirements.",
+      "opener": "Given the traffic and latency budgets you estimated, how are you structuring the online store to guarantee fast reads?",
+      "evidence": {
+        "strong": "Chooses an in-memory or fast SSD key-value store, designs a flat key structure (e.g., entity_id:feature_name), and discusses replication, partitioning, and TTLs.",
+        "adequate": "Proposes Redis or similar but doesn't detail the key schema or how it scales to handle the read throughput.",
+        "weak": "Uses a relational database with complex joins for the online serving path."
+      },
+      "misconceptions": [
+        {
+          "id": "online_joins",
+          "pattern": "Executing SQL joins across multiple tables during the online inference request.",
+          "challenge": "How will running multiple table joins per request impact the strict latency budget at your estimated scale?"
+        }
+      ],
+      "probes": [
+        "What does the exact key and value look like in this database?",
+        "How do we prevent the online store from running out of memory over time?"
+      ],
+      "hints": [
+        "For the fastest possible reads, what database paradigm should we use?",
+        "If a model only needs the absolute latest value of a feature, do we need to store historical versions in the online store?"
+      ],
+      "moveOnSummary": "Designed a partitioned key-value store with flattened keys and TTLs for low-latency online serving.",
+      "learnTopics": [
+        "dynamo-style-key-value-store",
+        "redis",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.parity",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "batch-job",
+          "t-flink",
+          "t-spark"
+        ],
+        "keywords": [
+          "unified",
+          "parity",
+          "lambda",
+          "kappa",
+          "stream",
+          "batch"
+        ]
+      },
+      "goal": "Ensure offline and online feature calculation logic is identical.",
+      "opener": "How do we guarantee that the logic computing features for historical offline training is exactly the same as the logic processing live streaming events?",
+      "evidence": {
+        "strong": "Uses a unified engine (like Spark or Flink) or a feature abstraction framework so data scientists write logic once, which is compiled to both batch and stream execution.",
+        "adequate": "Identifies the risk of training-serving skew but accepts maintaining dual implementations (e.g., Python for batch, Java for stream) with strict testing.",
+        "weak": "Ignores the discrepancy, assuming models will perform fine even if stream processing behaves slightly differently from batch."
+      },
+      "misconceptions": [
+        {
+          "id": "copy_paste_code",
+          "pattern": "Assuming rewriting Pandas code into Flink SQL manually is sufficient and risk-free.",
+          "challenge": "If a developer updates the batch logic but forgets to update the streaming service, how will the system prevent the model from degrading in production?"
+        }
+      ],
+      "probes": [
+        "If a data scientist writes feature logic in SQL, how does that execute against a live Kafka stream?",
+        "What is training-serving skew, and how does this design prevent it?"
+      ],
+      "hints": [
+        "Is there a way for a user to declare a feature's transformation once, and let the platform decide how to execute it?",
+        "Look into modern unified processing frameworks that can handle both bounded and unbounded data."
+      ],
+      "moveOnSummary": "Addressed offline/online parity by proposing a unified execution framework or abstracted feature definitions.",
+      "learnTopics": [
+        "batch-vs-stream-processing",
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "deep.versioning",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "model-registry",
+          "database"
+        ],
+        "keywords": [
+          "version",
+          "backfill",
+          "immutable",
+          "breaking"
+        ]
+      },
+      "goal": "Manage feature updates safely without disrupting live models.",
+      "opener": "If a team discovers a bug in their feature logic and changes it, what happens to the models already using that feature in production?",
+      "evidence": {
+        "strong": "Implements immutable feature versions. New logic creates a new feature version (e.g., v2), triggers a historical backfill, and models explicitly pin to the version they were trained on.",
+        "adequate": "Discusses backfilling data but struggles with how models coordinate the transition safely without downtime or mismatched predictions.",
+        "weak": "Overwrites the existing feature in-place, which would immediately feed differently scaled or structured data to live models."
+      },
+      "misconceptions": [
+        {
+          "id": "in_place_update",
+          "pattern": "Updating the data in the online store in-place without notifying the model.",
+          "challenge": "If the new feature logic changes the average output from 1.0 to 100.0, what will the currently deployed model predict?"
+        }
+      ],
+      "probes": [
+        "How do we calculate the historical values for this newly updated feature?",
+        "How does the model inference service know which definition of the feature it should be fetching?"
+      ],
+      "hints": [
+        "If changing a feature breaks a model, perhaps we shouldn't change the feature. What could we create instead?",
+        "Think about how you manage dependencies in software packages. How does semantic versioning apply here?"
+      ],
+      "moveOnSummary": "Handled feature updates using immutable versioning and coordinated backfills.",
+      "learnTopics": [
+        "feature-store",
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "deep.freshness",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "monitoring-dashboard",
+          "drift-monitor",
+          "alerting"
+        ],
+        "keywords": [
+          "stale",
+          "freshness",
+          "lag",
+          "watermark",
+          "monitor"
+        ]
+      },
+      "goal": "Monitor and ensure the online store is receiving data within SLAs.",
+      "opener": "How do you monitor that online features are actually fresh and that our streaming pipelines haven't fallen behind?",
+      "evidence": {
+        "strong": "Emits watermarks or tracks ingestion timestamps vs event timestamps in the online store, firing alerts if the delta exceeds the feature's specific SLA.",
+        "adequate": "Monitors the streaming pipeline lag generally, but doesn't track end-to-end freshness from the model's perspective.",
+        "weak": "Relies entirely on basic infrastructure metrics like CPU usage rather than data-level freshness metrics."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the system distinguish between a pipeline that is down versus a user who genuinely hasn't had any activity for a week?",
+        "Where exactly is the metric calculated to prove the online store is up-to-date?"
+      ],
+      "hints": [
+        "If every feature record in the online store includes the time it was generated, how could a monitoring job use that?",
+        "What happens if Kafka is processing messages, but the writer to the online store is failing silently?"
+      ],
+      "moveOnSummary": "Established freshness monitoring by comparing event timestamps to current time at the serving layer.",
+      "learnTopics": [
+        "observability",
+        "stream-processing-windows-watermarks",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.conflict_resolution",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "stream-processor"
+        ],
+        "keywords": [
+          "out of order",
+          "late arriving",
+          "overwrite",
+          "timestamp"
+        ]
+      },
+      "goal": "Handle out-of-order events gracefully in the online store without corrupting fresh data.",
+      "opener": "How does the system handle late-arriving events so they don't overwrite newer data that has already been stored?",
+      "evidence": {
+        "strong": "Uses event timestamps to conditionally update records only if the incoming event is newer than the stored event.",
+        "adequate": "Relies on the stream processor to buffer and sort events, but leaves a potential race condition at the storage layer.",
+        "weak": "Allows simple blind writes, leading to older stale data permanently overwriting fresh data."
+      },
+      "misconceptions": [
+        {
+          "id": "blind_writes",
+          "pattern": "Assuming message queues always deliver in strict chronological order end-to-end.",
+          "challenge": "What happens if a retry in the stream processor causes an older event to be processed after a newer one?"
+        }
+      ],
+      "probes": [
+        "How do we ensure the database physically rejects an older event?",
+        "What metadata must we store alongside the feature value to make this decision?"
+      ],
+      "hints": [
+        "If an event from 10:00 arrives after an event from 10:05, how does the database know not to save the 10:00 event?",
+        "Look into conditional writes or compare-and-swap operations."
+      ],
+      "moveOnSummary": "Resolved out-of-order updates using event timestamps and conditional writes.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "delivery-semantics"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "risk",
+          "summary",
+          "tradeoff"
+        ]
+      },
+      "goal": "Reflect on the design's limits and operational complexities.",
+      "opener": "Looking at the system we've designed, what do you consider the biggest operational risk or bottleneck?",
+      "evidence": {
+        "strong": "Identifies complex, domain-specific risks, such as the operational burden of maintaining offline/online parity or the cost of massive historical backfills.",
+        "adequate": "Points to generic system bottlenecks like database scaling or network latency.",
+        "weak": "Claims the system has no bottlenecks or focuses on a trivial component."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If traffic doubles next year, which component will require a major rewrite first?",
+        "How would you mitigate the cost of storing petabytes of feature history?"
+      ],
+      "hints": [
+        "Consider the complexity of managing versions across dozens of ML teams.",
+        "Think about what happens when a team decides to backfill 5 years of data for a heavy streaming feature."
+      ],
+      "moveOnSummary": "Concluded with a review of system bottlenecks and operational trade-offs.",
+      "learnTopics": [
+        "capacity-planning",
+        "machine-learning-system-architecture"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "out_of_order",
+      "after": "deep.online_store",
+      "prompt": "Our streaming pipeline goes down for an hour. When it recovers, it processes an hour of delayed events while simultaneously receiving fresh ones. How does your online store prevent older delayed events from overwriting the fresh ones?",
+      "agendaItemId": "deep.conflict_resolution"
+    }
+  ],
+  "vocabulary": [
+    "point-in-time",
+    "feature materialization",
+    "data leakage",
+    "time travel",
+    "offline/online parity",
+    "backfill",
+    "AS OF join",
+    "training-serving skew"
+  ],
+  "alternatives": [
+    {
+      "choice": "Lambda Architecture vs Unified Stream Processing",
+      "whenBetter": "A Lambda architecture (separate batch and stream code) is easier to build with legacy tools, but a unified approach (e.g., Flink) is better for preventing training-serving skew at scale."
+    },
+    {
+      "choice": "Pushing to Online Store vs Pulling on Demand",
+      "whenBetter": "Pushing pre-computed features to a KV store is better for strict latency. Pulling and computing on-demand is better when combinations are too vast to pre-compute, provided latency budgets allow."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Clear boundaries, unified parity, time-aware joins",
+      "outline": "The candidate separated the offline data lake and online KV store entirely, tied together by a central feature registry. They explicitly solved data leakage using point-in-time 'AS OF' joins in the offline store. They chose a unified processing engine to maintain offline/online parity and handled definition changes cleanly using immutable feature versioning and backfills."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but lacks time-travel depth",
+      "outline": "The candidate designed a dual-storage system with batch and stream ingestion. However, they struggled to define the exact SQL or mechanisms needed for point-in-time correctness, hand-waving the prevention of data leakage. They recognised the need for low latency but lacked detail on managing feature versions or preventing skew between duplicated batch and stream logic."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic storage, high leakage risk",
+      "outline": "The candidate treated the feature store as a standard CRUD application, attempting to serve both petabyte-scale analytics and low-latency inference from a single relational database. They did not grasp the concept of point-in-time correctness, proposing queries that would leak future data into historical training sets."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

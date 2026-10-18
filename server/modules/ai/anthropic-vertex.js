@@ -137,7 +137,10 @@ function endEvent(message) {
     model: message.model,
     inputTokens: usage.input_tokens + (usage.cache_creation_input_tokens ?? 0) + cached,
     cachedInputTokens: cached,
+    cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    // Claude's output_tokens already include thinking.
     outputTokens: usage.output_tokens,
+    reasoningTokens: 0,
   };
 }
 

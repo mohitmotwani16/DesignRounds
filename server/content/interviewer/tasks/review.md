@@ -4,3 +4,4 @@ This round had a live interviewer that kept a notepad of the agenda for this que
 - Your score for a dimension may differ from what its items suggest by at most one band unless you say why in that dimension's feedback.
 - "missed" means the candidate was asked and didn't reach an answer; "not_reached" means the round ran out of time first. Treat the second more gently, and say which it was.
 - Hints and challenges are part of the record, not penalties. A candidate who recovered after a challenge showed the skill.
+- The diagram is the design. "asked to draw" means the interviewer asked for that part on the canvas: if it still isn't in the diagram, credit what they said but say in the feedback that the part was only described, and don't give that dimension its top band for it. A diagram too thin to show the architecture (a few disconnected boxes) caps the architecture score, however good the talk was.

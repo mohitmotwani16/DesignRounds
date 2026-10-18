@@ -1,0 +1,580 @@
+{
+  "opening": "Welcome! Today we're going to design the core of a ride-hailing system. How would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.writes",
+      "topics": [
+        "scale",
+        "drivers",
+        "updates",
+        "throughput",
+        "traffic"
+      ],
+      "answer": "Assume we have millions of active riders and drivers, generating hundreds of thousands of driver location updates per second."
+    },
+    {
+      "id": "latency.matching",
+      "topics": [
+        "latency",
+        "sla",
+        "matching",
+        "time"
+      ],
+      "answer": "A rider should be matched with a driver within a few seconds."
+    },
+    {
+      "id": "scope.core",
+      "topics": [
+        "scope",
+        "features",
+        "mvp",
+        "requirements"
+      ],
+      "answer": "Focus on the core matching flow, real-time driver location tracking, and managing the state of the trip."
+    },
+    {
+      "id": "scope.out",
+      "topics": [
+        "payments",
+        "maps",
+        "routing",
+        "billing",
+        "onboarding"
+      ],
+      "answer": "We can consider payments, driver onboarding, and complex map routing algorithms out of scope; assume we have a third-party mapping API available."
+    },
+    {
+      "id": "data.geography",
+      "topics": [
+        "global",
+        "cities",
+        "regions",
+        "boundaries"
+      ],
+      "answer": "The system operates globally, but trips and matches are strictly local to specific cities or regions."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about anything outside core matching and location tracking, tell them to assume a standard 3rd-party API exists or it is out of scope, to keep the focus on the real-time core.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "users",
+          "drivers",
+          "requests",
+          "qps",
+          "assumptions"
+        ]
+      },
+      "goal": "Establish the scale of location updates and narrow the scope to core matching.",
+      "opener": "What scale and read/write patterns are you anticipating for this system?",
+      "evidence": {
+        "strong": "Clearly distinguishes between the extreme write-heavy nature of driver location pings and the lower volume of actual trip requests.",
+        "adequate": "Estimates general traffic but treats all requests with similar priority or doesn't separate location pings from trip matches.",
+        "weak": "Misses the high-throughput nature of the problem or focuses on out-of-scope features like user registration."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.reads_vs_writes",
+          "pattern": "Assuming trip requests have the same volume as location updates.",
+          "challenge": "How often does a rider request a trip compared to how often a driver's GPS sends a location ping?"
+        }
+      ],
+      "probes": [
+        "How many location updates per second do your estimations yield?"
+      ],
+      "hints": [
+        "Consider how often a moving car needs to update its location for the map to look smooth.",
+        "If we have millions of active drivers updating every few seconds, what does that do to your write volume?"
+      ],
+      "moveOnSummary": "Agreed on the core scope and established the high write volume of location updates.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "system-design-roadmap"
+      ]
+    },
+    {
+      "id": "hl.ingestion",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "location-service",
+          "api-gateway",
+          "stream",
+          "t-kafka"
+        ],
+        "keywords": [
+          "ingest",
+          "updates",
+          "ping",
+          "gps",
+          "location"
+        ]
+      },
+      "goal": "Design a high-throughput pipeline for driver location updates.",
+      "opener": "Walk me through how the system ingests and processes the location updates from active drivers.",
+      "evidence": {
+        "strong": "Routes updates through a scalable gateway and drops them into memory or an async stream, avoiding heavy synchronous disk writes.",
+        "adequate": "Passes updates through a service directly to a database, acknowledging potential load but lacking a specific buffering mechanism.",
+        "weak": "Sends all updates directly to a monolithic relational database synchronously."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.sync_writes",
+          "pattern": "Requiring every location ping to be durably written to disk before acknowledging.",
+          "challenge": "If we lose a single GPS ping from a driver who updates every 3 seconds, what is the actual business impact?"
+        }
+      ],
+      "probes": [
+        "Given your estimated write throughput, what happens to this service during peak hours?"
+      ],
+      "hints": [
+        "Do we need long-term durable storage for a driver's location from 5 seconds ago?",
+        "Consider separating the real-time index used for matching from the historical data used for analytics."
+      ],
+      "moveOnSummary": "Designed an ingestion path that decouples real-time location tracking from persistent historical storage.",
+      "learnTopics": [
+        "latency-vs-throughput",
+        "event-streaming-kafka",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "hl.dispatch",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "matching-service",
+          "worker",
+          "service"
+        ],
+        "keywords": [
+          "match",
+          "dispatch",
+          "find driver",
+          "request ride"
+        ]
+      },
+      "goal": "Establish the end-to-end flow from rider request to driver acceptance.",
+      "opener": "Trace the exact path a rider's request takes through your components until a driver is confirmed.",
+      "evidence": {
+        "strong": "Describes a clear flow: request received, spatial query executed, driver filtered by availability, driver offered the trip, and response routed back.",
+        "adequate": "Describes finding the driver but glosses over how the offer is communicated or accepted.",
+        "weak": "Skips the matching logic entirely or assumes drivers manually search for nearby riders."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.bidirectional_search",
+          "pattern": "Believing both drivers and riders constantly query the database for matches.",
+          "challenge": "Who initiates the matching process, and how does the other party find out about it?"
+        }
+      ],
+      "probes": [
+        "How does the driver's app know they have been selected for a ride?"
+      ],
+      "hints": [
+        "Once the matching service identifies the best driver, how does it communicate the offer to that specific driver's phone?"
+      ],
+      "moveOnSummary": "Outlined the core matching request and response cycle.",
+      "learnTopics": [
+        "backend-system-design-roadmap"
+      ]
+    },
+    {
+      "id": "deep.geoindex",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "location-service",
+          "in-memory-db",
+          "t-redis",
+          "cache"
+        ],
+        "keywords": [
+          "geohash",
+          "h3",
+          "quadtree",
+          "search",
+          "radius",
+          "nearest"
+        ]
+      },
+      "goal": "Efficiently store and query driver locations in real-time.",
+      "opener": "How exactly are you storing the driver coordinates so that finding the nearest 10 available drivers takes milliseconds?",
+      "evidence": {
+        "strong": "Uses a spatial indexing strategy like Geohash, H3, or Quadtrees, kept in memory (like Redis Geo) and partitioned by city or region.",
+        "adequate": "Uses a standard spatial database like PostGIS but might struggle to explain how it sustains the high write load.",
+        "weak": "Stores latitude and longitude in standard database columns and scans all active drivers calculating distances on the fly."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.sql_math",
+          "pattern": "Using a SQL query with the Haversine formula across all rows.",
+          "challenge": "If we have 50,000 active drivers in this city, how many complex math operations does that query perform per second?"
+        }
+      ],
+      "probes": [
+        "How do you handle the case where a driver moves from one index grid or cell to another?"
+      ],
+      "hints": [
+        "Calculating distance mathematically for every driver is too slow. How can we group drivers who are geographically close together into the same bucket?",
+        "Look into how strings can be used to represent a grid on a map, such that sharing a prefix means sharing a neighborhood."
+      ],
+      "moveOnSummary": "Defined an in-memory spatial index using Geohashes/H3 to rapidly filter nearby drivers.",
+      "learnTopics": [
+        "geospatial-indexing",
+        "redis",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.statemachine",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "t-postgres",
+          "document-db",
+          "ledger"
+        ],
+        "keywords": [
+          "state machine",
+          "status",
+          "requested",
+          "completed",
+          "durable",
+          "trip"
+        ]
+      },
+      "goal": "Ensure reliable state transitions and persistence for a trip.",
+      "opener": "Once a match is made, how do you track the lifecycle of the trip from pickup to completion?",
+      "evidence": {
+        "strong": "Designs an explicit state machine (e.g., Requested, Offered, Accepted, In-Progress, Completed) backed by a durable transactional store.",
+        "adequate": "Maintains a status column in a database but does not enforce valid transitions or consider concurrent updates.",
+        "weak": "Leaves trip state in memory or fails to separate it from the ephemeral location data."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.ephemeral_trip",
+          "pattern": "Storing the trip state only in a cache like Redis.",
+          "challenge": "If that cache node restarts unexpectedly, what happens to the rider who is currently halfway to the airport?"
+        }
+      ],
+      "probes": [
+        "What prevents a trip from moving directly from 'Requested' to 'Completed' by accident?"
+      ],
+      "hints": [
+        "A trip goes through several phases. What are they?",
+        "How should the database enforce that a trip can only be cancelled if it hasn't been completed yet?"
+      ],
+      "moveOnSummary": "Outlined a durable trip state machine with defined transition phases.",
+      "learnTopics": [
+        "acid-vs-base",
+        "transactions-isolation-levels"
+      ]
+    },
+    {
+      "id": "deep.concurrency",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "matching-service",
+          "queue",
+          "t-redis"
+        ],
+        "keywords": [
+          "lock",
+          "double dispatch",
+          "race condition",
+          "offer",
+          "transaction"
+        ]
+      },
+      "goal": "Prevent assigning the same driver to multiple riders simultaneously.",
+      "opener": "If two riders standing on the same street corner request a ride at the exact same time, how do you prevent them from being assigned the same driver?",
+      "evidence": {
+        "strong": "Explains a locking mechanism (optimistic locking on the driver record, or distributed locks) combined with an 'offered' state.",
+        "adequate": "Mentions race conditions and suggests basic database transactions but struggles with the distributed nature of the matching service.",
+        "weak": "Assumes the first query always wins and does not recognize the concurrency risk."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.read_modify_write",
+          "pattern": "Reading availability, then blindly writing a match.",
+          "challenge": "What if Service Instance A and Service Instance B both read the driver as 'Available' at the exact same millisecond?"
+        }
+      ],
+      "probes": [
+        "Walk me through the database query that actually reserves the driver for a rider."
+      ],
+      "hints": [
+        "How can we change the driver's state so that other matching requests ignore them while they are deciding whether to accept a ride?",
+        "Consider what database mechanisms allow you to conditionally update a record only if its version hasn't changed since you last read it."
+      ],
+      "moveOnSummary": "Resolved concurrency using state-based filtering and optimistic locking.",
+      "learnTopics": [
+        "optimistic-vs-pessimistic-locking",
+        "distributed-locks",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "deep.disconnects",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "mobile",
+          "client",
+          "api-gateway",
+          "websocket"
+        ],
+        "keywords": [
+          "offline",
+          "reconnect",
+          "retry",
+          "sync",
+          "tunnel"
+        ]
+      },
+      "goal": "Handle network unreliability on mobile clients during an active trip.",
+      "opener": "What happens to the trip if the driver drives through a tunnel and loses cellular connection for five minutes?",
+      "evidence": {
+        "strong": "Client buffers GPS points locally and batch-syncs upon reconnection; server infers state from last known data and relies on durable trip state.",
+        "adequate": "Server times out the driver but relies on manual intervention to fix the trip state.",
+        "weak": "System fails the trip or assumes the app will just start over when it reconnects."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.instant_cancel",
+          "pattern": "Cancelling the trip immediately if pings stop.",
+          "challenge": "Would you want your ride to the airport cancelled just because your driver hit a dead zone?"
+        }
+      ],
+      "probes": [
+        "How do we charge the rider fairly if we missed 5 minutes of location pings?"
+      ],
+      "hints": [
+        "The driver's phone is still on, just disconnected from the internet. Where can it store data in the meantime?",
+        "When the connection returns, how should the app send the missing information to the server?"
+      ],
+      "moveOnSummary": "Handled network drops via local client buffering and durable server state.",
+      "learnTopics": [
+        "fallacies-of-distributed-computing",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "deep.regional_spikes",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "load-balancer",
+          "shard",
+          "cluster"
+        ],
+        "keywords": [
+          "new year",
+          "stadium",
+          "spike",
+          "surge",
+          "hotspot"
+        ]
+      },
+      "goal": "Scale and isolate traffic dynamically during massive localized demand.",
+      "opener": "How does your system cope when a major concert ends and fifty thousand people in a few city blocks request rides simultaneously?",
+      "evidence": {
+        "strong": "Uses geographic sharding to isolate the load, implements rate limiting/load shedding, and triggers dynamic pricing (surge) to balance demand.",
+        "adequate": "Relies purely on generic autoscaling without considering hot partitions in the database.",
+        "weak": "Assumes the standard architecture will just handle it or that adding more web servers is sufficient."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.global_scale",
+          "pattern": "Assuming adding servers globally helps a localized database bottleneck.",
+          "challenge": "If all these requests hit the same city partition in your database, how does adding web servers in another region help?"
+        }
+      ],
+      "probes": [
+        "How do you prevent this localized spike from degrading performance for users in other cities?"
+      ],
+      "hints": [
+        "If the database partition for this city gets overwhelmed, what patterns can protect it from crashing entirely?",
+        "Aside from technical scaling, what business logic (like pricing) can be used to control the flood of requests?"
+      ],
+      "moveOnSummary": "Addressed regional traffic spikes through sharding isolation and load shedding/surge pricing.",
+      "learnTopics": [
+        "hot-partitions",
+        "autoscaling",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "deep.dispatch_fairness",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "matching-service",
+          "worker"
+        ],
+        "keywords": [
+          "fairness",
+          "starvation",
+          "wait time",
+          "score",
+          "algorithm"
+        ]
+      },
+      "goal": "Balance strict distance matching with driver fairness and system efficiency.",
+      "opener": "How would you ensure drivers who have been waiting a long time eventually get a ride, even if they aren't strictly the closest?",
+      "evidence": {
+        "strong": "Proposes a scoring function that weights ETA alongside driver idle time or destination preferences.",
+        "adequate": "Mentions sorting by wait time but struggles to combine it efficiently with spatial distance.",
+        "weak": "Forces purely random matching or entirely ignores distance to prioritize wait times."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.strict_queue",
+          "pattern": "Putting all drivers in a strict FIFO queue regardless of location.",
+          "challenge": "If the longest-waiting driver is 30 minutes away from the rider, is it a good experience to match them?"
+        }
+      ],
+      "probes": [
+        "How does adding non-spatial criteria affect the speed of your spatial query?"
+      ],
+      "hints": [
+        "Instead of just filtering by radius, what if we fetched the top 50 closest drivers and then re-ranked them in memory?",
+        "How can you mathematically combine a distance score and an idle-time score?"
+      ],
+      "moveOnSummary": "Explored weighted scoring to balance ETA optimization with driver fairness.",
+      "learnTopics": [
+        "recommendation-system-design",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "single point of failure",
+          "scale",
+          "limit",
+          "next steps"
+        ]
+      },
+      "goal": "Identify the biggest remaining weakness or scaling limit in the design.",
+      "opener": "Looking at the entire architecture, what part of this system is most likely to fail if our user base grows by 10x tomorrow?",
+      "evidence": {
+        "strong": "Accurately points to a specific choke point, such as the single writer node of the trip database or network bandwidth on the API gateway, and offers a mitigation strategy.",
+        "adequate": "Identifies a general area like 'the database' without pinpointing the exact mechanism that would fail.",
+        "weak": "Claims the system will scale infinitely or focuses on trivial components."
+      },
+      "misconceptions": [
+        {
+          "id": "misc.infinite_scale",
+          "pattern": "Believing managed services automatically prevent bottlenecks.",
+          "challenge": "Even if AWS handles the servers, what internal limits or quotas of that service might we hit?"
+        }
+      ],
+      "probes": [
+        "If that component fails, how does it degrade the user experience?"
+      ],
+      "hints": [
+        "Where is the highest concentration of synchronous writes happening?",
+        "Trace the path of a single request and look for the component that has to do the most work."
+      ],
+      "moveOnSummary": "Identified the primary scaling bottlenecks and wrapped up the architecture.",
+      "learnTopics": [
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "curve.rejected_offers",
+      "after": "deep.concurrency",
+      "prompt": "Sometimes drivers reject an offer. How do we ensure we don't just assign the next closest driver who might have also just rejected the trip, over and over, while making sure drivers who have waited a long time get a fair chance?",
+      "agendaItemId": "deep.dispatch_fairness"
+    }
+  ],
+  "vocabulary": [
+    "geohash",
+    "H3",
+    "quadtree",
+    "double-dispatch",
+    "idempotency",
+    "optimistic locking",
+    "PostGIS",
+    "surge pricing",
+    "haversine"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using Redis Geo-hashing versus building a custom Quadtree service.",
+      "whenBetter": "Redis is better for speed to market and handles medium scale well; a custom Quadtree service in a language like Go/C++ is better for strict memory control, dynamic grid resizing, and extreme scale."
+    },
+    {
+      "choice": "Driver offer acceptance (manual) versus auto-dispatch.",
+      "whenBetter": "Offer acceptance is better for preserving driver autonomy and legal contractor classification; auto-dispatch is better for minimizing ETA and rider wait times in strict employee models."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Scalable Geo-Index with Robust Locking",
+      "outline": "Separates the ephemeral, high-throughput location updates (kept in an in-memory spatial index partitioned by city) from the durable, stateful trip data. Clearly explains how Geohash or H3 works to group nearby drivers. Uses an explicit trip state machine with optimistic locking to prevent double-dispatching during concurrent requests. Plans for mobile network unreliability with local client buffering."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard Stack without Deep Concurrency",
+      "outline": "Recognizes the need for geospatial indexing and relies on a standard tool like Redis Geo or PostGIS. Has a functioning high-level matching flow but defaults to a purely relational DB for all location updates, risking disk I/O bottlenecks. Identifies race conditions but uses vague 'transactions' rather than specific distributed locking or optimistic versioning to solve them."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic CRUD Approach",
+      "outline": "Attempts to write all 100k/s location updates directly to a single relational database table. Proposes finding drivers by mathematically calculating distances across all active rows on the fly, which would immediately collapse under load. Misses the state machine requirements entirely and has no mechanism to prevent assigning one driver to two riders."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

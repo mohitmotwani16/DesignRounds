@@ -1,0 +1,562 @@
+{
+  "opening": "Welcome. Today we're going to design a recommendation system for a large content platform. Where would you like to begin?",
+  "clarifications": [
+    {
+      "id": "scale.catalog",
+      "topics": [
+        "users",
+        "items",
+        "scale",
+        "catalog"
+      ],
+      "answer": "Assume tens of millions of active users and tens of millions of items in the catalog."
+    },
+    {
+      "id": "scale.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "sla",
+        "performance"
+      ],
+      "answer": "Recommendations must be served in under 100 to 200 milliseconds to avoid degrading the user experience."
+    },
+    {
+      "id": "scale.freshness",
+      "topics": [
+        "freshness",
+        "new items",
+        "updates",
+        "cold start"
+      ],
+      "answer": "New users and items are added continuously throughout the day, and they need to be incorporated rapidly."
+    },
+    {
+      "id": "requirements.experimentation",
+      "topics": [
+        "testing",
+        "metrics",
+        "updates",
+        "ab test"
+      ],
+      "answer": "Experimentation is continuous. We frequently deploy and test new models against live traffic."
+    },
+    {
+      "id": "requirements.signals",
+      "topics": [
+        "data",
+        "events",
+        "signals",
+        "interactions"
+      ],
+      "answer": "You have access to user profiles, item metadata, and historical interaction events like impressions, clicks, and purchases."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about specific business goals or content domains, tell them to assume a generic platform where user engagement is the primary metric, and ask them to define reasonable thresholds.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "goals",
+          "users",
+          "items",
+          "engagement",
+          "metrics"
+        ]
+      },
+      "goal": "Define what recommendations the system provides, the primary input signals, and the success metrics.",
+      "opener": "What use cases and requirements will you focus on for this recommendation system?",
+      "evidence": {
+        "strong": "Explicitly lists implicit/explicit user signals, defines the output format, and identifies both system metrics (latency) and business metrics (engagement).",
+        "adequate": "Mentions users and items, and notes that the system needs to return a list of recommendations.",
+        "weak": "Jumps straight into ML algorithms without defining what the system is recommending or what signals are available."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What specific user actions will you use to understand their preferences?",
+        "How will you measure if the recommendations are actually good?"
+      ],
+      "hints": [
+        "Think about what data we know about the user and the item.",
+        "Consider what a successful recommendation looks like from a product perspective."
+      ],
+      "moveOnSummary": "Agreed on core inputs like clicks and metadata, and outputs of ranked item lists.",
+      "learnTopics": [
+        "recommendation-system-design",
+        "system-design-interview-questions"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "latency",
+          "millions",
+          "throughput"
+        ]
+      },
+      "goal": "Establish the scale of the catalog and the latency budget.",
+      "opener": "What scale of traffic and data do you think this system needs to handle?",
+      "evidence": {
+        "strong": "Estimates QPS based on DAU, recognizes the massive catalog size, and sets a strict latency budget for the critical path.",
+        "adequate": "Asks for user numbers and notes that latency should be fast.",
+        "weak": "Ignores latency budgets or estimates traffic that contradicts the prompt's scale."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Given the millions of users, what does that mean for our read QPS?",
+        "How much time do we have to generate and return these recommendations?"
+      ],
+      "hints": [
+        "Assume a typical active user visits a few times a day.",
+        "Think about the maximum delay a user will tolerate before abandoning the page."
+      ],
+      "moveOnSummary": "Established scale at millions of items and a strict <200ms latency budget.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "recommender",
+          "api-gateway",
+          "client",
+          "service"
+        ],
+        "keywords": [
+          "flow",
+          "request",
+          "return",
+          "api",
+          "service"
+        ]
+      },
+      "goal": "Lay out the end-to-end flow from user request to recommendation response.",
+      "opener": "Walk me through the high-level path of a user requesting recommendations.",
+      "evidence": {
+        "strong": "Draws a clear boundary between the online serving path and offline data/training pipelines, showing API gateways, recommendation services, and data stores.",
+        "adequate": "Shows a client connecting to a backend service that queries a database or model.",
+        "weak": "Draws a monolithic block or connects clients directly to databases without intermediate processing."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens in the backend when the client sends a request?",
+        "Where are the user interactions logged?"
+      ],
+      "hints": [
+        "Start with the user's device. What service does it talk to first?",
+        "Once the service receives the request, where does it get the recommendations from?"
+      ],
+      "moveOnSummary": "Mapped out the basic client-to-service-to-model request flow.",
+      "learnTopics": [
+        "machine-learning-system-architecture",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "deep.retrieval",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "retriever",
+          "search-index",
+          "vector-db",
+          "embedding",
+          "database",
+          "cache"
+        ],
+        "keywords": [
+          "candidate generation",
+          "recall",
+          "ann",
+          "filtering",
+          "embeddings",
+          "retrieval"
+        ]
+      },
+      "goal": "Efficiently narrow down millions of items to a few hundred relevant candidates.",
+      "opener": "Given there are tens of millions of items, how do you quickly find the candidates to consider for a user?",
+      "evidence": {
+        "strong": "Proposes a multi-stage funnel starting with lightweight candidate generation (e.g., ANN index, multi-source retrieval) that meets the latency budget.",
+        "adequate": "Mentions filtering items down using tags, categories, or a simple database query before scoring.",
+        "weak": "Suggests scoring all tens of millions of items at request time or relies on a slow relational DB scan."
+      },
+      "misconceptions": [
+        {
+          "id": "score-all",
+          "pattern": "We can just run the ML model on all items in the catalog.",
+          "challenge": "If scoring one item takes 1 millisecond, how long will it take to score 10 million items for a single request?"
+        }
+      ],
+      "probes": [
+        "How do you ensure this initial filtering step finishes in just a few tens of milliseconds?",
+        "What data structures or technologies are best for finding similar items quickly?"
+      ],
+      "hints": [
+        "We can't evaluate heavy ML models on 10 million items in real time.",
+        "Consider how you might use embeddings and a vector database, or precomputed clusters, to find candidates."
+      ],
+      "moveOnSummary": "Decided on a fast candidate generation stage using ANN or heuristic filters to reduce the pool.",
+      "learnTopics": [
+        "vector-databases",
+        "search-and-inverted-index",
+        "recommendation-system-design"
+      ]
+    },
+    {
+      "id": "deep.ranking",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "recommender",
+          "model-registry"
+        ],
+        "keywords": [
+          "ranking",
+          "scoring",
+          "features",
+          "model",
+          "diversity"
+        ]
+      },
+      "goal": "Score and order the narrowed-down candidates accurately within the latency budget.",
+      "opener": "Once you have your generated candidates, how do you decide which ones to show first?",
+      "evidence": {
+        "strong": "Introduces a heavier ranking model (e.g., deep neural network or XGBoost) to score the few hundred candidates, followed by a re-ranking stage for business logic and diversity.",
+        "adequate": "Passes candidates to a scoring model and sorts by the highest probability.",
+        "weak": "Sorts purely by database fields like date or raw views, without personalized scoring."
+      },
+      "misconceptions": [
+        {
+          "id": "generator-scores",
+          "pattern": "Ranking just sorts candidates by the candidate generator's score.",
+          "challenge": "If we only use the retrieval score, how do we incorporate real-time context like the user's current session or time of day?"
+        }
+      ],
+      "probes": [
+        "How do you apply business rules like filtering out already-seen content or ensuring diversity?",
+        "Where does the ranking model get the features it needs to score these candidates?"
+      ],
+      "hints": [
+        "Now that we only have 500 items, we can afford a more complex model.",
+        "Think about a final pass over the scored items to ensure the feed isn't repetitive."
+      ],
+      "moveOnSummary": "Defined a ranking stage that scores candidates and applies final business logic.",
+      "learnTopics": [
+        "model-serving",
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "deep.coldstart",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "database",
+          "cache"
+        ],
+        "keywords": [
+          "cold start",
+          "new user",
+          "new item",
+          "content-based",
+          "popularity",
+          "exploration"
+        ]
+      },
+      "goal": "Provide sensible recommendations when historical interaction data is missing.",
+      "opener": "How does your system handle brand-new users or items that have just been published?",
+      "evidence": {
+        "strong": "Designs specific fallback pipelines: onboarding surveys or popularity for new users; content-based embeddings and multi-armed bandit exploration for new items.",
+        "adequate": "Mentions falling back to global top trending items for new users.",
+        "weak": "Ignores the problem or assumes all users and items have rich interaction histories."
+      },
+      "misconceptions": [
+        {
+          "id": "cf-everything",
+          "pattern": "We can just use collaborative filtering for everything.",
+          "challenge": "What collaborative filtering score will an item have if it was published 5 seconds ago and no one has seen it yet?"
+        }
+      ],
+      "probes": [
+        "If a new user hasn't clicked anything yet, what inputs can you use?",
+        "How do you ensure a great new piece of content actually gets its first few views?"
+      ],
+      "hints": [
+        "Consider what metadata is available when an item is first created.",
+        "Think about how you balance showing proven popular content versus testing out brand-new content."
+      ],
+      "moveOnSummary": "Established cold-start fallbacks using popularity, content features, and exploration.",
+      "learnTopics": [
+        "recommendation-system-design"
+      ]
+    },
+    {
+      "id": "deep.training",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "training",
+          "feature-store",
+          "data-lake",
+          "stream-processor",
+          "event-bus",
+          "clickstream"
+        ],
+        "keywords": [
+          "training",
+          "features",
+          "skew",
+          "offline",
+          "logs",
+          "pipeline"
+        ]
+      },
+      "goal": "Ensure models are trained on accurate data and avoid training-serving skew.",
+      "opener": "How do you manage the features and data used to train your ranking models?",
+      "evidence": {
+        "strong": "Uses a feature store with offline/online parity and implements point-in-time logging during serving to ensure training data exactly matches what the model saw.",
+        "adequate": "Describes an offline ETL pipeline that dumps user clicks into a data warehouse to train models periodically.",
+        "weak": "Assumes models train directly off the production database in real-time."
+      },
+      "misconceptions": [
+        {
+          "id": "db-inference",
+          "pattern": "The online service queries the main relational database for features during inference.",
+          "challenge": "If the ranking model needs 100 features for 500 candidates, how many database reads is that per request, and what is the latency impact?"
+        }
+      ],
+      "probes": [
+        "How do you prevent the offline training data from differing from the features available at serving time?",
+        "Where do the real-time interaction events go so the model can learn from them?"
+      ],
+      "hints": [
+        "Think about what happens if a feature is calculated differently in the offline batch job versus the online API.",
+        "Consider logging the exact feature vectors at request time."
+      ],
+      "moveOnSummary": "Outlined offline training loops and feature parity mechanisms.",
+      "learnTopics": [
+        "feature-store",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "deep.experimentation",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "metrics",
+          "feature-flags",
+          "logging"
+        ],
+        "keywords": [
+          "a/b test",
+          "experiment",
+          "metrics",
+          "online",
+          "guardrails"
+        ]
+      },
+      "goal": "Safely test new models in production and measure their impact without blocking traffic.",
+      "opener": "How do you measure if a new recommendation model is actually better than the current one?",
+      "evidence": {
+        "strong": "Designs a robust A/B testing framework routing a percentage of traffic to the new model, measuring online guardrail metrics, and tracking statistical significance.",
+        "adequate": "Mentions A/B testing by giving some users the new model and checking if clicks go up.",
+        "weak": "Relies solely on offline metrics like AUC or precision to evaluate models."
+      },
+      "misconceptions": [
+        {
+          "id": "offline-only",
+          "pattern": "We can just check offline metrics like AUC to decide if a model is good enough to deploy.",
+          "challenge": "How do we know if a model with a higher offline AUC actually drives more user engagement in the live app?"
+        }
+      ],
+      "probes": [
+        "How do you ensure a user has a consistent experience across multiple sessions during a test?",
+        "What metrics would cause you to immediately abort a running experiment?"
+      ],
+      "hints": [
+        "We need to test the model with real users. How do we split the traffic?",
+        "Think about what business metrics matter beyond just algorithm accuracy."
+      ],
+      "moveOnSummary": "Described an online A/B testing setup with clear business metrics.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "ml-evaluation-metrics"
+      ]
+    },
+    {
+      "id": "deep.realtime",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "event-bus",
+          "cache",
+          "queue"
+        ],
+        "keywords": [
+          "real-time",
+          "viral",
+          "spike",
+          "stream",
+          "trending"
+        ]
+      },
+      "goal": "Adapt recommendations dynamically to sudden spikes in popularity using real-time event processing.",
+      "opener": "How do you update recommendations in real-time when a new item goes viral before the next offline training run?",
+      "evidence": {
+        "strong": "Incorporates streaming infrastructure like Kafka and Flink to aggregate real-time interaction counts and dynamically injects trending features during the candidate generation or ranking stages.",
+        "adequate": "Uses a high-performance cache like Redis to track trending counters and manually boosts them when scoring.",
+        "weak": "Relies entirely on batch jobs and accepts the delay, ignoring the real-time constraints."
+      },
+      "misconceptions": [
+        {
+          "id": "batch-only",
+          "pattern": "We can just run the batch training job more frequently, like every 5 minutes.",
+          "challenge": "How much computational overhead and database load does retraining the entire model every 5 minutes add?"
+        }
+      ],
+      "probes": [
+        "What infrastructure do you need to count clicks in near real-time?",
+        "How does the ranking model know to prioritize this surging item?"
+      ],
+      "hints": [
+        "Think about processing streams of events as they happen rather than waiting for a database write.",
+        "If we can't retrain the model instantly, can we inject a real-time 'trending' feature into the ranking stage?"
+      ],
+      "moveOnSummary": "Discussed stream processing and real-time feature injection for viral content.",
+      "learnTopics": [
+        "batch-vs-stream-processing",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "scalability",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "scale",
+          "future",
+          "single point of failure"
+        ]
+      },
+      "goal": "Identify the weakest points in the current design and suggest improvements.",
+      "opener": "If traffic spiked by 10x tomorrow, which part of your system would break first?",
+      "evidence": {
+        "strong": "Points to specific computationally heavy areas like the ranking model serving or the vector database, and suggests autoscaling or more aggressive caching.",
+        "adequate": "Identifies the database as a bottleneck and suggests adding read replicas.",
+        "weak": "Claims the system will scale infinitely without issues."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How would you mitigate that bottleneck?",
+        "Are there any trade-offs you made today that you would revisit at that scale?"
+      ],
+      "hints": [
+        "Look at the components doing the most intense computations.",
+        "Consider what happens to the caching layer if there's a sudden surge in new content."
+      ],
+      "moveOnSummary": "Identified bottlenecks and discussed potential scaling strategies.",
+      "learnTopics": [
+        "scalability",
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "viral-item",
+      "after": "deep.coldstart",
+      "prompt": "What if a famous influencer posts a new item and it goes viral immediately, generating massive traffic before your offline training loop runs?",
+      "agendaItemId": "deep.realtime"
+    }
+  ],
+  "vocabulary": [
+    "ANN",
+    "two-tower",
+    "XGBoost",
+    "multi-armed bandit",
+    "embedding",
+    "re-ranking",
+    "collaborative filtering"
+  ],
+  "alternatives": [
+    {
+      "choice": "Precomputing recommendations offline",
+      "whenBetter": "When the catalog changes slowly and user profiles are static, precomputing saves significant online serving costs."
+    },
+    {
+      "choice": "Matrix Factorization vs Deep Learning for retrieval",
+      "whenBetter": "Matrix factorization is simpler and often sufficient for standard collaborative filtering, while two-tower deep learning models can easily incorporate complex metadata and context."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Multi-stage architecture with full ML lifecycle",
+      "outline": "The candidate designs a clear multi-stage funnel separating fast candidate generation (using ANN/vector DBs) from heavy ranking (model serving). They explicitly handle cold starts using popularity heuristics and content-based embeddings. They include a feature store to prevent training-serving skew, set up point-in-time logging, and design a robust A/B testing framework to measure online impact. Strict latency budgets are allocated across stages."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic generation and ranking",
+      "outline": "The candidate understands the need to reduce the item pool, using basic database filters or simple collaborative filtering to generate candidates. They pass these to a ranking model. They recognize the cold start problem but solve it purely with global popularity. Training pipelines are described loosely as ETL jobs, without deep consideration for feature consistency."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic scoring or purely offline",
+      "outline": "The candidate attempts to score the entire catalog at request time, or relies heavily on slow database queries. They miss the cold start problem entirely, assuming all items have interaction histories. The design lacks an experimentation framework, focusing only on offline algorithm metrics without an architectural plan for production deployment."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.5,
+    "wrap_up": 0.15
+  }
+}

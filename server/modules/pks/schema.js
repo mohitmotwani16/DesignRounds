@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { z } from "zod";
 import { TOPICS } from "../../../src/learn/catalog.js";
-import { componentKinds } from "../ai/components.js";
+import { componentKinds, isAnonymousKind } from "../ai/components.js";
 import { dimensionIds } from "../ai/rubric.js";
 import { integer, list, oneOf, text } from "../ai/schema.js";
 
@@ -180,6 +180,16 @@ export function validatePack(pack) {
   for (const [where, value] of unprompted) {
     const leaked = factNumbersIn(value).filter((number) => factNumbers.has(number));
     if (leaked.length) errors.push(`${where} reveals hidden fact ${leaked.join(", ")}`);
+  }
+  // Adaptive, varied deep dives need options, and the canvas check needs names to look for.
+  const deepDive = pack.agenda.filter((item) => item.stage === "deep_dive");
+  if (deepDive.length < 4) errors.push(`the deep_dive stage needs at least 4 items (has ${deepDive.length}) so the deep dive can follow the candidate`);
+  if (deepDive.filter((item) => item.required).length > 3) errors.push("at most 3 deep_dive items may be required");
+  const drawable = deepDive.filter((item) => item.triggers.componentKinds.some((kind) => !isAnonymousKind(kind)));
+  if (drawable.length < 3) errors.push(`at least 3 deep_dive items need a specific component kind to be drawn (has ${drawable.length})`);
+  for (const item of pack.agenda.filter((entry) => entry.stage === "high_level" || entry.stage === "deep_dive")) {
+    if (item.triggers.keywords.length < 3) errors.push(`${item.id} needs at least 3 trigger keywords`);
+    if (item.triggers.componentKinds.length && !item.triggers.componentKinds.some((kind) => !isAnonymousKind(kind)) && item.triggers.keywords.length < 3) errors.push(`${item.id} lists only generic component kinds and too few keywords to recognise it on the canvas`);
   }
   const shares = STAGES.map((stage) => pack.pacing[stage]);
   if (shares.some((share) => !(share > 0))) errors.push("every stage needs a positive pacing share");

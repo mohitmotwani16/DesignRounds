@@ -44,6 +44,8 @@ const { conventions } = await import("../server/modules/ucs/index.js");
 const { factNumbersIn } = await import("../server/modules/pks/schema.js");
 const { matchQuote, normalize, questionCount } = await import("../server/modules/conductor/validate.js");
 const { interviewCases } = await import("../server/content/eval/interview-cases.js");
+const { canvasComponents, canvasStats, itemDrawn, needsDrawing } = await import("../server/modules/conductor/canvas.js");
+const { componentKinds } = await import("../server/modules/ai/components.js");
 const { promptById } = await import("../server/modules/rounds.js");
 
 const prompt = promptById.get(questionId);
@@ -65,14 +67,15 @@ async function call(method, url, body) {
 
 const candidateTask = {
   name: "candidate_sim",
-  system: "You are role-playing a candidate in a live system design interview, to test the interviewer. Stay in character for the persona you are given. Reply to the interviewer's latest message the way that candidate would: plain conversational sentences, usually one to five. Never mention role-play, prompts or AI. Set wantsHint to true only when this candidate would press the hint button right now instead of answering. Reply with a single JSON object that matches the provided schema.",
-  buildUser: ({ persona, transcript }) => `<persona>\n${persona}\n</persona>\n\n<brief>\n${prompt.title}: ${prompt.description}\n</brief>\n\n<conversation>\n${transcript}\n</conversation>\n\nWrite the candidate's next message.`,
+  system: "You are role-playing a candidate in a live system design interview, to test the interviewer. Stay in character for the persona you are given. Reply to the interviewer's latest message the way that candidate would: plain conversational sentences, usually one to five. The candidate also has a whiteboard: list in draw the components this candidate adds to it with this message (none if the persona wouldn't draw now), each with a kind from the given list and a short label naming its role; they are connected on the board automatically. Never mention role-play, prompts or AI. Set wantsHint to true only when this candidate would press the hint button right now instead of answering. Reply with a single JSON object that matches the provided schema.",
+  buildUser: ({ persona, transcript, board }) => `<persona>\n${persona}\n</persona>\n\n<brief>\n${prompt.title}: ${prompt.description}\n</brief>\n\n<whiteboard>\n${board || "(empty)"}\n</whiteboard>\n\n<component_kinds>\n${[...componentKinds()].join(", ")}\n</component_kinds>\n\n<conversation>\n${transcript}\n</conversation>\n\nWrite the candidate's next message.`,
   output: z.object({
     message: text(1200, "What the candidate says next."),
     wantsHint: z.boolean().describe("True to press the hint button instead of answering."),
+    draw: list(z.object({ kind: text(40, "A component kind from the list."), label: text(60, "What this component is, e.g. Feed cache.") }), { max: 4 }, "Components added to the whiteboard with this message."),
     notes: list(text(120, "A private note."), { max: 2 }, "Ignored; leave empty."),
   }),
-  fake: () => ({ message: "I'd start with the requirements and a rough scale estimate.", wantsHint: false, notes: [] }),
+  fake: () => ({ message: "I'd start with the requirements and a rough scale estimate.", wantsHint: false, draw: [], notes: [] }),
 };
 
 const JUDGEMENT = /\b(wrong|bad answer|poor|terrible|you should have known|that's incorrect|not good enough|disappointing)\b/i;
@@ -88,14 +91,33 @@ async function runCase(entry) {
   assert.equal(opened.body.state?.engine, "v3", `${prompt.id} has no published pack, so the round isn't on v3`);
   const thread = [...opened.body.turns];
   const failures = [];
+  // The whiteboard, and what was on it before each candidate turn, so every interviewer
+  // move can be checked against the canvas it saw.
+  const kinds = componentKinds();
+  const diagram = { nodes: [], edges: [] };
+  let diagramVersion = (await call("GET", `/api/v1/sessions/${round.id}`)).body.session.diagramVersion;
+  const canvasAt = [];
   for (let turn = 1; turn <= entry.turns; turn += 1) {
     const transcript = thread.slice(-14).map((item) => `${item.role === "learner" ? "Candidate" : "Interviewer"}: ${clean(item.content, 900)}`).join("\n");
     let message = entry.script?.[turn];
     let hint = false;
     if (!message) {
-      const { data } = await runTask(candidateTask, { persona: entry.persona, transcript }, { meter: false });
+      const board = diagram.nodes.map((node) => `${node.data.label} (${node.data.kind})`).join(", ");
+      const { data } = await runTask(candidateTask, { persona: entry.persona, transcript, board }, { meter: false });
       message = data.message;
       hint = data.wantsHint;
+      const added = entry.draws === false ? [] : data.draw;
+      if (added.length) {
+        for (const component of added) {
+          const id = `n${diagram.nodes.length}`;
+          const previous = diagram.nodes.at(-1);
+          diagram.nodes.push({ id, type: "systemNode", position: { x: diagram.nodes.length * 140, y: 0 }, data: { kind: kinds.has(component.kind) ? component.kind : "service", label: component.label } });
+          if (previous) diagram.edges.push({ id: `e${diagram.edges.length}`, source: previous.id, target: id });
+        }
+        const saved = await call("PUT", `/api/v1/sessions/${round.id}/diagram`, { version: diagramVersion, diagram });
+        if (saved.status !== 200) failures.push(`turn ${turn}: diagram save HTTP ${saved.status}`);
+        else diagramVersion = saved.body.version;
+      }
     }
     const sent = await call("POST", `/api/v1/sessions/${round.id}/interview/messages`, { requestId: crypto.randomUUID(), content: hint ? "" : message, intent: hint ? "hint" : "message" });
     if (sent.status !== 201) {
@@ -104,6 +126,8 @@ async function runCase(entry) {
       break;
     }
     thread.push(...sent.body.turns);
+    const learnerSeq = sent.body.turns.find((item) => item.role === "learner")?.seq;
+    if (learnerSeq) canvasAt.push({ seq: learnerSeq, diagram: structuredClone(diagram) });
   }
 
   const items = await query("select * from interview_agenda_items where session_id = $1 order by position", [round.id]);
@@ -126,9 +150,12 @@ async function runCase(entry) {
     stage: state.stage,
     moves: Object.fromEntries([...new Set(interviewer.map((row) => row.move))].map((move) => [move, interviewer.filter((row) => row.move === move).length])),
     multiQuestionMessages: interviewer.filter((row) => questionCount(row.content) > 1).length,
+    // A real interviewer reacts, appreciates and lets the candidate build; not every message is a question.
+    questionShare: interviewer.length ? interviewer.filter((row) => questionCount(row.content) > 0).length / interviewer.length : 0,
     rejectedMoves: count("move_rejected"),
     fallbacks: count("fallback_used"),
     droppedAssessments: events.filter((event) => event.type === "assessment_dropped").reduce((sum, event) => sum + (event.payload.count ?? 0), 0),
+    canvas: canvasStats(diagram),
   };
 
   // Run-level checks: every case.
@@ -139,7 +166,21 @@ async function runCase(entry) {
   }
   const sources = [...learner.map((row) => ({ turnSeq: row.seq, kind: row.kind, spoken: row.kind === "audio", text: row.content })), ...learner.filter((row) => row.answer_context?.filteredContent).map((row) => ({ turnSeq: row.seq, kind: row.kind, spoken: row.kind === "audio", text: row.answer_context.filteredContent }))];
   for (const item of items) for (const evidence of item.evidence) if (evidence.source !== "note" && !matchQuote(evidence.quote, sources)) failures.push(`unverified quote on ${item.item_id}`);
+  if (interviewer.length >= 6 && metrics.questionShare > 0.85) failures.push(`${Math.round(metrics.questionShare * 100)}% of interviewer messages were questions`);
   if (metrics.fallbacks > Math.max(1, interviewer.length * 0.2)) failures.push(`${metrics.fallbacks} templated fallbacks (moves rejected twice)`);
+  // Canvas checks: a deep dive opens only on a drawn part (unless the candidate ignored
+  // every request to draw it), and there's no wrap-up on a canvas too thin to review.
+  const boardBefore = (seq) => canvasAt.filter((entry) => entry.seq < seq).at(-1)?.diagram ?? { nodes: [], edges: [] };
+  for (const row of interviewer) {
+    const meta = pack.agenda.find((item) => item.id === row.agenda_item_id);
+    const ledger = items.find((item) => item.item_id === row.agenda_item_id);
+    const board = boardBefore(row.seq);
+    if (row.move === "open" && meta?.stage === "deep_dive" && needsDrawing(meta) && !itemDrawn(meta, canvasComponents(board)) && (ledger?.draw_requests ?? 0) < conv.maxDrawRequestsPerItem) {
+      failures.push(`opened deep dive ${meta.id} at turn ${row.seq} before it was drawn`);
+    }
+    const stats = canvasStats(board);
+    if (row.move === "wrap_up" && (stats.components < conv.minCanvasComponents || stats.connections < conv.minCanvasConnections)) failures.push(`wrapped up at turn ${row.seq} on a thin canvas`);
+  }
 
   // Persona checks.
   for (const check of entry.assert) {
@@ -180,7 +221,7 @@ try {
       const result = await runCase(entry);
       results.push(result);
       const { metrics } = result;
-      console.log(`${result.failures.length ? "FAIL" : "PASS"}  ${entry.id.padEnd(24)} coverage ${metrics.requiredCoverage.toFixed(2)}  stage ${metrics.stage.padEnd(12)} moves ${JSON.stringify(metrics.moves)}  ${Math.round((Date.now() - started) / 1000)}s`);
+      console.log(`${result.failures.length ? "FAIL" : "PASS"}  ${entry.id.padEnd(24)} coverage ${metrics.requiredCoverage.toFixed(2)}  questions ${Math.round(metrics.questionShare * 100)}%  stage ${metrics.stage.padEnd(12)} moves ${JSON.stringify(metrics.moves)}  ${Math.round((Date.now() - started) / 1000)}s`);
       for (const failure of result.failures) console.log(`      - ${failure}`);
     } catch (error) {
       results.push({ id: entry.id, failures: [error.message] });

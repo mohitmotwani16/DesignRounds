@@ -1,0 +1,579 @@
+{
+  "opening": "Let's design a metrics and observability platform. We need a system where internal teams can monitor their services and route alerts. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.series",
+      "topics": [
+        "scale",
+        "volume",
+        "series",
+        "metrics"
+      ],
+      "answer": "Assume thousands of services generating millions of active time series."
+    },
+    {
+      "id": "scale.bursts",
+      "topics": [
+        "bursts",
+        "spikes",
+        "traffic"
+      ],
+      "answer": "Traffic can spike unpredictably, especially during major service restarts."
+    },
+    {
+      "id": "requirements.latency",
+      "topics": [
+        "latency",
+        "real-time",
+        "delay"
+      ],
+      "answer": "Metrics should be available for querying and alerting within a minute of generation."
+    },
+    {
+      "id": "requirements.retention",
+      "topics": [
+        "retention",
+        "history",
+        "keep",
+        "store"
+      ],
+      "answer": "We need full resolution for 14 days, and downsampled data for 1 year."
+    },
+    {
+      "id": "requirements.scope",
+      "topics": [
+        "logs",
+        "traces",
+        "scope"
+      ],
+      "answer": "Focus strictly on metrics and alerting. Logs and distributed traces are out of scope for this design."
+    }
+  ],
+  "clarificationPolicy": "For anything not covered, assume standard internal enterprise constraints: prioritise system reliability and cost control over extreme low latency.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "logs",
+          "traces",
+          "metrics",
+          "scope"
+        ]
+      },
+      "goal": "Establish the boundaries of the design by isolating metrics from other telemetry types.",
+      "opener": "What specific types of telemetry are we focusing on for this design?",
+      "evidence": {
+        "strong": "You explicitly ask to clarify the scope between logs, metrics, and traces, and focus the discussion on time-series data.",
+        "adequate": "You accept the metrics requirement but initially blur the lines with log aggregation before correcting course.",
+        "weak": "You design a log-aggregation system instead of a metrics platform, ignoring the specific shape of time-series data."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the shape of metric data differ from application logs?"
+      ],
+      "hints": [
+        "Think about whether we are storing unstructured text or numerical time-series points.",
+        "For this design, let's focus purely on numerical metrics and dashboards."
+      ],
+      "moveOnSummary": "We will focus entirely on time-series metrics and alerting.",
+      "learnTopics": [
+        "observability"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "series",
+          "retention",
+          "nodes"
+        ]
+      },
+      "goal": "Estimate the ingestion volume and storage capacity required over time.",
+      "opener": "Given the scale you assume, how much data will this system ingest and store?",
+      "evidence": {
+        "strong": "You estimate the number of active series, ingestion rate, and total storage, factoring in data point size and retention.",
+        "adequate": "You provide basic QPS estimates but miss the distinction between active time series and raw ingestion rate.",
+        "weak": "You skip estimations entirely or produce numbers that do not align with thousands of services."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How big is a single data point in bytes?",
+        "How does the 1-year retention requirement impact your total storage calculation?"
+      ],
+      "hints": [
+        "Consider what makes up a metric point: a timestamp, a float value, and some labels.",
+        "Multiply your ingestion rate by the retention period to find the storage boundary."
+      ],
+      "moveOnSummary": "We are dealing with millions of series and heavy long-term storage needs.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.ingestion",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "ingestion",
+          "queue",
+          "load-balancer"
+        ],
+        "keywords": [
+          "push",
+          "pull",
+          "agent",
+          "collector"
+        ]
+      },
+      "goal": "Design the path from application code to the storage layer.",
+      "opener": "Walk me through how a metric travels from an application service to our database.",
+      "evidence": {
+        "strong": "You map out a clear flow using agents or SDKs, routing through collectors or a message queue for decoupling before ingestion.",
+        "adequate": "You show a direct path from services to an API gateway and into storage, missing a dedicated collector tier.",
+        "weak": "You push metrics directly from application code into the database, coupling the services tightly to the database health."
+      },
+      "misconceptions": [
+        {
+          "id": "direct_db_write",
+          "pattern": "Writing directly from application services to the time-series database without a collector or buffer.",
+          "challenge": "If the database is down for maintenance for 5 minutes, what happens to the metrics generated during that time?"
+        }
+      ],
+      "probes": [
+        "Will services push metrics to you, or will your system pull them?",
+        "What handles the routing and batching of these metrics before they hit storage?"
+      ],
+      "hints": [
+        "Consider introducing an intermediary component between the applications and the database.",
+        "Think about how an agent or collector sidecar could help manage the metric flow."
+      ],
+      "moveOnSummary": "You designed an ingestion pipeline using collectors and a buffering layer.",
+      "learnTopics": [
+        "api-design",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "hl.storage",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "timeseries-db",
+          "database",
+          "storage"
+        ],
+        "keywords": [
+          "time series",
+          "promql",
+          "sharding",
+          "tsdb"
+        ]
+      },
+      "goal": "Select and configure an appropriate data store for time-series metrics.",
+      "opener": "How will you store these metrics to support efficient dashboard queries?",
+      "evidence": {
+        "strong": "You choose a Time-Series Database (TSDB), explaining how it handles append-only workloads and shards data by series or tenant.",
+        "adequate": "You select a TSDB but struggle to explain how data is partitioned across nodes for high availability.",
+        "weak": "You choose a standard relational database or document store, which will not scale for time-series workloads."
+      },
+      "misconceptions": [
+        {
+          "id": "relational_metrics",
+          "pattern": "Using a relational database like PostgreSQL for high-volume metric storage without an extension like Timescale.",
+          "challenge": "How will a standard B-tree index perform when inserting millions of timestamps per second?"
+        }
+      ],
+      "probes": [
+        "How does the database partition this data across multiple nodes?",
+        "What indexing strategy makes querying by metric labels fast?"
+      ],
+      "hints": [
+        "Time-series data is usually append-only and queried by time windows.",
+        "Consider databases specifically optimized for time-series data, like Prometheus, Mimir, or TimescaleDB."
+      ],
+      "moveOnSummary": "We will use a dedicated Time-Series Database sharded by tenant and metric name.",
+      "learnTopics": [
+        "time-series-databases",
+        "sharding",
+        "replication"
+      ]
+    },
+    {
+      "id": "hl.alerting",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "alerting",
+          "scheduler",
+          "notification-service"
+        ],
+        "keywords": [
+          "evaluate",
+          "rules",
+          "threshold",
+          "alert"
+        ]
+      },
+      "goal": "Design a mechanism that evaluates metric thresholds and triggers notifications.",
+      "opener": "How does the system know when a metric crosses a dangerous threshold to trigger an alert?",
+      "evidence": {
+        "strong": "You decouple the alerting engine from storage, using a scheduler to periodically evaluate PromQL-like rules against the query layer.",
+        "adequate": "You include an alerting component but tie it directly into the ingestion stream without a clear way to evaluate historical windows.",
+        "weak": "You rely on the database to push alerts out natively, missing the need for a separate rule-evaluation engine."
+      },
+      "misconceptions": [
+        {
+          "id": "db_trigger",
+          "pattern": "Using database triggers to fire alerts.",
+          "challenge": "Time-series databases use append-only blocks. How would a database trigger evaluate a sliding window average over 5 minutes?"
+        }
+      ],
+      "probes": [
+        "Who evaluates the alert rule, and how often?",
+        "How do you handle an alert that requires comparing data from 10 minutes ago?"
+      ],
+      "hints": [
+        "Think about a separate service that runs queries on a schedule.",
+        "The alerting engine can act as just another client querying the TSDB."
+      ],
+      "moveOnSummary": "You added a rule-evaluation engine that queries the TSDB and fires alerts.",
+      "learnTopics": [
+        "incident-management",
+        "distributed-task-scheduler"
+      ]
+    },
+    {
+      "id": "deep.cardinality",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "aggregator",
+          "rate-limiter",
+          "timeseries-db",
+          "guardrails"
+        ],
+        "keywords": [
+          "labels",
+          "user_id",
+          "tags",
+          "cardinality",
+          "drop",
+          "limits"
+        ]
+      },
+      "goal": "Protect the storage layer from unbounded label combinations that exhaust memory and index space.",
+      "opener": "A team accidentally adds a 'user_id' label to their request rate metric. What happens, and how do we prevent it from breaking the system?",
+      "evidence": {
+        "strong": "You implement cardinality limits at the collector/ingestion layer, dropping or aggregating offending metrics before they reach the TSDB, and enforcing per-team quotas.",
+        "adequate": "You mention rate limiting or quotas, but apply them only at the database level after the data has already consumed ingestion resources.",
+        "weak": "You assume the database can simply scale to absorb the extra labels, ignoring the exponential explosion of time series."
+      },
+      "misconceptions": [
+        {
+          "id": "limit_at_db",
+          "pattern": "Assuming the database can handle high cardinality if scaled up enough.",
+          "challenge": "What happens to our index memory and query latency if a metric suddenly spawns 10 million unique label combinations?"
+        }
+      ],
+      "probes": [
+        "How does the system detect that a metric has too many unique labels?",
+        "Where exactly should we block these metrics to protect the core infrastructure?"
+      ],
+      "hints": [
+        "Consider what happens to the number of time series if a UUID is used as a label.",
+        "Think about placing guardrails in the collectors or API gateway to drop bad data early."
+      ],
+      "moveOnSummary": "You placed cardinality limits and label-dropping rules in the ingestion pipeline.",
+      "learnTopics": [
+        "time-series-databases",
+        "rate-limiting",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.retention",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "archive",
+          "batch-job",
+          "storage",
+          "timeseries-db"
+        ],
+        "keywords": [
+          "downsample",
+          "rollup",
+          "tiers",
+          "hot",
+          "cold",
+          "s3"
+        ]
+      },
+      "goal": "Manage long-term storage costs while keeping historical data queryable.",
+      "opener": "If we need to keep this data for a year to analyze trends, how do we do that without bankrupting the company on SSD storage?",
+      "evidence": {
+        "strong": "You design retention tiers, using batch jobs to downsample older metrics and move them from hot SSDs to cheap object storage like S3.",
+        "adequate": "You mention moving data to cold storage but miss the downsampling step required to make long-term queries performant.",
+        "weak": "You suggest keeping all data at full resolution for a year on standard disk storage."
+      },
+      "misconceptions": [],
+      "probes": [
+        "When querying a year of data, how do you prevent the query from scanning billions of points and timing out?",
+        "How and when does the downsampling happen?"
+      ],
+      "hints": [
+        "Do we need second-by-second resolution for data that is 6 months old?",
+        "Consider moving older data chunks into object storage and running a compaction process."
+      ],
+      "moveOnSummary": "You set up rollups and tiered storage to manage long-term retention costs.",
+      "learnTopics": [
+        "time-series-databases",
+        "batch-vs-stream-processing",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "deep.routing",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "on-call",
+          "runbook",
+          "router"
+        ],
+        "keywords": [
+          "owner",
+          "pagerduty",
+          "runbook",
+          "catalog",
+          "routing"
+        ]
+      },
+      "goal": "Ensure alerts dynamically reach the correct team with actionable context.",
+      "opener": "Once an alert fires for 'Service A', how do you ensure it reaches the right team with the associated runbook?",
+      "evidence": {
+        "strong": "You integrate the alerting engine with a service catalog or registry that holds dynamic mappings of services to on-call schedules and runbooks.",
+        "adequate": "You route alerts to an on-call tool like PagerDuty but rely on static configuration files for the routing rules.",
+        "weak": "You hardcode email addresses or Slack channels into the alert rules themselves."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If a team renames themselves or changes their PagerDuty schedule, how does the metric system know?",
+        "Where is the mapping between a service and its runbook stored?"
+      ],
+      "hints": [
+        "We have thousands of services. Managing routing manually won't scale.",
+        "Consider introducing a service registry or ownership database that the alert router queries."
+      ],
+      "moveOnSummary": "You integrated alert routing with a service ownership registry.",
+      "learnTopics": [
+        "service-discovery",
+        "incident-management"
+      ]
+    },
+    {
+      "id": "deep.bursts",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "t-kafka",
+          "ingestion"
+        ],
+        "keywords": [
+          "spike",
+          "burst",
+          "buffer",
+          "throttle",
+          "backpressure"
+        ]
+      },
+      "goal": "Handle sudden spikes in metric emissions without losing data or crashing the database.",
+      "opener": "If several massive services restart simultaneously and emit a huge burst of metrics, how does your ingestion pipeline cope?",
+      "evidence": {
+        "strong": "You decouple ingestion from storage using a highly available message queue like Kafka to absorb the burst and apply backpressure.",
+        "adequate": "You rely on memory buffers in the collectors, which might OOM or lose data if the database slows down.",
+        "weak": "You pass the burst directly to the TSDB, risking a cascading failure."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to the metrics if the database cannot write as fast as the burst arrives?",
+        "How do you ensure we don't drop critical alerts during this burst?"
+      ],
+      "hints": [
+        "If the database slows down, we need somewhere to hold the data temporarily.",
+        "Consider putting a durable streaming platform in front of the database writers."
+      ],
+      "moveOnSummary": "You added a message queue to absorb ingestion bursts.",
+      "learnTopics": [
+        "message-queues",
+        "backpressure",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "deep.flapping",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "alerting",
+          "stream-processor"
+        ],
+        "keywords": [
+          "flap",
+          "debounce",
+          "for",
+          "window"
+        ]
+      },
+      "goal": "Design mechanisms to prevent alert fatigue from transient spikes.",
+      "opener": "How do you ensure an alert doesn't trigger and resolve repeatedly within a few minutes?",
+      "evidence": {
+        "strong": "You implement a 'for' duration in the rule engine, requiring the threshold to be breached continuously for a time window before firing.",
+        "adequate": "You mention debounce logic or smoothing the metric but don't define where this state is held during evaluation.",
+        "weak": "You ignore the flapping risk, assuming any threshold breach should instantly page an engineer."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where is the state kept to know how long a metric has been over the threshold?",
+        "Does the evaluator look at a single data point or a time window?"
+      ],
+      "hints": [
+        "Think about adding a time condition to the alert rule.",
+        "We could require the metric to stay above the threshold for 5 consecutive minutes."
+      ],
+      "moveOnSummary": "You used evaluation windows to debounce flapping alerts.",
+      "learnTopics": [
+        "incident-management",
+        "observability"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "failure",
+          "single point"
+        ]
+      },
+      "goal": "Identify the weakest links and operational risks in the final design.",
+      "opener": "Looking at your final architecture, where is the biggest operational risk or bottleneck?",
+      "evidence": {
+        "strong": "You identify specific limits, such as TSDB write-head memory limits, cross-zone network costs, or the complexity of managing cardinality rules.",
+        "adequate": "You name generic components like 'the database' without tying the risk to the specific nature of time-series workloads.",
+        "weak": "You claim the system is fully scalable and has no significant bottlenecks."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If the entire system degrades, which component is most likely to fail first?",
+        "How complex is this system to operate for the team running it?"
+      ],
+      "hints": [
+        "Review the flow of data from ingestion to storage.",
+        "Consider the operational overhead of running a distributed time-series database."
+      ],
+      "moveOnSummary": "We have identified the core trade-offs and risks in the design.",
+      "learnTopics": [
+        "fallacies-of-distributed-computing"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "flapping",
+      "after": "deep.routing",
+      "prompt": "Some teams complain that their alerts are flapping on and off every minute during minor traffic fluctuations. How do you stabilise this?",
+      "agendaItemId": "deep.flapping"
+    }
+  ],
+  "vocabulary": [
+    "cardinality",
+    "PromQL",
+    "OpenTelemetry",
+    "downsampling",
+    "rollups",
+    "TSDB",
+    "runbook",
+    "flapping",
+    "Prometheus"
+  ],
+  "alternatives": [
+    {
+      "choice": "Push-based versus pull-based metrics collection.",
+      "whenBetter": "Pull prevents collectors from being overwhelmed and gives better control over ingestion rate, while push is better for ephemeral workloads like serverless functions."
+    },
+    {
+      "choice": "Streaming alert evaluation versus periodic DB queries.",
+      "whenBetter": "Streaming evaluates rules instantly as data arrives, which is better for extremely time-sensitive alerts, while periodic DB queries are simpler to implement and allow for complex historical comparisons."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust and Scalable",
+      "outline": "You establish robust cardinality limits at the collector level before data reaches the TSDB. The architecture correctly separates ingestion, time-series storage with hot/warm/cold downsampling tiers, and a decoupled alerting engine. Alerts dynamically route to owners using a service catalog, ensuring actionable notifications with runbook links."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but Reactive",
+      "outline": "You design a functional push or pull ingestion pipeline into a time-series database and include basic alerting. You identify high cardinality as an issue but handle it reactively rather than proactively. Retention is mentioned but downsampling mechanics are vague, and alert routing lacks deep integration with ownership systems."
+    },
+    {
+      "band": "weak",
+      "label": "Lacking Time-Series Context",
+      "outline": "You treat metrics like standard relational data, missing the specific patterns of time-series storage. The design lacks buffering for bursts, has no cardinality controls, and hardcodes alert rules and destinations, making it unmanageable at the requested scale."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.35,
+    "deep_dive": 0.4,
+    "wrap_up": 0.1
+  }
+}

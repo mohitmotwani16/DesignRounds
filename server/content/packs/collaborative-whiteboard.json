@@ -1,0 +1,608 @@
+{
+  "opening": "Welcome. Today we're going to design a collaborative whiteboard client. Whenever you're ready, feel free to start laying out your approach.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "concurrent",
+        "participants",
+        "room"
+      ],
+      "answer": "Assume up to 50 concurrent users collaborating on a single board."
+    },
+    {
+      "id": "scale.shapes",
+      "topics": [
+        "shapes",
+        "size",
+        "objects",
+        "large"
+      ],
+      "answer": "A large board can contain up to 50,000 individual shapes."
+    },
+    {
+      "id": "req.format",
+      "topics": [
+        "format",
+        "pixels",
+        "vector",
+        "drawing"
+      ],
+      "answer": "The whiteboard is vector-based. Users draw objects like paths, rectangles, and text, rather than painting pixels."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "lag",
+        "real-time"
+      ],
+      "answer": "We want users to see each other's strokes and cursors in near real time, ideally under 100 milliseconds."
+    },
+    {
+      "id": "req.offline",
+      "topics": [
+        "offline",
+        "reconnect",
+        "network"
+      ],
+      "answer": "Users might experience brief network drops. They should be able to continue drawing and sync up when they reconnect."
+    }
+  ],
+  "clarificationPolicy": "Keep the focus on client rendering performance, data synchronization, and conflict resolution; standard authentication and static asset delivery are out of scope.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "users"
+        ],
+        "keywords": [
+          "requirements",
+          "latency",
+          "concurrent",
+          "shapes",
+          "real-time"
+        ]
+      },
+      "goal": "Identify the real-time constraints and rendering scale of the whiteboard.",
+      "opener": "What primary constraints and features will drive the architecture of this whiteboard?",
+      "evidence": {
+        "strong": "Explicitly calls out rendering performance for large numbers of shapes and the need for a conflict-free shared state.",
+        "adequate": "Mentions real-time updates and basic concurrent drawing, but misses the rendering scale limits.",
+        "weak": "Lists generic drawing features without addressing the challenges of collaboration or scale."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to the browser if a board contains the upper limit of shapes you estimated?"
+      ],
+      "hints": [
+        "Consider the difference between a single-player drawing app and a massive collaborative canvas.",
+        "Think about what data actually needs to be sent over the network when a user moves a mouse."
+      ],
+      "moveOnSummary": "We will target a vector-based board handling a high volume of shapes and concurrent users.",
+      "learnTopics": [
+        "frontend-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.transport",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "websocket",
+          "web-server"
+        ],
+        "keywords": [
+          "websocket",
+          "connection",
+          "server",
+          "broadcast",
+          "tcp"
+        ]
+      },
+      "goal": "Establish a low-latency, bidirectional transport mechanism between clients and the server.",
+      "opener": "How do strokes drawn by one user propagate to the other users in the same room?",
+      "evidence": {
+        "strong": "Selects WebSockets for persistent bidirectional communication and explicitly separates durable operations from ephemeral presence events.",
+        "adequate": "Uses WebSockets or Server-Sent Events to push data to clients.",
+        "weak": "Suggests HTTP polling or standard REST requests for real-time stroke updates."
+      },
+      "misconceptions": [
+        {
+          "id": "transport.polling",
+          "pattern": "Using short polling to get board updates.",
+          "challenge": "If a large number of users are polling multiple times per second, what does the load on the server look like, and what happens to perceived latency?"
+        }
+      ],
+      "probes": [
+        "How are you managing the connection state on the server?",
+        "Are all events routed through the server, or is there any peer-to-peer communication?"
+      ],
+      "hints": [
+        "We need a way for the server to push updates to the client without the client asking.",
+        "Think about persistent connection protocols in the browser."
+      ],
+      "moveOnSummary": "We'll use WebSockets to maintain a persistent connection for broadcasting actions.",
+      "learnTopics": [
+        "real-time-communication",
+        "tcp-vs-udp"
+      ]
+    },
+    {
+      "id": "hl.datamodel",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "document-store"
+        ],
+        "keywords": [
+          "crdt",
+          "ot",
+          "json",
+          "state",
+          "document",
+          "model"
+        ]
+      },
+      "goal": "Define the client document structure that allows safe concurrent edits.",
+      "opener": "How are you representing the state of the whiteboard in the client memory?",
+      "evidence": {
+        "strong": "Defines a structured format representing individual shapes with unique IDs, leveraging a CRDT or OT framework to manage state.",
+        "adequate": "Represents the board as an array or dictionary of shapes with basic IDs.",
+        "weak": "Attempts to send raw pixel data or entire board states over the network."
+      },
+      "misconceptions": [
+        {
+          "id": "model.fullstate",
+          "pattern": "Sending the full document state on every change.",
+          "challenge": "If the board has a massive number of shapes, what happens to network bandwidth if we broadcast the entire state when someone moves a single circle?"
+        }
+      ],
+      "probes": [
+        "How do you identify a specific shape when someone modifies it?"
+      ],
+      "hints": [
+        "If I change the color of a square, the server needs to know exactly which square to update.",
+        "Instead of sending the whole board, what is the minimum information needed to describe a change?"
+      ],
+      "moveOnSummary": "We will model the board as a collection of shape objects updated via discrete operational events.",
+      "learnTopics": [
+        "frontend-state-management"
+      ]
+    },
+    {
+      "id": "deep.conflict",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "document-store"
+        ],
+        "keywords": [
+          "crdt",
+          "ot",
+          "conflict",
+          "merge",
+          "timestamp",
+          "lww",
+          "resolution"
+        ]
+      },
+      "goal": "Resolve concurrent mutations reliably without tearing the document state.",
+      "opener": "If two users move the exact same shape simultaneously, what is the final state for everyone?",
+      "evidence": {
+        "strong": "Evaluates Operational Transformation (OT) against Conflict-free Replicated Data Types (CRDTs), understanding that CRDTs allow peer merging while OT relies on server sequence.",
+        "adequate": "Proposes a Last-Writer-Wins (LWW) mechanism using timestamps or server-assigned sequence numbers.",
+        "weak": "Assumes events will just arrive in order or locks the entire shape during editing."
+      },
+      "misconceptions": [
+        {
+          "id": "conflict.locking",
+          "pattern": "Using pessimistic locking on shapes.",
+          "challenge": "If a user goes offline immediately after locking a shape, how do other users interact with it?"
+        }
+      ],
+      "probes": [
+        "What happens if one user's clock is minutes ahead of another user's clock?",
+        "How does the server enforce a consistent ordering of events?"
+      ],
+      "hints": [
+        "Client timestamps are notoriously unreliable.",
+        "Look into data structures designed specifically for concurrent decentralized updates."
+      ],
+      "moveOnSummary": "We will use a CRDT or a server-ordered OT model to guarantee convergence.",
+      "learnTopics": [
+        "crdts",
+        "clocks-and-ordering"
+      ]
+    },
+    {
+      "id": "deep.rendering",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "desktop"
+        ],
+        "keywords": [
+          "canvas",
+          "webgl",
+          "svg",
+          "dom",
+          "render",
+          "culling",
+          "quadtree",
+          "batching",
+          "r-tree"
+        ]
+      },
+      "goal": "Design a rendering pipeline that prevents the browser from freezing on massive boards.",
+      "opener": "Given the large shape count you estimated, how do you render the board smoothly as a user pans and zooms?",
+      "evidence": {
+        "strong": "Chooses Canvas or WebGL over DOM/SVG. Implements a spatial index (like an R-tree or quadtree) for viewport culling, and batches redraws using requestAnimationFrame.",
+        "adequate": "Mentions using Canvas API instead of DOM elements, but lacks a spatial indexing strategy for culling.",
+        "weak": "Renders each shape as a separate DOM or SVG element, which will bottleneck browser layout."
+      },
+      "misconceptions": [
+        {
+          "id": "render.dom",
+          "pattern": "Using React to render tens of thousands of SVG nodes.",
+          "challenge": "How will the browser's layout engine perform when updating the position of a massive number of separate DOM elements at 60 frames per second?"
+        }
+      ],
+      "probes": [
+        "If only a small fraction of the total shapes are visible on the screen, do we need to process the rest?",
+        "How do you quickly find which shapes intersect with the user's current viewport?"
+      ],
+      "hints": [
+        "The DOM is too slow for thousands of animated nodes. What lower-level APIs exist in the browser?",
+        "Think about data structures used in game engines to partition 2D space."
+      ],
+      "moveOnSummary": "We will use Canvas/WebGL with a spatial index to cull off-screen shapes and batch updates.",
+      "learnTopics": [
+        "rendering-strategies",
+        "geospatial-indexing"
+      ]
+    },
+    {
+      "id": "deep.presence",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "cache",
+          "in-memory-db"
+        ],
+        "keywords": [
+          "cursor",
+          "presence",
+          "ephemeral",
+          "redis",
+          "throttle",
+          "mouse"
+        ]
+      },
+      "goal": "Handle high-frequency, ephemeral data separately from durable state.",
+      "opener": "How are you handling the display of other users' cursors as they move their mice around?",
+      "evidence": {
+        "strong": "Treats presence as ephemeral, non-persisted data. Throttles cursor updates on the client and drops stale cursor events without impacting the durable document.",
+        "adequate": "Transmits cursor events over the same WebSocket but doesn't explicitly throttle or separate them from database writes.",
+        "weak": "Writes cursor movements to the persistent database or operation log."
+      },
+      "misconceptions": [
+        {
+          "id": "presence.persist",
+          "pattern": "Saving cursor positions to the primary database.",
+          "challenge": "If dozens of users move their mice constantly, generating multiple events per second each, what happens to our database write capacity?"
+        }
+      ],
+      "probes": [
+        "Do we care about a cursor's position from several seconds ago?",
+        "How often should a client send its cursor position over the network?"
+      ],
+      "hints": [
+        "Cursor movements are high volume but low value.",
+        "If an event is lost, does it corrupt the whiteboard state?"
+      ],
+      "moveOnSummary": "Presence data like cursors will be throttled, broadcast ephemerally, and never persisted.",
+      "learnTopics": [
+        "real-time-communication",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.reconnection",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "local-cache",
+          "client"
+        ],
+        "keywords": [
+          "offline",
+          "reconnect",
+          "buffer",
+          "localstorage",
+          "indexdb"
+        ]
+      },
+      "goal": "Handle offline buffering and catch-up syncing seamlessly.",
+      "opener": "What happens if a user loses their connection for a minute, continues drawing, and then reconnects?",
+      "evidence": {
+        "strong": "Buffers local operations using IndexedDB. On reconnect, requests missing server operations via a version vector or last-known sequence, applies them, and flushes the local buffer.",
+        "adequate": "Queues operations in memory and sends them on reconnection, but struggles with interleaving server updates.",
+        "weak": "Requires the user to refresh the page, losing their offline work."
+      },
+      "misconceptions": [
+        {
+          "id": "reconnect.fullfetch",
+          "pattern": "Downloading the entire board state again on every brief disconnect.",
+          "challenge": "If a user flickers offline for a couple of seconds, do we want to download a heavy board payload again?"
+        }
+      ],
+      "probes": [
+        "How does the client know which events it missed while offline?",
+        "Where are the user's offline strokes stored so they survive an accidental page refresh?"
+      ],
+      "hints": [
+        "The client needs a way to tell the server what the last known state was.",
+        "Consider using browser storage mechanisms like IndexedDB for local persistence."
+      ],
+      "moveOnSummary": "Clients will buffer offline ops locally and sync via sequence numbers or vector clocks on reconnect.",
+      "learnTopics": [
+        "offline-first-sync",
+        "event-sourcing-cqrs"
+      ]
+    },
+    {
+      "id": "deep.persistence",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-store"
+        ],
+        "keywords": [
+          "snapshot",
+          "oplog",
+          "log",
+          "save",
+          "database",
+          "s3"
+        ]
+      },
+      "goal": "Efficiently save the board state to survive server restarts without overwhelming the database.",
+      "opener": "How is the board state persisted on the server so it can be loaded tomorrow?",
+      "evidence": {
+        "strong": "Combines an append-only operation log for recent changes with periodic board snapshots stored in object storage or a document DB.",
+        "adequate": "Saves every single shape update directly to a relational database table.",
+        "weak": "Relies entirely on the in-memory state of the WebSocket server."
+      },
+      "misconceptions": [
+        {
+          "id": "persistence.relational",
+          "pattern": "Updating a row in a SQL database for every single shape movement.",
+          "challenge": "If multiple users are dragging shapes simultaneously, can the database handle that write throughput efficiently?"
+        }
+      ],
+      "probes": [
+        "If a board has been running for a year, do we need to replay a year's worth of operations to load it?",
+        "How frequently do you save the board to durable storage?"
+      ],
+      "hints": [
+        "Loading a massive amount of past operations is slow. How can we speed up the initial load?",
+        "Think about how Redis combines log appending with periodic snapshots."
+      ],
+      "moveOnSummary": "We will persist an operation log and periodically squash it into snapshots.",
+      "learnTopics": [
+        "write-ahead-log",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "deep.lag_compensation",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "websocket"
+        ],
+        "keywords": [
+          "lag",
+          "latency",
+          "jitter",
+          "compensation",
+          "slow"
+        ]
+      },
+      "goal": "Handle large latency disparities between concurrent users without breaking the merging logic.",
+      "opener": "If one user has severe network lag while others are on fast connections, how does the system reconcile their overlapping edits?",
+      "evidence": {
+        "strong": "Explains how CRDTs or OT handle delayed operations, potentially discussing visual indicators of pending state.",
+        "adequate": "Relies on standard server ordering but acknowledges the delayed user will see snap-backs.",
+        "weak": "Assumes the slow user will lock the board or overwrite recent changes."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the UI reflect that a user's stroke hasn't been acknowledged by the server yet?"
+      ],
+      "hints": [
+        "If an operation arrives late, how does the sequence history apply it?"
+      ],
+      "moveOnSummary": "We will use our conflict resolution strategy to merge delayed edits and show a pending state locally.",
+      "learnTopics": [
+        "cap-theorem",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.mass_updates",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "desktop"
+        ],
+        "keywords": [
+          "batch",
+          "select all",
+          "group",
+          "transform"
+        ]
+      },
+      "goal": "Efficiently process and broadcast a single user action that mutates thousands of shapes at once.",
+      "opener": "How does the system handle an event where a user selects every shape on the board and drags them simultaneously?",
+      "evidence": {
+        "strong": "Batches the updates into a single transformation matrix or grouped operation payload instead of sending individual updates.",
+        "adequate": "Batches network calls but applies changes to shapes individually in memory.",
+        "weak": "Iterates through each shape and sends a separate network request per shape."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What does the payload look like when moving a massive group of shapes?"
+      ],
+      "hints": [
+        "Instead of updating the coordinates of every single shape individually, can we apply a broader operation to the group?"
+      ],
+      "moveOnSummary": "We'll represent mass selections with a grouped transformation to keep payload sizes small.",
+      "learnTopics": [
+        "api-design",
+        "frontend-state-management"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "limit",
+          "scale",
+          "tradeoff"
+        ]
+      },
+      "goal": "Summarize the architecture's limits and identify the most critical breaking point.",
+      "opener": "Looking at the system you've designed, what is the single biggest bottleneck as usage scales up?",
+      "evidence": {
+        "strong": "Identifies client-side memory/rendering or the central WebSocket room server capacity as the primary limit.",
+        "adequate": "Mentions database write speeds or generic network bandwidth.",
+        "weak": "Claims the system is infinitely scalable or cannot identify a specific bottleneck."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if one room goes viral and thousands of people join it at once?"
+      ],
+      "hints": [
+        "Look at the node where all traffic for a single board converges.",
+        "Think about what limits the browser itself."
+      ],
+      "moveOnSummary": "Thank you for walking through the tradeoffs and limits.",
+      "learnTopics": [
+        "latency-vs-throughput",
+        "scalability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "curve.slow_network",
+      "after": "deep.conflict",
+      "prompt": "What if one user is on a highly unstable 3G connection with severe latency, while everyone else is on fiber? How does that impact the merging of shapes?",
+      "agendaItemId": "deep.lag_compensation"
+    },
+    {
+      "id": "curve.mass_select",
+      "after": "deep.rendering",
+      "prompt": "A user presses CTRL+A, selects all the shapes you mentioned, and starts dragging them across the screen. How do you keep the application from crashing?",
+      "agendaItemId": "deep.mass_updates"
+    }
+  ],
+  "vocabulary": [
+    "CRDT",
+    "OT",
+    "Operational Transformation",
+    "WebGL",
+    "Canvas",
+    "culling",
+    "quadtree",
+    "r-tree",
+    "bounding box",
+    "ephemeral",
+    "vector clock",
+    "LWW",
+    "Last Writer Wins"
+  ],
+  "alternatives": [
+    {
+      "choice": "CRDT vs Operational Transformation (OT)",
+      "whenBetter": "CRDTs are better for offline-first, decentralized systems where peer merging is essential. OT is generally simpler if you have a centralized server that can strictly sequence operations."
+    },
+    {
+      "choice": "Canvas/WebGL vs DOM/SVG",
+      "whenBetter": "Canvas and WebGL are essential when the shape count exceeds a few thousand, as they bypass the browser's expensive layout engine. SVG is better for accessibility, CSS styling, and simpler interaction models on smaller boards."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "High-performance rendering with CRDTs",
+      "outline": "The candidate clearly separates durable document operations from ephemeral presence events like cursors. They choose a CRDT model to guarantee conflict-free merging even when users drop offline. For the client pipeline, they specify a Canvas or WebGL approach combined with a spatial index (like an R-tree) to cull off-screen shapes and batch rendering via requestAnimationFrame. Reconnection is handled smoothly using IndexedDB to buffer local actions and vector clocks to catch up on missed server events."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic WebSockets with simple state",
+      "outline": "The candidate uses WebSockets to broadcast shape updates and cursor events in the same channel. They mention using the Canvas API but do not design a spatial indexing strategy, meaning rendering might lag at the upper limits. They rely on Last-Writer-Wins using timestamps for conflict resolution, which works in basic cases but can be brittle with out-of-sync client clocks. Offline support is limited to buffering in memory."
+    },
+    {
+      "band": "weak",
+      "label": "Naive DOM rendering and full-state syncing",
+      "outline": "The candidate models the board using React and SVG, which will freeze the browser when rendering thousands of shapes. They suggest sending the entire board state over REST or polling HTTP requests on every change, ignoring the massive bandwidth requirements. They attempt to write cursor movements directly to the primary database and do not address offline synchronization or conflict resolution."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

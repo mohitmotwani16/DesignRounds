@@ -1,0 +1,551 @@
+{
+  "opening": "We are going to design a multi-region failover strategy for a customer-facing service. Let me know how you would like to begin.",
+  "clarifications": [
+    {
+      "id": "rto",
+      "topics": [
+        "rto",
+        "downtime",
+        "recovery time",
+        "speed"
+      ],
+      "answer": "We aim for a Recovery Time Objective of under 5 minutes."
+    },
+    {
+      "id": "rpo",
+      "topics": [
+        "rpo",
+        "data loss",
+        "recovery point",
+        "sync"
+      ],
+      "answer": "We want to minimize data loss, ideally zero, but can tolerate up to 1 minute in a hard regional crash."
+    },
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "scale",
+        "qps",
+        "traffic",
+        "requests"
+      ],
+      "answer": "Assume 10,000 requests per second globally during normal operations."
+    },
+    {
+      "id": "scale.mix",
+      "topics": [
+        "read",
+        "write",
+        "mix",
+        "ratio"
+      ],
+      "answer": "The workload is read-heavy, about 90% reads and 10% writes."
+    },
+    {
+      "id": "regions",
+      "topics": [
+        "regions",
+        "locations",
+        "geography"
+      ],
+      "answer": "We operate across two main regions for this service."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about a constraint not listed, tell them to choose a standard enterprise approach and state their assumptions.",
+  "agenda": [
+    {
+      "id": "req.rto_rpo",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "rto",
+          "rpo",
+          "recovery",
+          "time",
+          "loss"
+        ]
+      },
+      "goal": "Elicit concrete RTO and RPO requirements and understand what they mean for the design.",
+      "opener": "Before we draw, what specific recovery objectives should we define for this system?",
+      "evidence": {
+        "strong": "Explicitly asks for or defines RTO and RPO, explaining how they constrain the replication and failover choices.",
+        "adequate": "Mentions wanting to minimize downtime and data loss but needs prompting to quantify them.",
+        "weak": "Does not discuss recovery objectives or confuses RTO with RPO."
+      },
+      "misconceptions": [
+        {
+          "id": "zero_loss_async",
+          "pattern": "Assuming zero data loss is achievable with asynchronous replication.",
+          "challenge": "What happens to writes that were acknowledged to the user but have not crossed the region before the crash?"
+        }
+      ],
+      "probes": [
+        "How much data can we afford to lose?",
+        "How quickly must we be back online?"
+      ],
+      "hints": [
+        "Think about the time it takes to recover.",
+        "Consider the difference between losing time and losing data."
+      ],
+      "moveOnSummary": "Agreed on RTO and RPO objectives.",
+      "learnTopics": [
+        "disaster-recovery",
+        "availability"
+      ]
+    },
+    {
+      "id": "hl.architecture_mode",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cloud",
+          "cluster",
+          "load-balancer"
+        ],
+        "keywords": [
+          "active",
+          "passive",
+          "standby",
+          "primary",
+          "secondary"
+        ]
+      },
+      "goal": "Choose between Active-Active and Active-Passive multi-region deployment.",
+      "opener": "How will you utilize the multiple regions during normal operations?",
+      "evidence": {
+        "strong": "Evaluates Active-Active versus Active-Passive, citing cost, capacity, and write conflict trade-offs.",
+        "adequate": "Selects an approach but provides shallow reasoning for the choice.",
+        "weak": "Draws multiple regions but does not clarify if traffic flows to both or how data ownership is handled."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Are both regions serving read and write traffic?",
+        "What happens to the compute capacity in the secondary region normally?"
+      ],
+      "hints": [
+        "We can either run both regions hot or keep one as a backup.",
+        "Think about write conflicts if both regions accept writes."
+      ],
+      "moveOnSummary": "Selected an active-passive or active-active topology.",
+      "learnTopics": [
+        "disaster-recovery",
+        "multi-tenancy"
+      ]
+    },
+    {
+      "id": "hl.dns_routing",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "dns",
+          "load-balancer",
+          "api-gateway",
+          "t-cloudflare"
+        ],
+        "keywords": [
+          "dns",
+          "route",
+          "anycast",
+          "steer",
+          "failover"
+        ]
+      },
+      "goal": "Design the global traffic entry point that redirects users during an outage.",
+      "opener": "How does user traffic know which region to go to?",
+      "evidence": {
+        "strong": "Uses a global load balancer, anycast, or DNS with low TTL and health checks to steer traffic.",
+        "adequate": "Mentions DNS or a load balancer but overlooks TTLs or how health checks influence routing.",
+        "weak": "Relies on a single-region entry point that would fail during the outage."
+      },
+      "misconceptions": [
+        {
+          "id": "high_ttl",
+          "pattern": "Using standard DNS with high TTL for failover.",
+          "challenge": "If a region fails, how long will clients keep using the cached IP?"
+        }
+      ],
+      "probes": [
+        "How do clients get the new IP if the primary region goes down?",
+        "Where do these health checks run?"
+      ],
+      "hints": [
+        "Think about how domain names are resolved.",
+        "Consider how long a browser caches an IP address."
+      ],
+      "moveOnSummary": "Established global routing with health checks.",
+      "learnTopics": [
+        "dns",
+        "load-balancing",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "deep.replication",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "replica",
+          "stream",
+          "t-postgres"
+        ],
+        "keywords": [
+          "sync",
+          "async",
+          "replication",
+          "lag",
+          "wal",
+          "consensus"
+        ]
+      },
+      "goal": "Align the data replication strategy with the defined RPO and latency budget.",
+      "opener": "How is data replicated between the regions?",
+      "evidence": {
+        "strong": "Explicitly trades off synchronous latency cost versus asynchronous data loss lag based on RPO.",
+        "adequate": "Chooses asynchronous replication but glosses over the exact mechanics of data loss during a hard crash.",
+        "weak": "Assumes synchronous replication without acknowledging the cross-region latency penalty."
+      },
+      "misconceptions": [
+        {
+          "id": "sync_fast",
+          "pattern": "Thinking cross-region synchronous replication has negligible latency impact.",
+          "challenge": "What happens to the P99 write latency if every write must wait for an acknowledgment from across the country?"
+        }
+      ],
+      "probes": [
+        "Does the primary database wait for the secondary before acknowledging a write?",
+        "What is your typical replication lag?"
+      ],
+      "hints": [
+        "Consider the speed of light between regions.",
+        "If the primary dies instantly, what data is on the secondary?"
+      ],
+      "moveOnSummary": "Defined the cross-region data replication mechanism.",
+      "learnTopics": [
+        "replication",
+        "geo-replication",
+        "consistency-models"
+      ]
+    },
+    {
+      "id": "deep.failover_detection",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "health-check",
+          "alerting",
+          "orchestrator",
+          "monitoring-dashboard"
+        ],
+        "keywords": [
+          "detect",
+          "outage",
+          "partition",
+          "false positive",
+          "automated"
+        ]
+      },
+      "goal": "Establish how a regional outage is confidently detected to trigger the failover.",
+      "opener": "How do you distinguish between a true regional failure and a transient network partition?",
+      "evidence": {
+        "strong": "Designs external, multi-vantage-point health checks and discusses the risks of automated failovers versus human approval.",
+        "adequate": "Uses health checks but struggles with the split-brain risk of a simple network partition.",
+        "weak": "Relies on internal monitoring that might go down with the region."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where is the system that decides the region is down located?",
+        "What if the region is alive but the network link to the routing layer is cut?"
+      ],
+      "hints": [
+        "Think about who makes the decision to fail over.",
+        "Consider what happens if your monitoring system is inside the failing region."
+      ],
+      "moveOnSummary": "Addressed failover detection and the partition problem.",
+      "learnTopics": [
+        "health-checks-failover",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "deep.fencing_split_brain",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "leader",
+          "database",
+          "orchestrator",
+          "kv-store"
+        ],
+        "keywords": [
+          "fence",
+          "fencing",
+          "split brain",
+          "epoch",
+          "isolate"
+        ]
+      },
+      "goal": "Prevent both regions from accepting writes simultaneously if the original primary comes back online.",
+      "opener": "If the old primary region unexpectedly regains network connectivity, how do you prevent it from accepting writes?",
+      "evidence": {
+        "strong": "Implements fencing tokens, epoch numbers, or infrastructure-level isolation to ensure only one region can write.",
+        "adequate": "Mentions demoting the old primary but relies on a fragile network call that might fail during the outage.",
+        "weak": "Does not handle split-brain, allowing both regions to diverge."
+      },
+      "misconceptions": [
+        {
+          "id": "demote_api",
+          "pattern": "Relying on an API call to demote a primary during a network partition.",
+          "challenge": "If you cannot reach the region to send traffic, how can you reach it to tell the database to demote?"
+        }
+      ],
+      "probes": [
+        "How does the storage layer know it should not accept writes anymore?",
+        "What if the old primary database thinks it is still the leader?"
+      ],
+      "hints": [
+        "Look up how fencing works in distributed systems.",
+        "Can you revoke access at the infrastructure or routing level?"
+      ],
+      "moveOnSummary": "Designed a fencing mechanism to prevent split-brain.",
+      "learnTopics": [
+        "leader-election",
+        "distributed-locks",
+        "consensus"
+      ]
+    },
+    {
+      "id": "deep.failback",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "runbook",
+          "orchestrator",
+          "database"
+        ],
+        "keywords": [
+          "failback",
+          "restore",
+          "resync",
+          "reconcile"
+        ]
+      },
+      "goal": "Define the procedure to return traffic to the original primary region once it recovers.",
+      "opener": "Once the outage is resolved, walk me through the steps to move traffic back to the primary region.",
+      "evidence": {
+        "strong": "Describes reversing the replication direction, waiting for the old primary to catch up, and doing a controlled cutover.",
+        "adequate": "Mentions resyncing data but misses the step of reversing replication safely before switching traffic.",
+        "weak": "Assumes failback is just flipping the DNS switch back."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the old primary get the writes that happened while it was down?",
+        "How do you avoid downtime during the failback?"
+      ],
+      "hints": [
+        "The old primary is missing data.",
+        "Think about treating the failback just like a planned failover."
+      ],
+      "moveOnSummary": "Outlined the failback synchronization and cutover.",
+      "learnTopics": [
+        "disaster-recovery",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "deep.dependencies",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "auth-service",
+          "secrets",
+          "iam",
+          "config"
+        ],
+        "keywords": [
+          "dependency",
+          "auth",
+          "third-party",
+          "control plane"
+        ]
+      },
+      "goal": "Identify and handle shared or control-plane dependencies that might fail during the outage.",
+      "opener": "What shared dependencies in your design might prevent the secondary region from operating independently?",
+      "evidence": {
+        "strong": "Identifies IAM, config management, or centralized databases and ensures they are either replicated or decoupled.",
+        "adequate": "Acknowledges dependencies but offers a simplistic replication solution without addressing control-plane availability.",
+        "weak": "Assumes the secondary region has everything it needs without verifying dependencies."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where does the secondary region read its configuration from?",
+        "How do users authenticate if the primary auth cluster is down?"
+      ],
+      "hints": [
+        "Check if any component in the secondary region talks to the primary.",
+        "Consider control plane versus data plane dependencies."
+      ],
+      "moveOnSummary": "Addressed single-region dependencies.",
+      "learnTopics": [
+        "disaster-recovery"
+      ]
+    },
+    {
+      "id": "deep.data_corruption",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "db-backup",
+          "archive",
+          "storage"
+        ],
+        "keywords": [
+          "corruption",
+          "backup",
+          "snapshot",
+          "point-in-time"
+        ]
+      },
+      "goal": "Mitigate logical data corruption that gets replicated to the secondary region.",
+      "opener": "If a bad deployment corrupts data in the primary and it instantly replicates, how do you recover?",
+      "evidence": {
+        "strong": "Utilizes point-in-time recovery, delayed replicas, or frequent snapshots rather than just relying on cross-region replication.",
+        "adequate": "Mentions backups but struggles with the time it takes to restore them.",
+        "weak": "Assumes the failover region is safe from logical corruption."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How long does it take to restore from your backup?",
+        "What is the RPO if we have to use backups instead of the replica?"
+      ],
+      "hints": [
+        "Replication copies bad data just as fast as good data.",
+        "Think about delayed replication or snapshots."
+      ],
+      "moveOnSummary": "Addressed logical data corruption recovery.",
+      "learnTopics": [
+        "disaster-recovery"
+      ]
+    },
+    {
+      "id": "wrap.testing_gamedays",
+      "stage": "wrap_up",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "runbook",
+          "ci-cd",
+          "on-call"
+        ],
+        "keywords": [
+          "test",
+          "game day",
+          "drill",
+          "chaos"
+        ]
+      },
+      "goal": "Establish an operational practice to ensure failover actually works when needed.",
+      "opener": "How will you ensure this failover mechanism works a year from now?",
+      "evidence": {
+        "strong": "Proposes regular game days, chaos engineering, and automated failover testing in production.",
+        "adequate": "Mentions testing in staging or running occasional manual drills.",
+        "weak": "Relies entirely on hope or assumes it will just work because it is configured."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How often should we test this?",
+        "Would you test this in production?"
+      ],
+      "hints": [
+        "Consider what happens to runbooks over time if they are not used.",
+        "Look into chaos engineering."
+      ],
+      "moveOnSummary": "Discussed failover testing and game days.",
+      "learnTopics": [
+        "chaos-engineering",
+        "incident-management"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "db_corruption",
+      "after": "deep.replication",
+      "prompt": "What if the regional failure was not a power outage, but a bug that corrupted the database? How does your replication handle that?",
+      "agendaItemId": "deep.data_corruption"
+    }
+  ],
+  "vocabulary": [
+    "RTO",
+    "RPO",
+    "split-brain",
+    "fencing",
+    "anycast",
+    "epoch",
+    "failback",
+    "game day"
+  ],
+  "alternatives": [
+    {
+      "choice": "Active-Active architecture",
+      "whenBetter": "When RTO must be zero and resources in both regions should be fully utilized, accepting the complexity of conflict resolution."
+    },
+    {
+      "choice": "Consensus-based synchronous replication",
+      "whenBetter": "When zero data loss is strictly required and the application can tolerate higher cross-region write latency."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive with failback",
+      "outline": "The candidate clearly defined an RPO of 1 minute and RTO of 5 minutes, mapping these to an active-passive setup with asynchronous replication. They effectively handled split-brain using fencing tokens and outlined a safe failback procedure via reverse-replication. Finally, they planned production game days."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard active-passive without strict fencing",
+      "outline": "The candidate designed a multi-region active-passive system with DNS routing and cross-region replication. They struggled slightly with split-brain, initially relying on the primary region to step down via an API call, but corrected course when prompted. Failback was discussed but lacked detail."
+    },
+    {
+      "band": "weak",
+      "label": "Ignored constraints and latency",
+      "outline": "The candidate assumed multi-region meant automatic zero-downtime without addressing the latency of synchronous replication. They lacked a mechanism for detecting the outage safely, did not account for fencing, and left both regions vulnerable to diverging writes."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

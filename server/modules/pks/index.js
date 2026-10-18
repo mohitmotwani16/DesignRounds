@@ -13,7 +13,10 @@ import * as store from "./store.js";
 // Problem Pack per question, read by key at request time and built offline. No model
 // call ever happens on a learner's request path.
 
-const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "content", "packs");
+// PROBLEM_PACKS_DIR points at another folder of pack files (the smoke test uses one with a
+// question left out, to exercise building a pack).
+const defaultPacksDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "content", "packs");
+const packsDir = () => process.env.PROBLEM_PACKS_DIR || defaultPacksDir;
 const PUBLISHED_TTL_MS = 60_000;
 const MEMO_LIMIT = 200;
 
@@ -64,7 +67,7 @@ function renderedFor(pack) {
 
 // Hand-authored packs (server/content/packs/<prompt-id>.json) are validated like built
 // ones and land as published. Their version is the content hash, computed here.
-export function readPackFiles(dir = packsDir) {
+export function readPackFiles(dir = packsDir()) {
   let files = [];
   try {
     files = readdirSync(dir).filter((file) => file.endsWith(".json")).sort();
@@ -81,7 +84,7 @@ export function readPackFiles(dir = packsDir) {
   });
 }
 
-export async function importPackFiles(dir = packsDir) {
+export async function importPackFiles(dir = packsDir()) {
   let imported = 0;
   for (const { promptId, file, content } of readPackFiles(dir)) {
     const inputs = await inputsFor(promptId);

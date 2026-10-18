@@ -1,0 +1,568 @@
+{
+  "opening": "We need to design a data quality and observability framework. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.datasets",
+      "topics": [
+        "scale",
+        "size",
+        "datasets",
+        "tables"
+      ],
+      "answer": "Assume the company has around 100,000 datasets and 10,000 pipelines running across different schedules."
+    },
+    {
+      "id": "scale.checks",
+      "topics": [
+        "metrics",
+        "checks",
+        "runs",
+        "volume"
+      ],
+      "answer": "We execute about 5 million data checks per day. Most are simple metadata checks, but some are heavy SQL queries."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "real-time",
+        "speed"
+      ],
+      "answer": "Blocking checks must be fast enough not to bottleneck the pipeline. Alerting and lineage tracing should reflect state within a few minutes."
+    },
+    {
+      "id": "req.scope",
+      "topics": [
+        "processing",
+        "etl",
+        "data movement",
+        "out of scope"
+      ],
+      "answer": "We are not building the ETL execution engine or the data warehouse itself. We are building the observability and quality plane that integrates with them."
+    },
+    {
+      "id": "req.consumers",
+      "topics": [
+        "users",
+        "personas"
+      ],
+      "answer": "Data engineers will define the checks. Data consumers and product owners will use the dashboards to trace incidents."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about a requirement not listed, tell them to make an assumption appropriate for a large enterprise data platform and state it.",
+  "agenda": [
+    {
+      "id": "req.scoping",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "personas",
+          "goals",
+          "scale",
+          "expectations",
+          "contracts"
+        ]
+      },
+      "goal": "Identify the users, the types of checks needed, and the scale of the environment.",
+      "opener": "What functional requirements and data volume are you designing this framework for?",
+      "evidence": {
+        "strong": "Clearly separates metadata profiling from heavy compute checks and identifies both producer and consumer personas.",
+        "adequate": "Lists the types of anomalies to detect but stays vague on how users interact with the system.",
+        "weak": "Misses the scale entirely or focuses only on a single type of check like freshness."
+      },
+      "misconceptions": [
+        {
+          "id": "req.etl_confusion",
+          "pattern": "Designing a data pipeline platform instead of an observability framework.",
+          "challenge": "Are we building the system that transforms the data, or the system that observes it?"
+        }
+      ],
+      "probes": [
+        "How many checks do you estimate we will run per day?",
+        "What are the main types of data quality anomalies we need to catch?"
+      ],
+      "hints": [
+        "Think about what can go wrong with a table: freshness, volume, schema, and actual values.",
+        "Consider who writes the checks and who gets paged when they fail."
+      ],
+      "moveOnSummary": "Agreed on scale, core anomalies, and user personas.",
+      "learnTopics": [
+        "data-quality",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "data-quality",
+          "database",
+          "api-gateway"
+        ],
+        "keywords": [
+          "control plane",
+          "execution",
+          "storage",
+          "services",
+          "flow"
+        ]
+      },
+      "goal": "Establish a coherent architecture separating check definition, execution integration, and result storage.",
+      "opener": "Can you walk me through the high-level architecture and how these components interact during a pipeline run?",
+      "evidence": {
+        "strong": "Draws a clear boundary between the user's data plane (warehouse) and the observability control plane (metric store, alerting, lineage).",
+        "adequate": "Connects an execution engine to a database and alerting system, but blends the data platform with the framework.",
+        "weak": "Draws a linear flow of data without showing where the quality framework actually sits or stores its metadata."
+      },
+      "misconceptions": [
+        {
+          "id": "hl.data_extraction",
+          "pattern": "Pulling all raw data out of the warehouse into the framework to run checks.",
+          "challenge": "If a table has billions of rows, does the framework pull all that data over the network to check it?"
+        }
+      ],
+      "probes": [
+        "Where is the actual compute for the data quality checks happening?",
+        "How do the results get from the pipeline into your observability framework?"
+      ],
+      "hints": [
+        "Pushing down compute to the data warehouse is usually more efficient than pulling data out.",
+        "We need a place to store the historical results of these checks."
+      ],
+      "moveOnSummary": "High-level architecture with execution integration and metadata storage.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.circuit_breaker",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "t-airflow",
+          "t-dbt"
+        ],
+        "keywords": [
+          "blocking",
+          "warning",
+          "circuit breaker",
+          "halt",
+          "stop"
+        ]
+      },
+      "goal": "Explain how the system physically prevents bad data from reaching downstream consumers.",
+      "opener": "How does your design ensure that severely incorrect data is blocked before consumers query it?",
+      "evidence": {
+        "strong": "Integrates directly with the pipeline orchestrator using a circuit-breaker pattern, failing the DAG run based on block-level severity rules.",
+        "adequate": "Mentions stopping the pipeline but relies on polling or manual intervention to halt downstream tasks.",
+        "weak": "Runs checks on a schedule after data is written, relying on alerts rather than prevention."
+      },
+      "misconceptions": [
+        {
+          "id": "cb.async_checks",
+          "pattern": "Running checks asynchronously after the publish step completes.",
+          "challenge": "If a dashboard queries the table exactly one minute after your pipeline finishes, how did your asynchronous check protect it?"
+        }
+      ],
+      "probes": [
+        "How do we distinguish between a check that should halt the pipeline and one that just warns the owner?",
+        "If the check takes 20 minutes to run, how does that impact the upstream pipeline?"
+      ],
+      "hints": [
+        "Think about intermediate tables or staging areas.",
+        "How can the framework signal the orchestrator to fail the current job?"
+      ],
+      "moveOnSummary": "Pipeline circuit-breaking via orchestrator integration.",
+      "learnTopics": [
+        "data-pipeline-orchestration",
+        "circuit-breaker"
+      ]
+    },
+    {
+      "id": "deep.lineage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "lineage",
+          "graph-db"
+        ],
+        "keywords": [
+          "lineage",
+          "graph",
+          "impact",
+          "downstream",
+          "tracing"
+        ]
+      },
+      "goal": "Design a lineage data model and collection strategy to trace incident impact.",
+      "opener": "When a dataset fails its quality check, how do you find and notify all the downstream dashboards that will be affected?",
+      "evidence": {
+        "strong": "Uses a graph model for datasets, jobs, and dashboards. Discusses parsing query logs vs. explicit API emission for lineage metadata.",
+        "adequate": "Mentions a database table tracking source-to-destination pairs and recursively querying it.",
+        "weak": "Assumes lineage is magically known or relies entirely on manual documentation by developers."
+      },
+      "misconceptions": [
+        {
+          "id": "lineage.manual",
+          "pattern": "Relying on teams to manually declare all downstream consumers.",
+          "challenge": "If a new team builds a dashboard on top of our table without telling us, how does our system know they exist?"
+        }
+      ],
+      "probes": [
+        "What kind of database is best suited for traversing multiple levels of downstream dependencies?",
+        "How do we capture lineage from a complex SQL transformation?"
+      ],
+      "hints": [
+        "SQL queries contain `FROM` and `INSERT INTO` statements that can be parsed.",
+        "Consider graph databases for fast traversal of dependency chains."
+      ],
+      "moveOnSummary": "Lineage extraction and graph traversal for impact analysis.",
+      "learnTopics": [
+        "nosql-database-types",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.anomaly",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "alerting",
+          "ai-agent",
+          "evaluation"
+        ],
+        "keywords": [
+          "anomaly",
+          "statistics",
+          "noise",
+          "history",
+          "machine learning"
+        ]
+      },
+      "goal": "Handle statistical anomaly detection and alert fatigue for metrics like row count or null rates.",
+      "opener": "How does your system detect a sudden drop in row count without triggering false alarms during weekends?",
+      "evidence": {
+        "strong": "Stores time-series metrics and uses statistical methods (like z-scores or moving averages) that account for seasonality and trend.",
+        "adequate": "Uses a time-series database and static thresholds or simple percentage-based rules.",
+        "weak": "Hardcodes expected row counts or ignores historical trends entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "anomaly.static",
+          "pattern": "Using static rules for all anomaly detection.",
+          "challenge": "If our business grows 10% every month, won't a static volume rule break constantly?"
+        }
+      ],
+      "probes": [
+        "Where are you storing the historical check results to calculate these trends?",
+        "If a team gets too many false positives, what mechanism allows them to tune the alerts?"
+      ],
+      "hints": [
+        "We need to look at what the metric was last week or last month, not just yesterday.",
+        "Consider using a time-series database to track metric history."
+      ],
+      "moveOnSummary": "Time-series anomaly detection with seasonality adjustments.",
+      "learnTopics": [
+        "time-series-databases",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.contracts",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "config"
+        ],
+        "keywords": [
+          "contracts",
+          "schema drift",
+          "producer",
+          "consumer",
+          "registry"
+        ]
+      },
+      "goal": "Define how schema expectations are managed between data producers and consumers.",
+      "opener": "How does your system handle a scenario where an upstream engineer drops a column that a downstream dashboard relies on?",
+      "evidence": {
+        "strong": "Proposes declarative data contracts stored in a registry, enforced at deployment or ingestion time before data enters the warehouse.",
+        "adequate": "Detects the schema change after the fact and alerts the downstream owner.",
+        "weak": "Relies purely on the data warehouse throwing an error when the query is run."
+      },
+      "misconceptions": [
+        {
+          "id": "contracts.post_facto",
+          "pattern": "Treating schema drift only as a data check rather than a CI/CD or registry problem.",
+          "challenge": "If we wait until the pipeline runs to catch the dropped column, haven't we already broken the contract?"
+        }
+      ],
+      "probes": [
+        "Where are these contracts defined, and who owns them?",
+        "Can we catch a schema violation before the pipeline even executes?"
+      ],
+      "hints": [
+        "Think about integrating schema checks into the CI/CD pipeline of the upstream service.",
+        "A central schema registry can hold the agreed-upon structure."
+      ],
+      "moveOnSummary": "Data contracts and proactive schema enforcement.",
+      "learnTopics": [
+        "data-contracts-schema-evolution",
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "deep.storage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "warehouse",
+          "timeseries-db",
+          "document-store"
+        ],
+        "keywords": [
+          "store",
+          "metadata",
+          "history",
+          "query"
+        ]
+      },
+      "goal": "Design the storage layer for framework metadata, historical metrics, and lineage data.",
+      "opener": "Can you deep dive into the databases backing your framework? What data goes where, and why?",
+      "evidence": {
+        "strong": "Splits storage appropriately: relational/document for configurations, time-series for metrics history, and graph for lineage.",
+        "adequate": "Puts everything into a single relational database but correctly identifies indexing strategies.",
+        "weak": "Stores framework configuration inside the analytical data warehouse directly, mixing data plane and control plane."
+      },
+      "misconceptions": [
+        {
+          "id": "storage.everything_rdbms",
+          "pattern": "Using a relational DB for complex lineage traversal at scale.",
+          "challenge": "If we have a lineage chain 15 levels deep, how does a standard SQL database perform on that query?"
+        }
+      ],
+      "probes": [
+        "What is the write-per-second volume for the metrics database during peak ETL hours?",
+        "How do you ensure fast reads for the incident dashboards?"
+      ],
+      "hints": [
+        "Lineage is inherently a network of connected nodes.",
+        "Millions of check results daily behave like metrics."
+      ],
+      "moveOnSummary": "Polyglot persistence for configuration, metrics, and lineage.",
+      "learnTopics": [
+        "sql-vs-nosql",
+        "time-series-databases"
+      ]
+    },
+    {
+      "id": "deep.notification",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "notification-service",
+          "dashboard",
+          "api-gateway",
+          "webhook"
+        ],
+        "keywords": [
+          "banner",
+          "warning",
+          "incident",
+          "status",
+          "notify"
+        ]
+      },
+      "goal": "Integrate the framework's incident status with consumer-facing dashboards to surface real-time data health warnings.",
+      "opener": "How does the observability system communicate the 'Data Stale' status directly to the BI tool's frontend?",
+      "evidence": {
+        "strong": "Designs an API or event-driven webhook that the BI tool can query or listen to for dataset health status before rendering the dashboard.",
+        "adequate": "Suggests polling a relational database directly from the dashboard for health status.",
+        "weak": "Relies on email alerts rather than system-to-system integration, missing the requirement to display it on the dashboard."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we handle the added load of dashboards polling for status?",
+        "What if the incident framework goes down? Does it break the dashboard?"
+      ],
+      "hints": [
+        "Dashboards typically render based on API calls. How can we intercept or augment those calls?",
+        "Consider a push mechanism like webhooks or a fast cache for status lookups."
+      ],
+      "moveOnSummary": "API or webhook integration for propagating data health status to dashboards.",
+      "learnTopics": [
+        "api-design",
+        "webhooks"
+      ]
+    },
+    {
+      "id": "deep.optimization",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "warehouse",
+          "t-snowflake",
+          "t-bigquery",
+          "metrics"
+        ],
+        "keywords": [
+          "cost",
+          "compute",
+          "sampling",
+          "optimize",
+          "query"
+        ]
+      },
+      "goal": "Reduce the compute overhead of running extensive data quality checks on large data warehouse tables.",
+      "opener": "What strategies can we use to reduce the compute cost of running deep profiling queries on massive datasets?",
+      "evidence": {
+        "strong": "Introduces techniques like query pushdown optimization, incremental checking (only checking new partitions), or statistical sampling instead of full table scans.",
+        "adequate": "Proposes running checks less frequently or only on critical tables, without optimizing the queries themselves.",
+        "weak": "Suggests pulling the data out of the warehouse to process locally, ignoring the data transfer and local compute costs."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you check for freshness without scanning the whole table?",
+        "If we use sampling, what types of anomalies might we miss?"
+      ],
+      "hints": [
+        "Do we need to read every historical row to validate yesterday's data?",
+        "Think about table partitioning and metadata that the warehouse might already expose."
+      ],
+      "moveOnSummary": "Compute optimization through sampling and partition-aware incremental checks.",
+      "learnTopics": [
+        "capacity-planning",
+        "database-indexing"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "requirements",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottlenecks",
+          "improvements",
+          "summary",
+          "limits"
+        ]
+      },
+      "goal": "Summarize the design and critically evaluate its limitations.",
+      "opener": "Looking at the final architecture, what is the biggest bottleneck or limitation in this system today?",
+      "evidence": {
+        "strong": "Identifies realistic limits, such as the compute cost of deep profiling queries on massive datasets, or graph DB scaling.",
+        "adequate": "Mentions generic bottlenecks like the API gateway or database connections.",
+        "weak": "Claims the system has no bottlenecks because it scales infinitely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If the number of datasets doubles next year, which component fails first?"
+      ],
+      "hints": [
+        "Think about the cost of executing thousands of heavy SQL checks on the warehouse.",
+        "What happens if the metadata store goes down during a critical pipeline window?"
+      ],
+      "moveOnSummary": "Bottleneck review completed.",
+      "learnTopics": [
+        "capacity-planning",
+        "system-design-roadmap"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.incident_workflow",
+      "after": "deep.lineage",
+      "prompt": "We now have 50 downstream dashboards affected by a data outage. Operations wants to automatically display a 'Data Stale' warning banner directly on those dashboards. How do we build that integration?",
+      "agendaItemId": "deep.notification"
+    },
+    {
+      "id": "cb.compute_costs",
+      "after": "deep.circuit_breaker",
+      "prompt": "Running data quality queries directly on our cloud data warehouse is driving our compute bill up by 400%. How can we optimize check execution without sacrificing data quality?",
+      "agendaItemId": "deep.optimization"
+    }
+  ],
+  "vocabulary": [
+    "DAG",
+    "dbt",
+    "Airflow",
+    "circuit breaker",
+    "schema drift",
+    "data contracts",
+    "lineage",
+    "ETL",
+    "ELT",
+    "metadata"
+  ],
+  "alternatives": [
+    {
+      "choice": "Parsing SQL logs for lineage vs explicit orchestrator emission.",
+      "whenBetter": "Parsing logs is better for catching undocumented manual queries; explicit emission is better for performance and accuracy in highly structured orchestration environments."
+    },
+    {
+      "choice": "Pushing compute to the warehouse vs pulling data into memory.",
+      "whenBetter": "Pushing down compute is almost always better for massive datasets. Pulling data is only viable for very small tables or specialized ML anomaly detection that the warehouse cannot natively run."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive Control Plane",
+      "outline": "Separates the observability framework entirely from the data processing engine. Integrates tightly with Airflow/dbt for circuit breaking, ensuring bad data blocks the pipeline. Uses a time-series DB for anomaly detection metrics and a Graph DB to dynamically trace lineage and flag downstream dashboards. Understands schema contracts."
+    },
+    {
+      "band": "adequate",
+      "label": "Scheduled Check Runner",
+      "outline": "Builds a system that runs SQL checks on a schedule using cron or Airflow. It alerts owners when data is bad, but checks often run after publish, meaning consumers see bad data briefly. Lineage is stored in relational tables, and anomaly detection relies entirely on static rule thresholds."
+    },
+    {
+      "band": "weak",
+      "label": "ETL Platform Clone",
+      "outline": "Misunderstands the prompt and designs a generic ETL pipeline rather than an observability framework. Focuses heavily on moving data via Kafka and Spark, but provides little to no tooling for lineage, schema drift, or historical quality metrics."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

@@ -1,0 +1,484 @@
+{
+  "opening": "We need to design a distributed model training platform for our researchers. Could you start by defining the scope and how you would approach this?",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "researchers",
+        "scale"
+      ],
+      "answer": "We have a few hundred researchers submitting around 10,000 jobs per week."
+    },
+    {
+      "id": "scale.hardware",
+      "topics": [
+        "cluster",
+        "gpus",
+        "accelerators",
+        "nodes"
+      ],
+      "answer": "Assume we have a shared pool of around 5,000 GPUs across multiple nodes."
+    },
+    {
+      "id": "job.duration",
+      "topics": [
+        "duration",
+        "time",
+        "length"
+      ],
+      "answer": "It varies wildly. Some jobs finish in an hour, while large distributed jobs can run for weeks."
+    },
+    {
+      "id": "data.volume",
+      "topics": [
+        "dataset",
+        "storage",
+        "size",
+        "volume"
+      ],
+      "answer": "Datasets can be up to several terabytes. A single checkpoint might be 50 to 100 gigabytes."
+    },
+    {
+      "id": "policy.fairness",
+      "topics": [
+        "contention",
+        "priority",
+        "fairness",
+        "quotas",
+        "hogging"
+      ],
+      "answer": "Teams are allocated specific quotas. We want high cluster utilization, but if a team needs their quota, they must get it, even if it means interrupting other lower-priority work."
+    },
+    {
+      "id": "req.reproducibility",
+      "topics": [
+        "reproduce",
+        "reproducibility",
+        "history",
+        "version"
+      ],
+      "answer": "A researcher must be able to perfectly reproduce a run from six months ago using the exact same code, configuration, and data."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not covered, assume standard enterprise ML environments: we own the on-prem or cloud infrastructure, we do not need to build the actual deep learning frameworks (like PyTorch), and developer velocity is key.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "researcher",
+          "training",
+          "reproducibility",
+          "quotas",
+          "multi-node"
+        ]
+      },
+      "goal": "Identify the primary actors, job lifecycle, hardware constraints, and non-functional goals like reproducibility and high utilization.",
+      "opener": "What are the core capabilities this platform needs to provide to the researchers and the administrators?",
+      "evidence": {
+        "strong": "Identifies multi-node complexity, the need for resource quotas, state persistence through checkpointing, and strict artifact lineage.",
+        "adequate": "Lists job submission, queuing, and basic storage of logs and models, but misses hardware scarcity.",
+        "weak": "Treats the platform as a standard synchronous web application backend, missing the long-running nature of jobs."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How will the system handle the fact that there are more requested GPUs than available ones?",
+        "What does a researcher need to know after a job finishes?"
+      ],
+      "hints": [
+        "Think about what happens if multiple teams submit large jobs at the same time.",
+        "Consider what happens if a job takes two weeks to run but the hardware is unreliable."
+      ],
+      "moveOnSummary": "The candidate established the need for resource management, fault-tolerant long-running jobs, and artifact lineage.",
+      "learnTopics": [
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway",
+          "scheduler",
+          "queue",
+          "worker",
+          "cluster"
+        ],
+        "keywords": [
+          "submit",
+          "schedule",
+          "execute",
+          "storage",
+          "control plane"
+        ]
+      },
+      "goal": "Establish the end-to-end flow from job submission to scheduling, execution on a cluster, and artifact storage.",
+      "opener": "Walk me through the lifecycle of a training job, from when a researcher hits submit to when the final model is saved.",
+      "evidence": {
+        "strong": "Separates the control plane (API, metadata, scheduler) from the data plane (compute nodes, shared storage) and shows clear boundaries.",
+        "adequate": "Draws an API, a queue, worker nodes, and a database, but mixes control and data paths.",
+        "weak": "Missing storage for large artifacts, or missing a job queue entirely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which component decides when a queued job actually starts running?",
+        "Where do the worker nodes pull the training data from?"
+      ],
+      "hints": [
+        "Draw the components that store the job definition separately from the machines that do the heavy lifting.",
+        "You'll need an orchestrator or scheduler between your queue and your GPUs."
+      ],
+      "moveOnSummary": "The candidate laid out a control plane for API and scheduling, alongside a data plane for execution and storage.",
+      "learnTopics": [
+        "machine-learning-system-architecture",
+        "system-design-roadmap"
+      ]
+    },
+    {
+      "id": "deep.scheduling",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "queue",
+          "t-kubernetes",
+          "worker",
+          "gpu"
+        ],
+        "keywords": [
+          "gang scheduling",
+          "quota",
+          "preempt",
+          "fair share",
+          "priority"
+        ]
+      },
+      "goal": "Design a scheduler that handles team quotas, gang scheduling for multi-node jobs, and preemption safely.",
+      "opener": "Let's look at the scheduler. If the cluster is full and a team submits a high-priority job within their quota, how does the platform allocate the required GPUs?",
+      "evidence": {
+        "strong": "Explains gang scheduling (all-or-nothing allocation), priority queues, and preemption mechanisms that pause lower-priority jobs.",
+        "adequate": "Mentions team quotas and a priority queue, but struggles with the deadlock risk in multi-node jobs.",
+        "weak": "Proposes a simple FIFO queue without quotas, allowing one user to monopolize the cluster."
+      },
+      "misconceptions": [
+        {
+          "id": "fifo_only",
+          "pattern": "Using a basic FIFO queue for all jobs.",
+          "challenge": "If one team submits 10,000 jobs, how do other teams access the cluster?"
+        },
+        {
+          "id": "partial_allocation",
+          "pattern": "Allocating nodes to a distributed job one by one as they become free.",
+          "challenge": "What happens if Job A holds 4 GPUs waiting for 4 more, while Job B holds 4 GPUs also waiting for 4 more?"
+        }
+      ],
+      "probes": [
+        "How do you prevent a distributed job from starting with only half the nodes it needs?",
+        "If a job is preempted to make room, what happens to its current progress?"
+      ],
+      "hints": [
+        "Consider what state the scheduler needs to track for the entire cluster.",
+        "If a job needs 8 nodes to run, the scheduler should wait until all 8 are available at the exact same time."
+      ],
+      "moveOnSummary": "The candidate designed a quota-aware gang scheduler with preemption capabilities.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "deep.checkpoint_recovery",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "storage",
+          "t-s3",
+          "file-system",
+          "worker",
+          "gpu"
+        ],
+        "keywords": [
+          "checkpoint",
+          "resume",
+          "failure",
+          "restart",
+          "state"
+        ]
+      },
+      "goal": "Provide a durable checkpoint mechanism that minimizes lost work and successfully resumes preempted or failed jobs.",
+      "opener": "Suppose a node hardware fails three days into a five-day distributed training job. How does the system handle this and resume the job?",
+      "evidence": {
+        "strong": "Stores checkpoints periodically in durable external storage, triggers automatic re-queuing on failure, and workers pull the latest checkpoint on restart.",
+        "adequate": "Mentions saving model state but lacks a clear mechanism for the scheduler to detect failure and coordinate the resume.",
+        "weak": "Restarts jobs from scratch on failure, losing days of computational work."
+      },
+      "misconceptions": [
+        {
+          "id": "no_checkpoints",
+          "pattern": "Assuming jobs always complete successfully without interruption.",
+          "challenge": "If a server racks loses power on day 4 of a 5-day run, how much compute time is lost?"
+        }
+      ],
+      "probes": [
+        "Is the platform or the training code responsible for writing the checkpoint?",
+        "How does a newly provisioned worker node know which checkpoint file to load?"
+      ],
+      "hints": [
+        "The model weights need to be saved to a place that survives a node crash.",
+        "When the scheduler restarts the job on a new node, it needs to pass the path of the last good state."
+      ],
+      "moveOnSummary": "The candidate implemented durable checkpointing and an automatic resume mechanism for fault tolerance.",
+      "learnTopics": [
+        "disaster-recovery",
+        "object-storage",
+        "distributed-training"
+      ]
+    },
+    {
+      "id": "deep.data_storage",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "storage",
+          "distributed-cache",
+          "data-lake",
+          "t-s3",
+          "file-system"
+        ],
+        "keywords": [
+          "locality",
+          "caching",
+          "throughput",
+          "nvme",
+          "posix",
+          "bandwidth"
+        ]
+      },
+      "goal": "Ensure high-throughput data loading for accelerators without bottlenecking the network or storage backend.",
+      "opener": "These GPUs process data extremely quickly. How do you serve multi-terabyte datasets to distributed workers without the storage network becoming a bottleneck?",
+      "evidence": {
+        "strong": "Uses shared parallel file systems or local NVMe caching to prevent storage network bottlenecks during data loading.",
+        "adequate": "Recognizes the need for high throughput and proposes S3 or a standard NFS share.",
+        "weak": "Plans to store massive datasets in a standard relational database or pull them sequentially over a slow link."
+      },
+      "misconceptions": [
+        {
+          "id": "db_for_files",
+          "pattern": "Storing training images or tensors directly in a relational database.",
+          "challenge": "How will the database handle all those GPUs simultaneously reading terabytes of binary data?"
+        }
+      ],
+      "probes": [
+        "Given your concurrent job estimates, if all those GPUs read the same dataset at once, how will the network hold up?",
+        "How can we leverage the fast local SSDs attached to the GPU compute nodes?"
+      ],
+      "hints": [
+        "Downloading the whole dataset from object storage on every epoch is too slow.",
+        "Think about pulling the data once to the node's local disk before the training loop starts."
+      ],
+      "moveOnSummary": "The candidate addressed data loading bottlenecks using caching or high-throughput file systems.",
+      "learnTopics": [
+        "object-storage",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.lineage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "model-registry",
+          "database",
+          "experiment",
+          "t-mlflow"
+        ],
+        "keywords": [
+          "lineage",
+          "version",
+          "commit",
+          "artifact",
+          "metrics",
+          "reproduce"
+        ]
+      },
+      "goal": "Track runs, metrics, and artifacts, linking them immutably to code and data versions for reproducibility.",
+      "opener": "A researcher needs to perfectly reproduce a model trained six months ago. What data model ensures they have everything they need to run it exactly the same way?",
+      "evidence": {
+        "strong": "Creates immutable run records linking a Git commit, a dataset hash or URI, the container image, hyperparameters, and the final model registry entry.",
+        "adequate": "Stores hyperparameters and final models in a database but misses tying them to exact data or code versions.",
+        "weak": "Just logs terminal text to a file and saves a generic model binary to object storage."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If the underlying dataset is updated later, how do we know which version this old model used?",
+        "How do we map a saved model binary back to the exact hyperparameters used?"
+      ],
+      "hints": [
+        "Think about everything that goes into a training job as an input: code, configuration, environment, and data.",
+        "How can we store metadata for a job so it is never overwritten?"
+      ],
+      "moveOnSummary": "The candidate designed a lineage system linking models back to immutable code and data versions.",
+      "learnTopics": [
+        "mlops-model-registry",
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "deep.network_failure",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "scheduler",
+          "health-check",
+          "cluster"
+        ],
+        "keywords": [
+          "heartbeat",
+          "partition",
+          "timeout",
+          "reconcile",
+          "split-brain"
+        ]
+      },
+      "goal": "Handle split-brain or temporary loss of worker heartbeat without unnecessarily killing long-running jobs.",
+      "opener": "How does the control plane distinguish between a crashed node and a temporary network partition to a node that is still computing?",
+      "evidence": {
+        "strong": "Uses health checks with grace periods, allows disconnected nodes to continue training locally, and reconciles state when the network returns.",
+        "adequate": "Relies on a basic timeout to kill the job, potentially wasting work if the network blip was short.",
+        "weak": "Assumes the network is perfectly reliable and has no heartbeat mechanism."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If a node loses connection to the scheduler for 5 minutes but keeps training, what happens?",
+        "How do we prevent the scheduler from starting a duplicate job while the old one is still writing to storage?"
+      ],
+      "hints": [
+        "A network drop doesn't mean the GPU stopped working.",
+        "Think about what happens if two identical jobs try to write to the same checkpoint path."
+      ],
+      "moveOnSummary": "The candidate handled network partitions and worker heartbeats safely.",
+      "learnTopics": [
+        "fallacies-of-distributed-computing",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "risk",
+          "trade-off",
+          "single point of failure",
+          "improve"
+        ]
+      },
+      "goal": "Reflect on the design's constraints, single points of failure, or unaddressed bottlenecks.",
+      "opener": "Looking at the overall architecture we've built, what do you consider the biggest operational risk or bottleneck, and how would you mitigate it?",
+      "evidence": {
+        "strong": "Realistically identifies scheduling complexity, network bandwidth for checkpoints, or shared file system bottlenecks as primary risks.",
+        "adequate": "Points out a generic database scaling issue or standard API latency.",
+        "weak": "Claims the system has no bottlenecks or risks."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens to the cluster if the central scheduler goes down?",
+        "As the number of concurrent jobs doubles, which component fails first?"
+      ],
+      "hints": [
+        "Look at the components that talk to all the workers at once.",
+        "Consider the sheer volume of data moving during checkpointing."
+      ],
+      "moveOnSummary": "The candidate summarized the architecture and identified valid system bottlenecks.",
+      "learnTopics": [
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "network_partition",
+      "after": "deep.scheduling",
+      "prompt": "The network between your control plane and a rack of GPUs drops for 10 minutes. The jobs keep running on the GPUs. What happens when the network returns?",
+      "agendaItemId": "deep.network_failure"
+    }
+  ],
+  "vocabulary": [
+    "gang scheduling",
+    "checkpointing",
+    "preemption",
+    "lineage",
+    "NVMe",
+    "RDMA",
+    "MPI",
+    "NCCL",
+    "tensor",
+    "epoch",
+    "hyperparameters"
+  ],
+  "alternatives": [
+    {
+      "choice": "Kubernetes native scheduling (e.g., Volcano, Kueue) vs Custom centralized scheduler",
+      "whenBetter": "Kubernetes native is better for leveraging existing generic compute clusters and standard container orchestration. A custom scheduler is better if integrating deeply with proprietary hardware, legacy HPC systems, or highly specific gang-scheduling logic."
+    },
+    {
+      "choice": "POSIX-compliant distributed file system (Lustre, Ceph) vs Object storage with local caching",
+      "whenBetter": "POSIX is better for legacy ML code that strictly expects standard file I/O operations. Object storage paired with local node caching is generally more scalable and cheaper for cloud-native workloads."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Clear boundaries and fault tolerance",
+      "outline": "Starts with clear scale and utilization goals. The high-level design cleanly separates the control plane from the data plane. Deep dives correctly identify the need for gang scheduling to prevent multi-node deadlocks, uses durable checkpointing for fault tolerance, and implements strict lineage tracking for reproducibility. Recognizes storage throughput as a bottleneck and adds local NVMe caching."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic queuing without advanced scheduling",
+      "outline": "Covers job submission and basic queuing. Uses a standard database and object storage. Misses gang scheduling, leading to potential multi-node deadlocks, but understands the need for basic checkpointing and logging. Solves data loading by throwing raw network bandwidth at it rather than optimizing locality."
+    },
+    {
+      "band": "weak",
+      "label": "Standard web backend approach",
+      "outline": "Treats the platform like a standard synchronous web backend. Misses the hardware constraints and long-running nature of the jobs. Uses a FIFO queue with no quotas, doesn't address node failures during week-long runs, and ignores the exact reproducibility requirements."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

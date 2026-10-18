@@ -73,6 +73,7 @@ export function validateOutput({ output, plan, items, pack, sources, designIds, 
   // the plan's choice stands, whatever the model wrote.
   let focusItemId = plan.focusItemId;
   if (move === "curveball") focusItemId = plan.curveball?.agendaItemId ?? plan.focusItemId;
+  else if (move === "ask_to_draw") focusItemId = plan.drawTarget ?? plan.focusItemId;
   else if (move === "open") focusItemId = isPendingItem(items, output.focusItemId) && output.focusItemId === plan.focusItemId ? output.focusItemId : plan.focusItemId;
   else if (OPENING_MOVES.has(move)) focusItemId = isPendingItem(items, output.focusItemId) ? output.focusItemId : plan.nextItemId;
   if (output.focusItemId && output.focusItemId !== focusItemId) problems.push(`focus ${output.focusItemId} replaced by ${focusItemId}`);
