@@ -9,8 +9,10 @@ const TEMPLATE = "review-v7";
 // Identifies everything that shaped a review's instructions, stored with each review.
 // The pool fingerprint is part of it so a newly built reference pool calibrates the
 // next review instead of being ignored behind a cached one.
-export function reviewTemplateVersion(guide, pool = null) {
-  return `${TEMPLATE}/${policyVersion}/${guide ? `guide-${guide.version}` : "no-guide"}/${pool ? `pool-${pool.fingerprint}` : "no-pool"}`;
+// A v3 round adds its pinned pack version: the review also reads the interview notepad.
+export function reviewTemplateVersion(guide, pool = null, ledger = null) {
+  const base = `${TEMPLATE}/${policyVersion}/${guide ? `guide-${guide.version}` : "no-guide"}/${pool ? `pool-${pool.fingerprint}` : "no-pool"}`;
+  return ledger ? `${base}/${ledger.packVersion}` : base;
 }
 
 const nodeRefs = list(z.string(), { max: 6 }, "Ids (the bracketed values) of the components this point is about; empty if none.");
@@ -85,7 +87,7 @@ Reply with a single JSON object that matches the provided schema.`;
 
 const system = `${policy}\n\n${instructions}`;
 
-function buildUser({ prompt, design, guide, transcript, pool }) {
+function buildUser({ prompt, design, guide, transcript, pool, ledger = null }) {
   const dimensions = rubric.dimensions.map((dimension) => `- ${dimension.id} (${dimension.name}): ${dimension.guide}`).join("\n");
   return `<brief>
 Title: ${clean(prompt.title, 200)}
@@ -118,6 +120,12 @@ ${transcript ? `
 <interview_transcript>
 ${transcript}
 </interview_transcript>
+` : ""}${ledger ? `
+${ledger.packReview}
+
+${ledger.addendum}
+
+${ledger.text}
 ` : ""}
 Review this design against the brief and rubric.`;
 }

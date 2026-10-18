@@ -9,7 +9,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "{server/migrations/**,server/content/guides/**,src/workspace/catalog.jsx}"
+      "includeFiles": "{server/migrations/**,server/content/guides/**,server/content/interviewer/**,server/content/packs/**,src/workspace/catalog.jsx}"
     }
   },
   "rewrites": [

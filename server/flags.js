@@ -20,3 +20,9 @@ export const devToolsEnabled = !isProduction && process.env.DEV_TOOLS !== "false
 // server/modules/ai/speech.js). On in development; opt-in elsewhere with
 // VOICE_ANSWERS=true, and only effective when speech-to-text is configured.
 export const voiceAnswersEnabled = process.env.VOICE_ANSWERS ? process.env.VOICE_ANSWERS === "true" : !isProduction;
+
+// The v3 interviewer (the Interview Conductor, docs/design/interview-conductor.md).
+// A round uses it only when this is on and its question has a published Problem Pack;
+// the choice is made at the round's opening and never changes mid-round. On in
+// development; opt-in elsewhere with INTERVIEWER_V3=true.
+export const interviewerV3Enabled = process.env.INTERVIEWER_V3 ? process.env.INTERVIEWER_V3 === "true" : !isProduction;
