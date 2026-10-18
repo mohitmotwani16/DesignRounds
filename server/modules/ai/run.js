@@ -68,7 +68,7 @@ export async function runTask(task, input, { userId, sessionId, meter = true } =
     const started = Date.now();
     let completion;
     try {
-      completion = await complete({ model: settings.model, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs });
+      completion = await complete({ model: settings.model, baseUrl: settings.baseUrl, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs });
     } catch (error) {
       await recordUsage({ ...meta, model: settings.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
       if (error.detail) console.error(`[ai] ${task.name} ${error.code}:`, JSON.stringify(error.detail));
@@ -141,7 +141,7 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
     let cachedInputTokens = null;
     let outputTokens = null;
     try {
-      for await (const event of streamComplete({ model: settings.model, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
+      for await (const event of streamComplete({ model: settings.model, baseUrl: settings.baseUrl, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
         if (event.type === "delta") {
           text += event.text;
           forward(extractor.push(event.text));

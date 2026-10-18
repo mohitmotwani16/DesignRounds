@@ -24,6 +24,13 @@ test("tasks use Flash for chat and Pro for the final submission", () => {
   assert.equal(aiConfig.vendor, "vertex-gemini");
 });
 
+test("chat runs on the us multi-region; the review model stays global", () => {
+  assert.equal(aiConfig.tasks.interviewer.baseUrl, "https://aiplatform.us.rep.googleapis.com/v1/projects/demo-project/locations/us/endpoints/openapi");
+  assert.equal(aiConfig.tasks.interview_summary.baseUrl, aiConfig.tasks.interviewer.baseUrl);
+  assert.equal(aiConfig.tasks.review.baseUrl, undefined);
+  assert.equal(aiConfig.baseUrl, "https://aiplatform.googleapis.com/v1/projects/demo-project/locations/global/endpoints/openapi");
+});
+
 test("calls Vertex's OpenAI endpoint with a Google token and the publisher-prefixed model", async (t) => {
   setTokenClientForTests({ getAccessToken: async () => ({ token: "ya29.test" }) });
   const seen = [];
@@ -91,7 +98,7 @@ test("chat falls back to 3.5 Flash in Mumbai when 3.8 Flash has not started answ
   assert.equal(end.model, "google/gemini-3.5-flash");
   assert.ok(Date.now() - started < 3_000, "fallback should start right after the first-token deadline");
   assert.equal(urls[0].model, "google/gemini-3.8-flash");
-  assert.match(urls[0].url, /^https:\/\/aiplatform\.googleapis\.com\/.*\/locations\/global\//);
+  assert.equal(urls[0].url, "https://aiplatform.us.rep.googleapis.com/v1/projects/demo-project/locations/us/endpoints/openapi/chat/completions");
   assert.equal(urls[1].model, "google/gemini-3.5-flash");
   assert.match(urls[1].url, /^https:\/\/asia-south1-aiplatform\.googleapis\.com\/v1\/projects\/demo-project\/locations\/asia-south1\//);
 });
