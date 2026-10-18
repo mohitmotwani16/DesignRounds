@@ -73,14 +73,30 @@ export function setTokenClientForTests(stub) {
   tokenClient = stub;
 }
 
+const TOKEN_TIMEOUT_MS = 15_000;
+
+function withTimeout(promise, ms, what) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} took longer than ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // A Google Cloud access token for direct REST calls (Gemini on Vertex). The client
-// is built once and caches the token until shortly before it expires.
+// is built once and caches the token until shortly before it expires. google-auth-library
+// sets no timeout of its own, so a stalled exchange is cut off here instead of holding
+// the learner's request open until the function is killed.
 export async function googleAccessToken() {
+  const started = Date.now();
   if (!tokenClient) {
-    const { options } = vertexCredentials();
+    const { label, options } = vertexCredentials();
     tokenClient = options.authClient ?? (await options.googleAuth.getClient());
+    tokenClient.label = label;
   }
-  const { token } = await tokenClient.getAccessToken();
+  const { token } = await withTimeout(tokenClient.getAccessToken(), TOKEN_TIMEOUT_MS, `Google Cloud sign-in (${tokenClient.label ?? "stub"})`);
   if (!token) throw new Error("Google Cloud returned no access token.");
+  const elapsed = Date.now() - started;
+  if (elapsed > 200) console.log(`[ai] google token via ${tokenClient.label ?? "stub"} in ${elapsed}ms`);
   return token;
 }

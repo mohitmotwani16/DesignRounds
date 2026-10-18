@@ -65,7 +65,7 @@ async function openAiCompatible(request) {
   throw lastError;
 }
 
-async function openAiCompatibleOnce({ model, messages, jsonSchema, effort, maxTokens, timeoutMs }) {
+async function openAiCompatibleOnce({ model, baseUrl = aiConfig.baseUrl, messages, jsonSchema, effort, maxTokens, timeoutMs }) {
   const body = {
     model: apiModel(model),
     messages,
@@ -77,7 +77,7 @@ async function openAiCompatibleOnce({ model, messages, jsonSchema, effort, maxTo
   for (let attempt = 0; ; attempt += 1) {
     let response;
     try {
-      response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
+      response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: await requestHeaders(),
         body: JSON.stringify(body),
@@ -116,6 +116,38 @@ function providerFailure(response, detail, attempts) {
   return new AiError(code, `AI provider returned ${response.status}.`, { status: response.status, body: detail, attempts });
 }
 
+// A task may name a fallback { model, baseUrl, afterMs }: when the primary model has
+// not started answering within `afterMs`, or fails before showing any text, the same
+// request goes to the fallback inside what is left of the task's time budget. Shared
+// pay-as-you-go capacity for new models can stall for tens of seconds; a learner
+// should get a slightly older model's answer rather than wait.
+const FALLBACK_CODES = new Set(["SLOW_START", "TIMEOUT", "RATE_LIMITED", "PROVIDER_ERROR", "NETWORK"]);
+const MIN_FALLBACK_MS = 5_000;
+
+function fallbackAllowed(error, remaining) {
+  return error instanceof AiError && FALLBACK_CODES.has(error.code) && remaining >= MIN_FALLBACK_MS;
+}
+
+function fallbackRequest(request, error, elapsed) {
+  const { fallback } = request;
+  console.warn(`[ai] ${request.model} ${error.code} after ${elapsed}ms; answering with ${fallback.model} instead`);
+  return { ...request, model: fallback.model, baseUrl: fallback.baseUrl, timeoutMs: request.timeoutMs - elapsed, fallback: undefined };
+}
+
+async function completeWithFallback(request) {
+  const { fallback } = request;
+  if (!fallback) return openAiCompatible(request);
+  const started = Date.now();
+  try {
+    // Without streaming there is no first token to watch, so the primary gets a shorter leash.
+    return await openAiCompatible({ ...request, timeoutMs: Math.min(request.timeoutMs, fallback.afterMs * 3) });
+  } catch (error) {
+    const elapsed = Date.now() - started;
+    if (!fallbackAllowed(error, request.timeoutMs - elapsed)) throw error;
+    return openAiCompatible(fallbackRequest(request, error, elapsed));
+  }
+}
+
 // Same completion as `openAiCompatible`, but tokens are yielded as they arrive.
 // A failure before the first token is retried; a stream that breaks after that is not,
 // because the caller may already have shown the text.
@@ -125,6 +157,26 @@ export async function* streamComplete(request) {
     return;
   }
   if (!OPENAI_STYLE.has(aiConfig.provider)) throw new AiError("DISABLED", "No AI provider is configured.");
+  const { fallback } = request;
+  if (!fallback) {
+    yield* streamWithPlans(request);
+    return;
+  }
+  const started = Date.now();
+  let shown = false;
+  try {
+    for await (const event of streamWithPlans({ ...request, firstTokenMs: fallback.afterMs })) {
+      if (event.type === "delta") shown = true;
+      yield event;
+    }
+  } catch (error) {
+    const elapsed = Date.now() - started;
+    if (shown || !fallbackAllowed(error, request.timeoutMs - elapsed)) throw error;
+    yield* streamWithPlans(fallbackRequest(request, error, elapsed));
+  }
+}
+
+async function* streamWithPlans(request) {
   let lastError;
   const plans = reasoningPlan(request.effort);
   for (let index = 0; index < plans.length; index += 1) {
@@ -144,7 +196,7 @@ export async function* streamComplete(request) {
 }
 
 async function* streamCompleteOnce(request) {
-  const { model: requestedModel, messages, jsonSchema, effort, maxTokens, timeoutMs } = request;
+  const { model: requestedModel, baseUrl = aiConfig.baseUrl, firstTokenMs, messages, jsonSchema, effort, maxTokens, timeoutMs } = request;
   const body = {
     model: apiModel(requestedModel),
     messages,
@@ -154,17 +206,25 @@ async function* streamCompleteOnce(request) {
   };
   if (effort) body.reasoning_effort = effort;
 
+  // `firstTokenMs` cuts the call off if no content has arrived by then.
+  const slow = new AbortController();
+  const timer = firstTokenMs ? setTimeout(() => slow.abort(), firstTokenMs) : null;
+  const slowStart = (attempts) => new AiError("SLOW_START", `No reply within ${firstTokenMs} ms.`, { attempts });
+  const signal = timer ? AbortSignal.any([AbortSignal.timeout(timeoutMs), slow.signal]) : AbortSignal.timeout(timeoutMs);
+
+  try {
   for (let attempt = 0; ; attempt += 1) {
     let response;
     try {
-      response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
+      response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: await requestHeaders(),
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal,
       });
     } catch (error) {
       if (error instanceof AiError) throw error;
+      if (slow.signal.aborted) throw slowStart(attempt + 1);
       if (error.name === "TimeoutError") throw new AiError("TIMEOUT", "AI request timed out.", { attempts: attempt + 1 });
       if (attempt < MAX_TRANSPORT_RETRIES) { await sleep(retryDelay(null, attempt)); continue; }
       throw new AiError("NETWORK", "Could not reach the AI provider.", { cause: error.message, attempts: attempt + 1 });
@@ -207,6 +267,7 @@ async function* streamCompleteOnce(request) {
           const piece = contentFromChunk(json);
           if (piece.text) {
             yielded = true;
+            if (timer) clearTimeout(timer);
             yield { type: "delta", text: piece.text };
           }
           if (piece.finishReason) finishReason = piece.finishReason;
@@ -217,6 +278,7 @@ async function* streamCompleteOnce(request) {
         if (done) break;
       }
     } catch (error) {
+      if (slow.signal.aborted && !yielded) throw slowStart(attempt + 1);
       if (error.name === "TimeoutError") throw new AiError("TIMEOUT", "AI request timed out.", { attempts: attempt + 1 });
       if (!yielded && attempt < MAX_TRANSPORT_RETRIES) { await sleep(retryDelay(null, attempt)); continue; }
       throw new AiError("NETWORK", "The AI reply was interrupted.", { cause: error.message, attempts: attempt + 1 });
@@ -225,11 +287,14 @@ async function* streamCompleteOnce(request) {
     yield { type: "end", finishReason, model, inputTokens, outputTokens, attempts: attempt + 1 };
     return;
   }
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
-// `request` is { model, messages, jsonSchema, effort, maxTokens, timeoutMs }.
+// `request` is { model, messages, jsonSchema, effort, maxTokens, timeoutMs, fallback? }.
 export async function complete(request) {
   if (aiConfig.provider === "anthropic-vertex") return vertex.complete(request);
-  if (OPENAI_STYLE.has(aiConfig.provider)) return openAiCompatible(request);
+  if (OPENAI_STYLE.has(aiConfig.provider)) return completeWithFallback(request);
   throw new AiError("DISABLED", "No AI provider is configured.");
 }

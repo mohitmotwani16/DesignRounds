@@ -42,8 +42,11 @@ const claude = provider === "anthropic-vertex";
 const vertex = { projectId: env.VERTEX_PROJECT_ID || "", region: env.VERTEX_REGION || "global" };
 
 // Vertex's OpenAI-compatible endpoint; the global location has no regional host prefix.
+// The "us" and "eu" multi-regions have their own hosts.
 function vertexOpenAiUrl({ projectId, region }) {
-  const host = region === "global" ? "aiplatform.googleapis.com" : `${region}-aiplatform.googleapis.com`;
+  const host = region === "global" ? "aiplatform.googleapis.com"
+    : region === "us" || region === "eu" ? `aiplatform.${region}.rep.googleapis.com`
+      : `${region}-aiplatform.googleapis.com`;
   return `https://${host}/v1/projects/${projectId}/locations/${region}/endpoints/openapi`;
 }
 
@@ -70,6 +73,28 @@ function models() {
 const model = models();
 const number = (value, fallback) => Number(value || fallback);
 
+// Chat on Gemini answers from a generally available model in Mumbai (next to the
+// Vercel functions in bom1) when the newest model on the shared global endpoint has
+// not started replying within a few seconds. AI_CHAT_FALLBACK_MODEL=off disables it.
+function chatFallback() {
+  if (provider !== "gemini-vertex" || env.AI_CHAT_FALLBACK_MODEL === "off") return undefined;
+  const fallbackModel = env.AI_CHAT_FALLBACK_MODEL || "gemini-3.5-flash";
+  if (fallbackModel === model.chat) return undefined;
+  return {
+    model: fallbackModel,
+    baseUrl: vertexOpenAiUrl({ projectId: vertex.projectId, region: env.AI_CHAT_FALLBACK_REGION || "asia-south1" }),
+    afterMs: number(env.AI_CHAT_FALLBACK_AFTER_MS, 5_000),
+  };
+}
+const fallback = chatFallback();
+
+// Gemini 3.8 Flash is also served from the "us" multi-region, a separate capacity pool
+// that stayed responsive while the shared global pool stalled for tens of seconds.
+// Chat runs there; the review model (3.1 Pro preview) is global-only.
+const chatBaseUrl = provider === "gemini-vertex"
+  ? vertexOpenAiUrl({ projectId: vertex.projectId, region: env.AI_CHAT_REGION || "us" })
+  : undefined;
+
 export const aiConfig = {
   provider,
   enabled: provider !== "none",
@@ -91,12 +116,14 @@ export const aiConfig = {
     // rejects "none" is retried at "low" (see providers.js).
     interviewer: {
       model: model.chat,
+      baseUrl: chatBaseUrl,
+      fallback,
       // Vertex rejects "none" for Gemini (400), and Claude thinks briefly at "low".
       effort: env.AI_INTERVIEWER_EFFORT || (onVertex ? "low" : "none"),
       maxTokens: number(env.AI_INTERVIEWER_MAX_TOKENS, 4_000),
       timeoutMs: number(env.AI_INTERVIEWER_TIMEOUT_MS, 45_000),
     },
-    interview_summary: { model: model.chat, effort: "low", maxTokens: 3_000, timeoutMs: 45_000 },
+    interview_summary: { model: model.chat, baseUrl: chatBaseUrl, fallback, effort: "low", maxTokens: 3_000, timeoutMs: 45_000 },
     // Part of the final submission and runs alongside the review, so it must finish
     // well within the review's time.
     communication: { model: model.review, effort: "low", maxTokens: onVertex ? 6_000 : 4_000, timeoutMs: onVertex ? 150_000 : 90_000 },
