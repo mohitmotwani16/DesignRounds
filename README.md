@@ -12,6 +12,7 @@ DesignRounds is a practice portal for system design interviews. Learners pick a 
 
 - **AI final review:** after finishing a round, learners request a rubric-based review: an overall score out of 100, six scored dimensions, strengths, risks, next steps, and (Plus) a decision-by-decision analysis of whether each choice was justified, needed, and right-sized. Reviews are capped per round and per month by plan. Free users see scores and the top strength and risk; Plus users see everything.
 - **AI interviewer and answer context:** Plus learners can discuss their design with a live interviewer, by text or voice. Each answer is kept verbatim and separately analyzed into technical decisions and assumptions, communication gaps, and (for speech) a filler-reduced copy. The technical context informs later interviewer turns and the final design review; communication feedback uses the original answer and delivery measurements.
+- **Interview intelligence (v3 interviewer):** behind `INTERVIEWER_V3`, questions with a published Problem Pack run on the Interview Conductor ([docs/design](docs/design/README.md)): a hidden agenda with judging descriptors per question, a ledger of what was asked and answered with verified quotes, follow-up and hint budgets enforced in code, consistent hidden facts, a round clock with time checks and wrap-up, guided and realistic modes, a debrief after the round, and a ledger-fed final review. Admins review packs under Admin → Interviewer packs.
 
 - **Community handbook:** signed-in learners can draft and preview articles before submitting them. Admins review submissions, exchange feedback with authors, and publish approved work to the Learn handbook.
 - **Memberships and invitations:** admins can search existing users, change Free/Plus access, grant or remove admin status, and email a Free or expiring Plus invitation from `/admin`. Invitees verify the invited email, then accept their one-time link within 14 days. New accounts receive a welcome email after their first successful sign-in.
@@ -106,6 +107,8 @@ Notes:
 
 `npm run ai:eval` runs the review prompt against sample designs in `server/content/eval/review-cases.js` (weak, medium, strong, over-engineered, and prompt-injection cases) and reports any score outside its expected range. Run it after changing prompts, the rubric, or the interviewer guides. Use `--case <id>` for one case and `--repeat 2` to check stability. It uses your quota (one call per case).
 
+`npm run ai:sim` checks the v3 interviewer: a candidate-simulator model plays each persona in `server/content/eval/interview-cases.js` (strong, "I don't know", rambler, asks for the answer, misconception then recovery, prompt injection, repeated clarification) against the real Conductor, and checks coverage, budgets, leaks and one-question-per-message. Use `--case`, `--question` and `--mode`. `npm run packs:build -- <prompt-id>` builds a Problem Pack file for review in a pull request.
+
 ## Configuration
 
 Copy `.env.example` to `.env`; every setting is optional locally.
@@ -120,6 +123,8 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | AI provider for reviews (see above). Unset means the fake provider in development and AI disabled in production. |
 | `AI_REVIEW_EFFORT`, `AI_REVIEW_MAX_TOKENS`, `AI_REVIEW_TIMEOUT_MS` | Optional tuning for review generation. |
 | `ANSWER_POOLS` | When a question is added or its brief changes, a reference answer pool is queued in Postgres. Production collects public pages and video captions and stores a pool composed from the brief. Locally, set `build` or run `npm run answers:build`. Set `off` to queue without fetching. |
+| `INTERVIEWER_V3` | The v3 interviewer for questions with a published Problem Pack. On in development, off in production unless `true`. A round keeps the interviewer it started with. |
+| `PROBLEM_PACKS` | `build` lets the worker and the daily cron build queued Problem Packs with the review model. Unset, questions are only queued; admins can still build one from Admin → Interviewer packs. `PROBLEM_PACKS_AUTOPUBLISH=on` skips admin review in development. |
 | `DEV_TOOLS` | Set to `false` to hide developer tools such as the plan switch. Always off in production. |
 | `VOICE_ANSWERS` | Voice answers in the live interviewer (record up to 2 minutes). On in development, off in production unless set to `true`. |
 | `GROQ_API_KEY` | Speech-to-text for voice answers (Groq Whisper). Optional locally (a fake transcriber is used); required in production for voice answers. `STT_MODEL` / `STT_BASE_URL` override the defaults. |
@@ -144,7 +149,12 @@ server/                 Express API (modular monolith)
   modules/answers/      reference answer pools queued when a question is added
   modules/plans.js      per-plan AI allowances
   modules/ai/           provider adapters, prompt policy, rubric, task definitions, diagram context
+  modules/ucs/          Universal Context Setter: who the interviewer is, versioned (docs/design)
+  modules/pks/          Problem Knowledge Service: Problem Packs, builder, admin review
+  modules/conductor/    Interview Conductor: plan / validate / apply, ledger, ticks (v3 interviewer)
   content/guides/       private per-prompt interviewer guides (never sent to the browser)
+  content/interviewer/  interviewer persona, rules, modes and task addenda (server-only)
+  content/packs/        hand-authored Problem Packs, validated and published on startup
   content/eval/         AI evaluation cases
   migrations/           SQL migrations, including analytics views
 api/index.js            Vercel Function entry (serves server/app.js)
@@ -195,7 +205,7 @@ Vercel Cron (daily) ──► /api/v1/internal/maintenance
 ```
 
 - **One codebase, two hosts.** `server/app.js` builds the Express app. `server/index.js` listens on a port (local, or any Node host), and `api/index.js` serves the same app as a Vercel Function. Static files go through Vercel's CDN with long-lived caching for hashed assets.
-- **Releases.** A push to `main` deploys to production. Pull requests and other branches get preview deployments backed by a separate staging database. CI (`.github/workflows/ci.yml`) runs a dependency audit, the build, and `npm run test:smoke` on every push and pull request.
+- **Releases.** A push to `main` deploys to production. Pull requests and other branches get preview deployments backed by a separate staging database. CI (`.github/workflows/ci.yml`) runs a dependency audit, the build, the build checks, the unit tests and both smoke tests (`test:smoke` for v2, `test:smoke:v3` for a whole Conductor round) on every push and pull request.
 - **Migrations** run once per deploy, before the build (`build:deploy` → `scripts/migrate.js`), under an advisory lock. A failed migration fails the deploy, and the previous release keeps serving. The new code goes live after its migrations, so each migration must work with the code that is already running: add things first, and remove old columns in a later release.
 - **State lives in Postgres**, not in the process. That includes sessions, AI credits, and rate limits (the `rate_limits` table), so any number of function instances behave as one.
 - **Supabase's Data API can't reach the data.** Migration 005 enables row-level security with no policies, and revokes table grants from `anon`/`authenticated`. The app connects as the owner role, which bypasses RLS.
