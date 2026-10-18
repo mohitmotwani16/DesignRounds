@@ -22,10 +22,11 @@
     "ai:sim": "node scripts/interview-sim.js",
     "answers:build": "node scripts/build-answer-pools.js",
     "packs:build": "node scripts/build-packs.js",
+    "packs:audit": "node scripts/audit-packs.js",
     "test:answers": "node --test server/modules/answers/answers.test.js",
     "test:stream": "node --test server/modules/ai/message-stream.test.js",
     "test:vertex": "node --test server/modules/ai/anthropic-vertex.test.js server/modules/ai/gemini-vertex.test.js",
-    "test:conductor": "node --test server/modules/ucs/ucs.test.js server/modules/pks/pks.test.js server/modules/conductor/conductor.test.js server/modules/conductor/gate.test.js",
+    "test:conductor": "node --test server/modules/ucs/ucs.test.js server/modules/pks/pks.test.js server/modules/conductor/conductor.test.js server/modules/conductor/gate.test.js server/modules/conductor/canvas.test.js",
     "test:smoke:v3": "node scripts/smoke-conductor.js",
     "theme": "node scripts/theme-tokens.mjs"
   },
