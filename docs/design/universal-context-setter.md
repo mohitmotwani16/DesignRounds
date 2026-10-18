@@ -1,6 +1,6 @@
 # Universal Context Setter (UCS)
 
-Status: draft for review · Part of [interview intelligence](README.md) · Scope: design only
+Status: implemented (`server/modules/ucs`, content in `server/content/interviewer`) · Part of [interview intelligence](README.md)
 
 ## 1. Purpose
 

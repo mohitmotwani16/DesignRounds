@@ -58,7 +58,9 @@ const diagramSchema = z.object({
   }
 });
 
-const createBody = z.object({ promptId: z.string().max(80) });
+// interviewMode: guided or realistic for the live interviewer; unset picks the default
+// for the learner and question when the interview opens.
+const createBody = z.object({ promptId: z.string().max(80), interviewMode: z.enum(["guided", "realistic"]).optional() });
 const saveBody = z.object({ version: z.number().int().min(0), diagram: diagramSchema });
 const updateBody = z.object({ status: z.enum(["completed", "in_progress"]) }).strict();
 const uuid = z.string().uuid();
@@ -103,7 +105,7 @@ practiceRouter.get("/sessions", route(async (req, res) => {
 
 // Resumes the learner's in-progress round for a prompt, or starts a new one.
 practiceRouter.post("/sessions", route(async (req, res) => {
-  const { promptId } = parse(createBody, req.body);
+  const { promptId, interviewMode } = parse(createBody, req.body);
   const prompt = promptById.get(promptId);
   if (!prompt) throw new HttpError(404, "NOT_FOUND", "Unknown design round.");
   if (!canStartPrompt(req.user, prompt)) throw new HttpError(403, "PLAN_REQUIRED", "This round is part of the Plus plan.");
@@ -115,10 +117,10 @@ practiceRouter.post("/sessions", route(async (req, res) => {
   if (existing) return res.json({ session: { ...toSummary(existing), diagram: existing.diagram, brief: briefFor(prompt) }, resumed: true });
 
   const created = await queryOne(
-    `insert into practice_sessions (user_id, prompt_id, prompt_version) values ($1, $2, $3)
+    `insert into practice_sessions (user_id, prompt_id, prompt_version, interview_mode) values ($1, $2, $3, $4)
      on conflict (user_id, prompt_id) where status = 'in_progress' do update set updated_at = practice_sessions.updated_at
      returning *`,
-    [req.user.id, promptId, prompt.version ?? 1]
+    [req.user.id, promptId, prompt.version ?? 1, interviewMode ?? null]
   );
   res.status(201).json({ session: { ...toSummary(created), diagram: created.diagram, brief: briefFor(prompt) }, resumed: false });
 }));

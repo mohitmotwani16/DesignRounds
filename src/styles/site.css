@@ -1293,3 +1293,48 @@
   .write-steps { grid-template-columns: 1fr; }
   .write-head, .learn-write-cta { flex-direction: column; align-items: stretch; }
 }
+
+/* Admin: interviewer packs (src/pages/AdminPacks.jsx) */
+.admin-intro { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+.pack-row { width: 100%; padding: 14px 16px; display: flex; align-items: center; gap: 14px; color: var(--ink); text-align: left; border: 0; background: transparent; font: inherit; cursor: pointer; }
+.pack-row:hover { background: var(--surface-2); }
+.pack-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pack-badge { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.pack-badge.draft, .pack-badge.job-pending, .pack-badge.job-building, .pack-badge.stale { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+.pack-badge.published { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.pack-badge.job-failed, .pack-badge.failed { border-color: var(--ink-2); color: var(--ink); }
+.pack-badge.retired { opacity: .7; }
+.pack-back, .pack-refresh { margin-bottom: 12px; padding: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); border: 0; background: none; font: inherit; font-size: 13px; cursor: pointer; }
+.pack-refresh { margin: 16px 0 0; }
+.pack-head { margin-bottom: 14px; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pack-head h2 { margin: 0 0 4px; font-size: 22px; }
+.pack-head p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+.pack-versions { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.pack-versions button { padding: 8px 12px; display: grid; grid-template-columns: auto auto auto; align-items: center; gap: 4px 8px; color: var(--ink); text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: inherit; font-size: 13px; cursor: pointer; }
+.pack-versions button[aria-selected="true"] { border-color: var(--accent-line); background: var(--accent-soft); }
+.pack-versions button small { grid-column: 1 / -1; color: var(--ink-2); font-size: 11.5px; }
+.pack-actions { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.pack-editor { margin-bottom: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pack-editor textarea { width: 100%; padding: 10px; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: 12.5px/1.5 var(--font-mono); }
+.pack-validation, .pack-diff { margin-bottom: 12px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px 10px; border: 1px solid var(--accent-line); border-radius: 10px; background: var(--accent-soft); color: var(--ink); font-size: 13px; }
+.pack-validation ul { margin: 4px 0 6px; padding-left: 18px; }
+.pack-diff span { color: var(--accent-text); }
+.pack-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .pack-split { grid-template-columns: 1fr; } }
+.pack-view section { margin-bottom: 18px; }
+.pack-view h3 { margin: 0 0 8px; font-size: 15px; }
+.pack-view ul, .pack-view ol { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.55; }
+.pack-view p { margin: 0; font-size: 14px; line-height: 1.55; }
+.pack-view small, .pack-note { color: var(--ink-2); }
+.pack-note { margin-top: 6px !important; font-size: 13px !important; }
+.pack-view code { padding: 1px 5px; border-radius: 5px; background: var(--surface-2); font-size: 12px; }
+.pack-item { padding: 8px 0; border-top: 1px solid var(--line); }
+.pack-item summary { cursor: pointer; font-size: 13.5px; line-height: 1.5; }
+.pack-item summary small { margin-left: 6px; color: var(--ink-2); }
+.pack-item dl { margin: 8px 0 0; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 12px; font-size: 13px; }
+.pack-item dt { color: var(--ink-2); font-weight: 600; }
+.pack-item dd { margin: 0; }
+.pack-guide { position: sticky; top: 16px; max-height: 80vh; overflow: auto; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.pack-guide summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.pack-guide pre { margin: 10px 0 0; white-space: pre-wrap; font: 12px/1.55 var(--font-mono); color: var(--ink); }
+@media (max-width: 600px) { .pack-item dl { grid-template-columns: 1fr; } }

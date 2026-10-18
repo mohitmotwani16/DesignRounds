@@ -12,6 +12,7 @@ import { communicationTask, communicationTemplateVersion } from "./ai/tasks/comm
 import { reviewTask, reviewTemplateVersion } from "./ai/tasks/review.js";
 import { requireUser } from "./identity.js";
 import { communicationInput, interviewTranscript } from "./interviews.js";
+import { debrief, reviewLedger } from "./conductor/index.js";
 import { hasFullFeedback, limitsFor, planFor } from "./plans.js";
 import { referencePoolFor } from "./answers/store.js";
 import { ownedSession, promptById } from "./practice.js";
@@ -166,7 +167,24 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
   await expireStale(db, session.id);
   const rows = await query("select * from ai_reviews where session_id = $1 and user_id = $2 order by created_at desc limit 20", [session.id, req.user.id]);
   const full = hasFullFeedback(req.user);
-  res.json({ reviews: rows.map((row) => present(row, full)), allowance: await readAllowance(db, req.user, session.id), aiAvailable: aiConfig.enabled });
+  // After a v3 round: what each agenda item got, and what a strong answer adds.
+  const roundDebrief = session.status === "completed"
+    ? await debrief(session.id, session.prompt_id).catch((error) => { console.error("[ai] debrief failed:", error.message); return null; })
+    : null;
+  // Whether this round had an interview, and whether its realism rating is in yet.
+  const interview = await queryOne(
+    `select s.engine, exists (select 1 from interview_ratings r where r.session_id = s.session_id) as rated,
+            exists (select 1 from interview_turns t where t.session_id = s.session_id and t.role = 'learner') as spoke
+       from interview_state s where s.session_id = $1`,
+    [session.id]
+  );
+  res.json({
+    reviews: rows.map((row) => present(row, full)),
+    allowance: await readAllowance(db, req.user, session.id),
+    aiAvailable: aiConfig.enabled,
+    debrief: roundDebrief,
+    interview: interview?.spoke ? { engine: interview.engine, rated: interview.rated } : null,
+  });
 }));
 
 reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
@@ -189,13 +207,15 @@ reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
   if (design.componentCount < MIN_COMPONENTS || design.edgeCount < MIN_CONNECTIONS) {
     throw new HttpError(422, "DESIGN_TOO_SMALL", `Add at least ${MIN_COMPONENTS} components and ${MIN_CONNECTIONS} connections so there's enough to review. No credit was used.`);
   }
-  const transcript = await interviewTranscript(session.id);
+  // On a v3 round the notepad carries pre-judged evidence, so the transcript can be shorter.
+  const ledger = await reviewLedger(session.id, prompt.id);
+  const transcript = await interviewTranscript(session.id, ledger ? 6_000 : 12_000);
   // The conversation is part of what is reviewed, so a changed transcript is a changed submission.
   const diagramHash = fingerprint(`${design.text}
 ${transcript}`);
   const guide = guideFor(prompt.id);
   const pool = await referencePoolFor(prompt.id);
-  const templateVersion = reviewTemplateVersion(guide, pool);
+  const templateVersion = reviewTemplateVersion(guide, pool, ledger);
 
   // Unchanged design under the same rubric: return the existing review, free of charge.
   const existing = await queryOne(
@@ -243,7 +263,7 @@ ${transcript}`);
     : Promise.resolve(null);
   let output;
   try {
-    output = await runTask(reviewTask, { prompt, design, guide, transcript, pool }, { userId: req.user.id, sessionId: session.id });
+    output = await runTask(reviewTask, { prompt, design, guide, transcript, pool, ledger }, { userId: req.user.id, sessionId: session.id });
   } catch (error) {
     await communication;
     await settle(pending, { status: "failed", errorCode: error instanceof AiError ? error.code : "INTERNAL" });

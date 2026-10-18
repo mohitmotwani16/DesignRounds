@@ -5,6 +5,9 @@ import { isProduction } from "../flags.js";
 import { HttpError, route } from "../http.js";
 import { purgeInterviewAudioObjects } from "../object-storage.js";
 import { processAnswerPools } from "./answers/worker.js";
+import { packStore, processPackJobs } from "./pks/index.js";
+import { buildPacksEnabled } from "./pks/worker.js";
+import { pruneUcsVersions } from "./ucs/index.js";
 
 // Housekeeping run by the scheduler (Vercel Cron, daily). It deletes rows nothing reads
 // any more. The run also counts as database activity, which keeps free-tier databases
@@ -44,6 +47,8 @@ async function purgeVoiceRecordings() {
 export async function runMaintenance() {
   const count = async (sql) => (await query(`with deleted as (${sql} returning 1) select count(*)::int as n from deleted`))[0].n;
   return {
+    ucsVersions: await pruneUcsVersions(),
+    retiredPacks: await packStore.pruneRetiredPacks(),
     loginCodes: await count(`delete from login_codes where created_at < now() - interval '${LOGIN_CODE_RETENTION}'`),
     authSessions: await count("delete from auth_sessions where expires_at < now()"),
     rateLimits: await count("delete from rate_limits where reset_at < now()"),
@@ -62,6 +67,8 @@ maintenanceRouter.get("/internal/maintenance", route(async (req, res) => {
   const answerPools = process.env.ANSWER_POOLS === "build" || (isProduction && process.env.ANSWER_POOLS !== "off")
     ? await processAnswerPools({ limit: 2 })
     : { built: 0, failed: 0 };
-  console.log(`[maintenance] deleted ${JSON.stringify(deleted)} pools=${JSON.stringify(answerPools)} in ${Date.now() - started}ms`);
-  res.json({ ok: true, deleted, answerPools });
+  // Problem Pack builds call the strong model, so the cron builds only when asked to.
+  const packs = buildPacksEnabled() ? await processPackJobs({ limit: 1 }) : { built: 0, failed: 0, deferred: 0 };
+  console.log(`[maintenance] deleted ${JSON.stringify(deleted)} pools=${JSON.stringify(answerPools)} packs=${JSON.stringify(packs)} in ${Date.now() - started}ms`);
+  res.json({ ok: true, deleted, answerPools, packs });
 }));

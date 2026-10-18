@@ -1,6 +1,6 @@
 # Problem Knowledge Service (PKS)
 
-Status: draft for review · Part of [interview intelligence](README.md) · Scope: design only
+Status: implemented (`server/modules/pks`, packs in `server/content/packs`) · Part of [interview intelligence](README.md)
 
 ## 1. Purpose
 

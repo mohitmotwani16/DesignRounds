@@ -17,6 +17,9 @@ import { roundsRouter } from "./modules/rounds.js";
 import { devRouter, devToolsEnabled } from "./modules/dev.js";
 import { guideFor } from "./modules/ai/guides.js";
 import { syncAnswerPools } from "./modules/answers/store.js";
+import { importPackFiles, syncPackJobs } from "./modules/pks/index.js";
+import { packsRouter } from "./modules/pks/routes.js";
+import { persistUcsVersion, ucsVersion } from "./modules/ucs/index.js";
 import { prompts } from "../src/data/prompts.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -76,6 +79,7 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use("/v1", practiceRouter);
   api.use("/v1", reviewsRouter);
   api.use("/v1", interviewsRouter);
+  api.use("/v1", packsRouter);
   if (devToolsEnabled) api.use("/v1", devRouter);
   api.use((_req, _res, next) => next(new HttpError(404, "NOT_FOUND", "No such endpoint.")));
   api.use((error, req, res, _next) => {
@@ -123,6 +127,16 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   // happens on the long-running worker or the production maintenance cron.
   const pools = await syncAnswerPools();
   if (pools.pending) console.log(`[answers] queued ${pools.pending} question(s) for a reference pool`);
+
+  // Interview intelligence: this deploy's interviewer text is retained for rounds that
+  // pin it, hand-authored Problem Packs are imported (an invalid one fails startup, like
+  // a guide missing a section), and questions without a pack are queued for a build.
+  await persistUcsVersion();
+  const imported = await importPackFiles();
+  if (imported) console.log(`[pks] published ${imported} hand-authored pack(s)`);
+  const queued = await syncPackJobs();
+  if (queued) console.log(`[pks] queued ${queued} question(s) for a Problem Pack`);
+  console.log(`[ucs] interviewer context ${ucsVersion()}`);
 
   return app;
 }

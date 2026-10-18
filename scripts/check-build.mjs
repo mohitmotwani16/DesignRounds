@@ -43,6 +43,29 @@ for (const [id, text] of plusTexts) {
 }
 if (plusTexts.length < 100) fail(`expected many Plus texts to check, found ${plusTexts.length}`);
 
+// 1c. Interviewer context (UCS) and Problem Packs are server-only: no prompt text, and
+// nothing a pack holds back from the learner (probes, hints, evidence, exemplars).
+const interviewerDir = path.join(root, "server", "content", "interviewer");
+const interviewerTexts = readdirSync(interviewerDir, { recursive: true })
+  .filter((file) => file.endsWith(".md"))
+  .flatMap((file) => readFileSync(path.join(interviewerDir, file), "utf8").split("\n"))
+  .map((line) => line.replace(/^[-#\d.\s]+/, "").trim())
+  .filter((line) => line.length > 60 && !line.includes("{{"));
+const packsDir = path.join(root, "server", "content", "packs");
+const packTexts = (existsSync(packsDir) ? readdirSync(packsDir).filter((file) => file.endsWith(".json")) : []).flatMap((file) => {
+  const pack = JSON.parse(readFileSync(path.join(packsDir, file), "utf8"));
+  return [
+    ...pack.agenda.flatMap((item) => [...item.probes, ...item.hints, item.moveOnSummary, item.evidence.strong, item.evidence.adequate, item.evidence.weak, ...item.misconceptions.map((entry) => entry.challenge)]),
+    ...pack.clarifications.map((fact) => fact.answer),
+    ...pack.exemplars.map((exemplar) => exemplar.outline),
+  ];
+}).filter((text) => text && text.length > 40);
+for (const text of [...interviewerTexts, ...packTexts]) {
+  const probe = text.slice(0, 40);
+  for (const [file, content] of contents) if (content.includes(probe)) fail(`server-only interviewer text found in ${path.relative(root, file)}: "${probe}…"`);
+}
+if (interviewerTexts.length < 30) fail(`expected many interviewer texts to check, found ${interviewerTexts.length}`);
+
 // 2. Every sitemap URL has a prerendered page with sound metadata.
 const sitemap = readFileSync(path.join(dist, "sitemap.xml"), "utf8");
 const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);

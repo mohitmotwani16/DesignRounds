@@ -5,6 +5,8 @@ import { api } from "../api.js";
 // at most this often. The server applies its own, stricter rules on top.
 const QUIET_MS = 20_000;
 const MIN_CHECK_GAP_MS = 45_000;
+// How often a visible v3 round ticks (the server rate-limits ticks on its own).
+const VISIBLE_TICK_MS = 60_000;
 
 // Interview state for a round. Lives in the workspace (not the panel) so the
 // conversation survives hiding the panel or switching to the Review tab.
@@ -17,6 +19,8 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   const [replyText, setReplyText] = useState(null);
   const typingRef = useRef(false);
   const pendingRef = useRef(false);
+  // Ticks have their own flag: a background tick must never block the learner's send.
+  const tickingRef = useRef(false);
   const attempt = useRef(null);
   const lastCheck = useRef(0);
   const generation = useRef(0);
@@ -26,7 +30,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   const load = useCallback(async () => {
     try {
       const result = await api.getInterview(sessionId);
-      setData({ status: "ready", ...result });
+      setData({ status: "ready", ...result, receivedAt: Date.now() });
     } catch (error) {
       setData((current) => (current.status === "ready" ? current : { status: "error", error }));
     }
@@ -36,7 +40,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
 
   const appendTurns = (turns, extra = {}) => setData((current) => {
     const known = new Set(current.turns.map((turn) => turn.id));
-    return { ...current, ...extra, turns: [...current.turns, ...turns.filter((turn) => !known.has(turn.id))] };
+    return { ...current, ...extra, ...(extra.state ? { receivedAt: Date.now() } : {}), turns: [...current.turns, ...turns.filter((turn) => !known.has(turn.id))] };
   });
 
   const streamHandlers = (gen) => ({
@@ -112,32 +116,57 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     }
   }, [sessionId, settleSave, selectedIdRef]);
 
-  // Proactive look at the canvas after it has been quiet for a while.
+  // A background tick: the server decides whether anything is worth saying (a question
+  // about the canvas, a time check, a gentle check-in) and most ticks end with nothing.
   const enabled = data.status === "ready" && data.access === "full" && data.aiAvailable && roundActive;
+  const tick = useCallback(async (reason) => {
+    if (pendingRef.current || tickingRef.current) return;
+    tickingRef.current = true;
+    try {
+      if (reason === "canvas_quiet") await settleSave();
+      const result = await api.interviewTick(sessionId, { reason, typing: typingRef.current, selectedNodeId: selectedIdRef.current });
+      if ((result.action === "ask" || result.action === "say") && result.turn) {
+        appendTurns([result.turn], { state: result.state, allowance: result.allowance });
+        if (result.action === "ask") onProactiveTurn?.();
+      }
+    } catch {
+      // A missed tick is harmless; the learner can always ask.
+    } finally {
+      tickingRef.current = false;
+    }
+  }, [sessionId, settleSave, selectedIdRef, onProactiveTurn]);
+
+  // Look at the canvas after it has been quiet for a while.
   const firstKey = useRef(structureKey);
   useEffect(() => {
     if (!enabled || structureKey === firstKey.current) return undefined;
-    const timer = window.setTimeout(async () => {
-      if (typingRef.current || pendingRef.current || Date.now() - lastCheck.current < MIN_CHECK_GAP_MS) return;
+    const timer = window.setTimeout(() => {
+      if (typingRef.current || Date.now() - lastCheck.current < MIN_CHECK_GAP_MS) return;
       lastCheck.current = Date.now();
-      pendingRef.current = true;
-      try {
-        await settleSave();
-        const result = await api.interviewCheck(sessionId, { selectedNodeId: selectedIdRef.current });
-        if (result.action === "ask" && result.turn) {
-          appendTurns([result.turn], { state: result.state, allowance: result.allowance });
-          onProactiveTurn?.();
-        }
-      } catch {
-        // A missed proactive question is harmless; the learner can always ask.
-      } finally {
-        pendingRef.current = false;
-      }
+      tick("canvas_quiet");
     }, QUIET_MS);
     return () => window.clearTimeout(timer);
-  }, [enabled, structureKey, sessionId, settleSave, selectedIdRef, onProactiveTurn]);
+  }, [enabled, structureKey, tick]);
 
-  return { ...data, sessionId, pending, pendingAudio, outgoing, replyText, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load };
+  // v3 rounds keep a clock: a tick while the tab is visible lets the interviewer pace the
+  // round (time checks, wrap-up) and check in after a long silence. Hidden tabs don't tick.
+  const v3 = data.state?.engine === "v3";
+  useEffect(() => {
+    if (!enabled || !v3) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") tick("visible");
+    }, VISIBLE_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [enabled, v3, tick]);
+
+  const setMode = useCallback(async (mode) => {
+    const result = await api.setInterviewMode(sessionId, mode);
+    setData((current) => ({ ...current, state: result.state, turns: result.turns }));
+  }, [sessionId]);
+
+  const sendFeedback = useCallback((turnId, reason) => api.interviewFeedback(sessionId, turnId, { rating: "down", reason }), [sessionId]);
+
+  return { ...data, sessionId, pending, pendingAudio, outgoing, replyText, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load, setMode, sendFeedback, receivedAt: data.receivedAt };
 }
 
 function blobToBase64(blob) {

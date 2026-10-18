@@ -148,8 +148,108 @@ export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor })
         </>
       )}
 
+      {roundFinished && data.interview && !data.interview.rated && <RealismRating sessionId={sessionId} onRated={load} />}
+
+      {roundFinished && data.debrief && <Debrief debrief={data.debrief} />}
+
       {(roundFinished || succeeded.length > 0) && <p className="review-allowance">{allowanceText(allowance)}</p>}
     </div>
+  );
+}
+
+// One question after the round, to know whether the interviewer felt real.
+const REALISM = ["Not at all", "Slightly", "Somewhat", "Mostly", "Very"];
+
+function RealismRating({ sessionId, onRated }) {
+  const [realism, setRealism] = useState(0);
+  const [comment, setComment] = useState("");
+  const [state, setState] = useState("idle");
+  async function submit() {
+    setState("saving");
+    try {
+      await api.rateInterview(sessionId, { realism, ...(comment.trim() ? { comment: comment.trim() } : {}) });
+      setState("done");
+      onRated();
+    } catch {
+      setState("error");
+    }
+  }
+  if (state === "done") return <div className="review-card realism-card"><p><CircleCheck size={14} /> Thanks, that helps us make the interviewer better.</p></div>;
+  return (
+    <div className="review-card realism-card">
+      <span className="review-kicker"><MessageSquareText size={13} /> ONE QUESTION</span>
+      <h3>How much did this feel like a real interview?</h3>
+      <div className="realism-scale" role="radiogroup" aria-label="Realism">
+        {REALISM.map((label, index) => (
+          <button key={label} role="radio" aria-checked={realism === index + 1} className={realism === index + 1 ? "active" : ""} onClick={() => setRealism(index + 1)}>
+            <strong>{index + 1}</strong><span>{label}</span>
+          </button>
+        ))}
+      </div>
+      {realism > 0 && (
+        <>
+          <textarea rows={2} maxLength={1000} placeholder="Anything that felt off, or great? (optional)" value={comment} onChange={(event) => setComment(event.target.value)} />
+          <button className="button button-dark button-small" disabled={state === "saving"} onClick={submit}>{state === "saving" ? <LoaderCircle size={13} className="spin" /> : null} Send</button>
+          {state === "error" && <p className="realism-error">Couldn't send that. Try again.</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+const DEBRIEF_STATUS = {
+  answered: ["Covered", "good"],
+  partial: ["Partly covered", "partial"],
+  missed: ["Missed", "missed"],
+  skipped: ["Skipped", "missed"],
+  not_reached: ["Not reached in time", "unreached"],
+  pending: ["Not covered", "unreached"],
+  open: ["In progress at the end", "partial"],
+};
+
+// What each part of the interview got, after the round: quotes the interviewer noted,
+// what a strong answer adds, and where to read up.
+function Debrief({ debrief }) {
+  const [open, setOpen] = useState(null);
+  const areas = [...new Set(debrief.items.map((item) => item.area))];
+  const covered = debrief.items.filter((item) => item.status === "answered").length;
+  return (
+    <section className="review-card debrief" aria-label="Interview debrief">
+      <span className="review-kicker"><Brain size={13} /> INTERVIEW DEBRIEF</span>
+      <h3>What the interviewer was looking for</h3>
+      <p className="debrief-lede">You covered {covered} of {debrief.items.length} topics. Open a topic to see what you said and what a strong answer adds.</p>
+      {areas.map((area) => (
+        <div key={area} className="debrief-area">
+          <h4>{area}</h4>
+          <ul>
+            {debrief.items.filter((item) => item.area === area).map((item) => {
+              const [label, tone] = DEBRIEF_STATUS[item.status] ?? ["", ""];
+              const expanded = open === item.id;
+              return (
+                <li key={item.id} className={`debrief-item ${tone}`}>
+                  <button aria-expanded={expanded} onClick={() => setOpen(expanded ? null : item.id)}>
+                    <span className="debrief-topic">{item.topic}</span>
+                    <span className={`debrief-status ${tone}`}>{label}{item.band ? ` · ${item.band}` : ""}</span>
+                    <ChevronDown size={14} className={expanded ? "open" : ""} />
+                  </button>
+                  {expanded && (
+                    <div className="debrief-detail">
+                      {item.quotes.length > 0 && (
+                        <div><strong>You said</strong>{item.quotes.map((quote) => <blockquote key={quote}>“{quote}”</blockquote>)}</div>
+                      )}
+                      {item.strongAnswer && <div><strong>What a strong answer adds</strong><p>{item.strongAnswer}</p></div>}
+                      {item.learn.length > 0 && (
+                        <div className="debrief-learn"><strong>Read up</strong>{item.learn.map((topic) => <a key={topic.slug} href={`/learn/${topic.slug}`} target="_blank" rel="noopener">{topic.title}</a>)}</div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </section>
   );
 }
 

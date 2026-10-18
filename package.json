@@ -19,10 +19,14 @@
     "preview": "vite preview --host 0.0.0.0",
     "ai:check": "node scripts/ai-check.js",
     "ai:eval": "node scripts/ai-eval.js",
+    "ai:sim": "node scripts/interview-sim.js",
     "answers:build": "node scripts/build-answer-pools.js",
+    "packs:build": "node scripts/build-packs.js",
     "test:answers": "node --test server/modules/answers/answers.test.js",
     "test:stream": "node --test server/modules/ai/message-stream.test.js",
     "test:vertex": "node --test server/modules/ai/anthropic-vertex.test.js server/modules/ai/gemini-vertex.test.js",
+    "test:conductor": "node --test server/modules/ucs/ucs.test.js server/modules/pks/pks.test.js server/modules/conductor/conductor.test.js server/modules/conductor/gate.test.js",
+    "test:smoke:v3": "node scripts/smoke-conductor.js",
     "theme": "node scripts/theme-tokens.mjs"
   },
   "dependencies": {

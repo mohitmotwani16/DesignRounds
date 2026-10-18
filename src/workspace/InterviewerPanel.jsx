@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Eye, Lightbulb, LoaderCircle, MessageSquare, Mic, RefreshCw, Send, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Eye, Lightbulb, LoaderCircle, MessageSquare, Mic, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
 const STAGES = [
@@ -58,6 +58,8 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   const repliesLeft = allowance ? Math.max(0, allowance.turns.limit - allowance.turns.used) : 0;
   const hintsLeft = allowance ? Math.max(0, allowance.hints.limit - allowance.hints.used) : 0;
   const outOfReplies = allowance && (repliesLeft === 0 || allowance.month.used >= allowance.month.limit);
+  const v3 = state?.engine === "v3";
+  const learnerSpoke = turns.some((turn) => turn.role === "learner");
   const canSend = !roundFinished && interview.aiAvailable && !pending && !outOfReplies;
   // A voice answer is a reply like a typed one, so the mic follows the same rules.
   const [voiceAvailable] = useState(voiceSupported);
@@ -99,14 +101,18 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
 
   return (
     <>
-      <ol className="interview-stages" aria-label="Interview stage">
-        {STAGES.map(([id, label], index) => (
-          <li key={id} className={index < stageIndex ? "done" : index === stageIndex ? "current" : ""} aria-current={index === stageIndex ? "step" : undefined}>{label}</li>
-        ))}
-      </ol>
+      <div className="interview-stagebar">
+        <ol className="interview-stages" aria-label="Interview stage">
+          {STAGES.map(([id, label], index) => (
+            <li key={id} className={index < stageIndex ? "done" : index === stageIndex ? "current" : ""} aria-current={index === stageIndex ? "step" : undefined}>{label}</li>
+          ))}
+        </ol>
+        {v3 && <RoundClock clock={state.clock} receivedAt={interview.receivedAt} paused={roundFinished} />}
+      </div>
 
       <div className="interviewer-body interview-thread" ref={listRef} role="log" aria-relevant="additions" aria-label="Interview conversation">
-        {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} />)}
+        {v3 && !learnerSpoke && !roundFinished && <ModeChoice mode={state.mode} onChange={interview.setMode} />}
+        {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} onFeedback={interview.sendFeedback} />)}
         {outgoing && (
           <div className="interview-turn learner">
             {outgoing.kind === "hint_request"
@@ -251,17 +257,28 @@ function useVoiceTip(sessionId, available) {
   return { visible: visible && available, offer, hide };
 }
 
-const kindLabels = { hint: "Hint", hint_request: "Asked for a hint" };
+const kindLabels = { hint: "Hint", hint_request: "Asked for a hint", time_check: "Time check", nudge: "Check-in", wrap_up: "Wrap-up" };
+// Check-ins and time checks come from the clock, not from what you said: quieter.
+const QUIET_KINDS = new Set(["time_check", "nudge"]);
+const FEEDBACK_REASONS = [
+  ["already_asked", "Already asked or repeating itself"],
+  ["not_relevant", "Not relevant to my design"],
+  ["wrong", "Technically wrong"],
+  ["too_harsh", "Too harsh"],
+  ["other", "Something else"],
+];
 
-function Turn({ turn, onFocusNode, labelFor }) {
+function Turn({ turn, onFocusNode, labelFor, onFeedback }) {
   const mine = turn.role === "learner";
+  const noticed = turn.trigger === "proactive" || (turn.trigger === "tick" && !QUIET_KINDS.has(turn.kind) && turn.kind !== "wrap_up");
   return (
-    <div className={`interview-turn ${mine ? "learner" : "interviewer"}`}>
+    <div className={`interview-turn ${mine ? "learner" : "interviewer"}${QUIET_KINDS.has(turn.kind) ? " quiet" : ""}`}>
       {!mine && (
         <span className="interview-turn-meta">
           Interviewer
-          {turn.trigger === "proactive" && <em><Eye size={11} /> Noticed on your canvas</em>}
-          {kindLabels[turn.kind] && <em>{kindLabels[turn.kind]}</em>}
+          {noticed && <em><Eye size={11} /> Noticed on your canvas</em>}
+          {kindLabels[turn.kind] && <em>{QUIET_KINDS.has(turn.kind) && <Clock size={11} />} {kindLabels[turn.kind]}</em>}
+          {onFeedback && !QUIET_KINDS.has(turn.kind) && turn.kind !== "opening" && <TurnFeedback turnId={turn.id} onFeedback={onFeedback} />}
         </span>
       )}
       {mine && turn.kind === "audio" ? <VoiceNote durationMs={turn.audio?.durationMs} />
@@ -273,5 +290,75 @@ function Turn({ turn, onFocusNode, labelFor }) {
         </div>
       )}
     </div>
+  );
+}
+
+// A thumbs-down with a reason on one interviewer message, so repeats and misses can be
+// measured. Remembered for this page only.
+function TurnFeedback({ turnId, onFeedback }) {
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState(false);
+  async function choose(reason) {
+    setOpen(false);
+    setSent(true);
+    try { await onFeedback(turnId, reason); } catch { setSent(false); }
+  }
+  if (sent) return <span className="turn-feedback-sent">Thanks</span>;
+  return (
+    <span className="turn-feedback">
+      <button aria-label="This message wasn't helpful" title="Not helpful?" aria-expanded={open} onClick={() => setOpen(!open)}><ThumbsDown size={11} /></button>
+      {open && (
+        <span className="turn-feedback-menu" role="menu">
+          {FEEDBACK_REASONS.map(([reason, label]) => <button key={reason} role="menuitem" onClick={() => choose(reason)}>{label}</button>)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// Guided or realistic: chosen before the learner says anything, since it changes how
+// the round is judged.
+const MODES = [
+  ["guided", "Guided", "The interviewer tells you what was good and points you to what to read when something's missed."],
+  ["realistic", "Realistic", "Like a real loop: neutral acknowledgements, fewer follow-ups, no pointers."],
+];
+
+function ModeChoice({ mode, onChange }) {
+  const [busy, setBusy] = useState(null);
+  async function pick(next) {
+    if (next === mode || busy) return;
+    setBusy(next);
+    try { await onChange(next); } finally { setBusy(null); }
+  }
+  return (
+    <div className="interview-mode" role="radiogroup" aria-label="Interview mode">
+      <span className="interview-mode-label">How should this interview run?</span>
+      {MODES.map(([id, label, text]) => (
+        <button key={id} role="radio" aria-checked={mode === id} className={mode === id ? "active" : ""} onClick={() => pick(id)} disabled={Boolean(busy)}>
+          <strong>{busy === id ? <LoaderCircle size={12} className="spin" /> : null}{label}</strong>
+          <span>{text}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Active round time against the question's budget. The server keeps the real clock;
+// this only moves forward between updates while the tab is open.
+function RoundClock({ clock, receivedAt, paused }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (paused) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [paused]);
+  if (!clock) return null;
+  const drift = paused || !receivedAt ? 0 : Math.min(Math.max(0, now - receivedAt), 5 * 60_000);
+  const minutes = Math.floor((clock.elapsedMs + drift) / 60_000);
+  const budget = Math.round(clock.budgetMs / 60_000);
+  return (
+    <span className={`interview-clock${minutes >= budget ? " over" : minutes >= budget * 0.8 ? " late" : ""}`} title="Active time in this round">
+      <Clock size={12} /> {minutes} / {budget} min
+    </span>
   );
 }

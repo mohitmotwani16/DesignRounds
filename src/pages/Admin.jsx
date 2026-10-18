@@ -7,6 +7,7 @@ import { SITE } from "../seo.js";
 import { Link } from "../router.js";
 import { ArticleBody, CommunityArticleHeader } from "./Learn.jsx";
 import { ArticleThread, StatusBadge } from "./LearnWrite.jsx";
+import { PackAdmin } from "./AdminPacks.jsx";
 
 const FILTERS = [["in_review", "In review"], ["changes_requested", "Changes requested"], ["published", "Published"], ["rejected", "Not accepted"], ["all", "All"]];
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
@@ -39,7 +40,7 @@ function AdminHome() {
         <header className="write-head">
           <div>
             <h1><ShieldCheck size={24} /> Admin</h1>
-            <p>Review community articles, manage admins, and grant expiring Plus access.</p>
+            <p>Review community articles and interviewer packs, manage admins, and grant expiring Plus access.</p>
           </div>
         </header>
         <div className="admin-tabs" role="tablist">
@@ -47,8 +48,9 @@ function AdminHome() {
           <button role="tab" aria-selected={tab === "admins"} onClick={() => setTab("admins")}>Admins</button>
           <button role="tab" aria-selected={tab === "members"} onClick={() => setTab("members")}>Users & access</button>
           <button role="tab" aria-selected={tab === "invitations"} onClick={() => setTab("invitations")}>Invitations</button>
+          <button role="tab" aria-selected={tab === "packs"} onClick={() => setTab("packs")}>Interviewer packs</button>
         </div>
-        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : <InvitationForm />}
+        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : <InvitationForm />}
       </div>
     </main>
   );

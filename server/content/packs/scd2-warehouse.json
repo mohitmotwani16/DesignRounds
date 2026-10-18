@@ -1,0 +1,516 @@
+{
+  "opening": "Welcome. Let's design a customer warehouse that tracks changes over time.",
+  "clarifications": [
+    {
+      "id": "scale.volume",
+      "topics": [
+        "scale",
+        "volume",
+        "size",
+        "customers"
+      ],
+      "answer": "Assume a few million customer records, with hundreds of thousands of updates landing daily."
+    },
+    {
+      "id": "scale.latency",
+      "topics": [
+        "latency",
+        "frequency",
+        "real-time"
+      ],
+      "answer": "Updates land anywhere from near-real-time to daily batches, depending on the source."
+    },
+    {
+      "id": "req.quality",
+      "topics": [
+        "quality",
+        "clean",
+        "late",
+        "duplicate"
+      ],
+      "answer": "Sources are messy. They disagree, send duplicates, and sometimes send late or corrected records."
+    }
+  ],
+  "clarificationPolicy": "Assume standard enterprise data warehousing volumes and patterns unless specific constraints are queried.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "warehouse",
+          "database"
+        ],
+        "keywords": [
+          "scale",
+          "volume",
+          "history",
+          "millions",
+          "sources"
+        ]
+      },
+      "goal": "Establish the volume of data, the nature of the sources, and the historical access patterns required.",
+      "opener": "What main requirements and constraints do you want to establish for this customer warehouse?",
+      "evidence": {
+        "strong": "Actively asks about update frequency, data quality, and how analysts intend to query the historical data.",
+        "adequate": "Identifies the need for historical tracking but makes assumptions about data volume and quality without asking.",
+        "weak": "Ignores the historical aspect entirely or assumes a pristine single source of truth."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.current_only",
+          "pattern": "Assuming queries only ever care about the current state.",
+          "challenge": "The brief mentions analysts query historical values as of a date. How does that change your scope?"
+        }
+      ],
+      "probes": [
+        "How do you expect analysts to query the history?",
+        "What kind of data issues might we face from multiple upstream systems?"
+      ],
+      "hints": [
+        "Consider what happens when different operational systems track the same customer.",
+        "Think about how we handle corrections to past data."
+      ],
+      "moveOnSummary": "We have millions of customers with messy, multi-source data that needs historical tracking.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "slowly-changing-dimensions"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ingestion",
+          "batch-job",
+          "etl",
+          "data-lake",
+          "warehouse"
+        ],
+        "keywords": [
+          "landing",
+          "raw",
+          "staging",
+          "pipeline",
+          "load"
+        ]
+      },
+      "goal": "Design a logical end-to-end data flow from source ingestion to the final dimensional tables.",
+      "opener": "Could you walk me through the high-level stages to get data from the source systems to the analysts?",
+      "evidence": {
+        "strong": "Outlines a clear progression from ingestion to a raw layer, then staging for deduplication, and finally the SCD2 target.",
+        "adequate": "Describes a basic ETL flow but might blend staging and historical load into a single complex step.",
+        "weak": "Fails to separate raw landing from historical processing, risking data loss on failures."
+      },
+      "misconceptions": [
+        {
+          "id": "hl.direct_load",
+          "pattern": "Loading data directly from operational sources into the SCD table.",
+          "challenge": "If the load logic changes, how would you rebuild the dimension without going back to the source systems?"
+        }
+      ],
+      "probes": [
+        "Where do you store the records before applying the SCD logic?",
+        "How do you isolate the source systems from our processing failures?"
+      ],
+      "hints": [
+        "It is usually safer to land data in a raw zone first.",
+        "Consider what layers you need between raw data and the final dimension."
+      ],
+      "moveOnSummary": "A multi-hop architecture from raw landing to staging and then to the SCD table is planned.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "medallion-architecture",
+        "etl-vs-elt"
+      ]
+    },
+    {
+      "id": "data.scd2",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "warehouse",
+          "storage"
+        ],
+        "keywords": [
+          "table",
+          "schema",
+          "valid_from",
+          "valid_to",
+          "is_current",
+          "surrogate"
+        ]
+      },
+      "goal": "Define a schema that robustly supports historical as-of-date queries.",
+      "opener": "How are you modeling the target customer table to support these historical queries?",
+      "evidence": {
+        "strong": "Defines surrogate keys, business keys, effective dates, and a current record flag to clearly demarcate validity intervals.",
+        "adequate": "Includes valid dates but relies solely on business keys, which might complicate fact table joins.",
+        "weak": "Adds a simple timestamp column to a flat table, making interval queries highly inefficient."
+      },
+      "misconceptions": [
+        {
+          "id": "scd.no_surrogate",
+          "pattern": "Using only the business key and a timestamp, ignoring surrogate keys.",
+          "challenge": "If the business key is the only identifier, how will fact tables link to a specific historical version of the customer?"
+        }
+      ],
+      "probes": [
+        "How do you uniquely identify a specific version of a customer?",
+        "How does an analyst efficiently query the currently active record?"
+      ],
+      "hints": [
+        "Think about what key the fact tables will use to join.",
+        "Consider adding an explicit flag for the current version to speed up queries."
+      ],
+      "moveOnSummary": "An SCD Type 2 table with a surrogate key, effective dates, and a current flag covers the data model.",
+      "learnTopics": [
+        "dimensional-modeling",
+        "slowly-changing-dimensions"
+      ]
+    },
+    {
+      "id": "data.survivorship",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "etl",
+          "database"
+        ],
+        "keywords": [
+          "conflict",
+          "resolve",
+          "trust",
+          "survivor",
+          "priority"
+        ]
+      },
+      "goal": "Determine survivorship rules for merging customer data from multiple sources.",
+      "opener": "Since we have multiple sources like CRM and billing, how do you handle cases where they disagree on a customer attribute?",
+      "evidence": {
+        "strong": "Proposes identity resolution and explicit survivorship rules, prioritizing trusted sources per attribute.",
+        "adequate": "Acknowledges the conflict and suggests a simple last-write-wins approach based on timestamps.",
+        "weak": "Assumes sources will never conflict or that a single source always wins for the whole record."
+      },
+      "misconceptions": [
+        {
+          "id": "survivorship.naive",
+          "pattern": "Assuming all sources share the same primary key natively.",
+          "challenge": "The CRM and billing systems likely use different internal IDs. How do you know they refer to the same person?"
+        }
+      ],
+      "probes": [
+        "How do you map a billing ID to a CRM ID?",
+        "If CRM says the phone number is X and billing says Y, which one do we keep?"
+      ],
+      "hints": [
+        "You might need a step to resolve identities before applying changes.",
+        "Consider setting trust levels for different source systems."
+      ],
+      "moveOnSummary": "Use identity resolution and attribute-level survivorship rules to build a golden record.",
+      "learnTopics": [
+        "data-quality",
+        "dimensional-modeling"
+      ]
+    },
+    {
+      "id": "deep.change_detection",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "etl",
+          "function"
+        ],
+        "keywords": [
+          "compare",
+          "hash",
+          "diff",
+          "detect",
+          "change"
+        ]
+      },
+      "goal": "Implement efficient change detection to avoid generating spurious historical versions.",
+      "opener": "How does the pipeline decide if an incoming record actually requires a new version in the dimension table?",
+      "evidence": {
+        "strong": "Uses a hash of the relevant attributes to quickly compare incoming records against the active version.",
+        "adequate": "Compares columns individually, which works but scales poorly as the schema grows.",
+        "weak": "Creates a new version for every load, regardless of whether any data actually changed."
+      },
+      "misconceptions": [
+        {
+          "id": "change.always_insert",
+          "pattern": "Inserting a new row for every daily extract even if nothing changed.",
+          "challenge": "If we receive a daily snapshot and the address is the same for 30 days, do we want 30 rows in our dimension?"
+        }
+      ],
+      "probes": [
+        "How do you handle a record that is identical to the currently active one?",
+        "Is there a faster way to compare fifty columns than writing fifty conditional statements?"
+      ],
+      "hints": [
+        "Think about checking only the fields that matter.",
+        "A cryptographic hash function can summarize all attributes into one string."
+      ],
+      "moveOnSummary": "Use a record hash to detect genuine attribute changes efficiently.",
+      "learnTopics": [
+        "slowly-changing-dimensions",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.late_data",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "etl",
+          "batch-job"
+        ],
+        "keywords": [
+          "late",
+          "out-of-order",
+          "correction",
+          "past",
+          "re-split",
+          "overlap"
+        ]
+      },
+      "goal": "Correctly process late-arriving records by adjusting historical validity intervals.",
+      "opener": "Suppose a correction for last month arrives today. How does your system update the history without corrupting the timeline?",
+      "evidence": {
+        "strong": "Explains how to locate the past interval, split it, insert the correction, and ripple the changes forward if necessary.",
+        "adequate": "Recognises the need to update past records but struggles with the exact logic to prevent overlapping intervals.",
+        "weak": "Appends the late record as the current active version, completely breaking the historical timeline."
+      },
+      "misconceptions": [
+        {
+          "id": "late.load_time",
+          "pattern": "Using the pipeline execution time as the effective date.",
+          "challenge": "If a change happened in January but our pipeline broke and loaded it in February, what should the valid_from date be?"
+        }
+      ],
+      "probes": [
+        "How do you ensure we do not create overlapping valid_from and valid_to dates?",
+        "What happens to the intervals of records that came after the late record?"
+      ],
+      "hints": [
+        "You need to find where the late event fits in the timeline.",
+        "The previous record's valid_to date will need to be adjusted to close the gap."
+      ],
+      "moveOnSummary": "Re-split historical intervals and use source event time for effective dates to handle late data.",
+      "learnTopics": [
+        "slowly-changing-dimensions",
+        "batch-vs-stream-processing"
+      ]
+    },
+    {
+      "id": "deep.idempotency",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "etl",
+          "batch-job",
+          "orchestrator"
+        ],
+        "keywords": [
+          "rerun",
+          "merge",
+          "idempotent",
+          "upsert",
+          "fail"
+        ]
+      },
+      "goal": "Design an idempotent load process that safely recovers from partial failures.",
+      "opener": "If the load job fails halfway and we restart it, how do you prevent creating duplicate versions?",
+      "evidence": {
+        "strong": "Uses a MERGE statement with robust match conditions on keys and hashes to ensure reruns are safe.",
+        "adequate": "Relies on deleting the target partition before reloading, which is risky for SCD2 tables.",
+        "weak": "Assumes simple appends and does not account for duplicate rows on a rerun."
+      },
+      "misconceptions": [
+        {
+          "id": "idempotent.delete_all",
+          "pattern": "Dropping the entire table and recreating it from scratch on failure.",
+          "challenge": "Rebuilding millions of history rows takes hours. How can we make the incremental load itself safe to retry?"
+        }
+      ],
+      "probes": [
+        "What SQL command allows you to insert new rows and update existing ones safely?",
+        "How does the pipeline know which rows were already processed in the failed run?"
+      ],
+      "hints": [
+        "Look into upsert or MERGE semantics.",
+        "Can we use the source event ID to deduplicate during the load?"
+      ],
+      "moveOnSummary": "Implement idempotent loads using MERGE statements based on keys and hashes.",
+      "learnTopics": [
+        "idempotency",
+        "data-pipeline-orchestration"
+      ]
+    },
+    {
+      "id": "deep.gdpr",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "etl",
+          "database"
+        ],
+        "keywords": [
+          "gdpr",
+          "delete",
+          "forget",
+          "privacy"
+        ]
+      },
+      "goal": "Safely redact or remove customer PII from historical dimensions without breaking referential integrity.",
+      "opener": "How do you apply a deletion request across all historical versions of a customer?",
+      "evidence": {
+        "strong": "Implements logical deletion or cryptoshredding, masking PII while retaining the surrogate key and non-identifying facts.",
+        "adequate": "Deletes rows entirely, recognizing it might orphan facts.",
+        "weak": "Fails to consider historical rows at all."
+      },
+      "misconceptions": [
+        {
+          "id": "gdpr.current_only",
+          "pattern": "Only deleting the current active record.",
+          "challenge": "What about the historical versions from last year?"
+        }
+      ],
+      "probes": [
+        "How does deleting this row affect sales facts linked to its surrogate key?"
+      ],
+      "hints": [
+        "If we delete the row entirely, we lose the fact table links.",
+        "Is there a way to remove the name and email but keep the key?"
+      ],
+      "moveOnSummary": "Use masking or cryptoshredding on the dimension attributes to preserve fact integrity.",
+      "learnTopics": [
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "tradeoffs",
+          "summary",
+          "limitations",
+          "bottlenecks"
+        ]
+      },
+      "goal": "Summarise the system strengths and acknowledge its main tradeoffs.",
+      "opener": "Looking at the whole design, what do you consider the biggest tradeoff or limitation?",
+      "evidence": {
+        "strong": "Identifies tradeoffs such as the complexity of handling late data versus the simplicity of append-only models.",
+        "adequate": "Mentions a valid limitation but struggles to explain the exact impact on the business.",
+        "weak": "Claims the design is perfect or focuses on trivial syntax issues rather than architectural tradeoffs."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.no_tradeoffs",
+          "pattern": "Believing the system has no downsides.",
+          "challenge": "Every design has limits. What happens if the data volume increases a hundredfold?"
+        }
+      ],
+      "probes": [
+        "If you had more time, what component would you optimise first?",
+        "Is the complexity of re-splitting intervals worth it for this use case?"
+      ],
+      "hints": [
+        "Think about the maintenance overhead of your change detection logic.",
+        "Consider the storage cost of keeping every single version."
+      ],
+      "moveOnSummary": "We have a robust SCD2 pipeline, trading off ingestion complexity for accurate historical querying.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.privacy",
+      "after": "deep.late_data",
+      "prompt": "How would you handle a GDPR Right to be Forgotten request for a customer, given you have historical records scattered across time?",
+      "agendaItemId": "deep.gdpr"
+    }
+  ],
+  "vocabulary": [
+    "SCD",
+    "SCD Type 2",
+    "surrogate key",
+    "business key",
+    "survivorship",
+    "idempotent",
+    "MERGE",
+    "CDC",
+    "effective date",
+    "hash",
+    "cryptoshredding"
+  ],
+  "alternatives": [
+    {
+      "choice": "Snapshotting the entire customer table daily instead of SCD Type 2.",
+      "whenBetter": "When data volumes are small, queries rarely span across time, and engineering resources are too constrained for complex MERGE logic."
+    },
+    {
+      "choice": "Stream processing for immediate ingestion rather than daily batches.",
+      "whenBetter": "When downstream systems or analysts require strictly real-time access to customer profile changes."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust Event-Driven SCD2",
+      "outline": "The candidate designs a multi-layered architecture starting with raw storage. They implement a robust MERGE process using hashes for change detection. Crucially, they identify that effective dates must come from the source event, and they provide a clear algorithm to re-split historical intervals when late data arrives. Their system is fully idempotent and resilient."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic Batch SCD2",
+      "outline": "The candidate builds a standard ETL pipeline into an SCD2 table. They correctly use valid date ranges with a surrogate key. However, they struggle with late-arriving records, assuming all data arrives in order, and use load timestamps for effective dates. The overall solution works for clean data but requires manual intervention for anomalies."
+    },
+    {
+      "band": "weak",
+      "label": "Overwrite and Append",
+      "outline": "The candidate treats the warehouse as an operational database. They use simple UPDATE statements that overwrite historical values or just append everything without closing previous intervals. They lack a clear strategy for change detection, resulting in duplicated or lost history, and their ingestion is not idempotent."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

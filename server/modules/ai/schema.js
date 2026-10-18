@@ -25,6 +25,8 @@ export function toJsonSchema(schema) {
       return { type: "array", ...description, items: toJsonSchema(def.type), ...(def.minLength ? { minItems: def.minLength.value } : {}) };
     case "ZodString":
       return { type: "string", ...description };
+    case "ZodBoolean":
+      return { type: "boolean", ...description };
     case "ZodNumber": {
       const check = (kind) => def.checks.find((entry) => entry.kind === kind);
       return {

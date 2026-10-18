@@ -9,6 +9,7 @@ import { describeSpeech } from "./modules/ai/speech.js";
 import { describeObjectStorage } from "./object-storage.js";
 import { describeTurnstile } from "./turnstile.js";
 import { startAnswerPoolWorker } from "./modules/answers/worker.js";
+import { buildPacksEnabled, describePacks, startPackWorker } from "./modules/pks/worker.js";
 
 const port = Number(process.env.PORT || 8787);
 const app = await createApp();
@@ -16,9 +17,10 @@ const app = await createApp();
 // call the model, so it runs in production, or locally when ANSWER_POOLS=build.
 const buildAnswerPools = process.env.ANSWER_POOLS === "build" || (isProduction && process.env.ANSWER_POOLS !== "off");
 const stopAnswerPools = buildAnswerPools ? startAnswerPoolWorker() : () => {};
+const stopPacks = buildPacksEnabled() ? startPackWorker() : () => {};
 
 const server = app.listen(port, () => {
-  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  storage=${describeObjectStorage()}  ai=${describeAi()}  stt=${describeSpeech()}  turnstile=${describeTurnstile()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
+  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  storage=${describeObjectStorage()}  ai=${describeAi()}  stt=${describeSpeech()}  turnstile=${describeTurnstile()}  packs=${describePacks()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
 });
 
 // Graceful shutdown: stop accepting connections, let in-flight requests finish (up
@@ -28,6 +30,7 @@ const SHUTDOWN_GRACE_MS = 8000;
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     stopAnswerPools();
+    stopPacks();
     const finish = () => close().finally(() => process.exit(0));
     const force = setTimeout(() => { server.closeAllConnections(); finish(); }, SHUTDOWN_GRACE_MS);
     server.close(() => { clearTimeout(force); finish(); });

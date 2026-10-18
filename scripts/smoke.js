@@ -13,6 +13,8 @@ const dataDir = await mkdtemp(path.join(os.tmpdir(), "designrounds-smoke-"));
 Object.assign(process.env, {
   PGLITE_DIR: dataDir,
   AI_PROVIDER: "fake",
+  // This run covers the v2 interviewer; scripts/smoke-conductor.js covers v3.
+  INTERVIEWER_V3: "false",
   CRON_SECRET: "smoke-secret",
   DEV_TOOLS: "true",
   ADMIN_EMAILS: "admin@example.com",

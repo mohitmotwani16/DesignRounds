@@ -1,0 +1,664 @@
+{
+  "opening": "Let's design a URL shortener service. Feel free to start wherever you'd like.",
+  "clarifications": [
+    {
+      "id": "scale.writes",
+      "topics": [
+        "write",
+        "traffic",
+        "create",
+        "new"
+      ],
+      "answer": "Assume we generate about 100 million new short links per month."
+    },
+    {
+      "id": "scale.reads",
+      "topics": [
+        "read",
+        "ratio",
+        "redirect",
+        "click"
+      ],
+      "answer": "It is extremely read-heavy. The read-to-write ratio is about 100 to 1."
+    },
+    {
+      "id": "latency",
+      "topics": [
+        "latency",
+        "speed",
+        "performance"
+      ],
+      "answer": "Redirects must be as fast as possible. Link creation can tolerate a bit of latency."
+    },
+    {
+      "id": "features.expiration",
+      "topics": [
+        "expire",
+        "permanent",
+        "delete",
+        "ttl"
+      ],
+      "answer": "Users should be able to specify an expiration date, but by default, links are permanent."
+    },
+    {
+      "id": "features.custom",
+      "topics": [
+        "custom",
+        "vanity",
+        "alias"
+      ],
+      "answer": "Custom aliases are a nice-to-have, but let's focus on the generated codes first."
+    },
+    {
+      "id": "analytics",
+      "topics": [
+        "analytics",
+        "tracking",
+        "stats",
+        "metrics"
+      ],
+      "answer": "We want basic click tracking, but gathering it should not slow down the redirect."
+    },
+    {
+      "id": "availability",
+      "topics": [
+        "availability",
+        "consistency",
+        "cap"
+      ],
+      "answer": "High availability for redirects is our top priority."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about anything else, ask them what they think is reasonable and go with their assumption.",
+  "agenda": [
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "client"
+        ],
+        "keywords": [
+          "qps",
+          "capacity",
+          "scale",
+          "estimate"
+        ]
+      },
+      "goal": "Establish the high read-to-write ratio and calculate the baseline QPS.",
+      "opener": "What kind of traffic volume do you think we should design for?",
+      "evidence": {
+        "strong": "Asks about read/write ratios, calculates writes and peak reads accurately, and identifies read latency as the critical constraint.",
+        "adequate": "Identifies the system as read-heavy and estimates QPS accurately enough to guide the architectural choices.",
+        "weak": "Skips estimation, struggles with basic math, or assumes a balanced read/write ratio."
+      },
+      "misconceptions": [
+        {
+          "id": "write-heavy-assumption",
+          "pattern": "Believes write traffic requires a massive distributed write cluster.",
+          "challenge": "Based on your monthly volume estimate, how many write requests are we actually handling per second?"
+        }
+      ],
+      "probes": [
+        "How does your monthly volume estimate translate to requests per second?",
+        "What does that read-to-write ratio mean for our peak read traffic?"
+      ],
+      "hints": [
+        "Think about the total number of new links created over a month.",
+        "Once you have your monthly write estimate, how does the read-to-write ratio help find the redirect traffic?",
+        "To get requests per second, divide your monthly totals by the number of seconds in a month."
+      ],
+      "moveOnSummary": "Agreed on the baseline write QPS and the much higher peak read traffic.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.api_and_storage",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "load-balancer",
+          "database",
+          "service"
+        ],
+        "keywords": [
+          "api",
+          "redirect",
+          "database",
+          "save"
+        ]
+      },
+      "goal": "Define the core read and write flows, connecting users to a backend service and a durable data store.",
+      "opener": "How would you lay out the core components to handle link creation and redirection?",
+      "evidence": {
+        "strong": "Separates the write API from the read redirect service, places a load balancer, and selects a database suited for key-value lookups.",
+        "adequate": "Draws a single monolithic API interacting with a database for both flows.",
+        "weak": "Mixes read and write flows without a clear storage layer, or creates broken connections."
+      },
+      "misconceptions": [
+        {
+          "id": "db-direct-redirect",
+          "pattern": "Thinks redirects happen directly from the database to the client without a service layer.",
+          "challenge": "What exactly receives the HTTP GET request and issues the redirect header?"
+        }
+      ],
+      "probes": [
+        "Can you walk me through the journey of a user clicking a short link?",
+        "How are these core components communicating with each other?"
+      ],
+      "hints": [
+        "What component initially receives the incoming HTTP request?",
+        "Where do we persistently store the mapping between short codes and long URLs?"
+      ],
+      "moveOnSummary": "We have an API handling requests and a database storing the URL mappings.",
+      "learnTopics": [
+        "hld-vs-lld",
+        "api-design",
+        "nosql-database-types"
+      ]
+    },
+    {
+      "id": "hl.caching",
+      "stage": "high_level",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "t-redis",
+          "distributed-cache"
+        ],
+        "keywords": [
+          "cache",
+          "redis",
+          "memcached",
+          "fast"
+        ]
+      },
+      "goal": "Introduce a caching layer to handle the high read volume and ensure low latency for redirects.",
+      "opener": "Given the high read traffic you estimated, how can we ensure redirects stay fast?",
+      "evidence": {
+        "strong": "Adds a distributed cache between the redirect service and database, and explains cache policies like LRU for hot links.",
+        "adequate": "Adds a cache but is vague about what gets cached or how it is populated.",
+        "weak": "Suggests scaling the database directly without considering caching for a read-heavy workload."
+      },
+      "misconceptions": [
+        {
+          "id": "db-speed-sufficient",
+          "pattern": "Believes caching is unnecessary because modern databases are fast enough.",
+          "challenge": "If a specific link goes viral and gets a huge spike in traffic, how will the database handle it?"
+        }
+      ],
+      "probes": [
+        "What data specifically are we putting in the cache?",
+        "What happens in the system when a code is not found in the cache?"
+      ],
+      "hints": [
+        "Remember the high read-to-write ratio we discussed earlier.",
+        "How do we prevent a database overload if a single link becomes incredibly popular?"
+      ],
+      "moveOnSummary": "We will use a cache to serve hot links quickly and reduce database load.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.generation",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "id-generator",
+          "function",
+          "microservice"
+        ],
+        "keywords": [
+          "base62",
+          "hash",
+          "md5",
+          "collision",
+          "counter",
+          "generate"
+        ]
+      },
+      "goal": "Establish a collision-free and scalable mechanism for generating unique short codes.",
+      "opener": "How exactly will we generate the short codes for new URLs?",
+      "evidence": {
+        "strong": "Evaluates hashing versus base62 counters, chooses a distributed counter with base62 encoding or random strings with a fast collision check, and calculates keyspace.",
+        "adequate": "Mentions base62 or hashing but struggles to explain how to avoid collisions in a distributed environment.",
+        "weak": "Suggests simply hashing the URL without considering length or collisions, or uses an auto-increment ID without encoding."
+      },
+      "misconceptions": [
+        {
+          "id": "md5-direct-use",
+          "pattern": "Thinks hashing a URL directly gives a short string naturally.",
+          "challenge": "MD5 produces a long hash. How do you get a short code from that?"
+        }
+      ],
+      "probes": [
+        "How do we ensure two different servers do not generate the same code at the same time?",
+        "How long should the short code be to support your estimated volume for the next few years?"
+      ],
+      "hints": [
+        "What characters are safe to use in a URL?",
+        "If we use a numeric counter, how do we convert it to a shorter, URL-safe string?",
+        "How do we coordinate a counter across multiple concurrent API servers?"
+      ],
+      "moveOnSummary": "We have settled on a unique generation strategy to ensure short codes do not collide.",
+      "learnTopics": [
+        "unique-id-generation"
+      ]
+    },
+    {
+      "id": "deep.redirect_type",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "301",
+          "302",
+          "redirect",
+          "seo",
+          "analytics",
+          "status"
+        ]
+      },
+      "goal": "Decide between 301 and 302 redirects by trading off server load versus analytics completeness.",
+      "opener": "When the client gets the redirect response, what HTTP status code should we use?",
+      "evidence": {
+        "strong": "Articulates that 301 is permanent and cached by browsers while 302 is temporary. Makes a reasoned choice based on analytics requirements versus server load.",
+        "adequate": "Knows the difference between 301 and 302 but struggles to map it to the trade-off between analytics tracking and performance.",
+        "weak": "Is unaware of the distinction between different HTTP redirect status codes."
+      },
+      "misconceptions": [
+        {
+          "id": "permanent-tracking",
+          "pattern": "Thinks a 301 redirect allows the server to track every single click.",
+          "challenge": "If the browser caches a 301 redirect, does the second click ever reach our servers?"
+        }
+      ],
+      "probes": [
+        "How does your choice of status code impact our ability to track analytics?",
+        "How does that same choice impact our overall server load?"
+      ],
+      "hints": [
+        "There are two main HTTP status codes for redirection to consider: 301 and 302.",
+        "Consider what happens in the browser's local cache for permanent versus temporary redirects."
+      ],
+      "moveOnSummary": "We will use 302 redirects to ensure we capture analytics, or 301 if raw load reduction is the priority.",
+      "learnTopics": [
+        "http",
+        "api-design"
+      ]
+    },
+    {
+      "id": "deep.storage_model",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "kv-store",
+          "document-db",
+          "t-dynamodb",
+          "t-postgres"
+        ],
+        "keywords": [
+          "nosql",
+          "sql",
+          "shard",
+          "key-value",
+          "dynamodb",
+          "cassandra"
+        ]
+      },
+      "goal": "Choose a database paradigm suited for simple key-value lookups and explain how it scales horizontally.",
+      "opener": "Let's look closer at the database. What type of database would you choose and how would you scale it?",
+      "evidence": {
+        "strong": "Chooses a NoSQL KV store or sharded SQL citing the simple access pattern. Explains partitioning data by the short code.",
+        "adequate": "Selects a reasonable database but cannot fully explain how data is partitioned across nodes at scale.",
+        "weak": "Proposes complex relational schemas with joins, or picks a database without justifying it against the access pattern."
+      },
+      "misconceptions": [
+        {
+          "id": "relational-cant-scale",
+          "pattern": "Believes a relational database cannot handle billions of rows under any circumstance.",
+          "challenge": "Could we shard a relational database by the short code to handle this volume?"
+        }
+      ],
+      "probes": [
+        "What does the schema look like for our main table?",
+        "If the data outgrows a single machine, how exactly do we partition it?"
+      ],
+      "hints": [
+        "What is the primary way we query this data during a redirect?",
+        "If we query by the short code every time, do we need complex relational joins?"
+      ],
+      "moveOnSummary": "We will use a partitioned datastore with the short code acting as the partition key.",
+      "learnTopics": [
+        "sql-vs-nosql",
+        "sharding",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.analytics",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "t-kafka",
+          "topic",
+          "stream-processor"
+        ],
+        "keywords": [
+          "analytics",
+          "tracking",
+          "async",
+          "kafka",
+          "queue"
+        ]
+      },
+      "goal": "Design an asynchronous analytics pipeline to track clicks without blocking the redirect critical path.",
+      "opener": "How would you capture click analytics for these redirects?",
+      "evidence": {
+        "strong": "Introduces a message queue to decouple analytics ingestion from the redirect request, ensuring redirects stay fast.",
+        "adequate": "Writes analytics to a separate database table directly from the redirect service, mentioning it might add minor latency.",
+        "weak": "Writes analytics synchronously to the main URL database on every click, degrading read performance."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-analytics",
+          "pattern": "Updates a counter in the main database synchronously before returning the redirect.",
+          "challenge": "If the database is slow to update the click counter, what happens to the user's redirect speed?"
+        }
+      ],
+      "probes": [
+        "How do we ensure tracking a click does not add latency to the redirect?",
+        "What happens to redirects if the analytics database goes down?"
+      ],
+      "hints": [
+        "Can we do the tracking work in the background after returning the redirect?",
+        "What component helps decouple fast producers from slower downstream consumers?"
+      ],
+      "moveOnSummary": "We will drop click events into a queue for asynchronous processing.",
+      "learnTopics": [
+        "message-queues",
+        "event-streaming-kafka",
+        "outbox-pattern"
+      ]
+    },
+    {
+      "id": "deep.cleanup",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "scheduler"
+        ],
+        "keywords": [
+          "ttl",
+          "expire",
+          "cleanup",
+          "cron",
+          "batch"
+        ]
+      },
+      "goal": "Design a mechanism to handle expired URLs, keeping storage manageable.",
+      "opener": "How should we handle URLs that have an expiration date?",
+      "evidence": {
+        "strong": "Combines lazy deletion on read with a background batch job or native database TTL to reclaim space.",
+        "adequate": "Mentions a cron job to delete rows but does not handle the edge case of a user clicking an expired link before the job runs.",
+        "weak": "Keeps all links forever and assumes storage is infinite, or runs a full table scan constantly."
+      },
+      "misconceptions": [
+        {
+          "id": "perfect-cron",
+          "pattern": "Thinks a background job perfectly deletes records at the exact second they expire.",
+          "challenge": "What if someone clicks the link in the window between it expiring and the cleanup job running?"
+        }
+      ],
+      "probes": [
+        "How does the database actually free up space?",
+        "What logic runs in the redirect service if it fetches an expired link?"
+      ],
+      "hints": [
+        "What can the read API do if it notices the current time is past the fetched expiry time?",
+        "Many key-value stores have a built-in feature for expiring keys automatically."
+      ],
+      "moveOnSummary": "We will use lazy evaluation on read, plus a TTL feature or background job to reclaim space.",
+      "learnTopics": [
+        "nosql-database-types",
+        "redis"
+      ]
+    },
+    {
+      "id": "wrap.abuse",
+      "stage": "wrap_up",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "firewall",
+          "ddos"
+        ],
+        "keywords": [
+          "abuse",
+          "spam",
+          "rate limit",
+          "sequential",
+          "malicious"
+        ]
+      },
+      "goal": "Address security and abuse, specifically rate limiting creation and preventing code enumeration.",
+      "opener": "What are some ways malicious users might abuse this service, and how would you protect it?",
+      "evidence": {
+        "strong": "Identifies script-driven link creation and code enumeration. Mitigates with rate limiting, user auth, and non-sequential short codes.",
+        "adequate": "Mentions rate limiting to stop spam but does not consider enumeration or scraping.",
+        "weak": "Assumes users are well-behaved and does not add any security layers."
+      },
+      "misconceptions": [
+        {
+          "id": "safe-sequential",
+          "pattern": "Thinks a sequential auto-incrementing ID exposed to users is perfectly safe.",
+          "challenge": "If someone gets the short link 'abc1', what link might they try to visit next?"
+        }
+      ],
+      "probes": [
+        "How do you stop someone from generating a million links an hour?",
+        "How do we prevent competitors from discovering all our users' short links?"
+      ],
+      "hints": [
+        "What happens if a bot tries to shorten every URL on the internet?",
+        "If our codes are strictly sequential, what can an attacker do easily?"
+      ],
+      "moveOnSummary": "We will implement rate limiting and ensure our generated codes are not easily guessable.",
+      "learnTopics": [
+        "rate-limiting",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "deep.cache_stampede",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "t-redis"
+        ],
+        "keywords": [
+          "thundering herd",
+          "stampede",
+          "lock",
+          "collapse"
+        ]
+      },
+      "goal": "Mitigate cache stampedes when a hot link misses the cache.",
+      "opener": "How do we prevent a cache miss storm from overwhelming the database?",
+      "evidence": {
+        "strong": "Explains request coalescing or using a distributed lock so only one request queries the database while others wait.",
+        "adequate": "Mentions pre-warming the cache but does not solve the concurrent miss problem.",
+        "weak": "Does not understand the problem and assumes the cache just handles it natively."
+      },
+      "misconceptions": [
+        {
+          "id": "cache-nodes-solve-stampede",
+          "pattern": "Thinks adding more cache nodes solves a stampede on a single key.",
+          "challenge": "All those requests are for the exact same short code. Which cache node do they hit?"
+        }
+      ],
+      "probes": [
+        "If many threads miss the cache simultaneously, how do we stop them all from querying the database?",
+        "Can we coordinate the readers in the application layer?"
+      ],
+      "hints": [
+        "What if the first request to miss the cache tells the others to wait?",
+        "Consider patterns like 'request coalescing'."
+      ],
+      "moveOnSummary": "We will use a locking mechanism or request coalescing to protect the database on a cache miss.",
+      "learnTopics": [
+        "cache-invalidation"
+      ]
+    },
+    {
+      "id": "deep.custom_aliases",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database"
+        ],
+        "keywords": [
+          "unique",
+          "constraint",
+          "custom",
+          "collision",
+          "alias"
+        ]
+      },
+      "goal": "Handle the uniqueness constraints and routing for custom user-provided aliases.",
+      "opener": "How do we support custom short aliases alongside our auto-generated ones?",
+      "evidence": {
+        "strong": "Adds a unique constraint on the alias column, handles collision errors gracefully, and separates the custom alias namespace from generated codes.",
+        "adequate": "Stores custom aliases but does not fully explain how to prevent a custom alias from clashing with an auto-generated one.",
+        "weak": "Overwrites existing URLs if a custom alias matches an existing code."
+      },
+      "misconceptions": [
+        {
+          "id": "custom-alias-pk",
+          "pattern": "Thinks we can just use the custom alias as the primary key without checking if it exists.",
+          "challenge": "What if two users try to claim the same alias at the exact same time?"
+        }
+      ],
+      "probes": [
+        "How do you ensure a custom alias has not already been taken?",
+        "How do you ensure an auto-generated code never accidentally matches a custom alias?"
+      ],
+      "hints": [
+        "Databases have features to ensure a column's value is strictly unique.",
+        "Consider length limits for custom versus generated codes to separate them."
+      ],
+      "moveOnSummary": "We will enforce uniqueness in the database and handle collision errors for custom aliases.",
+      "learnTopics": [
+        "nosql-database-types",
+        "acid-vs-base"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "viral_cache_miss",
+      "after": "hl.caching",
+      "prompt": "A massive influencer drops a new link, but it is not in the cache yet. A huge number of users click it at the exact same time. What happens to your database?",
+      "agendaItemId": "deep.cache_stampede"
+    },
+    {
+      "id": "custom_aliases",
+      "after": "deep.generation",
+      "prompt": "Marketing now wants users to be able to choose custom aliases, like /summer-sale. How does this change your generation and storage logic?",
+      "agendaItemId": "deep.custom_aliases"
+    }
+  ],
+  "vocabulary": [
+    "base62",
+    "base64",
+    "URL",
+    "URI",
+    "QPS",
+    "TTL",
+    "Zookeeper",
+    "Cassandra",
+    "Redis",
+    "MD5",
+    "SHA",
+    "sharding",
+    "301",
+    "302"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using a relational database (SQL) instead of NoSQL.",
+      "whenBetter": "When the team has strong SQL expertise, scale can be handled via read replicas or simple sharding, and ACID guarantees are wanted for billing or user management."
+    },
+    {
+      "choice": "Generating IDs via a centralized service like ZooKeeper instead of random strings.",
+      "whenBetter": "When strict uniqueness without database round-trips for collision checking is required, and sequential or time-sortable IDs are beneficial."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive & Scalable",
+      "outline": "The candidate clearly separated the read and write paths, correctly identifying the system as highly read-heavy. They calculated sensible estimates and used them to justify a distributed cache and a horizontally scalable KV store. Their code generation strategy used a distributed counter with Base62 encoding, ensuring no collisions. They thoughtfully discussed the 301 vs 302 redirect trade-offs for analytics, designed an asynchronous message-based pipeline for click tracking, and addressed security by proposing rate limiting and unpredictable codes."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but Basic",
+      "outline": "The candidate recognized the read-heavy nature and proposed a standard architecture with an API, cache, and database. They chose hashing for code generation but needed a few hints to resolve hash collisions and determine a reasonable code length. They understood the need for a cache but were vague on eviction policies. Analytics were mentioned but initially designed as synchronous database writes until prompted. Overall, a functional design but lacked depth in failure modes and optimizations."
+    },
+    {
+      "band": "weak",
+      "label": "Incomplete & Unscalable",
+      "outline": "The candidate struggled to articulate the read-to-write ratio and its impact on the architecture. They proposed a single relational database for all reads, writes, and analytics without caching, which would fail at the stated scale. Their code generation strategy was to simply use a database auto-increment ID without encoding it, resulting in easily guessable URLs. When asked about scale, they suggested buying a larger database server rather than exploring distributed patterns."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

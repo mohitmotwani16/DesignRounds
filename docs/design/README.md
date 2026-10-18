@@ -1,6 +1,6 @@
 # Interview intelligence: overview
 
-Status: draft for review · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23) · Scope: design only
+Status: implemented behind `INTERVIEWER_V3` (see [Implementation status](#13-implementation-status)) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23)
 
 This folder designs the parts of DesignRounds that make the live interviewer behave like a real one. There are three services and one shared platform layer:
 
@@ -333,3 +333,27 @@ Before shadow mode on real rounds, and before any second production provider rec
 2. **Redis.** Recommendation: not yet. Add it only if measured in-process cache misses or lock contention justify it.
 3. **Extracting PKS's builder into its own worker deployment.** Recommendation: when the Problem Setter starts, not before.
 4. **Eval gate strictness.** Recommendation: block in production, warn in development.
+
+## 13. Implementation status
+
+Built in the `feature/interview-intelligence` branch, behind `INTERVIEWER_V3` (on in development, opt-in in production) and per question (only questions with a published pack).
+
+**Built as designed**
+
+- **UCS** (`server/modules/ucs`): content as files in `server/content/interviewer` (policy, persona, format, behaviours, moves, output, modes, task addenda, `conventions.json`); boot validation of files and `{{placeholders}}`; `ucs-<hash>` versions; `ucs_versions` retention for pinned rounds, pruned by maintenance; deterministic blocks labelled by stability; candidate snapshot without personal data; a committed snapshot of the rendered core (`server/modules/ucs/fixtures/ucs-core.txt`) so prompt changes show up in review. `prompts/policy.js` now reads `policy.md`, byte-identical.
+- **PKS** (`server/modules/pks`): `packSchema` plus structural rules (stage coverage, ids, pacing, curveballs, Learn slugs, component kinds, exemplar leakage, and hidden facts never stated unprompted); content-hash versions; `problem_packs` and the `problem_pack_jobs` queue; hand-authored packs imported and published at boot; the builder (`pack_build`, one strong-model call, one repair round on rule failures, a fast consistency check against the guide); deterministic pre-rendered blocks with focus expansion; the admin review tab (diff against published, edit as a new draft, publish, retire, rebuild).
+- **Conductor** (`server/modules/conductor`): ledger, events, pure `plan` / `validate` / `apply` / `ticks`, gated streaming (`move` and `focusItemId` are checked before any text is shown; a rejected move gets one retry, then a template), quote verification (typed and noisy voice), the clock and pacing, modes, ticks with their own rate limit and one-in-flight guard, the tick result key, the templated time checks, nudges and wrap-up, the ledger-fed review, the debrief, the realism rating and per-message feedback. Five packs are hand-authored for the first free questions.
+- **Gateway**: tasks can pass context blocks; `run.js` orders them by stability and marks cache boundaries, which the Claude adapter turns into `cache_control` breakpoints; `ai_usage` records cached input tokens.
+- **Evaluation**: unit tests for every rule (`npm run test:conductor`), an end-to-end smoke of a whole v3 round (`npm run test:smoke:v3`), and conversation simulations with a candidate-simulator model (`npm run ai:sim`).
+
+**Different from the design, and why**
+
+- **Routing.** Instead of `AI_ROUTES` tiers with failover between providers, each task names its model in `server/modules/ai/config.js`, and chat tasks fall back from Gemini 3.8 Flash (us multi-region) to Gemini 3.5 Flash (Mumbai) when the first token doesn't arrive in time. One provider (Vertex) is in production today; tiers can be added when a second production provider is.
+- **Ticks may stay silent.** A model-backed tick can choose `stay_silent` (the v2 "skip"): the credit is released and the canvas absorbed.
+- **Mode switch.** Besides `POST /sessions { interviewMode }`, the interviewer panel offers Guided or Realistic until the learner first speaks (`POST /interview/mode`), because most rounds are started from buttons that don't show a mode choice.
+- **Batch API for builds** isn't used: Vertex's OpenAI-compatible endpoint has none, and builds are rare and run offline anyway.
+
+**Still to do before launch** (unchanged from section 10 and the [launch checklist](#launch-checklist))
+
+- Baseline on v2 (the realism rating and feedback endpoints already work on v2 rounds), shadow mode, the privacy page update and opt-in, calibration with real interviewers, and the cost per round. None of these is code that can be finished in a branch.
+- The eval gate at boot (refusing an unevaluated route) and the ESLint import-boundary rule.

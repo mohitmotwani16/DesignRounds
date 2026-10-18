@@ -20,6 +20,14 @@ async function requestHeaders() {
   }
 }
 
+// Messages may carry content as cache-marked parts (see run.js messagesFromBlocks).
+// OpenAI-style APIs cache by prefix on their own, so the parts are joined in order.
+export function plainMessages(messages) {
+  return messages.map((message) => (Array.isArray(message.content)
+    ? { role: message.role, content: message.content.map((part) => part.text).join("\n\n") }
+    : message));
+}
+
 // Vertex's OpenAI-compatible endpoint names Google's models with a publisher prefix.
 function apiModel(model) {
   return aiConfig.provider === "gemini-vertex" && !model.includes("/") ? `google/${model}` : model;
@@ -68,7 +76,7 @@ async function openAiCompatible(request) {
 async function openAiCompatibleOnce({ model, baseUrl = aiConfig.baseUrl, messages, jsonSchema, effort, maxTokens, timeoutMs }) {
   const body = {
     model: apiModel(model),
-    messages,
+    messages: plainMessages(messages),
     max_tokens: maxTokens,
     response_format: { type: "json_schema", json_schema: { name: jsonSchema.name, schema: jsonSchema.schema, strict: true } },
   };
@@ -199,7 +207,7 @@ async function* streamCompleteOnce(request) {
   const { model: requestedModel, baseUrl = aiConfig.baseUrl, firstTokenMs, messages, jsonSchema, effort, maxTokens, timeoutMs } = request;
   const body = {
     model: apiModel(requestedModel),
-    messages,
+    messages: plainMessages(messages),
     max_tokens: maxTokens,
     stream: true,
     response_format: { type: "json_schema", json_schema: { name: jsonSchema.name, schema: jsonSchema.schema, strict: true } },
@@ -211,6 +219,9 @@ async function* streamCompleteOnce(request) {
   const timer = firstTokenMs ? setTimeout(() => slow.abort(), firstTokenMs) : null;
   const slowStart = (attempts) => new AiError("SLOW_START", `No reply within ${firstTokenMs} ms.`, { attempts });
   const signal = timer ? AbortSignal.any([AbortSignal.timeout(timeoutMs), slow.signal]) : AbortSignal.timeout(timeoutMs);
+  // A consumer that stops early (the Conductor's move gate) must not leave the
+  // provider streaming into nowhere: the open body is cancelled on the way out.
+  let activeReader = null;
 
   try {
   for (let attempt = 0; ; attempt += 1) {
@@ -247,6 +258,7 @@ async function* streamCompleteOnce(request) {
     }
 
     const reader = response.body.getReader();
+    activeReader = reader;
     const decoder = new TextDecoder();
     let pending = "";
     let finishReason = null;
@@ -275,9 +287,10 @@ async function* streamCompleteOnce(request) {
           if (piece.inputTokens != null) inputTokens = piece.inputTokens;
           if (piece.outputTokens != null) outputTokens = piece.outputTokens;
         }
-        if (done) break;
+        if (done) { activeReader = null; break; }
       }
     } catch (error) {
+      activeReader = null;
       if (slow.signal.aborted && !yielded) throw slowStart(attempt + 1);
       if (error.name === "TimeoutError") throw new AiError("TIMEOUT", "AI request timed out.", { attempts: attempt + 1 });
       if (!yielded && attempt < MAX_TRANSPORT_RETRIES) { await sleep(retryDelay(null, attempt)); continue; }
@@ -289,6 +302,7 @@ async function* streamCompleteOnce(request) {
   }
   } finally {
     if (timer) clearTimeout(timer);
+    activeReader?.cancel().catch(() => {});
   }
 }
 

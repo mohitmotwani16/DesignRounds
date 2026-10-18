@@ -1,6 +1,6 @@
 # Interview Conductor
 
-Status: draft for review · Part of [interview intelligence](README.md) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23) · Scope: design only
+Status: implemented behind `INTERVIEWER_V3` (`server/modules/conductor`) · Part of [interview intelligence](README.md) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23)
 
 ## 1. Purpose
 

@@ -1,0 +1,22 @@
+{
+  "shared": {
+    "maxChallengesPerMisconception": 1,
+    "idleNudgeMs": 180000,
+    "drawingWithoutTalkingMs": 240000,
+    "proactiveCooldownMs": 90000,
+    "oneQuestionPerMessage": true,
+    "messageWordLimit": 120,
+    "maxAssessmentsPerTurn": 4,
+    "stageOverrunFactor": 1.5,
+    "wrapUpAt": 0.95,
+    "activityGapCapMs": 300000
+  },
+  "guided": {
+    "maxFollowUpsPerItem": 3,
+    "timeWarnings": [0.5, 0.8]
+  },
+  "realistic": {
+    "maxFollowUpsPerItem": 2,
+    "timeWarnings": [0.8]
+  }
+}

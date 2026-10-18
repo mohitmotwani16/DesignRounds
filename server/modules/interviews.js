@@ -5,6 +5,7 @@ import { voiceAnswersEnabled } from "../flags.js";
 import { HttpError, afterResponse, createLimiter, parse, route } from "../http.js";
 import { aiConfig } from "./ai/config.js";
 import { openSse, wantsEventStream } from "./ai/sse.js";
+import { diffSnapshots, snapshotOf } from "./ai/canvas.js";
 import { isSignificantKind } from "./ai/components.js";
 import { clean, describeDiagram, nameComponents } from "./ai/context.js";
 import { filterFillerWords, parseAnswerContext } from "./ai/communication.js";
@@ -13,6 +14,7 @@ import { guideFor } from "./ai/guides.js";
 import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
+import { changeMode, handleLearnerTurn, handleTick, presentV3State, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
 import { requireUser } from "./identity.js";
 import { hasInterviewer, limitsFor } from "./plans.js";
 import { deleteInterviewAudioForTurn, interviewAudioKey, objectStorage, putInterviewAudio } from "../object-storage.js";
@@ -31,6 +33,21 @@ const QUESTION_KINDS = new Set(["opening", "question", "probe", "hint"]);
 const MONTH_START = "(date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')";
 
 const messageLimiter = createLimiter({ name: "interview-message", windowMs: 60_000, max: 12 });
+// Ticks are background calls, so they get their own limiter and can never use up a
+// learner's message allowance (docs/design/interview-conductor.md, section 6).
+const tickLimiter = createLimiter({ name: "interview-tick", windowMs: 60_000, max: 6 });
+const tickBody = z.object({
+  reason: z.enum(["canvas_quiet", "idle", "visible"]).default("canvas_quiet"),
+  typing: z.boolean().default(false),
+  selectedNodeId: z.string().max(80).nullable().optional(),
+}).strict();
+const modeBody = z.object({ mode: z.enum(["guided", "realistic"]) }).strict();
+const feedbackBody = z.object({
+  rating: z.literal("down"),
+  reason: z.enum(["already_asked", "not_relevant", "wrong", "too_harsh", "other"]),
+  note: z.string().trim().max(500).optional(),
+}).strict();
+const ratingBody = z.object({ realism: z.number().int().min(1).max(5), comment: z.string().trim().max(1000).optional() }).strict();
 const messageBody = z.object({
   requestId: z.string().uuid(),
   intent: z.enum(["message", "hint"]).default("message"),
@@ -79,31 +96,9 @@ function presentTurn(row) {
 const TURNS_WITH_AUDIO = `select t.*, a.duration_ms as audio_duration_ms, a.delivery
   from interview_turns t left join interview_audio a on a.turn_id = t.id`;
 
-function presentState(state) {
-  return { stage: state.stage, hintsUsed: state.hints_used };
-}
-
-// Position-free shape of the canvas, to tell what changed since the interviewer last looked.
-function snapshotOf(diagram) {
-  const components = {};
-  for (const node of diagram?.nodes ?? []) {
-    if (node.type === "systemNode" || !node.type) components[node.id] = node.data.kind;
-  }
-  return { components, edges: (diagram?.edges ?? []).map((edge) => `${edge.source}>${edge.target}`).sort() };
-}
-
-function diffSnapshots(previous, current, diagram) {
-  const before = previous ?? { components: {}, edges: [] };
-  const nodes = new Map((diagram?.nodes ?? []).map((node) => [node.id, node]));
-  const added = Object.keys(current.components).filter((id) => !(id in before.components)).map((id) => {
-    const node = nodes.get(id);
-    return { id, kind: node.data.kind, label: clean(node.data.label, 120) || node.data.kind, hasNote: Boolean(node.data.note?.trim()) };
-  });
-  const removed = Object.keys(before.components).filter((id) => !(id in current.components));
-  const beforeEdges = new Set(before.edges);
-  const afterEdges = new Set(current.edges);
-  const edgeChanges = current.edges.filter((edge) => !beforeEdges.has(edge)).length + before.edges.filter((edge) => !afterEdges.has(edge)).length;
-  return { added, removed, edgeChanges };
+function presentState(state, promptId) {
+  if (state.engine === "v3") return presentV3State(state, promptId);
+  return { engine: "v2", stage: state.stage, hintsUsed: state.hints_used };
 }
 
 function forwardStage(current, proposed) {
@@ -189,7 +184,9 @@ async function maybeSummarize(session) {
   const pending = await query("select * from interview_turns where session_id = $1 and seq > $2 order by seq", [session.id, state.summarized_through]);
   if (pending.length <= SUMMARIZE_AFTER) return;
   const fold = pending.slice(0, pending.length - KEEP_VERBATIM);
-  const { data } = await runTask(interviewSummaryTask, { previous: state.summary, turns: fold }, { userId: session.user_id, sessionId: session.id });
+  const { data } = state.engine === "v3"
+    ? await summarizeV3({ round: state, previous: state.summary, turns: fold, userId: session.user_id, sessionId: session.id })
+    : await runTask(interviewSummaryTask, { previous: state.summary, turns: fold }, { userId: session.user_id, sessionId: session.id });
   await query(
     "update interview_state set summary = $2, summarized_through = $3, updated_at = now() where session_id = $1 and summarized_through = $4",
     [session.id, data.summary, fold.at(-1).seq, state.summarized_through]
@@ -215,7 +212,7 @@ function taskInput({ session, state, turns, trigger, selectedNodeId, design, cha
 
 // Compact transcript of the round's conversation for the final review, so reasoning
 // explained in chat counts as much as reasoning written in notes.
-export async function interviewTranscript(sessionId) {
+export async function interviewTranscript(sessionId, maxChars = 12_000) {
   const state = await queryOne("select summary, summarized_through from interview_state where session_id = $1", [sessionId]);
   if (!state) return "";
   const turns = await query("select role, kind, content, answer_context from interview_turns where session_id = $1 and seq > $2 order by seq desc limit 40", [sessionId, state.summarized_through]);
@@ -231,7 +228,7 @@ export async function interviewTranscript(sessionId) {
       context.communicationGaps?.length ? `  Identified communication gaps: ${context.communicationGaps.join(", ")}` : "",
     ].filter(Boolean);
   });
-  return [state.summary ? `Earlier: ${clean(state.summary, 3000)}` : "", ...lines].filter(Boolean).join("\n").slice(0, 12_000);
+  return [state.summary ? `Earlier: ${clean(state.summary, 3000)}` : "", ...lines].filter(Boolean).join("\n").slice(0, maxChars);
 }
 
 // Everything the communication feedback needs from a round: each learner answer with
@@ -292,16 +289,23 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
   const session = await ownedSession(req);
   if (!hasInterviewer(req.user)) return res.json({ access: "locked", turns: [], aiAvailable: aiConfig.enabled, voice: false });
 
-  // The first visit to an active round opens the interview (a fixed message, no model call).
+  // The first visit to an active round opens the interview (a fixed message, no model
+  // call). A question with a published Problem Pack opens on the v3 Conductor, which
+  // pins everything for the rest of the round; otherwise the v2 interviewer runs.
   if (session.status === "in_progress") {
+    const packVersion = await v3PackFor(session.prompt_id);
     await transaction(async (conn) => {
       await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
       await ensureState(conn, session);
       if (!(await conn.queryOne("select 1 from interview_turns where session_id = $1 limit 1", [session.id]))) {
-        await conn.query(
-          "insert into interview_turns (session_id, user_id, seq, role, kind, trigger, content) values ($1, $2, 1, 'interviewer', 'opening', 'opening', $3)",
-          [session.id, req.user.id, openingMessage(promptById.get(session.prompt_id))]
-        );
+        if (packVersion) {
+          await startRound(conn, { session, user: req.user, packVersion });
+        } else {
+          await conn.query(
+            "insert into interview_turns (session_id, user_id, seq, role, kind, trigger, content) values ($1, $2, 1, 'interviewer', 'opening', 'opening', $3)",
+            [session.id, req.user.id, openingMessage(promptById.get(session.prompt_id))]
+          );
+        }
       }
     });
   }
@@ -312,7 +316,7 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
     aiAvailable: aiConfig.enabled,
     voice: voiceAvailable,
     turns: turns.map(presentTurn),
-    state: state ? presentState(state) : null,
+    state: state ? presentState(state, session.prompt_id) : null,
     allowance: await readAllowance(db, req.user, session.id, state),
   });
 }));
@@ -372,6 +376,9 @@ async function undoLearnerTurn(session, reserved) {
 }
 
 async function replyToLearner({ req, session, reserved, hint = false, onDelta, onReset }) {
+  if (reserved.state.engine === "v3") {
+    return handleLearnerTurn({ session, user: req.user, reserved, selectedNodeId: req.body.selectedNodeId, hint, onDelta, onReset });
+  }
   const design = describeDiagram(session.diagram);
   const trigger = hint ? "hint" : "reply";
   const turns = await recentTurns(session.id, reserved.state.summarized_through);
@@ -402,7 +409,7 @@ async function deliverLearnerReply(req, res, { session, reserved, hint = false }
     }
     return {
       turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
-      state: presentState(result.state),
+      state: presentState(result.state, session.prompt_id),
       allowance: await readAllowance(db, req.user, session.id, result.state),
     };
   };
@@ -532,16 +539,71 @@ interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, 
   }
 }));
 
-// Called by the workspace after the canvas has been quiet for a while. The server
-// decides whether anything significant and unexplained changed; most calls end
-// without a model call, and a model "skip" costs the learner nothing.
+// A v3 tick (docs/design/interview-conductor.md, section 6): most end with nothing or a
+// template, never an error the learner would see.
+async function v3Tick(req, res, session, state, body) {
+  const none = (reason) => res.json({ action: "none", reason });
+  if (!(await tickLimiter(req.user.id))) {
+    await query("insert into interview_events (session_id, type, payload) values ($1, 'tick_rate_limited', '{}'::jsonb)", [session.id]);
+    return none("rate_limited");
+  }
+  const reserveCredit = async () => {
+    try {
+      return await transaction(async (conn) => {
+        await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
+        const fresh = await conn.queryOne("select * from interview_state where session_id = $1", [session.id]);
+        if (fresh.pending_since && Date.now() - new Date(fresh.pending_since).getTime() < PENDING_MS) return null;
+        const allowance = await readAllowance(conn, req.user, session.id, fresh);
+        if (allowance.turns.used >= allowance.turns.limit || allowance.month.used >= allowance.month.limit) return null;
+        const credit = await conn.queryOne("insert into ai_credits (user_id, session_id, kind) values ($1, $2, 'interview_turn') returning id", [req.user.id, session.id]);
+        await conn.query("update interview_state set pending_since = now() where session_id = $1", [session.id]);
+        return credit.id;
+      });
+    } catch (error) {
+      if (error.code === "23505") return null;
+      throw error;
+    }
+  };
+  const release = (creditId) => transaction(async (conn) => {
+    await releaseCredit(conn, creditId);
+    await conn.query("update interview_state set pending_since = null where session_id = $1", [session.id]);
+  });
+  try {
+    const result = await handleTick({ session, user: req.user, stateRow: state, body, reserveCredit, releaseCredit: release });
+    if (result.action === "none") return none(result.reason);
+    res.json({ action: result.action, turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session.id, result.state) });
+  } catch (error) {
+    console.error("[ai] tick failed:", error.code || error.message);
+    return none("error");
+  }
+}
+
+interviewsRouter.post("/sessions/:sessionId/interview/tick", route(async (req, res) => {
+  const body = parse(tickBody, req.body);
+  const session = await ownedSession(req);
+  if (!hasInterviewer(req.user) || session.status !== "in_progress" || !aiConfig.enabled) return res.json({ action: "none", reason: "unavailable" });
+  const state = await transaction((conn) => ensureState(conn, session));
+  if (state.engine === "v3") return v3Tick(req, res, session, state, body);
+  // v2 rounds only look at the canvas; idle and visibility ticks are v3 behaviours.
+  if (body.reason !== "canvas_quiet" || body.typing) return res.json({ action: "none", reason: "nothing_to_ask" });
+  return v2Check(req, res, session, state, body);
+}));
+
+// Kept as an alias of /tick for one release, for workspaces loaded before the switch.
 interviewsRouter.post("/sessions/:sessionId/interview/check", route(async (req, res) => {
   const body = parse(checkBody, req.body);
   const session = await ownedSession(req);
-  const none = (reason) => res.json({ action: "none", reason });
-  if (!hasInterviewer(req.user) || session.status !== "in_progress" || !aiConfig.enabled) return none("unavailable");
-
+  if (!hasInterviewer(req.user) || session.status !== "in_progress" || !aiConfig.enabled) return res.json({ action: "none", reason: "unavailable" });
   const state = await transaction((conn) => ensureState(conn, session));
+  if (state.engine === "v3") return v3Tick(req, res, session, state, { reason: "canvas_quiet", typing: false, selectedNodeId: body.selectedNodeId });
+  return v2Check(req, res, session, state, body);
+}));
+
+// The v2 interviewer's look at the canvas after it has been quiet for a while. The
+// server decides whether anything significant and unexplained changed; most calls end
+// without a model call, and a model "skip" costs the learner nothing.
+async function v2Check(req, res, session, state, body) {
+  const none = (reason) => res.json({ action: "none", reason });
   const current = snapshotOf(session.diagram);
   const diff = diffSnapshots(state.snapshot, current, session.diagram);
   const covered = new Set(state.covered);
@@ -598,7 +660,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/check", route(async (req, 
       return res.json({ action: "skip" });
     }
     const result = await saveInterviewerTurn({ session, state: reserved.state, output: { ...data, intent: data.intent === "answer" ? "question" : data.intent }, trigger: "proactive", design, creditId: reserved.creditId, hint: false });
-    res.json({ action: "ask", turn: presentTurn(result.turn), state: presentState(result.state), allowance: await readAllowance(db, req.user, session.id, result.state) });
+    res.json({ action: "ask", turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session.id, result.state) });
   } catch (error) {
     await transaction(async (conn) => {
       await releaseCredit(conn, reserved.creditId);
@@ -607,4 +669,53 @@ interviewsRouter.post("/sessions/:sessionId/interview/check", route(async (req, 
     console.error("[ai] proactive check failed:", error.code || error.message);
     return none("error");
   }
+}
+
+// Guided or realistic. Fixed once the learner has said anything, because it changes
+// how the round is judged.
+interviewsRouter.post("/sessions/:sessionId/interview/mode", route(async (req, res) => {
+  const { mode } = parse(modeBody, req.body);
+  const session = await ownedSession(req);
+  if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", ROUND_FINISHED);
+  const state = await transaction(async (conn) => {
+    await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
+    const current = await ensureState(conn, session);
+    if (await conn.queryOne("select 1 from interview_turns where session_id = $1 and role = 'learner' limit 1", [session.id])) {
+      throw new HttpError(409, "MODE_LOCKED", "The mode is fixed once the interview has started.");
+    }
+    await changeMode(conn, { session, state: current, mode });
+    return conn.queryOne("select * from interview_state where session_id = $1", [session.id]);
+  });
+  const turns = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [session.id]);
+  res.json({ mode, state: presentState(state, session.prompt_id), turns: turns.map(presentTurn) });
+}));
+
+// A thumbs-down on one interviewer message, with a reason. Works on v2 and v3 rounds,
+// so the two can be compared (docs/design/README.md, success measures).
+interviewsRouter.post("/sessions/:sessionId/interview/turns/:turnId/feedback", route(async (req, res) => {
+  const body = parse(feedbackBody, req.body);
+  const session = await ownedSession(req);
+  const turn = await queryOne("select id from interview_turns where id = $1 and session_id = $2 and role = 'interviewer'", [req.params.turnId, session.id]).catch(() => null);
+  if (!turn) throw new HttpError(404, "NOT_FOUND", "No such interviewer message.");
+  await query(
+    `insert into interview_turn_feedback (turn_id, user_id, rating, reason, note) values ($1, $2, $3, $4, $5)
+     on conflict (turn_id) do update set reason = excluded.reason, note = excluded.note, created_at = now()`,
+    [turn.id, req.user.id, body.rating, body.reason, body.note || null]
+  );
+  res.json({ ok: true });
+}));
+
+// The one-question realism rating at the end of a round, once per round.
+interviewsRouter.post("/sessions/:sessionId/interview/rating", route(async (req, res) => {
+  const body = parse(ratingBody, req.body);
+  const session = await ownedSession(req);
+  const state = await queryOne("select engine from interview_state where session_id = $1", [session.id]);
+  if (!state) throw new HttpError(409, "NO_INTERVIEW", "This round had no interview to rate.");
+  const saved = await queryOne(
+    `insert into interview_ratings (session_id, user_id, realism, comment, engine) values ($1, $2, $3, $4, $5)
+     on conflict (session_id) do nothing returning session_id`,
+    [session.id, req.user.id, body.realism, body.comment || null, state.engine]
+  );
+  if (!saved) throw new HttpError(409, "ALREADY_RATED", "You've already rated this round.");
+  res.status(201).json({ ok: true });
 }));

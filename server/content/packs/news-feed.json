@@ -1,0 +1,535 @@
+{
+  "opening": "Let's talk about building a news feed system. Could you walk me through how you'd design this?",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "dau",
+        "mau",
+        "active"
+      ],
+      "answer": "Assume hundreds of millions of daily active users."
+    },
+    {
+      "id": "scale.graph",
+      "topics": [
+        "followers",
+        "follows",
+        "social graph",
+        "connections"
+      ],
+      "answer": "The average user follows a few hundred accounts, but highly followed accounts can have tens of millions of followers."
+    },
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "ratio",
+        "reads",
+        "writes",
+        "throughput",
+        "post rate"
+      ],
+      "answer": "Feed reads vastly outnumber posts, assume something like a 100 to 1 ratio."
+    },
+    {
+      "id": "latency",
+      "topics": [
+        "latency",
+        "speed",
+        "sla",
+        "performance"
+      ],
+      "answer": "The feed needs to feel instant when a user opens the app, so we're aiming for a latency under 200 ms."
+    },
+    {
+      "id": "scope.media",
+      "topics": [
+        "media",
+        "images",
+        "video",
+        "content"
+      ],
+      "answer": "Posts can contain text, images, and videos. You can assume standard usage for media files and focus on the feed generation logic."
+    },
+    {
+      "id": "scope.ranking",
+      "topics": [
+        "chronological",
+        "algorithm",
+        "ranking",
+        "relevance"
+      ],
+      "answer": "The final feed should be ranked by relevance, though it's fine to start with a chronological approach and build on it."
+    }
+  ],
+  "clarificationPolicy": "Assume standard industry practices for anything not explicitly specified, keeping the focus on high-scale feed delivery.",
+  "agenda": [
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "user"
+        ],
+        "keywords": [
+          "reads",
+          "writes",
+          "qps",
+          "storage",
+          "users"
+        ]
+      },
+      "goal": "Define the scale of the system to inform architectural decisions later.",
+      "opener": "To kick things off, what kind of scale and traffic numbers do you think we should be designing for?",
+      "evidence": {
+        "strong": "Estimates DAU, write QPS, and read QPS, recognizing the heavy read-to-write ratio.",
+        "adequate": "Asks for the numbers but correctly identifies it as a read-heavy system.",
+        "weak": "Dives into architecture without considering the volume of traffic."
+      },
+      "misconceptions": [
+        {
+          "id": "write-heavy",
+          "pattern": "Assuming posting is as frequent as viewing the feed.",
+          "challenge": "Think about standard usage of social media. How often do users post compared to how often they open the app to read?"
+        }
+      ],
+      "probes": [
+        "Based on those user numbers, what read and write QPS are we looking at?"
+      ],
+      "hints": [
+        "Start with an assumption for daily active users.",
+        "If a user opens the app multiple times a day but posts once a month, what's the read to write ratio?"
+      ],
+      "moveOnSummary": "Candidate established the read-heavy scale of the system.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "system-design-interview"
+      ]
+    },
+    {
+      "id": "req.api",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway"
+        ],
+        "keywords": [
+          "endpoint",
+          "json",
+          "rest",
+          "grpc",
+          "graphql"
+        ]
+      },
+      "goal": "Define the interface between the client and the backend.",
+      "opener": "What core APIs would the client need to interact with this system?",
+      "evidence": {
+        "strong": "Defines clear endpoints for publishing and reading feeds with appropriate parameters.",
+        "adequate": "Lists the required actions but without clear API boundaries.",
+        "weak": "Omits the client interface entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "missing-pagination",
+          "pattern": "Defining a feed endpoint that returns an entire list of posts.",
+          "challenge": "If a user follows many people, how many posts will the feed request return in one response?"
+        }
+      ],
+      "probes": [
+        "What parameters would the get feed API take?"
+      ],
+      "hints": [
+        "What data does the client send when publishing?",
+        "How does the client tell the server it wants the next page of the feed?"
+      ],
+      "moveOnSummary": "Candidate defined the core API endpoints.",
+      "learnTopics": [
+        "api-design"
+      ]
+    },
+    {
+      "id": "hl.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "service",
+          "database",
+          "cache"
+        ],
+        "keywords": [
+          "publish",
+          "read",
+          "feed service",
+          "post service"
+        ]
+      },
+      "goal": "Establish a clear path from a user publishing a post to another user viewing their feed.",
+      "opener": "Let's map out the core components. What happens in the system when I publish a post, and when I request my feed?",
+      "evidence": {
+        "strong": "Separates write path and read path using appropriate async mechanisms and caching.",
+        "adequate": "Connects a basic web server to a database to serve feeds.",
+        "weak": "Merges all logic into one monolith directly querying databases on reads."
+      },
+      "misconceptions": [
+        {
+          "id": "db-read",
+          "pattern": "Querying the database for followers' posts on every read.",
+          "challenge": "If I open my app and follow a large number of people, how long will that database query take during peak load?"
+        }
+      ],
+      "probes": [
+        "How do the post service and feed service communicate?",
+        "Where is the social graph stored?"
+      ],
+      "hints": [
+        "Think about what happens when a user opens the app. Should we build the feed on the fly, or have it ready?",
+        "How can we decouple the action of posting from the action of updating feeds?"
+      ],
+      "moveOnSummary": "Candidate established a basic architecture with separated read and write paths.",
+      "learnTopics": [
+        "hld-vs-lld",
+        "api-gateway",
+        "monolith-vs-microservices"
+      ]
+    },
+    {
+      "id": "deep.fanout",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "queue",
+          "stream-processor",
+          "event-bus"
+        ],
+        "keywords": [
+          "push",
+          "pull",
+          "hybrid",
+          "fan-out",
+          "celebrity",
+          "asynchronous"
+        ]
+      },
+      "goal": "Design a strategy to distribute posts that handles high-follower accounts without causing bottlenecks.",
+      "opener": "How does your system handle the distribution of a post to followers, especially for someone with a massive following?",
+      "evidence": {
+        "strong": "Proposes a hybrid fan-out model pushing for normal accounts and pulling for highly followed accounts.",
+        "adequate": "Uses fan-out on write but adds queues to handle the load, acknowledging the delay.",
+        "weak": "Attempts synchronous fan-out on write or full pull on read for everyone."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-push",
+          "pattern": "Pushing to all followers synchronously before returning success to the poster.",
+          "challenge": "If pushing to one cache takes one millisecond, how long does the HTTP request take for a user with a massive following?"
+        }
+      ],
+      "probes": [
+        "How do we define which accounts get a different fan-out treatment?",
+        "How does the read path know to fetch the posts if they weren't pushed?"
+      ],
+      "hints": [
+        "Fan-out on write is great for fast reads, but expensive for major accounts.",
+        "What if we didn't push the massive account's post to caches, but instead fetched it when the follower opens their feed?"
+      ],
+      "moveOnSummary": "Candidate justified a fan-out strategy to handle viral posts and high-follower accounts.",
+      "learnTopics": [
+        "fan-out",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "deep.cache",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "kv-store",
+          "t-redis"
+        ],
+        "keywords": [
+          "hydration",
+          "post ids",
+          "memory",
+          "content"
+        ]
+      },
+      "goal": "Optimize memory usage and ensure data consistency by storing post references in the feed cache.",
+      "opener": "What exact data structure and fields are you storing in the precomputed feed cache for a given user?",
+      "evidence": {
+        "strong": "Stores only post IDs in the feed cache and fetches full post content from a separate cache.",
+        "adequate": "Stores full post content in the feed cache but recognizes the memory cost when prompted.",
+        "weak": "Stores massive amounts of unoptimized JSON in the user's feed cache."
+      },
+      "misconceptions": [
+        {
+          "id": "cache-full-post",
+          "pattern": "Storing the full post body in every follower's feed cache.",
+          "challenge": "If a post is edited or deleted, how do you update it in the millions of feeds it was pushed to?"
+        }
+      ],
+      "probes": [
+        "How much memory will this cache take as the user base grows?"
+      ],
+      "hints": [
+        "What happens to memory if a post with a large text body is duplicated into many feed caches?",
+        "Is there a way to store a reference to the post instead of the full body?"
+      ],
+      "moveOnSummary": "Candidate defined a cache model based on post IDs with a separate hydration step.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.ranking",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "ai-agent",
+          "model-serving"
+        ],
+        "keywords": [
+          "ranking",
+          "score",
+          "relevance",
+          "machine learning"
+        ]
+      },
+      "goal": "Integrate a ranking step into the feed retrieval process while respecting the low latency requirement.",
+      "opener": "If we want to rank the feed by relevance rather than just time, how does that fit into your architecture?",
+      "evidence": {
+        "strong": "Fetches a candidate set of recent IDs from the cache, passes them to a ranking service, and then hydrates the top results.",
+        "adequate": "Suggests ranking happens asynchronously on the backend but struggles to explain how new posts get ranked instantly.",
+        "weak": "Suggests running a heavy model over all posts in the database on every read."
+      },
+      "misconceptions": [
+        {
+          "id": "rank-all",
+          "pattern": "Ranking all posts a user could possibly see on every request.",
+          "challenge": "Given our latency budget, how many posts can the ranking service realistically score during a read?"
+        }
+      ],
+      "probes": [
+        "How many posts do we send to the ranker at once?",
+        "Does ranking happen before or after we hydrate the post content?"
+      ],
+      "hints": [
+        "We probably can't score a huge volume of posts in our latency budget.",
+        "Consider a two-stage approach: get a candidate set of IDs, score them, then fetch the content for the top results."
+      ],
+      "moveOnSummary": "Candidate designed a ranking boundary over a limited candidate set of posts.",
+      "learnTopics": [
+        "recommendation-system-design",
+        "model-serving"
+      ]
+    },
+    {
+      "id": "deep.pagination",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "client"
+        ],
+        "keywords": [
+          "cursor",
+          "offset",
+          "limit",
+          "pagination",
+          "infinite scroll"
+        ]
+      },
+      "goal": "Ensure the feed can be scrolled infinitely without performance degradation or duplicate items.",
+      "opener": "As the user scrolls down their feed, how does the client request the next batch of posts?",
+      "evidence": {
+        "strong": "Explains cursor-based pagination using an ID or timestamp to avoid duplicates when new posts arrive.",
+        "adequate": "Suggests offset-based pagination but acknowledges the duplicate issue.",
+        "weak": "Fetches the entire feed to the client in one request."
+      },
+      "misconceptions": [
+        {
+          "id": "offset-pagination",
+          "pattern": "Using purely OFFSET and LIMIT for an infinite scrolling feed.",
+          "challenge": "If the client uses an offset, but new posts arrived while reading the first page, what happens to the posts seen on page two?"
+        }
+      ],
+      "probes": [
+        "What exactly does the client send to the server to get the second page?"
+      ],
+      "hints": [
+        "If you use an index offset, the underlying list changing will shift the items.",
+        "What if the client passed the ID of the last post they saw?"
+      ],
+      "moveOnSummary": "Candidate implemented cursor-based pagination for feed retrieval.",
+      "learnTopics": [
+        "pagination",
+        "api-design"
+      ]
+    },
+    {
+      "id": "deep.deletion",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "cache",
+          "worker"
+        ],
+        "keywords": [
+          "delete",
+          "tombstone",
+          "remove",
+          "hydrate"
+        ]
+      },
+      "goal": "Ensure deleted content is not served to users, even if it was fanned out.",
+      "opener": "How does the system handle deleted posts, especially if they've already been distributed?",
+      "evidence": {
+        "strong": "Explains that deleting the post from the source cache means hydration fails on read, effectively hiding it instantly.",
+        "adequate": "Suggests fanning out a delete event to remove IDs from caches.",
+        "weak": "Suggests running a massive database update across all user feeds synchronously."
+      },
+      "misconceptions": [
+        {
+          "id": "fanout-delete",
+          "pattern": "Fanning out a delete operation to all feed caches.",
+          "challenge": "If the post is in countless feed caches, how long will it take to run that many removals, and what if they read it in the meantime?"
+        }
+      ],
+      "probes": [
+        "If we just store IDs in the feed cache, what happens during the read path if the post is deleted?"
+      ],
+      "hints": [
+        "Consider what happens during the hydration step.",
+        "If the post content is gone from the main database, does it matter if the ID is still in the user's feed cache?"
+      ],
+      "moveOnSummary": "Candidate handled deletions by relying on hydration failure or tombstones.",
+      "learnTopics": [
+        "cache-invalidation",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "failure",
+          "inactive",
+          "memory"
+        ]
+      },
+      "goal": "Identify edge cases and system limits, such as handling inactive users.",
+      "opener": "Looking at the system as a whole, what happens to the feed caches for users who haven't logged in for several months?",
+      "evidence": {
+        "strong": "Proposes eviction policies for inactive users and a fallback path to rebuild feeds on the fly when they return.",
+        "adequate": "Suggests a time limit on caches but doesn't clearly explain how the feed is rebuilt.",
+        "weak": "Keeps all users in the cache indefinitely."
+      },
+      "misconceptions": [
+        {
+          "id": "infinite-cache",
+          "pattern": "Keeping every user's feed in memory forever.",
+          "challenge": "If we have a massive user base but only a fraction are active daily, how much memory are we wasting?"
+        }
+      ],
+      "probes": [
+        "If an inactive user logs in and their cache is empty, how do we generate their feed?"
+      ],
+      "hints": [
+        "Do we need to actively push posts to users who aren't online?",
+        "Consider an eviction policy on the feed cache. What is the fallback read path?"
+      ],
+      "moveOnSummary": "Candidate addressed inactive users and cache eviction strategies.",
+      "learnTopics": [
+        "cache-eviction",
+        "redis"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "deleted_viral_post",
+      "after": "deep.fanout",
+      "prompt": "An account with a massive following posts something, it gets pulled into feeds everywhere, but then they delete it a few minutes later. How does your system ensure it's removed from feeds immediately?",
+      "agendaItemId": "deep.deletion"
+    }
+  ],
+  "vocabulary": [
+    "fan-out",
+    "hydration",
+    "cursor",
+    "chronological",
+    "celebrity",
+    "tombstone"
+  ],
+  "alternatives": [
+    {
+      "choice": "Pure fan-out on read (Pull model)",
+      "whenBetter": "When the read volume is very low compared to write volume, or when users follow mostly inactive accounts, saving compute on unnecessary push operations."
+    },
+    {
+      "choice": "Graph database for the social graph",
+      "whenBetter": "When we need to traverse followers of followers or calculate complex network connections, rather than just simple follower lists."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Hybrid fan-out with ID caching",
+      "outline": "Uses a hybrid fan-out model, pushing posts for regular users via queues and pulling for high-follower accounts at read time. Employs a feed cache storing only post IDs, hydrating content separately to handle edits and deletes cleanly. Implements cursor-based pagination and defines a clear boundary for ranking over a limited candidate set."
+    },
+    {
+      "band": "adequate",
+      "label": "Push fan-out with full posts",
+      "outline": "Proposes a pure fan-out on write architecture. Acknowledges that highly followed accounts will cause bottlenecks and attempts to mitigate this by adding queues, but accepts the delay. Caches full post bodies, which wastes memory but technically functions. Uses offset pagination."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic graph traversal",
+      "outline": "Designs a monolithic system that queries the social graph and post database on every read request. Fails to recognize the read-to-write ratio imbalance and struggles to articulate how the system scales beyond a single database."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}
