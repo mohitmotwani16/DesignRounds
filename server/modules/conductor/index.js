@@ -144,6 +144,13 @@ async function converse({ ctx, session, user, turns, plan, trigger, learner, sel
       continue;
     }
     const verified = validateOutput({ output: data, plan, items, pack: record.pack, sources, designIds: design.componentIds, mode: round.mode, conventions });
+    if (verified.unearned) {
+      // Praising a non-answer: this turn may not advance. Probe or redirect instead.
+      plan = { ...plan, allowedMoves: plan.allowedMoves.filter((move) => move !== "acknowledge_advance") };
+      rejection = `acknowledge_advance needs an answer you can quote for ${plan.focusItemId}, and the candidate hasn't given one; probe or redirect instead. Allowed moves: ${plan.allowedMoves.join(", ")}`;
+      await store.logEvents(session.id, [{ type: "move_rejected", payload: { move: verified.move, attempt, stage: "unearned" } }]);
+      continue;
+    }
     if (!verified.moveAllowed) {
       rejection = `${verified.move} isn't allowed; allowed moves: ${plan.allowedMoves.join(", ")}`;
       await store.logEvents(session.id, [{ type: "move_rejected", payload: { move: verified.move, attempt, stage: "validate" } }]);

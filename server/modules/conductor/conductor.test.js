@@ -147,6 +147,19 @@ test("validate: disallowed moves are flagged; opening moves need a pending item"
   assert.equal(validate(output({ move: "probe", focusItemId: "hl.flow" })).focusItemId, "deep.codegen");
 });
 
+test("validate: acknowledging needs a quoted, adequate answer for the focus item", () => {
+  const ack = output({ move: "acknowledge_advance", focusItemId: "deep.cache" });
+  const praiseOfNothing = validate(ack);
+  assert.equal(praiseOfNothing.unearned, true);
+  assert.equal(praiseOfNothing.moveAllowed, false);
+  const earned = validate({ ...ack, assessment: [{ itemId: "deep.codegen", band: "adequate", quote: "a counter per server and encode it in base62", missing: "", misconceptionId: "" }] });
+  assert.equal(earned.moveAllowed, true);
+  const earlier = validate(ack, {}, ledger({ "deep.codegen": { status: "open", band: "strong" } }));
+  assert.equal(earlier.moveAllowed, true, "an answer from an earlier turn counts");
+  const weakOnly = validate({ ...ack, assessment: [{ itemId: "deep.codegen", band: "weak", quote: "a counter per server and encode it in base62", missing: "", misconceptionId: "" }] });
+  assert.equal(weakOnly.unearned, true, "a weak answer doesn't earn an acknowledgement; move_on is the honest move");
+});
+
 test("validate: counts questions outside quotes, filters ids, flags leaks", () => {
   assert.equal(questionCount('You said "why not?" earlier. What breaks first?'), 1);
   assert.equal(validate(output({ message: "What breaks? And why?" })).multipleQuestions, true);

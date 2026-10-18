@@ -91,11 +91,26 @@ export function validateOutput({ output, plan, items, pack, sources, designIds, 
   }
   if (dropped) problems.push(`${dropped} assessment(s) dropped (unknown item or unverified quote)`);
 
+  // "Answered, let's move on" needs evidence: the focus item must already have an
+  // adequate band or get one, with a verified quote, in this turn. Otherwise the model
+  // is praising a non-answer, and the move is rejected (it should probe or redirect).
+  let unearned = false;
+  if (move === "acknowledge_advance" && plan.focusItemId) {
+    const focus = items.find((item) => item.itemId === plan.focusItemId);
+    const earned = (focus && ["adequate", "strong"].includes(focus.band))
+      || assessments.some((entry) => entry.itemId === plan.focusItemId && ["adequate", "strong"].includes(entry.band));
+    if (!earned) {
+      unearned = true;
+      problems.push(`acknowledge_advance without an adequate, quoted answer for ${plan.focusItemId}`);
+    }
+  }
+
   const clarificationIds = [...new Set(output.clarificationIds ?? [])].filter((id) => pack.clarifications.some((fact) => fact.id === id));
   const questions = questionCount(output.message);
   return {
     move,
-    moveAllowed,
+    moveAllowed: moveAllowed && !unearned,
+    unearned,
     focusItemId,
     message: String(output.message ?? "").trim(),
     classification: output.classification,
