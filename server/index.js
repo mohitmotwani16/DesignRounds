@@ -6,6 +6,7 @@ import { deliveryMode } from "./email.js";
 import { devToolsEnabled, isProduction } from "./flags.js";
 import { describeAi } from "./modules/ai/config.js";
 import { describeSpeech } from "./modules/ai/speech.js";
+import { describeObjectStorage } from "./object-storage.js";
 import { describeTurnstile } from "./turnstile.js";
 import { startAnswerPoolWorker } from "./modules/answers/worker.js";
 import { buildPacksEnabled, describePacks, startPackWorker } from "./modules/pks/worker.js";
@@ -19,7 +20,7 @@ const stopAnswerPools = buildAnswerPools ? startAnswerPoolWorker() : () => {};
 const stopPacks = buildPacksEnabled() ? startPackWorker() : () => {};
 
 const server = app.listen(port, () => {
-  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  ai=${describeAi()}  stt=${describeSpeech()}  turnstile=${describeTurnstile()}  packs=${describePacks()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
+  console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  storage=${describeObjectStorage()}  ai=${describeAi()}  stt=${describeSpeech()}  turnstile=${describeTurnstile()}  packs=${describePacks()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
 });
 
 // Graceful shutdown: stop accepting connections, let in-flight requests finish (up

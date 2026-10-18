@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { query, queryOne } from "../db.js";
 import { HttpError, parse, route } from "../http.js";
+import { deleteInterviewAudioForSession } from "../object-storage.js";
 import { requireUser } from "./identity.js";
 import { briefFor, canAccessRound, promptById } from "./rounds.js";
 
@@ -181,6 +182,7 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
 
 practiceRouter.delete("/sessions/:sessionId", route(async (req, res) => {
   const row = await ownedSession(req);
+  await deleteInterviewAudioForSession(row.id);
   await query("delete from practice_sessions where id = $1 and user_id = $2", [row.id, req.user.id]);
   res.json({ ok: true });
 }));
