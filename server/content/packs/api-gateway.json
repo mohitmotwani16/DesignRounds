@@ -1,0 +1,614 @@
+{
+  "opening": "Welcome! Today we're going to design a multi-tenant API gateway. Whenever you're ready, you can start by exploring the requirements or laying out the initial architecture.",
+  "clarifications": [
+    {
+      "id": "scale.qps",
+      "topics": [
+        "scale",
+        "qps",
+        "traffic",
+        "volume",
+        "throughput"
+      ],
+      "answer": "We are expecting around 100,000 peak requests per second across all tenants globally."
+    },
+    {
+      "id": "scale.latency",
+      "topics": [
+        "latency",
+        "delay",
+        "performance",
+        "overhead"
+      ],
+      "answer": "The gateway should add no more than 10 milliseconds of latency to the critical path."
+    },
+    {
+      "id": "scale.tenants",
+      "topics": [
+        "tenants",
+        "customers",
+        "users",
+        "size"
+      ],
+      "answer": "We have around 1,000 active tenants. A few are very large enterprise customers, but most are small."
+    },
+    {
+      "id": "scope.services",
+      "topics": [
+        "services",
+        "backend",
+        "destinations",
+        "routing"
+      ],
+      "answer": "The gateway routes to hundreds of independent microservices maintained by different teams."
+    },
+    {
+      "id": "scope.updates",
+      "topics": [
+        "configuration",
+        "changes",
+        "frequency",
+        "updates",
+        "policies"
+      ],
+      "answer": "Configuration changes happen hundreds of times a day and should take effect within a minute."
+    },
+    {
+      "id": "scope.ratelimits",
+      "topics": [
+        "limit",
+        "throttle",
+        "rate",
+        "quota"
+      ],
+      "answer": "Rate limits are defined per tenant and sometimes per endpoint to protect our backend services from overload."
+    },
+    {
+      "id": "scope.auth",
+      "topics": [
+        "auth",
+        "authentication",
+        "tokens",
+        "jwt"
+      ],
+      "answer": "All incoming requests carry a standard token, like a JWT, which the gateway must validate before routing."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about any other specific constraints, tell them to assume sensible defaults for a high-traffic infrastructure service and state their assumptions.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "latency",
+          "tenants",
+          "requirements",
+          "scale"
+        ]
+      },
+      "goal": "Understand traffic scale, latency requirements, and core gateway responsibilities.",
+      "opener": "What main requirements and constraints will drive your design choices for this gateway?",
+      "evidence": {
+        "strong": "Actively asks about traffic volume, tenant count, config update frequency, and latency limits.",
+        "adequate": "Mentions basic requirements like routing and auth but misses constraints around config rollouts or scale.",
+        "weak": "Jumps straight into drawing components without defining what the gateway actually needs to handle."
+      },
+      "misconceptions": [
+        {
+          "id": "monolithic_gateway",
+          "pattern": "Assuming the gateway only routes traffic without needing to handle isolated tenant policies.",
+          "challenge": "How do we apply different rate limits or access rules depending on which customer is calling the API?"
+        }
+      ],
+      "probes": [
+        "What are your expectations for the performance overhead of the gateway?",
+        "How frequently do you think routing rules or tenant policies will change?"
+      ],
+      "hints": [
+        "Consider the difference between the sheer volume of API requests and the frequency of configuration updates.",
+        "Think about what metrics are critical when we sit right in front of all backend services."
+      ],
+      "moveOnSummary": "We've established the need for high-throughput routing, low latency, and safe configuration updates.",
+      "learnTopics": [
+        "api-gateway",
+        "multi-tenancy",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "client",
+          "load-balancer",
+          "service"
+        ],
+        "keywords": [
+          "proxy",
+          "route",
+          "backend",
+          "traffic",
+          "request"
+        ]
+      },
+      "goal": "Establish the request path from client through the gateway to the backend.",
+      "opener": "Can you walk me through the components involved when an API request arrives from a client?",
+      "evidence": {
+        "strong": "Draws a clear path from client through a load balancer to horizontal gateway nodes, and finally to the correct backend services.",
+        "adequate": "Shows a basic gateway routing to backends but might miss load balancing or horizontal scaling.",
+        "weak": "Merges the gateway with backend business logic or creates a single monolithic node."
+      },
+      "misconceptions": [
+        {
+          "id": "business_logic_in_gateway",
+          "pattern": "Putting backend business logic or heavy processing inside the gateway nodes.",
+          "challenge": "If the gateway is doing this processing, how does that affect our strict latency budget for all other requests?"
+        }
+      ],
+      "probes": [
+        "How does a client know which gateway node to talk to?",
+        "What happens when the number of incoming requests doubles?"
+      ],
+      "hints": [
+        "We need a way to distribute incoming connections across multiple gateway machines.",
+        "Keep the gateway focused only on cross-cutting concerns, not payload processing."
+      ],
+      "moveOnSummary": "You have laid out the critical path for incoming traffic routing to the microservices.",
+      "learnTopics": [
+        "api-gateway",
+        "load-balancing"
+      ]
+    },
+    {
+      "id": "hl.control_plane",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "admin",
+          "database"
+        ],
+        "keywords": [
+          "control plane",
+          "configuration",
+          "admin",
+          "policies",
+          "management"
+        ]
+      },
+      "goal": "Isolate the configuration management from the traffic serving path.",
+      "opener": "How and where are the routing rules and tenant configurations stored and managed?",
+      "evidence": {
+        "strong": "Clearly separates the data plane traffic from the control plane management APIs and uses a database for config storage.",
+        "adequate": "Mentions storing configurations but somewhat mixes the management APIs with the data plane APIs.",
+        "weak": "Hardcodes configurations or expects the gateway nodes to handle configuration writing and serving simultaneously."
+      },
+      "misconceptions": [
+        {
+          "id": "no_control_plane",
+          "pattern": "Serving admin configuration updates through the same high-traffic gateway endpoints.",
+          "challenge": "If the gateway is under heavy load, will administrators still be able to update rate limits or routes reliably?"
+        }
+      ],
+      "probes": [
+        "Where is the source of truth for all our routing rules?",
+        "Who or what interacts with these configuration APIs?"
+      ],
+      "hints": [
+        "Think about the pattern used in systems like Envoy or Istio, separating configuration from traffic.",
+        "We need a secure, internal way to manage state without impacting customer traffic."
+      ],
+      "moveOnSummary": "We have a distinct control plane to manage and store all configurations.",
+      "learnTopics": [
+        "api-gateway",
+        "multi-tenancy"
+      ]
+    },
+    {
+      "id": "deep.data_plane_resilience",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "local-cache"
+        ],
+        "keywords": [
+          "cache",
+          "sync",
+          "pull",
+          "push",
+          "offline",
+          "memory"
+        ]
+      },
+      "goal": "Ensure the gateway continues serving traffic using last-known-good configuration if the control plane fails.",
+      "opener": "What happens to incoming API traffic if your configuration service or database goes offline entirely?",
+      "evidence": {
+        "strong": "Caches configuration locally in gateway memory, ensuring zero impact to live traffic during a control plane outage.",
+        "adequate": "Uses an external distributed cache; traffic survives DB failure but has a dependency on cache availability.",
+        "weak": "Gateway queries the control plane database synchronously per request, causing a total traffic outage."
+      },
+      "misconceptions": [
+        {
+          "id": "synchronous_config_lookup",
+          "pattern": "Looking up routing rules in a database or external service for every incoming API request.",
+          "challenge": "Given our low latency budget, can we afford a network call to the database on every single request?"
+        }
+      ],
+      "probes": [
+        "How do the gateway nodes actually get the rules from the control plane?",
+        "If a node restarts while the control plane is down, what configuration does it load?"
+      ],
+      "hints": [
+        "Consider what the gateway nodes can keep in their own memory.",
+        "The data plane should be able to operate entirely independently of the control plane's health."
+      ],
+      "moveOnSummary": "Storing the config locally guarantees traffic routing continues even if management systems fail.",
+      "learnTopics": [
+        "caching",
+        "availability",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.config_rollout",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "deployer",
+          "t-kafka",
+          "api-gateway"
+        ],
+        "keywords": [
+          "rollout",
+          "canary",
+          "validation",
+          "versioning",
+          "update",
+          "watch"
+        ]
+      },
+      "goal": "Design a safe mechanism for applying configuration updates without dropping healthy traffic.",
+      "opener": "If someone deploys a bad routing change, how does your system handle it, and how do you ensure safe rollouts?",
+      "evidence": {
+        "strong": "Discusses configuration versioning, dry runs or validation, staged rollouts, and rapid automated rollback.",
+        "adequate": "Mentions pushing config updates to nodes or using a message broker, but lacks a clear strategy for rollback.",
+        "weak": "Assumes all gateway nodes immediately pick up and apply any database update without validation."
+      },
+      "misconceptions": [
+        {
+          "id": "instant_global_update",
+          "pattern": "Forcing all gateway nodes to immediately update their routing tables at the exact same time.",
+          "challenge": "If the new configuration is malformed, what happens to all our global traffic?"
+        }
+      ],
+      "probes": [
+        "How do you verify a new rate limit policy will not block legitimate traffic before applying it everywhere?",
+        "How does a node switch from the old config to the new one without dropping inflight requests?"
+      ],
+      "hints": [
+        "Think about how you deploy application code safely; configuration is no different.",
+        "Can we apply the change to just one node first?"
+      ],
+      "moveOnSummary": "A versioned, staged rollout with quick rollback capability protects the system from bad configurations.",
+      "learnTopics": [
+        "deployment-strategies",
+        "feature-flags"
+      ]
+    },
+    {
+      "id": "deep.rate_limiting",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "distributed-cache",
+          "t-redis"
+        ],
+        "keywords": [
+          "rate limit",
+          "token bucket",
+          "throttle",
+          "redis",
+          "counters"
+        ]
+      },
+      "goal": "Implement distributed, per-tenant rate limiting that is accurate and low-latency.",
+      "opener": "How are you enforcing rate limits across multiple gateway instances for a single tenant?",
+      "evidence": {
+        "strong": "Uses a fast, in-memory store like Redis with Lua scripts or a token bucket algorithm, discussing the latency trade-offs of centralized vs local counters.",
+        "adequate": "Proposes a centralized database or cache for counters but misses the concurrency or latency implications.",
+        "weak": "Keeps limits only in local node memory without syncing, or hits a relational database synchronously."
+      },
+      "misconceptions": [
+        {
+          "id": "local_only_limits",
+          "pattern": "Keeping rate limit counters strictly local to each node without any syncing.",
+          "challenge": "If a tenant's limit is 100 QPS and we have 50 nodes, how do we prevent them from actually using 5,000 QPS?"
+        }
+      ],
+      "probes": [
+        "How do you handle race conditions when multiple nodes update a tenant's counter simultaneously?",
+        "What happens to latency if the rate-limit store is slow?"
+      ],
+      "hints": [
+        "You might want to look at algorithms like token bucket or sliding window.",
+        "Consider how we can batch or asynchronously sync counters if strict accuracy is not mandatory."
+      ],
+      "moveOnSummary": "We have covered how to distribute rate limit counters efficiently using a fast caching layer.",
+      "learnTopics": [
+        "rate-limiting",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.tenant_isolation",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "cluster",
+          "shard"
+        ],
+        "keywords": [
+          "isolation",
+          "noisy neighbor",
+          "dedicated",
+          "pools",
+          "tiers"
+        ]
+      },
+      "goal": "Prevent a single large or misbehaving tenant from exhausting gateway resources.",
+      "opener": "How do you prevent a massive traffic spike from one large tenant from degrading the performance for everyone else?",
+      "evidence": {
+        "strong": "Proposes fairness mechanisms, load shedding, or physically isolating very large tenants into dedicated gateway pools.",
+        "adequate": "Relies entirely on rate limiting, which might not protect against resource exhaustion at the connection level.",
+        "weak": "Assumes basic auto-scaling is fast enough to handle sudden massive spikes from a single tenant."
+      },
+      "misconceptions": [
+        {
+          "id": "autoscaling_solves_all",
+          "pattern": "Relying purely on auto-scaling to absorb spikes instead of isolating or throttling traffic.",
+          "challenge": "Auto-scaling takes minutes to spin up new nodes. What happens to the other tenants' traffic during those minutes?"
+        }
+      ],
+      "probes": [
+        "What if a tenant sends traffic well below their rate limit, but the requests are extremely heavy or slow?",
+        "Should our top 3 biggest customers share the exact same hardware as the 997 smaller ones?"
+      ],
+      "hints": [
+        "Think about noisy neighbors and how to contain the blast radius of a bad actor.",
+        "Can we route traffic differently based on the tenant ID?"
+      ],
+      "moveOnSummary": "Isolating workloads or using dedicated pools helps protect smaller tenants from noisy neighbors.",
+      "learnTopics": [
+        "multi-tenancy",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "deep.authentication",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "auth-service",
+          "idp",
+          "local-cache"
+        ],
+        "keywords": [
+          "jwt",
+          "jwks",
+          "token",
+          "verify",
+          "introspection",
+          "signature"
+        ]
+      },
+      "goal": "Validate auth tokens securely without adding significant per-request latency.",
+      "opener": "Where and how exactly is token validation happening on the critical path?",
+      "evidence": {
+        "strong": "Validates JWT signatures locally on the gateway using cached public keys, minimizing network hops.",
+        "adequate": "Calls an external authentication service or IDP for every request, recognizing it as a bottleneck.",
+        "weak": "Passes unvalidated tokens directly to backend services, violating the gateway's security responsibilities."
+      },
+      "misconceptions": [
+        {
+          "id": "remote_introspection",
+          "pattern": "Sending the token to an auth service database for validation on every single request.",
+          "challenge": "If the auth service goes down, does our entire gateway stop routing traffic?"
+        }
+      ],
+      "probes": [
+        "How does the gateway know the token hasn't been tampered with?",
+        "What happens if the backend auth service becomes slow or unresponsive?"
+      ],
+      "hints": [
+        "Look into how stateless tokens like JWTs are signed and verified.",
+        "We only need the public key to verify a signature, and keys do not change often."
+      ],
+      "moveOnSummary": "Validating tokens locally on the gateway keeps latency low and removes a critical dependency.",
+      "learnTopics": [
+        "authentication-authorization",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "deep.dedicated_pools",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "cluster"
+        ],
+        "keywords": [
+          "dedicated",
+          "compliance",
+          "isolation",
+          "hardware"
+        ]
+      },
+      "goal": "Adapt the architecture to support physically isolated infrastructure for specific high-tier tenants.",
+      "opener": "How would you modify your design if a major enterprise customer requires their traffic to be physically isolated from others?",
+      "evidence": {
+        "strong": "Proposes a dedicated set of gateway nodes and potentially distinct config paths or shards, managed by the same control plane.",
+        "adequate": "Suggests separate deployments but struggles to explain how routing and management would integrate.",
+        "weak": "Tries to enforce physical isolation using just logical software limits on shared nodes."
+      },
+      "misconceptions": [
+        {
+          "id": "logical_is_physical",
+          "pattern": "Assuming software tenant IDs provide physical isolation.",
+          "challenge": "If they share the same CPU and memory on a VM, is that physically isolated?"
+        }
+      ],
+      "probes": [
+        "How does the control plane know which hardware to deploy this tenant's configuration to?"
+      ],
+      "hints": [
+        "We might need separate load balancers and auto-scaling groups just for this tenant."
+      ],
+      "moveOnSummary": "Using dedicated cell architectures or node pools achieves strict physical isolation.",
+      "learnTopics": [
+        "multi-tenancy"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "scalability",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "spof",
+          "risk",
+          "scale",
+          "failure"
+        ]
+      },
+      "goal": "Reflect on the limits of the design and identify single points of failure.",
+      "opener": "Looking at the overall design, where do you see the biggest risk or bottleneck as the system continues to scale?",
+      "evidence": {
+        "strong": "Identifies realistic limits like rate-limiter sync latency, memory limits for holding massive routing tables, or load balancer capacity.",
+        "adequate": "Mentions generic database scaling issues without tying them specifically to the gateway architecture.",
+        "weak": "Claims the system is perfectly scalable and has no bottlenecks."
+      },
+      "misconceptions": [
+        {
+          "id": "perfect_system",
+          "pattern": "Believing the addition of a cache or auto-scaling makes a system infinitely scalable.",
+          "challenge": "What happens to the gateway's memory footprint if we have millions of complex routing rules?"
+        }
+      ],
+      "probes": [
+        "If we had 10x the number of routing rules, how would that impact the gateway nodes?",
+        "Where is the most complex logic currently sitting in your data path?"
+      ],
+      "hints": [
+        "Think about the components that store state or have to broadcast information globally.",
+        "Consider the memory and CPU cost of running complex regex or header transformations."
+      ],
+      "moveOnSummary": "Identifying bottlenecks around memory footprint and state synchronization is a great way to wrap up.",
+      "learnTopics": [
+        "scalability",
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "dedicated_pools",
+      "after": "deep.tenant_isolation",
+      "prompt": "What if one of our biggest enterprise customers demands strict physical isolation for their traffic for compliance reasons?",
+      "agendaItemId": "deep.dedicated_pools"
+    }
+  ],
+  "vocabulary": [
+    "JWT",
+    "JWKS",
+    "Envoy",
+    "Istio",
+    "Kong",
+    "Nginx",
+    "token bucket",
+    "sliding window",
+    "noisy neighbour",
+    "control plane",
+    "data plane",
+    "canary",
+    "Lua",
+    "Redis"
+  ],
+  "alternatives": [
+    {
+      "choice": "Local token bucket rate limiting vs centralized Redis",
+      "whenBetter": "Local token buckets are better when extreme low latency is required and slight over-provisioning or inaccuracy in rate limits is acceptable across nodes."
+    },
+    {
+      "choice": "Pushing config via message broker (e.g., Kafka) vs Gateway polling/watching (e.g., etcd/Consul)",
+      "whenBetter": "Watching a highly consistent store like etcd is often simpler for state synchronization, whereas a message broker is better for auditing and guaranteed sequenced delivery of distinct events."
+    },
+    {
+      "choice": "Remote token introspection vs Local JWT validation",
+      "whenBetter": "Remote introspection is necessary when tokens need to be revoked instantly across the entire system, despite the added latency."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Clear separation and resilience",
+      "outline": "The candidate designed a robust architecture strictly separating the data plane (stateless gateway nodes) from the control plane. They focused heavily on resilience, ensuring gateway nodes cache routing and tenant rules in memory so they survive control plane outages. They handled rate limiting with a low-latency Redis tier using Lua scripts, and detailed a staged, versioned rollout process for configuration changes to prevent bad updates from taking down global traffic. JWT validation was done locally using cached keys."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but misses some edge cases",
+      "outline": "The candidate successfully routed traffic and understood the need for a separate database for configurations. They used an external cache for quick config lookups, though this introduced a dependency on the data path. They proposed basic Redis counters for rate limiting but missed concurrency issues. They understood tenant isolation conceptually but relied mostly on rate limits rather than dedicated resources for large tenants."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic and synchronous",
+      "outline": "The candidate struggled to separate the management APIs from the traffic-serving APIs, effectively building a monolithic application rather than a gateway. They queried a database for routing rules or rate limits on every single request, violating the strict latency requirements. They lacked a strategy for safely rolling out configuration changes, assuming updates would apply instantly without validation."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

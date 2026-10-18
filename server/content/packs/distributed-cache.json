@@ -1,0 +1,544 @@
+{
+  "opening": "Welcome. Today we're going to design a distributed caching service to serve data quickly across our fleet. Let me know when you're ready to start.",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "traffic",
+        "scale",
+        "qps",
+        "ops"
+      ],
+      "answer": "We should handle tens of millions of operations per second across the cluster."
+    },
+    {
+      "id": "scale.data",
+      "topics": [
+        "data",
+        "size",
+        "storage",
+        "terabytes"
+      ],
+      "answer": "The total cached dataset is in the tens of terabytes."
+    },
+    {
+      "id": "system.ratio",
+      "topics": [
+        "read",
+        "write",
+        "mix",
+        "ratio"
+      ],
+      "answer": "It is heavily read-skewed, about 10 to 1 reads to writes."
+    },
+    {
+      "id": "system.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "response"
+      ],
+      "answer": "We need predictable sub-millisecond to low-millisecond latency on the critical path."
+    },
+    {
+      "id": "system.consistency",
+      "topics": [
+        "consistency",
+        "stale",
+        "failover"
+      ],
+      "answer": "Eventual consistency is acceptable; losing a few recent writes during a failover is fine for our use case."
+    },
+    {
+      "id": "system.values",
+      "topics": [
+        "value",
+        "size",
+        "payload"
+      ],
+      "answer": "Values are generally small, averaging a few kilobytes each."
+    }
+  ],
+  "clarificationPolicy": "If a requirement isn't specified, ask the candidate to choose an approach that supports a highly available, high-throughput memory store and state their assumptions.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "throughput",
+          "qps",
+          "terabytes",
+          "latency",
+          "ratio",
+          "read-heavy"
+        ]
+      },
+      "goal": "Establish the high throughput, low latency requirements and dataset volume.",
+      "opener": "What are the main constraints and traffic patterns you want to design for?",
+      "evidence": {
+        "strong": "Estimates memory needs for terabytes of data and identifies the need for horizontal scaling to handle millions of ops per second.",
+        "adequate": "Asks about read to write ratios and basic scale, recognizing it is a distributed system.",
+        "weak": "Skips scale entirely and jumps straight to drawing a single cache node."
+      },
+      "misconceptions": [
+        {
+          "id": "durable_storage",
+          "pattern": "Treating the cache as a source of truth that must never lose data.",
+          "challenge": "If a cache node restarts and loses its memory, how does that impact the overall application?"
+        }
+      ],
+      "probes": [
+        "How much memory would we need in total for this dataset?"
+      ],
+      "hints": [
+        "Think about how many nodes you need to store tens of terabytes in RAM.",
+        "Consider what happens if one machine can only hold 100 gigabytes."
+      ],
+      "moveOnSummary": "Agreed on scale and read-heavy distributed memory requirements.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hld.topology",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "router",
+          "distributed-cache",
+          "reverse-proxy"
+        ],
+        "keywords": [
+          "routing",
+          "fleet",
+          "nodes",
+          "proxy",
+          "gateway"
+        ]
+      },
+      "goal": "Define how clients find the right cache node for a given key.",
+      "opener": "How does a read or write request find its way from the application to the correct cache node?",
+      "evidence": {
+        "strong": "Proposes a clear routing mechanism, whether client-side or proxy-based, separating the routing logic from the storage nodes.",
+        "adequate": "Draws an API gateway or load balancer routing to a pool of cache nodes, though the exact mapping logic may be vague.",
+        "weak": "Connects a client directly to a generic cache cluster without explaining how a specific key is located."
+      },
+      "misconceptions": [
+        {
+          "id": "stateless_lb",
+          "pattern": "Using a standard round-robin load balancer in front of cache nodes.",
+          "challenge": "If we round-robin requests for the same key, what happens to our cache hit rate?"
+        }
+      ],
+      "probes": [
+        "Where does the routing logic live in your design?",
+        "What are the trade-offs of using a proxy versus a smart client?"
+      ],
+      "hints": [
+        "To get a cache hit, requests for a specific key must always go to the same place.",
+        "Who decides which node owns a given key?"
+      ],
+      "moveOnSummary": "Established a routing layer to map keys to specific cache nodes.",
+      "learnTopics": [
+        "api-gateway",
+        "load-balancing"
+      ]
+    },
+    {
+      "id": "deep.hashing",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "router",
+          "client",
+          "reverse-proxy",
+          "t-redis"
+        ],
+        "keywords": [
+          "hash",
+          "consistent",
+          "virtual",
+          "modulo",
+          "rebalance",
+          "ring"
+        ]
+      },
+      "goal": "Ensure node additions or removals do not cause massive remapping of keys.",
+      "opener": "When we need to add more cache nodes to handle growth, how does your routing layer adjust to the new cluster size?",
+      "evidence": {
+        "strong": "Explains consistent hashing with virtual nodes to distribute the load evenly and minimize key movement.",
+        "adequate": "Mentions consistent hashing to avoid total reshuffling, but misses the skew issues solved by virtual nodes.",
+        "weak": "Uses simple modulo hashing, causing a near total cache miss storm on resize."
+      },
+      "misconceptions": [
+        {
+          "id": "modulo_hashing",
+          "pattern": "Using hash of key modulo number of nodes.",
+          "challenge": "If the cluster size changes from 10 to 11, how many keys will still map to their previous node?"
+        }
+      ],
+      "probes": [
+        "How do you ensure data is balanced evenly across all nodes if the hash ring is sparse?",
+        "What exactly happens to the mapping of keys when a node dies?"
+      ],
+      "hints": [
+        "Think about what happens to the modulo math when the denominator changes.",
+        "How could one physical machine represent multiple points on your routing ring?"
+      ],
+      "moveOnSummary": "Adopted consistent hashing with virtual nodes for stable key distribution.",
+      "learnTopics": [
+        "consistent-hashing",
+        "sharding"
+      ]
+    },
+    {
+      "id": "deep.replication",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "leader",
+          "cluster",
+          "shard"
+        ],
+        "keywords": [
+          "failover",
+          "primary",
+          "secondary",
+          "availability",
+          "sync"
+        ]
+      },
+      "goal": "Provide continuous availability of cached data during node failures.",
+      "opener": "What happens to the traffic and the data if a cache node suddenly powers off?",
+      "evidence": {
+        "strong": "Designs a primary and replica setup per shard with asynchronous replication and automatic failover, understanding the trade-off of potentially losing recent writes.",
+        "adequate": "Mentions replication to a backup node to prevent data loss, but the failover mechanics are manual or vague.",
+        "weak": "Assumes consistent hashing alone solves failure by routing to the next node, ignoring the massive cache miss penalty."
+      },
+      "misconceptions": [
+        {
+          "id": "sync_replication",
+          "pattern": "Using strict synchronous replication for a cache.",
+          "challenge": "If we wait for replicas to acknowledge every write, how does that impact our sub-millisecond latency goal?"
+        }
+      ],
+      "probes": [
+        "How does a replica know it needs to take over?",
+        "Is the replication synchronous or asynchronous, and why?"
+      ],
+      "hints": [
+        "If a node dies, the next node on the ring would be completely empty. How can we keep it warm?",
+        "Consider grouping nodes into primary and standby pairs."
+      ],
+      "moveOnSummary": "Designed asynchronous primary-replica shards for high availability.",
+      "learnTopics": [
+        "replication",
+        "health-checks-failover",
+        "availability"
+      ]
+    },
+    {
+      "id": "deep.hotkeys",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "local-cache",
+          "in-memory-db",
+          "cache"
+        ],
+        "keywords": [
+          "hot",
+          "popular",
+          "celebrity",
+          "skew",
+          "split"
+        ]
+      },
+      "goal": "Prevent a single node from being overwhelmed by a massive spike in reads to one key.",
+      "opener": "Suppose a single key becomes extremely popular and starts receiving one million reads per second. How does your system handle this?",
+      "evidence": {
+        "strong": "Proposes local client-side caching, read replicas, or key splitting to distribute the read load for hot keys.",
+        "adequate": "Suggests adding more replicas to the shard, which helps reads but does not address the fundamental single-shard bottleneck.",
+        "weak": "Claims consistent hashing balances the load, forgetting that a single key always hashes to the same node."
+      },
+      "misconceptions": [
+        {
+          "id": "hashing_solves_hot_keys",
+          "pattern": "Believing that consistent hashing inherently mitigates hot keys.",
+          "challenge": "Consistent hashing distributes keys evenly, but what if ninety percent of traffic is for just one key?"
+        }
+      ],
+      "probes": [
+        "How could the application nodes themselves help reduce the load on the cache cluster?",
+        "What if the hot key is heavily written to, not just read?"
+      ],
+      "hints": [
+        "If everyone is asking for the exact same value, where is the fastest place to store it?",
+        "Can we append a random number to the key to store it in multiple places?"
+      ],
+      "moveOnSummary": "Mitigated hot keys using local caches and key splitting.",
+      "learnTopics": [
+        "hot-partitions",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.eviction",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "distributed-cache"
+        ],
+        "keywords": [
+          "lru",
+          "ttl",
+          "memory",
+          "expiry",
+          "stampede",
+          "thundering"
+        ]
+      },
+      "goal": "Safely free memory and handle key expiration without overwhelming the backend database.",
+      "opener": "Since memory is finite, how do you decide what to keep, and what happens when a popular key expires?",
+      "evidence": {
+        "strong": "Specifies an eviction policy like LRU or LFU, and addresses cache stampedes via request coalescing or TTL jittering.",
+        "adequate": "Mentions LRU or TTL for memory management but misses the thundering herd problem on expiry.",
+        "weak": "Assumes data stays in cache forever or only expires when the user explicitly deletes it."
+      },
+      "misconceptions": [
+        {
+          "id": "no_stampede",
+          "pattern": "Assuming that when a key expires, it triggers just a single database read to fetch it again.",
+          "challenge": "If a key getting ten thousand requests per second expires, how many of those requests will hit the database at the exact same time?"
+        }
+      ],
+      "probes": [
+        "How do we prevent a huge spike in requests from hitting the database when a popular key expires?",
+        "How does the cache node physically reclaim memory when it is full?"
+      ],
+      "hints": [
+        "If multiple clients ask for an expired key at the same time, could the cache node pause them and only send one request to the database?",
+        "Could we add a bit of randomness to the expiration times?"
+      ],
+      "moveOnSummary": "Handled eviction policies and mitigated cache stampedes on expiry.",
+      "learnTopics": [
+        "cache-eviction",
+        "cache-invalidation",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.membership",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "service-discovery",
+          "t-consul",
+          "t-etcd"
+        ],
+        "keywords": [
+          "gossip",
+          "heartbeat",
+          "zookeeper",
+          "health",
+          "membership"
+        ]
+      },
+      "goal": "Detect node failures and propagate routing table changes reliably.",
+      "opener": "How do the clients or proxies know exactly which nodes are currently healthy and part of the cluster?",
+      "evidence": {
+        "strong": "Introduces a configuration store like etcd or a gossip protocol to manage cluster state and detect failures via heartbeats.",
+        "adequate": "Mentions health checks from the proxy or client, but lacks a centralized or coordinated view of the cluster state.",
+        "weak": "Assumes nodes are statically configured or magically discoverable without a designated mechanism."
+      },
+      "misconceptions": [
+        {
+          "id": "static_config",
+          "pattern": "Hardcoding IP addresses in the client configuration.",
+          "challenge": "When an auto-scaling group replaces a dead node with a new IP, how do the thousands of clients find out?"
+        }
+      ],
+      "probes": [
+        "How do we prevent a split-brain scenario where clients disagree on which nodes are active?",
+        "Who is responsible for pinging the cache nodes to check their health?"
+      ],
+      "hints": [
+        "We need a system that acts as a source of truth for the cluster layout.",
+        "Look into how systems like Redis Cluster or Cassandra share state among nodes."
+      ],
+      "moveOnSummary": "Used a coordinated membership system for health checking and routing updates.",
+      "learnTopics": [
+        "service-discovery",
+        "gossip-protocol",
+        "health-checks-failover"
+      ]
+    },
+    {
+      "id": "deep.partition",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "partition",
+          "split-brain",
+          "quorum",
+          "cap"
+        ]
+      },
+      "goal": "Decide how to handle read and write availability during a network split.",
+      "opener": "If a network partition isolates a subset of nodes, how do they handle incoming client requests?",
+      "evidence": {
+        "strong": "Identifies the CAP theorem trade-off, opting to serve stale reads for availability while potentially rejecting writes or buffering them.",
+        "adequate": "Recognizes the split-brain risk but struggles to articulate a concrete policy for reads versus writes.",
+        "weak": "Assumes the system will automatically heal without addressing the behavior during the actual partition."
+      },
+      "misconceptions": [
+        {
+          "id": "perfect_network",
+          "pattern": "Believing that TCP guarantees messages will eventually arrive so partitions do not matter.",
+          "challenge": "If a client can reach a replica, but the replica cannot reach the primary node, what does the replica return?"
+        }
+      ],
+      "probes": [
+        "Do we prefer returning stale data or an error?",
+        "How does a node know it is in the minority partition?"
+      ],
+      "hints": [
+        "Think about the CAP theorem.",
+        "If a replica cannot talk to its primary, should it still answer read requests?"
+      ],
+      "moveOnSummary": "Addressed split-brain by favoring read availability over strict consistency.",
+      "learnTopics": [
+        "cap-theorem",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "summary",
+          "trade-offs",
+          "limits",
+          "constraints"
+        ]
+      },
+      "goal": "Summarize the design's constraints and single points of failure.",
+      "opener": "Looking at the whole system, what do you consider the biggest operational headache or potential bottleneck?",
+      "evidence": {
+        "strong": "Critically evaluates network bandwidth limits, proxy layer bottlenecks, or the cost of maintaining massive memory pools.",
+        "adequate": "Points out standard issues like database load or general latency without tying it deeply to their specific design choices.",
+        "weak": "Claims the system is infinitely scalable and has no bottlenecks."
+      },
+      "misconceptions": [
+        {
+          "id": "perfect_system",
+          "pattern": "Believing that horizontal scaling removes all limits.",
+          "challenge": "As we add thousands of nodes, what happens to the size of the routing table or the gossip network traffic?"
+        }
+      ],
+      "probes": [
+        "If we doubled the traffic again tomorrow, which component would break first?"
+      ],
+      "hints": [
+        "Think about the network pipes between the proxy and the cache nodes.",
+        "Consider the cost and operational overhead of thousands of servers."
+      ],
+      "moveOnSummary": "Reviewed system bottlenecks and operational trade-offs.",
+      "learnTopics": [
+        "capacity-planning",
+        "fallacies-of-distributed-computing"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "network_split",
+      "after": "deep.membership",
+      "prompt": "What if a network partition splits the cache cluster exactly in half? How do the two sides handle reads and writes?",
+      "agendaItemId": "deep.partition"
+    }
+  ],
+  "vocabulary": [
+    "Memcached",
+    "Redis",
+    "Consistent Hashing",
+    "Virtual Nodes",
+    "Thundering Herd",
+    "LRU",
+    "LFU",
+    "Gossip Protocol",
+    "Jitter",
+    "Split-brain"
+  ],
+  "alternatives": [
+    {
+      "choice": "Smart client libraries instead of a proxy layer for routing.",
+      "whenBetter": "When minimizing network hops and latency is critical, and you can control the languages used by all client applications."
+    },
+    {
+      "choice": "Gossip protocol for cluster state instead of centralized configuration.",
+      "whenBetter": "When the cluster scales to thousands of nodes and you want to avoid a single centralized bottleneck or point of failure for membership updates."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Strong answer",
+      "outline": "Designs a proxy-based or smart-client routing layer using consistent hashing with virtual nodes. Incorporates asynchronous primary-replica shards for high availability without sacrificing sub-millisecond latency. Addresses hot keys via local caching or key splitting, and mitigates thundering herds using TTL jittering and request coalescing. Uses a robust membership store like etcd or a gossip protocol for node health."
+    },
+    {
+      "band": "adequate",
+      "label": "Adequate answer",
+      "outline": "Uses consistent hashing and recognizes the need for replication, but glosses over failover mechanics or the specifics of virtual nodes. Plans for LRU eviction but does not address the cache stampede problem on key expiry. Relies on simple proxy health checks rather than a coordinated cluster state."
+    },
+    {
+      "band": "weak",
+      "label": "Weak answer",
+      "outline": "Proposes modulo hashing which would collapse under node additions or removals. Lacks a replication strategy, meaning node failure causes massive cache misses and database load. Treats the cache as durable storage and does not account for hot keys or complex eviction."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

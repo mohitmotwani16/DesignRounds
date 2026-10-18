@@ -1,0 +1,703 @@
+{
+  "opening": "Welcome. Today we're going to design a large-scale clickstream event tracking system. Whenever you're ready, feel free to start.",
+  "clarifications": [
+    {
+      "id": "scale.events",
+      "topics": [
+        "scale",
+        "volume",
+        "how many",
+        "traffic"
+      ],
+      "answer": "We receive about 5 billion events per day on average, with 10x bursts during marketing campaigns."
+    },
+    {
+      "id": "scale.payload",
+      "topics": [
+        "size",
+        "payload",
+        "event size"
+      ],
+      "answer": "An average event payload is around 1KB."
+    },
+    {
+      "id": "requirements.latency",
+      "topics": [
+        "latency",
+        "real-time",
+        "delay"
+      ],
+      "answer": "End-to-end latency isn't strictly real-time. It's fine if events show up in the data warehouse within 15 to 30 minutes."
+    },
+    {
+      "id": "requirements.offline",
+      "topics": [
+        "offline",
+        "airplane mode",
+        "disconnected"
+      ],
+      "answer": "Mobile clients can be offline for up to a few days. We want to capture those events once they reconnect."
+    },
+    {
+      "id": "requirements.pii",
+      "topics": [
+        "pii",
+        "privacy",
+        "gdpr",
+        "sensitive"
+      ],
+      "answer": "Yes, some events contain PII. We must ensure analysts cannot accidentally query plaintext PII."
+    },
+    {
+      "id": "scope.analytics",
+      "topics": [
+        "analytics",
+        "dashboard",
+        "query",
+        "warehouse"
+      ],
+      "answer": "You only need to get the data cleanly into the data lake or warehouse. You don't need to design the analytics dashboard itself."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about anything else, tell them to make a sensible assumption for a large-scale consumer app and explicitly state it.",
+  "agenda": [
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "volume",
+          "events per day",
+          "size",
+          "qps"
+        ]
+      },
+      "goal": "Establish the event volume, burst characteristics, and latency expectations.",
+      "opener": "What numbers do you want to define to scope the scale of our tracking system?",
+      "evidence": {
+        "strong": "Asks about average daily volume, peak multipliers, average payload size, and acceptable ingestion latency.",
+        "adequate": "Asks for event volume and assumes standard JSON payload sizes.",
+        "weak": "Starts designing without establishing how much data needs to be processed."
+      },
+      "misconceptions": [
+        {
+          "id": "realtime_dashboards",
+          "pattern": "Assuming realtime streaming is required",
+          "challenge": "Do analysts typically need sub-second visibility for clickstream dashboards?"
+        }
+      ],
+      "probes": [
+        "How does the traffic pattern change during a marketing push?",
+        "How large do you expect a typical event payload to be?"
+      ],
+      "hints": [
+        "Think about the difference between our average load and a black friday sale.",
+        "Will all events need to be queryable instantly?"
+      ],
+      "moveOnSummary": "Candidate established the scale and requirements.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.sdk",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "mobile",
+          "web-server"
+        ],
+        "keywords": [
+          "sdk",
+          "client",
+          "tracking",
+          "send",
+          "batch"
+        ]
+      },
+      "goal": "Propose a client-side component responsible for collecting and transmitting events.",
+      "opener": "How do events actually get from the user's device to our backend?",
+      "evidence": {
+        "strong": "Proposes an SDK that buffers events locally and sends them in batches to reduce network requests.",
+        "adequate": "Mentions a client-side component but defaults to sending events synchronously.",
+        "weak": "Assumes the application code calls an API directly for every click without a tracking module."
+      },
+      "misconceptions": [
+        {
+          "id": "sync_requests",
+          "pattern": "Sending events one by one is fine",
+          "challenge": "How would one request per click affect a mobile device's battery and cellular data?"
+        }
+      ],
+      "probes": [
+        "What happens if the user clicks 10 times in 2 seconds?",
+        "How do you handle the network overhead of HTTP requests?"
+      ],
+      "hints": [
+        "Can we group events together before sending?",
+        "Where does the code that groups events live?"
+      ],
+      "moveOnSummary": "Candidate outlined a client SDK with basic batching.",
+      "learnTopics": [
+        "api-design",
+        "mobile-release-engineering"
+      ]
+    },
+    {
+      "id": "hl.collector",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "load-balancer",
+          "service",
+          "ingestion"
+        ],
+        "keywords": [
+          "collector",
+          "endpoint",
+          "api",
+          "receive"
+        ]
+      },
+      "goal": "Design an ingestion layer that scales horizontally to receive client events.",
+      "opener": "What component receives these events on our servers?",
+      "evidence": {
+        "strong": "Places a stateless, horizontally scalable fleet of collector APIs behind a load balancer, doing minimal work before appending to a queue.",
+        "adequate": "Uses an API gateway or standard web servers to receive events.",
+        "weak": "Writes events directly from the API to a database."
+      },
+      "misconceptions": [
+        {
+          "id": "direct_db_write",
+          "pattern": "Collectors should write straight to a database",
+          "challenge": "How would a relational database handle a burst of 500,000 inserts per second?"
+        }
+      ],
+      "probes": [
+        "What exactly does the collector service do before responding to the client?",
+        "How do you scale this layer if traffic doubles?"
+      ],
+      "hints": [
+        "Should the collector do heavy processing, or just acknowledge receipt quickly?",
+        "What sits between the internet and your collector servers?"
+      ],
+      "moveOnSummary": "Candidate designed a scalable collector layer.",
+      "learnTopics": [
+        "load-balancing",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "topic",
+          "event-bus",
+          "stream",
+          "data-lake",
+          "warehouse"
+        ],
+        "keywords": [
+          "kafka",
+          "kinesis",
+          "storage",
+          "lake",
+          "warehouse",
+          "queue"
+        ]
+      },
+      "goal": "Outline the downstream data flow from ingestion to final storage.",
+      "opener": "Once the collector receives the payload, where does the data go?",
+      "evidence": {
+        "strong": "Introduces a durable, high-throughput message bus like Kafka to decouple ingestion from downstream processing and storage.",
+        "adequate": "Uses a queue or streams events into cloud storage.",
+        "weak": "Stores events purely in a traditional relational database."
+      },
+      "misconceptions": [
+        {
+          "id": "sql_storage",
+          "pattern": "A standard SQL database is good for raw clickstream logs",
+          "challenge": "What happens to the database storage costs and write performance at billions of rows per day?"
+        }
+      ],
+      "probes": [
+        "How do we ensure we don't lose events if the downstream storage is temporarily unavailable?",
+        "What type of storage fits append-only log data best?"
+      ],
+      "hints": [
+        "Think about publish-subscribe systems or message brokers.",
+        "Where do analysts usually query large volumes of historical data?"
+      ],
+      "moveOnSummary": "Candidate established a streaming and storage pipeline.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "data-warehouse-vs-data-lake"
+      ]
+    },
+    {
+      "id": "deep.offline_sdk",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "mobile",
+          "local-cache",
+          "storage"
+        ],
+        "keywords": [
+          "offline",
+          "buffer",
+          "batch",
+          "retry",
+          "sqlite",
+          "local storage"
+        ]
+      },
+      "goal": "Ensure the SDK durably buffers events when offline and efficiently batches them to save battery and network.",
+      "opener": "Let's dive into the mobile SDK. If a user is on a flight without internet for two days, what happens to their events?",
+      "evidence": {
+        "strong": "Designs a persistent local queue on the device, records the original event timestamps, and syncs batches when connectivity is restored.",
+        "adequate": "Mentions keeping events in memory or local storage, but misses timestamps or batch size limits.",
+        "weak": "Drops the events, or keeps them in an in-memory array that is lost if the app closes."
+      },
+      "misconceptions": [
+        {
+          "id": "server_timestamps",
+          "pattern": "We can use the server's timestamp when events arrive",
+          "challenge": "If offline events arrive two days late, how will analysts sequence the user's session?"
+        }
+      ],
+      "probes": [
+        "How do you prevent the local storage from growing indefinitely if they stay offline for a month?",
+        "When the phone reconnects, how do you avoid overwhelming the network with two days of events?"
+      ],
+      "hints": [
+        "Memory is cleared when the app closes; where else can the mobile app store data?",
+        "Does the server know when the event actually happened if we only check the time it arrived?"
+      ],
+      "moveOnSummary": "Candidate designed local persistent storage and syncing for offline clients.",
+      "learnTopics": [
+        "offline-first-sync",
+        "clocks-and-ordering"
+      ]
+    },
+    {
+      "id": "deep.schema",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "database"
+        ],
+        "keywords": [
+          "schema",
+          "version",
+          "compatibility",
+          "registry",
+          "malformed",
+          "quarantine",
+          "dead letter"
+        ]
+      },
+      "goal": "Handle evolving event schemas across different client versions without breaking downstream consumers.",
+      "opener": "We have dozens of app versions in the wild, and developers want to add new fields to events. How do we manage changing event schemas?",
+      "evidence": {
+        "strong": "Proposes a central schema registry with backward compatibility rules, validates events at the collector, and routes invalid events to a quarantine stream.",
+        "adequate": "Mentions versioning the API or attaching a schema version to the payload, but validation is ad-hoc.",
+        "weak": "Assumes everyone uses the newest schema, or drops events that don't match."
+      },
+      "misconceptions": [
+        {
+          "id": "drop_bad_events",
+          "pattern": "We should drop malformed events immediately",
+          "challenge": "If a bug in a new app release sends invalid payloads, how would we recover that data later if we drop it?"
+        }
+      ],
+      "probes": [
+        "Where does the validation actually happen?",
+        "What do you do with an event that fails validation?"
+      ],
+      "hints": [
+        "How does the backend know what fields to expect in 'Event V2'?",
+        "Instead of throwing away bad data, where could we put it for debugging?"
+      ],
+      "moveOnSummary": "Candidate handled schema evolution and validation.",
+      "learnTopics": [
+        "data-contracts-schema-evolution",
+        "outbox-pattern"
+      ]
+    },
+    {
+      "id": "deep.bursts",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "load-balancer",
+          "service",
+          "queue",
+          "topic"
+        ],
+        "keywords": [
+          "burst",
+          "campaign",
+          "scale",
+          "spike",
+          "backpressure"
+        ]
+      },
+      "goal": "Protect the system from 10x traffic bursts without dropping events.",
+      "opener": "A marketing push triggers a 10x traffic burst in one minute. How does your ingestion layer survive?",
+      "evidence": {
+        "strong": "Relies on autoscaling for stateless collectors and the inherent buffering of a partitioned message queue, acknowledging clients quickly without waiting for downstream.",
+        "adequate": "Mentions autoscaling the collector servers.",
+        "weak": "Assumes normal load balancing is enough, or suggests scaling the database."
+      },
+      "misconceptions": [
+        {
+          "id": "autoscaling_is_instant",
+          "pattern": "Autoscaling handles instant spikes",
+          "challenge": "If it takes 2 minutes for new instances to boot, what happens to the traffic during those 2 minutes?"
+        }
+      ],
+      "probes": [
+        "What happens if the queue or stream fills up?",
+        "How does the collector respond to the client if the downstream system is slow?"
+      ],
+      "hints": [
+        "What is the absolute minimum work the collector must do before returning 200 OK?",
+        "How do queues help when producers are faster than consumers?"
+      ],
+      "moveOnSummary": "Candidate addressed 10x burst tolerance.",
+      "learnTopics": [
+        "backpressure",
+        "autoscaling"
+      ]
+    },
+    {
+      "id": "deep.pii",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "stream-processor",
+          "function"
+        ],
+        "keywords": [
+          "pii",
+          "mask",
+          "redact",
+          "hash",
+          "privacy",
+          "gdpr"
+        ]
+      },
+      "goal": "Redact or encrypt Personally Identifiable Information before it lands in analytical storage.",
+      "opener": "Some events contain email addresses or location data. How do you keep PII out of the raw analytics tables?",
+      "evidence": {
+        "strong": "Redacts or masks PII at the SDK or collector level before it hits the main event bus, using a dedicated PII vault or hashing.",
+        "adequate": "Filters PII in the downstream ETL process before the data warehouse.",
+        "weak": "Relies on analysts not to query the PII columns."
+      },
+      "misconceptions": [
+        {
+          "id": "delete_later",
+          "pattern": "We can just delete PII from the data lake later",
+          "challenge": "How expensive is it to find and delete individual records in immutable files like Parquet?"
+        }
+      ],
+      "probes": [
+        "At what exact point in the flow is the PII stripped?",
+        "What if a marketing system needs the real email address, but analytics shouldn't see it?"
+      ],
+      "hints": [
+        "Is it safer to store PII and restrict access, or to never store it in the analytics database at all?",
+        "Can we replace the email with a unique string that doesn't reveal the user?"
+      ],
+      "moveOnSummary": "Candidate designed a PII redaction strategy.",
+      "learnTopics": [
+        "encryption",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.dedupe",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "database",
+          "data-lake"
+        ],
+        "keywords": [
+          "duplicate",
+          "dedupe",
+          "idempotent",
+          "uuid",
+          "exactly-once"
+        ]
+      },
+      "goal": "Identify and remove duplicate events generated by client retries.",
+      "opener": "If the client sends a batch, the network drops the ACK, and the client retries, we get duplicate events. How do you handle this?",
+      "evidence": {
+        "strong": "Assigns a UUID to every event at creation on the client. Uses a downstream stream processor or warehouse feature to deduplicate based on this UUID.",
+        "adequate": "Mentions deduplication but tries to do it at the collector using a cache.",
+        "weak": "Assumes TCP guarantees exactly-once delivery."
+      },
+      "misconceptions": [
+        {
+          "id": "collector_cache",
+          "pattern": "We can deduplicate at the collector using Redis",
+          "challenge": "For billions of events a day, how large would that Redis cache need to be to store UUIDs for a 24-hour window?"
+        }
+      ],
+      "probes": [
+        "Who generates the unique ID, the client or the server?",
+        "Where is the most efficient place to perform the deduplication?"
+      ],
+      "hints": [
+        "If the server generates the ID, does it help identify a retry?",
+        "Is it easier to deduplicate stream events in real-time or when querying the warehouse?"
+      ],
+      "moveOnSummary": "Candidate proposed client-side IDs for downstream deduplication.",
+      "learnTopics": [
+        "idempotency",
+        "unique-id-generation"
+      ]
+    },
+    {
+      "id": "deep.replay",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "dlq",
+          "batch-job"
+        ],
+        "keywords": [
+          "replay",
+          "reprocess",
+          "quarantine",
+          "historical"
+        ]
+      },
+      "goal": "Design a robust mechanism to replay quarantined events back into the pipeline after fixing schema or processing issues.",
+      "opener": "We quarantined 50 million events due to a schema bug. Now it's fixed. How do you replay them?",
+      "evidence": {
+        "strong": "Proposes a separate replay batch job that maps quarantined events to the valid schema and inserts them directly into the lake or an offline topic, avoiding mixing them with live traffic.",
+        "adequate": "Pushes them back into the main live Kafka topic.",
+        "weak": "Manually edits the database."
+      },
+      "misconceptions": [
+        {
+          "id": "mix_live_traffic",
+          "pattern": "Just throw them back in the main queue",
+          "challenge": "If you dump 50M old events into the live queue, what happens to the latency of today's events?"
+        }
+      ],
+      "probes": [
+        "How do you ensure analysts querying the data don't see duplicates during the replay?",
+        "How do you handle the timestamp ordering?"
+      ],
+      "hints": [
+        "Should bulk historical data share the same pipe as latency-sensitive live data?",
+        "Where do these events ultimately need to end up?"
+      ],
+      "moveOnSummary": "Candidate proposed a quarantine replay strategy.",
+      "learnTopics": [
+        "message-queues",
+        "batch-vs-stream-processing"
+      ]
+    },
+    {
+      "id": "deep.security",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "firewall",
+          "rate-limiter",
+          "auth-service"
+        ],
+        "keywords": [
+          "spam",
+          "fake",
+          "bot",
+          "auth",
+          "malicious"
+        ]
+      },
+      "goal": "Protect the ingestion pipeline from malicious abuse and bot traffic.",
+      "opener": "If a malicious user starts spamming fake events, how do you detect and drop them before they cost us money in downstream storage?",
+      "evidence": {
+        "strong": "Uses token-based authentication (JWT) for the SDK, IP rate limiting at the API gateway, and a downstream bot-detection stream processor.",
+        "adequate": "Mentions IP blocking or rate limiting.",
+        "weak": "Assumes client-side validation is enough."
+      },
+      "misconceptions": [
+        {
+          "id": "trust_client",
+          "pattern": "We can trust the client's SDK",
+          "challenge": "What stops an attacker from writing a simple Python script to POST to our endpoint?"
+        }
+      ],
+      "probes": [
+        "How do we differentiate between a user clicking rapidly and a bot?",
+        "Where is the cheapest place in the architecture to drop a bad request?"
+      ],
+      "hints": [
+        "How does the server know the request came from our real app?",
+        "Can the API Gateway help us here?"
+      ],
+      "moveOnSummary": "Candidate designed bot mitigation and rate limiting.",
+      "learnTopics": [
+        "rate-limiting",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "failure",
+          "limits",
+          "improve"
+        ]
+      },
+      "goal": "Summarise the system's limits and identify what would break first at 100x scale.",
+      "opener": "Looking at the whole system, what is the biggest bottleneck if traffic increases by 100x?",
+      "evidence": {
+        "strong": "Identifies queue partition limits, database write throughput, or cloud provider network quotas as the next breaking points.",
+        "adequate": "Mentions general server overload or storage costs.",
+        "weak": "Claims the system will scale infinitely."
+      },
+      "misconceptions": [
+        {
+          "id": "infinite_scale",
+          "pattern": "More servers always solves it",
+          "challenge": "If you add 1000 collectors, what bottleneck do they hit next?"
+        }
+      ],
+      "probes": [
+        "If you had to shard the message queue, what partition key would you use?",
+        "How would your storage costs change at 100x?"
+      ],
+      "hints": [
+        "Think about the stateful components in your design.",
+        "Where do all the concurrent connections eventually converge?"
+      ],
+      "moveOnSummary": "Candidate reviewed system bottlenecks.",
+      "learnTopics": [
+        "capacity-planning",
+        "hot-partitions"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb_quarantine_replay",
+      "after": "deep.schema",
+      "prompt": "Let's say a bad deployment caused us to quarantine 50 million events over the weekend. We've fixed the schema registry. How do we get those events back into the analytics warehouse?",
+      "agendaItemId": "deep.replay"
+    },
+    {
+      "id": "cb_malicious_client",
+      "after": "hl.collector",
+      "prompt": "We notice someone reverse-engineered our SDK and is spamming the collector with millions of fake events to pollute our analytics. How do we stop them?",
+      "agendaItemId": "deep.security"
+    }
+  ],
+  "vocabulary": [
+    "clickstream",
+    "batching",
+    "PII",
+    "schema registry",
+    "quarantine",
+    "Kafka",
+    "Iceberg",
+    "parquet",
+    "Avro",
+    "protobuf",
+    "deduplication",
+    "dead-letter queue",
+    "autoscaling",
+    "backpressure"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using cloud-native serverless functions (e.g., AWS Lambda) for collectors instead of containerized microservices.",
+      "whenBetter": "When traffic is highly unpredictable and the team wants to offload scaling entirely to the cloud provider, provided cost and cold starts are acceptable."
+    },
+    {
+      "choice": "Direct PUT to object storage (e.g., S3 via API Gateway) instead of using a message broker like Kafka.",
+      "whenBetter": "When latency to the data lake is not a concern, complex routing is unnecessary, and minimizing operational complexity is the top priority."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust SDK and Scalable Pipeline",
+      "outline": "The candidate defined the scale precisely, opting for a robust mobile SDK with SQLite-based offline buffering and batching. They placed stateless Go/Rust collectors behind an API gateway, simply appending payloads to Kafka for high throughput and burst tolerance. They introduced a schema registry using Avro/Protobuf, with a dedicated stream processor for validation and quarantine. PII was hashed at the collector layer. They demonstrated deep understanding of exactly-once semantics by using client-generated UUIDs for downstream deduplication in the data warehouse."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard API with Basic Queuing",
+      "outline": "The candidate designed a functional pipeline using an API gateway, microservice collectors, and Kafka. They recognised the need for client-side batching but missed the nuances of offline timestamping. Schema evolution was handled by versioning the API endpoints rather than a central registry, which works but is harder to manage at scale. They handled PII by filtering it out in a batch ETL process later. Burst tolerance was mostly delegated to auto-scaling without deeply discussing backpressure."
+    },
+    {
+      "band": "weak",
+      "label": "Synchronous CRUD Approach",
+      "outline": "The candidate treated the system like a standard CRUD app, having mobile apps send synchronous HTTP requests per click directly to a monolithic backend service. They wrote events straight into a relational database, failing to account for the massive write volume or the 10x campaign bursts. Offline clients simply dropped data. Schema changes and PII redaction were not proactively addressed, relying on manual database migrations and query-time care."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

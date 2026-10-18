@@ -1,0 +1,651 @@
+{
+  "opening": "We need to design a global video streaming platform like YouTube or Netflix. We want users to be able to upload videos, and viewers across the world to stream them smoothly. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.viewers",
+      "topics": [
+        "users",
+        "viewers",
+        "traffic",
+        "reads",
+        "concurrent"
+      ],
+      "answer": "Assume 50 million daily active viewers, with peaks around 5 million concurrent streams."
+    },
+    {
+      "id": "scale.uploads",
+      "topics": [
+        "creators",
+        "uploads",
+        "writes",
+        "video size"
+      ],
+      "answer": "Assume 100,000 new video uploads per day. Average raw video size is 2GB, but can be up to 10GB."
+    },
+    {
+      "id": "scope.live",
+      "topics": [
+        "live",
+        "real-time",
+        "broadcasting"
+      ],
+      "answer": "No, let's strictly focus on Video on Demand (VOD). Live streaming is out of scope."
+    },
+    {
+      "id": "scope.features",
+      "topics": [
+        "comments",
+        "likes",
+        "recommendations",
+        "search"
+      ],
+      "answer": "You can ignore social features and search. Focus entirely on the ingest, processing, and reliable delivery of video content."
+    },
+    {
+      "id": "latency.playback",
+      "topics": [
+        "startup",
+        "buffering",
+        "latency",
+        "delay"
+      ],
+      "answer": "Time-to-first-frame should be under 2 seconds. Minimizing rebuffering during playback is a top priority."
+    },
+    {
+      "id": "devices.network",
+      "topics": [
+        "devices",
+        "network",
+        "bandwidth",
+        "mobile",
+        "tv"
+      ],
+      "answer": "Viewers will use everything from 4K Smart TVs on fiber to mobile phones on spotty 3G networks."
+    }
+  ],
+  "clarificationPolicy": "Keep the scope focused on core video ingestion and delivery; assume standard industry practices for anything else, aiming to handle massive read scale.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "requirements",
+          "features",
+          "in scope",
+          "out of scope"
+        ]
+      },
+      "goal": "Establish the focus on VOD ingest, processing, and scalable delivery, explicitly scoping out secondary features.",
+      "opener": "What features and constraints are you planning to focus on for this platform?",
+      "evidence": {
+        "strong": "Quickly identifies that the core challenge is handling massive file uploads, complex processing, and high-bandwidth, low-latency delivery.",
+        "adequate": "Lists basic functional requirements like 'upload video' and 'watch video', but needs prompting to focus on network conditions or performance metrics.",
+        "weak": "Focuses heavily on metadata, user profiles, or social features rather than the video stream itself."
+      },
+      "misconceptions": [
+        {
+          "id": "focus.metadata",
+          "pattern": "Spends too much time designing the database schema for video titles and descriptions.",
+          "challenge": "How will the system handle the actual video bytes, which will dominate our traffic?"
+        }
+      ],
+      "probes": [
+        "What are our success metrics for the viewer experience?"
+      ],
+      "hints": [
+        "Think about what happens when a user on a train goes through a tunnel while watching.",
+        "What is the largest payload this system will move around?"
+      ],
+      "moveOnSummary": "Focus on VOD ingest, async processing, and reliable adaptive delivery.",
+      "learnTopics": [
+        "system-design-interview-questions"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "capacity",
+          "qps",
+          "storage",
+          "bandwidth",
+          "terabytes",
+          "petabytes"
+        ]
+      },
+      "goal": "Estimate the scale of storage for multiple video renditions and the massive egress bandwidth required for delivery.",
+      "opener": "Given the user numbers, what volume of data and traffic are we designing for?",
+      "evidence": {
+        "strong": "Calculates daily raw upload storage, multiplies by a factor for processed renditions, and correctly identifies egress bandwidth as the massive scale driver.",
+        "adequate": "Estimates QPS for API calls but struggles to quantify the bandwidth or storage in gigabytes/petabytes.",
+        "weak": "Skips capacity planning or calculates text/JSON payload sizes, ignoring the size of video files."
+      },
+      "misconceptions": [
+        {
+          "id": "api.qps",
+          "pattern": "Treats the system like a standard web CRUD app, focusing purely on request rates.",
+          "challenge": "A single video request might return gigabytes of data. How does this affect our capacity needs compared to a standard API?"
+        }
+      ],
+      "probes": [
+        "How much storage will we need per day for the processed videos?",
+        "What is our peak egress bandwidth in Gbps?"
+      ],
+      "hints": [
+        "Given your concurrent stream estimate, and assuming a standard bitrate per stream, what is the total bandwidth?",
+        "Remember that one uploaded video will be stored in multiple resolutions."
+      ],
+      "moveOnSummary": "Storage is in petabytes, but egress bandwidth is the primary operational scale challenge.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "high_level.ingest",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "storage",
+          "web-server",
+          "t-s3"
+        ],
+        "keywords": [
+          "upload",
+          "ingest",
+          "s3",
+          "blob",
+          "raw"
+        ]
+      },
+      "goal": "Design a reliable, resumable upload path that stores raw files in object storage and triggers a processing pipeline.",
+      "opener": "Walk me through the flow when a creator hits the upload button for a maximum-sized raw file.",
+      "evidence": {
+        "strong": "Uses multipart/resumable uploads directly to object storage via presigned URLs, decoupling the data plane from the application servers.",
+        "adequate": "Routes uploads through application servers before sending to storage, but correctly uses object storage for the files.",
+        "weak": "Stores videos in a database or local file system, or doesn't account for upload failures on large files."
+      },
+      "misconceptions": [
+        {
+          "id": "app.bottleneck",
+          "pattern": "Piping large video uploads through the main backend API servers.",
+          "challenge": "If a huge upload takes an hour, what happens to our application server's resources while it proxies that file?"
+        }
+      ],
+      "probes": [
+        "What happens if the creator's connection drops near the end of a massive upload?",
+        "How does the backend know the upload is completely finished?"
+      ],
+      "hints": [
+        "Is there a way the client can upload chunks directly to the storage service?",
+        "Look into how object storage platforms handle large file uploads safely."
+      ],
+      "moveOnSummary": "Client uses multipart upload via signed URLs directly to object storage.",
+      "learnTopics": [
+        "resumable-file-uploads",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "high_level.delivery",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cdn",
+          "client",
+          "mobile",
+          "tv",
+          "t-cloudflare",
+          "t-fastly"
+        ],
+        "keywords": [
+          "stream",
+          "playback",
+          "cdn",
+          "edge",
+          "fetch"
+        ]
+      },
+      "goal": "Outline the playback flow from client requesting a video to receiving the video bytes from a content delivery network.",
+      "opener": "How does the system serve a video to a viewer who clicks play?",
+      "evidence": {
+        "strong": "Describes the client fetching metadata/manifest from the API, and then pulling video segments strictly from a CDN.",
+        "adequate": "Includes a CDN, but might blur the lines between how the API serves the video page and how the video bytes are delivered.",
+        "weak": "Application servers read video files from storage and stream them directly to the client."
+      },
+      "misconceptions": [
+        {
+          "id": "app.streaming",
+          "pattern": "The backend service streams the video to the client.",
+          "challenge": "If millions of users are watching, how many backend servers would we need to stream the video bytes directly?"
+        }
+      ],
+      "probes": [
+        "How do we prevent unauthorized users from downloading the raw video files from the CDN?",
+        "Does the client talk to our backend API or the CDN first?"
+      ],
+      "hints": [
+        "Think about separating the 'control plane' (metadata) from the 'data plane' (video bytes).",
+        "How do static assets usually get served to global users with low latency?"
+      ],
+      "moveOnSummary": "API returns metadata and URLs; player fetches video segments from CDN.",
+      "learnTopics": [
+        "cdn",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "deep.transcoding",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "queue",
+          "transcoder",
+          "batch-job",
+          "t-kafka",
+          "t-sqs"
+        ],
+        "keywords": [
+          "encode",
+          "transcode",
+          "ffmpeg",
+          "rendition",
+          "resolution",
+          "process"
+        ]
+      },
+      "goal": "Design an asynchronous, parallelized pipeline to convert raw video into multiple streamable formats and segments quickly.",
+      "opener": "A creator uploads a massive high-resolution video. How do we process it so it's available for streaming as fast as possible?",
+      "evidence": {
+        "strong": "Splits the raw video into small chunks, processes them in parallel across a pool of workers to generate multiple resolutions, and stitches/manifests them at the end.",
+        "adequate": "Uses an async queue and worker pool, but processes the entire video linearly on a single worker.",
+        "weak": "Transcodes synchronously during the upload request, or fails to create multiple resolutions."
+      },
+      "misconceptions": [
+        {
+          "id": "sync.transcode",
+          "pattern": "Transcoding happens synchronously while the user waits.",
+          "challenge": "Transcoding a long video might take hours. How will you keep the HTTP connection open that long?"
+        }
+      ],
+      "probes": [
+        "How can we speed up the processing of a massive file?",
+        "What happens if a worker node crashes halfway through transcoding a file?"
+      ],
+      "hints": [
+        "If one server takes several hours to transcode a video, how could a large fleet of servers do it in minutes?",
+        "Can a video file be cleanly divided into smaller pieces?"
+      ],
+      "moveOnSummary": "Parallel, chunk-based asynchronous transcoding using workers and message queues.",
+      "learnTopics": [
+        "message-queues",
+        "distributed-task-scheduler",
+        "video-streaming-adaptive-bitrate"
+      ]
+    },
+    {
+      "id": "deep.abr",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "mobile",
+          "tv"
+        ],
+        "keywords": [
+          "hls",
+          "dash",
+          "abr",
+          "manifest",
+          "adaptive",
+          "segments",
+          "chunks"
+        ]
+      },
+      "goal": "Explain how the client adapts to changing network conditions using standard streaming protocols (HLS/DASH).",
+      "opener": "How does the system ensure the viewer's playback doesn't stall if their connection drops suddenly?",
+      "evidence": {
+        "strong": "Explains Adaptive Bitrate Streaming (ABR): the video is broken into short segments at multiple bitrates, and the client uses a manifest file to request the appropriate segment based on current buffer and bandwidth.",
+        "adequate": "Knows we need multiple resolutions, but expects the server to switch streams or assumes the client downloads whole files.",
+        "weak": "Assumes a single compressed format works for everyone, or relies on TCP to naturally slow down the stream."
+      },
+      "misconceptions": [
+        {
+          "id": "server.driven",
+          "pattern": "The server monitors the connection speed and pushes a lower quality video.",
+          "challenge": "How would a stateless CDN edge node know the client's internal buffer state or local network conditions?"
+        }
+      ],
+      "probes": [
+        "How does the video player actually know what qualities are available to switch to?",
+        "Are we streaming a single continuous file, or something else?"
+      ],
+      "hints": [
+        "Look up how protocols like HLS or DASH structure video data.",
+        "If you cut a video into short chunks, how could the player switch quality?"
+      ],
+      "moveOnSummary": "Client-driven Adaptive Bitrate Streaming (ABR) using segmented video and manifest files (HLS/DASH).",
+      "learnTopics": [
+        "video-streaming-adaptive-bitrate",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.cdn",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cdn",
+          "cache",
+          "t-cloudflare",
+          "t-fastly"
+        ],
+        "keywords": [
+          "edge",
+          "pop",
+          "cache hit",
+          "origin",
+          "shield"
+        ]
+      },
+      "goal": "Optimize CDN delivery to handle massive concurrent read traffic and protect the origin storage from thundering herds.",
+      "opener": "With millions of concurrent viewers, how do we efficiently deliver these video segments while protecting our backend storage?",
+      "evidence": {
+        "strong": "Uses a CDN hierarchy or origin shielding to collapse duplicate requests. Discusses cache hit ratios, caching manifests vs segments, and long-tail eviction.",
+        "adequate": "Adds a CDN to serve static files, but doesn't address what happens on cache misses for popular content.",
+        "weak": "Relies entirely on in-memory caches (like Redis) on application servers instead of a geographically distributed CDN."
+      },
+      "misconceptions": [
+        {
+          "id": "redis.video",
+          "pattern": "Caching gigabytes of video segments in Redis.",
+          "challenge": "Redis is optimized for small key-value pairs in memory. Does it make financial sense to store petabytes of video in RAM?"
+        }
+      ],
+      "probes": [
+        "If a massive wave of users request a new, uncached video segment at the exact same time, what happens to our storage layer?",
+        "Should we cache the manifest files (m3u8/mpd) for the same duration as the video segments?"
+      ],
+      "hints": [
+        "How can the CDN collapse a massive number of simultaneous requests for the same file into a single request to our origin?",
+        "Look into 'Origin Shielding'."
+      ],
+      "moveOnSummary": "CDN with origin shielding handles delivery; object storage serves only cache misses.",
+      "learnTopics": [
+        "cdn",
+        "caching",
+        "cache-strategies"
+      ]
+    },
+    {
+      "id": "deep.analytics",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream",
+          "event-bus",
+          "aggregator",
+          "t-kafka"
+        ],
+        "keywords": [
+          "views",
+          "analytics",
+          "tracking",
+          "telemetry"
+        ]
+      },
+      "goal": "Design a high-throughput, decoupled pipeline for aggregating telemetry and view counts without impacting playback.",
+      "opener": "How would you design the pipeline to track view counts and buffering metrics from millions of concurrent players?",
+      "evidence": {
+        "strong": "Uses a decoupled streaming architecture (e.g., Kafka/Kinesis) with batching on the client, feeding into real-time aggregators and a data warehouse.",
+        "adequate": "Updates a database directly per view, but adds an asynchronous queue to absorb the write load.",
+        "weak": "Client makes a synchronous API call to increment a relational database counter for every view."
+      },
+      "misconceptions": [
+        {
+          "id": "sync.counter",
+          "pattern": "Synchronously incrementing a row in Postgres for every view.",
+          "challenge": "At massive views per second, will row-level locking in a relational database become a bottleneck?"
+        }
+      ],
+      "probes": [
+        "How can we reduce the number of analytics requests hitting our servers from the clients?",
+        "How do we handle duplicate analytics events if the client retries a request?"
+      ],
+      "hints": [
+        "Can the player batch its telemetry data and send it periodically instead of on every event?",
+        "Consider a message broker designed for high-throughput stream processing."
+      ],
+      "moveOnSummary": "Client-side batching into a distributed event stream (Kafka) for async aggregation.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "stream-processing-windows-watermarks",
+        "batch-vs-stream-processing"
+      ]
+    },
+    {
+      "id": "deep.cost",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "cost",
+          "expensive",
+          "tradeoff",
+          "save money",
+          "egress"
+        ]
+      },
+      "goal": "Identify trade-offs between compute, storage, and egress bandwidth costs.",
+      "opener": "Video streaming is notoriously expensive. Where are the biggest costs in your architecture, and how might you optimize them?",
+      "evidence": {
+        "strong": "Identifies CDN egress and storage of multiple renditions as the major costs. Proposes optimizations like on-the-fly packaging, heavily compressing the long tail, or negotiating private peering.",
+        "adequate": "Recognizes that storage and bandwidth are expensive but lacks specific strategies to optimize them.",
+        "weak": "Focuses on optimizing minor costs like database queries or application server counts."
+      },
+      "misconceptions": [
+        {
+          "id": "compute.cost",
+          "pattern": "Believing API server compute is the primary cost driver.",
+          "challenge": "Compare the cost of running multiple API servers versus sending petabytes of data over the public internet every day."
+        }
+      ],
+      "probes": [
+        "Do we need to keep all resolutions of a video that hasn't been watched in a year?",
+        "How does the choice of video codec impact our storage and compute costs?"
+      ],
+      "hints": [
+        "If a newer codec halves the file size but takes much longer to transcode, when is it worth it?",
+        "Think about 'hot' vs 'cold' storage tiers."
+      ],
+      "moveOnSummary": "Optimizes CDN egress and balances compute (transcoding) vs storage (multiple renditions).",
+      "learnTopics": [
+        "capacity-planning",
+        "cdn"
+      ]
+    },
+    {
+      "id": "deep.origin_shield",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cdn",
+          "cache"
+        ],
+        "keywords": [
+          "origin shield",
+          "collapse",
+          "thundering herd"
+        ]
+      },
+      "goal": "Ensure the origin is protected from sudden spikes of cache misses.",
+      "opener": "How exactly do we prevent a sudden spike of requests for an uncached video from overwhelming our object storage?",
+      "evidence": {
+        "strong": "Implements request collapsing or origin shielding to ensure only one request goes to the origin per missing segment.",
+        "adequate": "Adds caching but struggles to handle concurrent misses without overwhelming the origin.",
+        "weak": "Assumes a CDN automatically handles all origin spikes perfectly."
+      },
+      "misconceptions": [
+        {
+          "id": "cdn.magic",
+          "pattern": "Assuming a standard CDN caching layer inherently prevents all origin overload on cache misses.",
+          "challenge": "If a large number of requests hit the CDN simultaneously for an uncached file, what does the edge node do?"
+        }
+      ],
+      "probes": [
+        "How do we handle the time window between the first request arriving and the file finally being cached?"
+      ],
+      "hints": [
+        "Look into request collapsing.",
+        "What is origin shielding?"
+      ],
+      "moveOnSummary": "Implemented request collapsing or origin shielding to protect object storage.",
+      "learnTopics": [
+        "cdn",
+        "caching",
+        "cache-strategies"
+      ]
+    },
+    {
+      "id": "wrap_up.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "limit",
+          "failure",
+          "break"
+        ]
+      },
+      "goal": "Critically evaluate the final design to find the most likely breaking point under extreme load.",
+      "opener": "Looking at the system you've designed, what part would you expect to fall over first if traffic spiked suddenly?",
+      "evidence": {
+        "strong": "Identifies realistic limits, such as CDN origin pull overload, transcoder queue backlog, or metadata database read capacity.",
+        "adequate": "Names a component like 'the database' but relies on generic auto-scaling as the only mitigation.",
+        "weak": "Claims the system is infinitely scalable and won't break."
+      },
+      "misconceptions": [
+        {
+          "id": "auto.scale.magic",
+          "pattern": "Assuming Kubernetes auto-scaling solves all sudden spikes.",
+          "challenge": "If traffic spikes massively in one minute, how fast can your nodes actually provision and boot up?"
+        }
+      ],
+      "probes": [
+        "If the transcoding queue backs up for days, how does that degrade the user experience?",
+        "Is there any single point of failure remaining?"
+      ],
+      "hints": [
+        "Trace the path of a completely new, viral video before it's cached.",
+        "What happens when third-party limits (like cloud provider quotas) are hit?"
+      ],
+      "moveOnSummary": "Acknowledged realistic bottlenecks in origin egress or stateful databases.",
+      "learnTopics": [
+        "fallacies-of-distributed-computing",
+        "autoscaling"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "viral.thundering.herd",
+      "after": "deep.cdn",
+      "prompt": "A highly anticipated video from a top creator drops, and countless people try to watch it in the first seconds. The CDN cache is empty. How do we prevent our origin object storage from melting?",
+      "agendaItemId": "deep.origin_shield"
+    }
+  ],
+  "vocabulary": [
+    "ABR",
+    "Adaptive Bitrate",
+    "HLS",
+    "DASH",
+    "Rendition",
+    "Manifest",
+    "m3u8",
+    "mpd",
+    "Transcoding",
+    "Multiplexing",
+    "Origin Shield",
+    "Egress",
+    "Signed URL",
+    "Chunking",
+    "Time to first frame"
+  ],
+  "alternatives": [
+    {
+      "choice": "On-the-fly packaging or transcoding",
+      "whenBetter": "Better for long-tail content where the storage cost for pre-computing all resolutions exceeds the compute cost of generating them on demand when rarely requested."
+    },
+    {
+      "choice": "Client-side vs Server-side Ad Insertion (SSAI)",
+      "whenBetter": "SSAI is better for bypassing ad-blockers and ensuring smooth playback transitions, while client-side is simpler to implement and allows highly targeted, interactive ads."
+    },
+    {
+      "choice": "WebRTC vs HTTP-based streaming (HLS/DASH)",
+      "whenBetter": "WebRTC is better for sub-second latency (like live conferencing), whereas HLS/DASH is vastly superior for VOD because it scales effortlessly using standard HTTP CDNs."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Decoupled Async & ABR",
+      "outline": "The candidate firmly separates ingest from playback. Uploads go directly to object storage via presigned URLs. An event triggers a robust, chunk-based parallel transcoding pipeline via message queues, generating segmented files and manifests for ABR. Playback relies entirely on a CDN with origin shielding, ensuring the player pulls segments smoothly based on local bandwidth. Identifies egress costs and intelligently discusses storage vs compute trade-offs."
+    },
+    {
+      "band": "adequate",
+      "label": "Standard Async & CDN",
+      "outline": "The candidate uses an async queue for transcoding, though they might process whole videos linearly rather than chunking them. They correctly place a CDN in front of object storage for delivery. They know videos need multiple resolutions but might struggle to explain how HLS/DASH manifests actually work, leaving the exact mechanics of client bitrate adaptation a bit vague."
+    },
+    {
+      "band": "weak",
+      "label": "Synchronous App Streaming",
+      "outline": "The candidate treats video files like large profile pictures. They pipe uploads through the backend API and attempt to transcode synchronously. They serve video directly from a database or application server without a CDN. They miss the concept of adaptive streaming entirely, serving a single massive MP4 file to all devices regardless of network conditions."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

@@ -1,0 +1,549 @@
+{
+  "opening": "Let's design a reusable ETL framework for our organization. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.pipelines",
+      "topics": [
+        "scale",
+        "pipelines",
+        "jobs",
+        "how many"
+      ],
+      "answer": "We expect hundreds to thousands of pipelines across the organization."
+    },
+    {
+      "id": "scale.data",
+      "topics": [
+        "data",
+        "volume",
+        "gigabytes",
+        "terabytes"
+      ],
+      "answer": "Data volume varies heavily by team, ranging from gigabytes to terabytes per run."
+    },
+    {
+      "id": "requirements.execution",
+      "topics": [
+        "compute",
+        "execution",
+        "spark",
+        "sql",
+        "where does it run"
+      ],
+      "answer": "Assume we have an elastic execution layer like a Spark cluster or cloud data warehouse available."
+    },
+    {
+      "id": "requirements.teams",
+      "topics": [
+        "teams",
+        "users",
+        "who builds",
+        "multitenant"
+      ],
+      "answer": "Many independent teams will author their own pipelines using this framework."
+    },
+    {
+      "id": "requirements.scheduling",
+      "topics": [
+        "schedule",
+        "trigger",
+        "frequency",
+        "hourly",
+        "daily"
+      ],
+      "answer": "Pipelines run on varying schedules: some are hourly or daily, others should run as soon as upstream data arrives."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not specified, ask them what they would recommend for a medium-to-large organization adopting a centralized data platform.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "requirements",
+          "teams",
+          "volume",
+          "sla"
+        ]
+      },
+      "goal": "Understand the multi-tenant nature of the platform and the operational needs like backfills and retries.",
+      "opener": "What requirements and scale boundaries do you want to establish before we design the architecture?",
+      "evidence": {
+        "strong": "Actively asks about the number of pipelines, data volumes, scheduling frequencies, and operational needs like backfills.",
+        "adequate": "Lists basic requirements but misses multi-tenancy or operational features like lineage.",
+        "weak": "Jumps straight into drawing components without defining the platform's scale or users."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Who are the primary users of this framework?",
+        "What operational features do you think those users will need when a pipeline fails?"
+      ],
+      "hints": [
+        "Consider what happens when a pipeline needs to reprocess old data.",
+        "Think about how many teams might use this simultaneously."
+      ],
+      "moveOnSummary": "Established the need for a multi-tenant platform handling thousands of pipelines with retry and backfill support.",
+      "learnTopics": [
+        "system-design-roadmap",
+        "data-engineering-roadmap"
+      ]
+    },
+    {
+      "id": "hl.control_execution",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "worker",
+          "scheduler",
+          "t-airflow"
+        ],
+        "keywords": [
+          "control plane",
+          "execution",
+          "dag",
+          "scheduler",
+          "worker"
+        ]
+      },
+      "goal": "Separate the scheduling and metadata management from actual data processing execution.",
+      "opener": "At a high level, how do the components that decide what to run interact with the components that actually process the data?",
+      "evidence": {
+        "strong": "Clearly separates a control plane orchestrator from an elastic execution plane, connected via message queues or APIs.",
+        "adequate": "Draws an orchestrator and executors but lumps them into a single monolithic service or cluster.",
+        "weak": "Fails to show a scheduling or orchestration component, relying only on cron scripts."
+      },
+      "misconceptions": [
+        {
+          "id": "hl.monolith",
+          "pattern": "The orchestrator runs the data transformations itself.",
+          "challenge": "What happens to the orchestrator if a transformation requires 500GB of RAM?"
+        }
+      ],
+      "probes": [
+        "Where does the pipeline metadata live compared to the actual data?",
+        "How does the orchestrator trigger a job in the execution cluster?"
+      ],
+      "hints": [
+        "Think about what happens if the scheduling node runs out of memory while processing data.",
+        "Consider separating the 'brain' from the 'muscle' of the system."
+      ],
+      "moveOnSummary": "Separated the control plane from the execution workers.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "data-pipeline-orchestration"
+      ]
+    },
+    {
+      "id": "hl.authoring",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "config",
+          "t-gh-actions"
+        ],
+        "keywords": [
+          "git",
+          "yaml",
+          "repo",
+          "sdk",
+          "declarative"
+        ]
+      },
+      "goal": "Establish a clear developer workflow for defining, versioning, and deploying pipelines.",
+      "opener": "Walk me through the lifecycle of a pipeline from a developer writing it to it being registered in the orchestrator.",
+      "evidence": {
+        "strong": "Uses declarative configuration or an SDK stored in version control, deployed via a CI/CD pipeline to the orchestrator.",
+        "adequate": "Mentions version control but the deployment mechanism to the orchestrator is vague or manual.",
+        "weak": "Assumes developers manually upload scripts or interact directly with the production database."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we ensure changes to a pipeline can be rolled back?",
+        "Where are the shared connectors actually stored and distributed?"
+      ],
+      "hints": [
+        "How do software engineering teams usually manage code changes?",
+        "Think about how the orchestrator discovers new pipelines."
+      ],
+      "moveOnSummary": "Defined a CI/CD workflow for deploying declarative pipeline configurations.",
+      "learnTopics": [
+        "ci-cd-pipelines",
+        "infrastructure-as-code"
+      ]
+    },
+    {
+      "id": "deep.idempotency",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "data-lake",
+          "warehouse",
+          "t-s3"
+        ],
+        "keywords": [
+          "overwrite",
+          "partition",
+          "append",
+          "idempotency",
+          "retry",
+          "merge"
+        ]
+      },
+      "goal": "Ensure failed tasks can be safely retried without duplicating data.",
+      "opener": "When a task fails halfway through and the orchestrator retries it, how do we guarantee the final data is correct?",
+      "evidence": {
+        "strong": "Explicitly designs partition-based writes or MERGE operations; ensures tasks overwrite their specific logical partition.",
+        "adequate": "Mentions idempotency and suggests deleting before inserting, but misses the mechanics of how partitions are isolated.",
+        "weak": "Suggests append-only loads and relies on the execution logic to simply not fail twice."
+      },
+      "misconceptions": [
+        {
+          "id": "idempotency.append",
+          "pattern": "Just insert the new data; the database will handle deduplication automatically.",
+          "challenge": "If the task inserts half the rows and fails, what happens when the retry inserts them again?"
+        }
+      ],
+      "probes": [
+        "How does the pipeline know which records belong to the current run?",
+        "What if a task is writing to a data lake storage bucket instead of a database?"
+      ],
+      "hints": [
+        "If a task runs twice, how do we avoid doubling the data?",
+        "Consider how data is logically organized by time in the storage layer."
+      ],
+      "moveOnSummary": "Relied on idempotent, partition-based overwrites to make retries safe.",
+      "learnTopics": [
+        "idempotency",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.backfilling",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "batch-processor",
+          "batch-job"
+        ],
+        "keywords": [
+          "backfill",
+          "historical",
+          "ranges",
+          "parallel",
+          "throughput"
+        ]
+      },
+      "goal": "Design a mechanism to process historical data efficiently without starving current runs.",
+      "opener": "A team needs to process two years of historical data. How does the framework handle this backfill alongside their daily runs?",
+      "evidence": {
+        "strong": "Treats backfills as a series of parameterized executions; isolates them into lower-priority queues or dedicated resource pools.",
+        "adequate": "Understands the need to parameterize runs by date, but struggles with the resource contention aspect.",
+        "weak": "Suggests creating a massive one-off script for the two years, breaking the standard pipeline contract."
+      },
+      "misconceptions": [
+        {
+          "id": "backfill.script",
+          "pattern": "We just run a special script to dump the history.",
+          "challenge": "How do we ensure the historical data follows the exact same transformation logic as the daily runs?"
+        }
+      ],
+      "probes": [
+        "How are the historical runs scheduled compared to today's run?",
+        "What happens to the execution cluster when 700 backfill tasks are submitted at once?"
+      ],
+      "hints": [
+        "How do we normally tell a task which day of data to process?",
+        "Think about how we can separate the compute resources used for backfills from daily jobs."
+      ],
+      "moveOnSummary": "Managed backfills via parameterized runs and resource isolation.",
+      "learnTopics": [
+        "batch-vs-stream-processing",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "deep.isolation",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cluster",
+          "container",
+          "t-kubernetes",
+          "queue"
+        ],
+        "keywords": [
+          "noisy neighbor",
+          "quotas",
+          "resources",
+          "queue",
+          "pool"
+        ]
+      },
+      "goal": "Prevent one team's massive job from consuming all execution resources and starving others.",
+      "opener": "If Team A submits a massive, poorly optimized pipeline, how do we prevent it from delaying Team B's critical daily reports?",
+      "evidence": {
+        "strong": "Implements resource quotas, separate execution queues, and isolated worker pools per tenant.",
+        "adequate": "Identifies the noisy neighbor problem and suggests separate queues, but lacks a clear mechanism for enforcing limits.",
+        "weak": "Puts all tasks into a single global queue with shared workers, allowing one team to consume everything."
+      },
+      "misconceptions": [
+        {
+          "id": "isolation.autoscaling",
+          "pattern": "The cluster will just autoscale to handle everything.",
+          "challenge": "What if the cloud provider has an account limit, or autoscaling takes too long?"
+        }
+      ],
+      "probes": [
+        "How does the orchestrator decide whose task gets an execution slot?",
+        "Can we place hard limits on how much compute a specific team can use?"
+      ],
+      "hints": [
+        "If we have 100 workers, how do we make sure Team B always has at least 10 available?",
+        "Consider grouping tasks into different logical buckets before assigning them to workers."
+      ],
+      "moveOnSummary": "Applied multi-tenant isolation using queues and resource quotas.",
+      "learnTopics": [
+        "multi-tenancy",
+        "rate-limiting"
+      ]
+    },
+    {
+      "id": "deep.lineage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "data-catalog",
+          "graph-db",
+          "lineage"
+        ],
+        "keywords": [
+          "lineage",
+          "upstream",
+          "downstream",
+          "metadata",
+          "trace"
+        ]
+      },
+      "goal": "Track data dependencies across pipelines to provide visibility and impact analysis.",
+      "opener": "When an operator is looking at a downstream dashboard, how do we track exactly which upstream tables and tasks contributed to it?",
+      "evidence": {
+        "strong": "Captures dataset inputs/outputs automatically via platform hooks or query parsing, storing it in a metadata graph.",
+        "adequate": "Suggests manual tagging of upstream/downstream dependencies by the pipeline authors in their configuration.",
+        "weak": "Assumes dependencies are just implicit in the scheduling order and provides no queryable view."
+      },
+      "misconceptions": [
+        {
+          "id": "lineage.manual",
+          "pattern": "Developers will manually update a wiki page for lineage.",
+          "challenge": "What happens when a developer changes a table dependency in code but forgets to update the docs?"
+        }
+      ],
+      "probes": [
+        "How can we extract this information without relying on developers to manually document it?",
+        "Where would we store this dependency graph to make it queryable?"
+      ],
+      "hints": [
+        "Can we extract dependencies directly from the pipeline definition?",
+        "If a task executes a SQL query, is there a way to parse the query to find its inputs?"
+      ],
+      "moveOnSummary": "Captured and stored data lineage in a metadata repository.",
+      "learnTopics": [
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "deep.credentials",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "secrets",
+          "t-vault",
+          "iam",
+          "auth-service"
+        ],
+        "keywords": [
+          "credentials",
+          "secrets",
+          "roles",
+          "rbac",
+          "keys"
+        ]
+      },
+      "goal": "Ensure that teams cannot access data or systems they don't own by isolating execution credentials.",
+      "opener": "Different teams connect to different external databases. How does the framework manage and provide credentials to the execution layer safely?",
+      "evidence": {
+        "strong": "Integrates a secrets manager and uses dynamic role assumption, injecting only necessary credentials into specific task containers.",
+        "adequate": "Stores credentials securely but loads them globally, risking cross-team access within the same worker.",
+        "weak": "Hardcodes credentials in pipeline code or stores them in plain text configuration files."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If Team A's job is running on a shared worker, what prevents them from reading Team B's database password?",
+        "How do the secrets get from the storage system into the actual running task?"
+      ],
+      "hints": [
+        "How do we normally handle secrets in Kubernetes or containerized environments?",
+        "Think about giving each task its own identity rather than sharing one."
+      ],
+      "moveOnSummary": "Isolated tenant credentials using a secrets manager and role-based access.",
+      "learnTopics": [
+        "secrets-management",
+        "authentication-authorization"
+      ]
+    },
+    {
+      "id": "deep.priority",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "orchestrator"
+        ],
+        "keywords": [
+          "priority",
+          "urgent",
+          "lane"
+        ]
+      },
+      "goal": "Support tiered execution SLAs where critical pipelines bypass normal limits.",
+      "opener": "How do we handle situations where an urgent executive report needs immediate execution but the cluster is fully utilized?",
+      "evidence": {
+        "strong": "Implements multiple priority queues or preemption within the scheduler to prioritize critical tasks.",
+        "adequate": "Suggests a high-priority tag but lacks detail on how it affects the scheduler's queuing logic.",
+        "weak": "Suggests manually stopping other jobs to make room."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If all workers are busy processing other jobs, how does the priority job get resources?"
+      ],
+      "hints": [
+        "Can we have separate queues for different priorities?",
+        "What happens to a running low-priority job if a high-priority job needs its resources?"
+      ],
+      "moveOnSummary": "Used dedicated priority queues and worker pools for critical SLAs.",
+      "learnTopics": [
+        "message-queues",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Summarize the design and reflect on its limits.",
+      "opener": "We're almost out of time. Looking back at the platform we've designed, what do you consider its biggest limitation or bottleneck?",
+      "evidence": {
+        "strong": "Identifies realistic bottlenecks like metadata store contention, cross-team dependency complexity, or compute costs.",
+        "adequate": "Summarizes the design but points to generic issues like 'we might need more servers'.",
+        "weak": "Claims the design has no limits and scales infinitely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If we doubled the number of teams tomorrow, what component would break first?"
+      ],
+      "hints": [
+        "Think about where all the state for thousands of jobs is being tracked."
+      ],
+      "moveOnSummary": "Reflected on the metadata store scaling limits.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "curveball.priority",
+      "after": "deep.isolation",
+      "prompt": "A priority 0 executive dashboard pipeline fails because its upstream data from another team is delayed. When it finally arrives, the execution queues are completely full with backfills. How do we ensure it runs immediately?",
+      "agendaItemId": "deep.priority"
+    }
+  ],
+  "vocabulary": [
+    "Airflow",
+    "Argo",
+    "Dagster",
+    "dbt",
+    "Spark",
+    "ELT",
+    "ETL",
+    "idempotency",
+    "DAG",
+    "orchestrator",
+    "lineage",
+    "multi-tenant",
+    "backfill"
+  ],
+  "alternatives": [
+    {
+      "choice": "Declarative YAML config vs Python SDK for pipeline definition.",
+      "whenBetter": "YAML is safer, strictly bounded, and easier to analyze for lineage. Python SDKs give authors more flexibility and loop constructs, which is better for complex programmatic generation of DAGs."
+    },
+    {
+      "choice": "Data-aware (event-based) scheduling vs Time-based (cron) scheduling.",
+      "whenBetter": "Data-aware scheduling reduces empty runs and tightens SLAs when data arrival is unpredictable. Time-based is simpler and better when downstream consumers expect data at a fixed time."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Control-Plane Separation & Safe Retries",
+      "outline": "The candidate clearly separates the orchestrator (control plane) from the elastic execution layer. They implement a CI/CD flow for version-controlled declarative pipeline definitions. They heavily emphasize idempotency through date-partitioned overwrites, ensuring safe retries. For backfills and noisy neighbors, they introduce robust multi-tenancy with dedicated resource pools, queues, and strict RBAC credential isolation."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic Orchestrator with Manual Controls",
+      "outline": "The design successfully uses a standard orchestrator like Airflow scheduling tasks on a cluster. They understand the need for retries and backfills but rely on manual scripts or loose conventions for idempotency, risking duplicate data. Multi-tenancy is addressed by spinning up separate environments per team, which meets the requirement but sacrifices centralized resource efficiency."
+    },
+    {
+      "band": "weak",
+      "label": "Monolithic Script Runner",
+      "outline": "The candidate designs a monolithic service that both schedules and executes data processing. Tasks are written as append-only scripts, leading to data duplication upon retry. They fail to isolate tenants, meaning teams share execution resources and database credentials, resulting in noisy neighbor problems and security risks. Backfills are handled by manually re-running pipelines."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

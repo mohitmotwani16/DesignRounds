@@ -1,0 +1,518 @@
+{
+  "opening": "Welcome! Today I'd like you to design a high-demand ticketing platform, similar to the one used for major concert tours. Whenever you're ready, please start by outlining the scope and requirements you want to focus on.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "scale",
+        "users",
+        "traffic",
+        "spike"
+      ],
+      "answer": "Expect up to 2 million concurrent users arriving within the first 5 minutes of a major on-sale."
+    },
+    {
+      "id": "scale.inventory",
+      "topics": [
+        "seats",
+        "inventory",
+        "tickets",
+        "capacity"
+      ],
+      "answer": "A large stadium event will have roughly 50,000 to 80,000 seats."
+    },
+    {
+      "id": "scope.seat_selection",
+      "topics": [
+        "pick",
+        "map",
+        "select",
+        "specific"
+      ],
+      "answer": "Yes, users should be able to pick specific seats from a seat map."
+    },
+    {
+      "id": "scope.payment",
+      "topics": [
+        "payment",
+        "credit card",
+        "processing"
+      ],
+      "answer": "Assume we integrate with a third-party payment gateway like Stripe. You don't need to build the credit card processing itself."
+    },
+    {
+      "id": "scope.timeout",
+      "topics": [
+        "timeout",
+        "expire",
+        "hold",
+        "time limit"
+      ],
+      "answer": "A user should have 10 minutes to complete checkout once they select a seat."
+    },
+    {
+      "id": "constraints.consistency",
+      "topics": [
+        "double sell",
+        "consistency",
+        "availability",
+        "cap"
+      ],
+      "answer": "Correctness is critical. We absolutely cannot double-sell a seat, even if it means rejecting some requests."
+    }
+  ],
+  "clarificationPolicy": "For any other details, assume standard industry practices and choose what makes for a challenging but realistic system.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "user",
+          "mobile",
+          "desktop"
+        ],
+        "keywords": [
+          "browse",
+          "select seat",
+          "checkout",
+          "buy"
+        ]
+      },
+      "goal": "Establish the critical path from viewing events to purchasing tickets.",
+      "opener": "What are the core user flows we need to support for this ticketing platform?",
+      "evidence": {
+        "strong": "Clearly defines the end-to-end journey from browsing events to seat selection and payment completion.",
+        "adequate": "Identifies the main features but may need prompting to include the temporary seat hold during checkout.",
+        "weak": "Misses key functional steps like seat selection or assumes a generic e-commerce cart model."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if they close their browser during checkout?"
+      ],
+      "hints": [
+        "Think about the steps a user takes from landing on the site to receiving a ticket.",
+        "Do they need a time limit?"
+      ],
+      "moveOnSummary": "We'll focus on browsing events, selecting a seat, and completing payment within a 10-minute hold.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "concurrent",
+          "spike",
+          "users",
+          "qps"
+        ]
+      },
+      "goal": "Recognize the extreme traffic spikes and the absolute constraint of limited inventory.",
+      "opener": "What kind of traffic patterns and volume should we anticipate for a major on-sale?",
+      "evidence": {
+        "strong": "Immediately identifies the massive bursty nature of the traffic and correctly prioritizes strict consistency over availability.",
+        "adequate": "Recognizes it will be high traffic but needs prompting to realize the spike happens entirely within the first few minutes.",
+        "weak": "Treats the system as a standard high-throughput application with steady traffic and standard caching."
+      },
+      "misconceptions": [
+        {
+          "id": "high_qps_steady",
+          "pattern": "Treating the load as a steady high QPS rather than a massive burst.",
+          "challenge": "What happens in the exact moments an incredibly popular event goes on sale?"
+        }
+      ],
+      "probes": [
+        "How does this traffic pattern differ from a typical e-commerce site?"
+      ],
+      "hints": [
+        "Consider the exact moment the sale starts.",
+        "How many people want tickets versus how many seats actually exist?"
+      ],
+      "moveOnSummary": "We are dealing with a massive 5-minute spike of up to 2 million users competing for 50k seats, where correctness is paramount.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "cap-theorem",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "database",
+          "api-gateway"
+        ],
+        "keywords": [
+          "catalog",
+          "inventory",
+          "booking",
+          "database"
+        ]
+      },
+      "goal": "Provide a complete end-to-end data flow for finding and buying a ticket.",
+      "opener": "Could you lay out the high-level components needed to support this user journey?",
+      "evidence": {
+        "strong": "Creates a clean separation between read-heavy event catalog services and write-heavy inventory and booking services.",
+        "adequate": "Draws a functional monolith or basic services but merges inventory and catalog concerns.",
+        "weak": "Misses essential components like the database or fails to connect the services coherently."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the client know which seats are available?",
+        "Where is the state of a reservation actually kept?"
+      ],
+      "hints": [
+        "We need a way to serve event details.",
+        "We need a place to track who owns which seat."
+      ],
+      "moveOnSummary": "We have an event service, an inventory service to track seats, and a booking service.",
+      "learnTopics": [
+        "hld-vs-lld",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "hl.waiting_room",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "queue",
+          "api-gateway"
+        ],
+        "keywords": [
+          "queue",
+          "waiting room",
+          "throttle",
+          "rate limit"
+        ]
+      },
+      "goal": "Protect the core transactional systems from the massive initial traffic spike by controlling user admission.",
+      "opener": "How do you plan to handle the situation where millions of users hit your system simultaneously?",
+      "evidence": {
+        "strong": "Introduces a virtual waiting room or strict admission control to protect downstream databases from being overwhelmed.",
+        "adequate": "Suggests simple rate limiting or auto-scaling, which might be too slow or result in poor user experience.",
+        "weak": "Assumes standard load balancers and horizontal scaling will absorb the entire spike seamlessly."
+      },
+      "misconceptions": [
+        {
+          "id": "standard_auto_scale",
+          "pattern": "Relying on auto-scaling to absorb the sudden spike.",
+          "challenge": "Can a database cluster scale up its write capacity within seconds of the sudden on-sale?"
+        }
+      ],
+      "probes": [
+        "How do we ensure fairness for users who arrived early?",
+        "What happens to the users who aren't currently browsing seats?"
+      ],
+      "hints": [
+        "Think about what physical venues do when there's a huge crowd outside.",
+        "Is there a way to control the inflow of users?"
+      ],
+      "moveOnSummary": "We will use a virtual waiting room to admit users to the inventory system at a manageable rate.",
+      "learnTopics": [
+        "rate-limiting",
+        "load-shedding",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "deep.concurrency",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "t-postgres",
+          "t-mysql"
+        ],
+        "keywords": [
+          "lock",
+          "transaction",
+          "atomic",
+          "condition",
+          "race condition"
+        ]
+      },
+      "goal": "Prevent double-booking of a seat when multiple users try to select it simultaneously.",
+      "opener": "Let's say two users click the exact same seat at the exact same millisecond. Walk me through how your system prevents them both from getting it.",
+      "evidence": {
+        "strong": "Uses database constraints, conditional updates, or explicit row-level locking correctly to ensure a seat can only be reserved once.",
+        "adequate": "Relies on standard database transactions but might cause unnecessary lock contention or deadlocks under heavy load.",
+        "weak": "Uses a read-modify-write pattern without locks, or relies on a cache as the source of truth for seat availability."
+      },
+      "misconceptions": [
+        {
+          "id": "cache_truth",
+          "pattern": "Checking availability in the cache and then writing to the database without constraints.",
+          "challenge": "What if the cache check passes for both users before either writes to the database?"
+        }
+      ],
+      "probes": [
+        "Can you write out the exact database operation that runs?",
+        "How does this approach perform when thousands of people try to lock different seats in the same section at the exact same time?"
+      ],
+      "hints": [
+        "If we use a relational database, what locking mechanisms are available?",
+        "How can a version number or a status check in the update statement help?"
+      ],
+      "moveOnSummary": "We will use a conditional update or a pessimistic lock to ensure only one user successfully reserves the seat.",
+      "learnTopics": [
+        "transactions-isolation-levels",
+        "optimistic-vs-pessimistic-locking",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "deep.holds",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "scheduler",
+          "batch-job"
+        ],
+        "keywords": [
+          "expire",
+          "timeout",
+          "ttl",
+          "release",
+          "cron"
+        ]
+      },
+      "goal": "Reliably release seat reservations if a user abandons their cart or takes too long to pay.",
+      "opener": "A user reserves a seat but closes their browser without paying. How does that seat become available for others again?",
+      "evidence": {
+        "strong": "Uses delayed queues, TTL keys with keyspace notifications, or lazy evaluation paired with a cleanup job to reliably release expired holds.",
+        "adequate": "Proposes a standard polling cron job but misses the potential for database contention and delay issues at scale.",
+        "weak": "Forgets to release holds entirely or assumes the client application will reliably send a cancellation request."
+      },
+      "misconceptions": [
+        {
+          "id": "client_cancel",
+          "pattern": "Relying on the frontend to tell the server to release the seat.",
+          "challenge": "What if the user's laptop loses power before sending that request?"
+        }
+      ],
+      "probes": [
+        "What happens if your expiration service crashes right when a hold is supposed to expire?",
+        "How often does your cleanup job run, and will that cause spikes in database load?"
+      ],
+      "hints": [
+        "Could we attach a time-to-live to the reservation?",
+        "Is there a way to queue a message that only becomes visible after the hold period?"
+      ],
+      "moveOnSummary": "We will use a delayed message queue or a scheduled worker to set the seat back to available.",
+      "learnTopics": [
+        "message-queues",
+        "distributed-task-scheduler",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.read_scale",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "t-redis",
+          "cdn"
+        ],
+        "keywords": [
+          "cache",
+          "seat map",
+          "read heavy"
+        ]
+      },
+      "goal": "Scale the delivery of seat map availability to millions of users without overwhelming the primary database.",
+      "opener": "Users will constantly refresh the seat map to see what's available. How do we serve these reads without overloading the main database?",
+      "evidence": {
+        "strong": "Caches the seat map aggressively, updates it asynchronously, and accepts eventual consistency on the frontend while enforcing correctness on writes.",
+        "adequate": "Caches the map with a simple time-to-live, accepting the risk of cache stampedes when the TTL expires.",
+        "weak": "Queries the primary transactional database directly for every seat map load, creating an immediate bottleneck."
+      },
+      "misconceptions": [
+        {
+          "id": "strict_read",
+          "pattern": "Trying to keep the seat map view strictly consistent for all users at all times.",
+          "challenge": "If the map is out of date by one second, does it break the system given we validate at reservation time?"
+        }
+      ],
+      "probes": [
+        "How do we invalidate or update the cache when a seat is reserved?",
+        "What happens if the cache goes down?"
+      ],
+      "hints": [
+        "Is it okay if a user sees a seat as available, but it gets taken when they click it?",
+        "How can we push updates to the clients instead of having them poll?"
+      ],
+      "moveOnSummary": "We will cache the seat maps and accept eventual consistency on the UI, relying on the transactional database to catch any conflicts.",
+      "learnTopics": [
+        "caching",
+        "cache-strategies",
+        "consistency-models"
+      ]
+    },
+    {
+      "id": "deep.payment_reliability",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "payment-provider",
+          "queue",
+          "webhook"
+        ],
+        "keywords": [
+          "payment",
+          "stripe",
+          "webhook",
+          "callback"
+        ]
+      },
+      "goal": "Reconcile state between the payment gateway and the internal database to ensure consistency.",
+      "opener": "How do we handle the scenario where a payment is successful, but the connection drops before our server receives the success response?",
+      "evidence": {
+        "strong": "Uses webhooks from the payment provider, idempotent retry mechanisms, and a background reconciliation job.",
+        "adequate": "Mentions retrying failed requests but misses the need for strict idempotency keys or asynchronous webhooks.",
+        "weak": "Assumes the user will manually retry the payment request, risking double charges."
+      },
+      "misconceptions": [
+        {
+          "id": "client_retry",
+          "pattern": "Having the client resubmit the payment request directly without safety checks.",
+          "challenge": "If the first payment actually went through, how do you prevent charging their card twice?"
+        }
+      ],
+      "probes": [
+        "How does Stripe know this is the same transaction if we retry?",
+        "What if the webhook arrives after the temporary hold has expired?"
+      ],
+      "hints": [
+        "Does the payment provider offer a way to push status updates to our servers asynchronously?",
+        "What can we pass to the payment provider to ensure they do not charge the user twice?"
+      ],
+      "moveOnSummary": "We will use an idempotency key with the payment provider and listen to webhooks to finalize the booking.",
+      "learnTopics": [
+        "idempotency",
+        "webhooks",
+        "payment-system-ledger"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "failure",
+          "scale further"
+        ]
+      },
+      "goal": "Summarize the architecture and critically evaluate the bottlenecks.",
+      "opener": "Looking at the final design, where is the most likely bottleneck if traffic is double what we expected?",
+      "evidence": {
+        "strong": "Accurately identifies the primary write database as the bottleneck and discusses sharding strategies.",
+        "adequate": "Points out a bottleneck but chooses a less critical component like the web servers.",
+        "weak": "Claims the system will scale infinitely without issues."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If the primary database maxes out its write capacity, how could we shard it?"
+      ],
+      "hints": [
+        "Think about the single points of failure.",
+        "Which component handles the most state changes per second?"
+      ],
+      "moveOnSummary": "We have identified the relational database as the primary bottleneck and discussed potential sharding by event.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "payment_failure",
+      "after": "deep.holds",
+      "prompt": "What if the payment succeeds with Stripe, but the network connection drops before our server receives the success response?",
+      "agendaItemId": "deep.payment_reliability"
+    }
+  ],
+  "vocabulary": [
+    "optimistic locking",
+    "pessimistic locking",
+    "select for update",
+    "TTL",
+    "waiting room",
+    "idempotency key",
+    "stampede",
+    "conditional update"
+  ],
+  "alternatives": [
+    {
+      "choice": "Redis with Lua scripts for seat inventory",
+      "whenBetter": "When write throughput requirements exceed what a relational database can handle on a single primary node, provided you implement strict persistence and replication."
+    },
+    {
+      "choice": "Event Sourcing for bookings",
+      "whenBetter": "When the business requires a complete, immutable audit log of every seat state change for compliance and dispute resolution."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Strongly consistent and resilient",
+      "outline": "The candidate clearly identified the traffic spike as the main challenge and used a virtual waiting room to protect the backend. For inventory, they used a relational database with optimistic locking to prevent double-selling. They implemented seat hold expirations using a delayed message queue and correctly handled payment reconciliation with webhooks and idempotency keys."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but lacks scale protections",
+      "outline": "The candidate designed a working system but struggled initially with the sheer volume of the traffic spike. They prevented double-selling using database transactions but didn't clearly articulate the locking mechanism. They used a polling cron job for expired holds, which works but could cause database contention at scale. Read caching was included but lacked a clear invalidation strategy."
+    },
+    {
+      "band": "weak",
+      "label": "Naïve e-commerce approach",
+      "outline": "The candidate treated this as a standard e-commerce platform and didn't account for the massive on-sale spike. They relied heavily on a cache to determine seat availability, introducing critical check-then-write race conditions that would lead to double-sold seats. Seat holds were either ignored or lacked a server-side expiration mechanism."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

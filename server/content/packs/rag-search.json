@@ -1,0 +1,596 @@
+{
+  "opening": "Let us design a retrieval-augmented generation system for an enterprise environment. Feel free to start by defining the specific requirements and scale you want to target.",
+  "clarifications": [
+    {
+      "id": "scale.documents",
+      "topics": [
+        "how many",
+        "scale",
+        "documents",
+        "size"
+      ],
+      "answer": "We have around 10 million documents, with 50,000 updates or additions per day."
+    },
+    {
+      "id": "traffic.reads",
+      "topics": [
+        "queries",
+        "traffic",
+        "qps",
+        "users"
+      ],
+      "answer": "Expect about 100 queries per second during peak business hours."
+    },
+    {
+      "id": "latency.target",
+      "topics": [
+        "latency",
+        "speed",
+        "fast"
+      ],
+      "answer": "Answers should stream back to the user within 2 to 3 seconds."
+    },
+    {
+      "id": "docs.types",
+      "topics": [
+        "format",
+        "types",
+        "pdf",
+        "html"
+      ],
+      "answer": "Assume plain text and Markdown for now, but design so we can add PDFs later."
+    },
+    {
+      "id": "security.acls",
+      "topics": [
+        "permissions",
+        "security",
+        "access",
+        "acl"
+      ],
+      "answer": "Strict per-user permissions. Users must never know a document exists if they lack access."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about parameters not listed, tell them to choose a reasonable assumption for a large enterprise system and proceed.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "user"
+        ],
+        "keywords": [
+          "format",
+          "access",
+          "latency",
+          "scale"
+        ]
+      },
+      "goal": "Establish system boundaries, including data types, access control strictness, and latency goals.",
+      "opener": "What are the main requirements and constraints you want to establish before we draw out the components?",
+      "evidence": {
+        "strong": "Actively clarifies update frequency, permissions granularity, and query latency bounds.",
+        "adequate": "Notes basic document types and queries.",
+        "weak": "Skips requirements and jumps straight to drawing a vector database."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What assumption are you making about how often documents change?",
+        "Have we discussed how access permissions affect the system?"
+      ],
+      "hints": [
+        "Consider the lifecycle of an enterprise document.",
+        "Think about who is allowed to read a restricted internal draft document."
+      ],
+      "moveOnSummary": "Basic requirements set with a focus on strict ACLs and changing documents.",
+      "learnTopics": [
+        "system-design-roadmap"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "storage",
+          "million",
+          "throughput"
+        ]
+      },
+      "goal": "Estimate the storage needed for vector indexes and the read or write load on the ingestion pipeline.",
+      "opener": "Based on the scale of an enterprise, how much storage and compute traffic should we plan for?",
+      "evidence": {
+        "strong": "Calculates vector storage based on dimensions, chunks per document, and overhead.",
+        "adequate": "Provides rough estimates for QPS.",
+        "weak": "Calculates raw text storage but forgets vector index bloat."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How large is a single embedding vector in bytes?",
+        "What is the ratio of ingestion writes versus query reads?"
+      ],
+      "hints": [
+        "A standard dimension float vector takes about a few kilobytes. How many chunks per document?",
+        "Do not forget the metadata overhead in the index."
+      ],
+      "moveOnSummary": "Storage and throughput calculations completed.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.ingestion",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ingestion",
+          "worker",
+          "embedding",
+          "vector-db"
+        ],
+        "keywords": [
+          "pipeline",
+          "embed",
+          "index",
+          "parse"
+        ]
+      },
+      "goal": "Design an offline pipeline to ingest documents, extract text, generate embeddings, and store them.",
+      "opener": "Walk me through how a document goes from being uploaded to being searchable in our system.",
+      "evidence": {
+        "strong": "Separates parsing, chunking, and embedding into asynchronous queue workers.",
+        "adequate": "Shows a basic linear pipeline but misses failure handling.",
+        "weak": "Lacks a persistent store for embeddings or does embedding on the fly per query."
+      },
+      "misconceptions": [
+        {
+          "id": "on-the-fly-embedding",
+          "pattern": "The system embeds the entire document when the user asks a question.",
+          "challenge": "How long does it take to embed a massive document, and does that meet our latency goals?"
+        }
+      ],
+      "probes": [
+        "How do you handle a temporary failure in the embedding API?",
+        "Where do you store the original document text?"
+      ],
+      "hints": [
+        "Consider what happens if extracting text from a large document takes several minutes.",
+        "Do we write directly to the database, or use an intermediary to decouple the work?"
+      ],
+      "moveOnSummary": "Standard asynchronous ingestion pipeline with queues and workers writing to a vector database.",
+      "learnTopics": [
+        "retrieval-augmented-generation",
+        "message-queues",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "hl.query",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "llm",
+          "retriever",
+          "t-openai"
+        ],
+        "keywords": [
+          "prompt",
+          "search",
+          "generate",
+          "return"
+        ]
+      },
+      "goal": "Design the synchronous critical path from a user question to the final generated answer.",
+      "opener": "Walk me through the flow of a user query from the moment it hits the API to when the answer is returned.",
+      "evidence": {
+        "strong": "Diagrams the sequence query to embedding to retrieval to prompt construction to language model.",
+        "adequate": "Shows a direct line from database to language model without intermediate processing steps.",
+        "weak": "Missing the embedding step for the user query."
+      },
+      "misconceptions": [
+        {
+          "id": "llm-reads-db",
+          "pattern": "The LLM queries the database directly to find the answer.",
+          "challenge": "Standard language models only accept text prompts. How does the data actually get out of the database and into the model?"
+        }
+      ],
+      "probes": [
+        "Where does the application embed the user search query?",
+        "How do the retrieved chunks and the original question combine?"
+      ],
+      "hints": [
+        "Before we can search the vector database, what format must the user question be in?",
+        "Draw the exact component that talks to the inference API."
+      ],
+      "moveOnSummary": "Standard retrieval-augmented generation online flow established.",
+      "learnTopics": [
+        "retrieval-augmented-generation",
+        "ai-application-architecture"
+      ]
+    },
+    {
+      "id": "deep.chunking",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "t-langchain",
+          "function"
+        ],
+        "keywords": [
+          "chunk size",
+          "overlap",
+          "sliding window",
+          "tokens"
+        ]
+      },
+      "goal": "Determine how to split documents into semantic chunks to optimize context window usage and retrieval accuracy.",
+      "opener": "Documents can be hundreds of pages long. How exactly do you decide to break them down before embedding?",
+      "evidence": {
+        "strong": "Suggests structure-aware chunking with overlap to preserve context.",
+        "adequate": "Proposes a fixed token count chunking strategy.",
+        "weak": "Sends whole documents to the embedder, hitting token limits."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if a core concept is split right down the middle between two chunks?",
+        "How does your chunk size relate to the language model context window?"
+      ],
+      "hints": [
+        "If a sentence is cut in half, the embedding might lose meaning. How can we prevent that?",
+        "Consider what structural elements exist in an HTML or Markdown document."
+      ],
+      "moveOnSummary": "Structure-aware chunking with token overlap to preserve semantic context.",
+      "learnTopics": [
+        "retrieval-augmented-generation"
+      ]
+    },
+    {
+      "id": "deep.retrieval",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "retriever",
+          "vector-db",
+          "search-index"
+        ],
+        "keywords": [
+          "hybrid",
+          "bm25",
+          "semantic",
+          "rerank"
+        ]
+      },
+      "goal": "Improve search relevance beyond naive cosine similarity by using hybrid techniques and re-ranking.",
+      "opener": "Semantic search is great, but it sometimes fails on exact part numbers or acronyms. How can we improve our retrieval quality?",
+      "evidence": {
+        "strong": "Proposes hybrid search combining dense vectors and sparse search, followed by a cross-encoder re-ranker.",
+        "adequate": "Mentions adding keyword search but is vague on how to merge the results.",
+        "weak": "Assumes standard vector search is flawless for all query types."
+      },
+      "misconceptions": [
+        {
+          "id": "vector-only",
+          "pattern": "Vector embeddings capture all semantics, so keyword search is obsolete.",
+          "challenge": "How will an embedding model handle a brand new internal project acronym it was never trained on?"
+        }
+      ],
+      "probes": [
+        "How do you normalize and combine scores from a keyword index and a vector index?",
+        "Retrieving a large batch of chunks is fast, but how do we pick the absolute best ones for the final prompt?"
+      ],
+      "hints": [
+        "Look into how sparse indexes handle exact text matches compared to dense embeddings.",
+        "If you get many results from exact match and many from vectors, what kind of model could score them all accurately?"
+      ],
+      "moveOnSummary": "Hybrid retrieval with exact match, vector search, and a re-ranking step.",
+      "learnTopics": [
+        "retrieval-augmented-generation",
+        "search-and-inverted-index",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "deep.permissions",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "iam",
+          "auth-service",
+          "vector-db"
+        ],
+        "keywords": [
+          "acl",
+          "permissions",
+          "filter",
+          "rbac"
+        ]
+      },
+      "goal": "Guarantee that a user only retrieves and sees answers based on documents they are authorized to read.",
+      "opener": "How do we enforce access control so a user cannot get answers from documents they are not permitted to see?",
+      "evidence": {
+        "strong": "Filters by access lists directly within the database query.",
+        "adequate": "Retrieves chunks then filters in application code, but notes the recall issue.",
+        "weak": "Relies on the model to ignore restricted documents or checks permissions after generation."
+      },
+      "misconceptions": [
+        {
+          "id": "post-gen-filter",
+          "pattern": "We can ask the model to redact sensitive information based on the user role.",
+          "challenge": "Can we mathematically prove the model will not leak facts it has in its context window?"
+        }
+      ],
+      "probes": [
+        "What happens if we retrieve a batch of chunks, but the user does not have access to most of them?",
+        "How is permission metadata kept in sync with the index?"
+      ],
+      "hints": [
+        "If we filter chunks out after retrieving the top results, how many chunks are left for generation?",
+        "Can the database do the filtering for us during the nearest-neighbor search?"
+      ],
+      "moveOnSummary": "Pre-filtering nearest-neighbor search results using metadata access lists.",
+      "learnTopics": [
+        "retrieval-augmented-generation",
+        "authentication-authorization",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "deep.updates",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "event-bus",
+          "queue",
+          "vector-db",
+          "ingestion"
+        ],
+        "keywords": [
+          "update",
+          "delete",
+          "tombstone",
+          "sync"
+        ]
+      },
+      "goal": "Ensure the vector index accurately reflects modifications or deletions of source documents.",
+      "opener": "Documents in the enterprise change all the time. How does your system handle an edit or deletion of an existing document?",
+      "evidence": {
+        "strong": "Uses a parent document ID to locate and delete old chunks before inserting new ones.",
+        "adequate": "Notes that the document needs to be re-embedded, but misses deleting the old orphaned chunks.",
+        "weak": "Assumes documents are static once ingested."
+      },
+      "misconceptions": [
+        {
+          "id": "append-only-updates",
+          "pattern": "We just embed the new version and add it to the database.",
+          "challenge": "If the user asks a question, will the system not retrieve both the old contradictory chunk and the new chunk?"
+        }
+      ],
+      "probes": [
+        "How do you find the specific vectors to remove when a document is deleted?",
+        "What is the performance impact of deleting vectors in your chosen database?"
+      ],
+      "hints": [
+        "A single document produces many chunks. How do we track which chunks belong to which document?",
+        "Databases often do not physically delete instantly. How do they handle removals?"
+      ],
+      "moveOnSummary": "Deleting or tombstoning old vector chunks by document ID during an update.",
+      "learnTopics": [
+        "vector-databases",
+        "retrieval-augmented-generation",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "deep.grounding",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "llm",
+          "t-openai"
+        ],
+        "keywords": [
+          "prompt",
+          "context",
+          "hallucination",
+          "refuse"
+        ]
+      },
+      "goal": "Configure the model to strictly answer from the context and properly cite its sources.",
+      "opener": "How do you construct the prompt to ensure the model does not invent answers based on its training data?",
+      "evidence": {
+        "strong": "Detailed system prompt instructing the model to rely only on context, cite chunk IDs, and refuse if missing.",
+        "adequate": "Mentions adding context instructions to the prompt.",
+        "weak": "Passes the user query and chunks without strict behavioral instructions."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the application map the citation back to a clickable document link?",
+        "What if the retrieved chunks contain conflicting information?"
+      ],
+      "hints": [
+        "Can we tell the model exactly what to output if it cannot find the answer in the text?",
+        "How do you format the retrieved chunks in the prompt so the model can reference them by name?"
+      ],
+      "moveOnSummary": "Strict grounding prompt with citation ID formatting and fallback instructions.",
+      "learnTopics": [
+        "retrieval-augmented-generation",
+        "ai-application-architecture"
+      ]
+    },
+    {
+      "id": "wrap.eval",
+      "stage": "wrap_up",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "metrics",
+          "logging"
+        ],
+        "keywords": [
+          "quality",
+          "hallucination",
+          "ragas",
+          "feedback"
+        ]
+      },
+      "goal": "Establish a mechanism to continuously monitor answer quality and track hallucinations.",
+      "opener": "Once this system is live, how will we know if the answers it generates are actually correct and useful?",
+      "evidence": {
+        "strong": "Describes offline evaluation sets, automated judges for groundedness, and logging user feedback.",
+        "adequate": "Mentions tracking explicit user feedback like thumbs up.",
+        "weak": "Relies purely on system metrics like latency and error rates."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you systematically detect if the model hallucinated a fact not in the source document?",
+        "What metrics would you track in a golden dataset for this system?"
+      ],
+      "hints": [
+        "Users will not always click a button when an answer is slightly wrong. Can we automate checking?",
+        "Think about separating the evaluation of the retriever from the evaluation of the generator."
+      ],
+      "moveOnSummary": "Offline evaluation framework and online telemetry for hallucination and relevance detection.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "retrieval-augmented-generation",
+        "ml-model-monitoring"
+      ]
+    },
+    {
+      "id": "deep.multihop",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ai-agent",
+          "orchestrator",
+          "t-langchain"
+        ],
+        "keywords": [
+          "agent",
+          "routing",
+          "tools"
+        ]
+      },
+      "goal": "Handle complex questions that require aggregating data across many documents.",
+      "opener": "What if the user asks a question that requires aggregating data across thousands of documents, rather than just fetching a few chunks?",
+      "evidence": {
+        "strong": "Proposes an agentic approach, metadata filtering, or routing to a structured database instead.",
+        "adequate": "Mentions increasing search limits, which scales poorly.",
+        "weak": "Assumes embedding similarity naturally solves aggregation."
+      },
+      "misconceptions": [
+        {
+          "id": "llm-aggregation",
+          "pattern": "We can just feed all thousands of documents into a massive context window.",
+          "challenge": "What are the cost and latency implications of sending millions of tokens per query?"
+        }
+      ],
+      "probes": [
+        "Can we route the query differently based on whether it asks for a specific fact versus an aggregate trend?"
+      ],
+      "hints": [
+        "Standard search is good for needles in haystacks. How do we count haystacks?",
+        "Consider if the metadata store could answer this directly without the inference model."
+      ],
+      "moveOnSummary": "Query routing to handle aggregate versus factoid questions.",
+      "learnTopics": [
+        "ai-application-architecture",
+        "hld-vs-lld"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "aggregate-queries",
+      "after": "deep.retrieval",
+      "prompt": "Our executives just tested the beta. They asked for key themes across all incident reports this year, and the system gave a terrible, incomplete answer. How do we fix this?",
+      "agendaItemId": "deep.multihop"
+    }
+  ],
+  "vocabulary": [
+    "BM25",
+    "RAG",
+    "Chunking",
+    "Vector DB",
+    "Embedding",
+    "Cosine Similarity",
+    "HNSW",
+    "Reranker",
+    "Cross-encoder",
+    "Tombstone",
+    "ACLs"
+  ],
+  "alternatives": [
+    {
+      "choice": "Graph database retrieval",
+      "whenBetter": "When the data is highly interconnected or requires complex multi-hop reasoning over relationships rather than pure text similarity."
+    },
+    {
+      "choice": "Pre-fetching and application-side filtering",
+      "whenBetter": "Only when the access control rules are too complex for the database to evaluate, accepting the tradeoff of degraded search recall."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive and secure pipeline",
+      "outline": "Presents a fully decoupled asynchronous ingestion pipeline handling chunking, embedding, and tombstones for updates. Highlights hybrid search with sparse and vector similarity, capped with a cross-encoder reranker. Correctly enforces access control pre-filtering directly in the vector database query. Designs strict prompting constraints and defines clear offline metrics to evaluate groundedness and relevance."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but coupled",
+      "outline": "Designs a functional retrieval pipeline but couples components tightly. Proposes basic semantic vector search and enforces permissions, but post-filters results which degrades context recall. Mentions prompt instructions for citations but lacks a systematic evaluation framework beyond basic user feedback."
+    },
+    {
+      "band": "weak",
+      "label": "Misses core mechanics",
+      "outline": "Confuses fine-tuning the model with retrieval context. Attempts to pass entire documents into the context window, causing latency and token limit failures. Fails to account for deleted or updated documents, leading to stale retrieved answers. Misunderstands access controls, hoping the model redacts information itself."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

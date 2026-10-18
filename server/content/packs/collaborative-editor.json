@@ -1,0 +1,618 @@
+{
+  "opening": "Welcome. Let's design a collaborative document editor, similar to Google Docs. Whenever you're ready, you can start by exploring the requirements.",
+  "clarifications": [
+    {
+      "id": "scale.docs",
+      "topics": [
+        "total",
+        "amount",
+        "number",
+        "documents",
+        "scale"
+      ],
+      "answer": "Assume we have millions of active documents stored in the system."
+    },
+    {
+      "id": "scale.concurrent",
+      "topics": [
+        "concurrent",
+        "users",
+        "editors",
+        "simultaneous",
+        "traffic"
+      ],
+      "answer": "Most documents have one or two editors, but we need to support up to 50 concurrent editors per document typically."
+    },
+    {
+      "id": "latency.sync",
+      "topics": [
+        "latency",
+        "speed",
+        "real-time",
+        "delay"
+      ],
+      "answer": "Edits should appear on other collaborators' screens within 100 to 200 milliseconds."
+    },
+    {
+      "id": "features.offline",
+      "topics": [
+        "offline",
+        "disconnect",
+        "reconnect",
+        "network drop"
+      ],
+      "answer": "Users can continue typing if they lose their connection; their edits must merge seamlessly when they reconnect."
+    },
+    {
+      "id": "scope.formatting",
+      "topics": [
+        "images",
+        "video",
+        "rich text",
+        "formatting",
+        "media"
+      ],
+      "answer": "Assume the documents contain plain text with basic formatting. Do not worry about large media files."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about a feature not in the brief (like folders, sharing links, or billing), rule it out to keep them focused on real-time sync and conflict resolution.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "concurrent",
+          "users",
+          "latency",
+          "offline",
+          "requirements"
+        ]
+      },
+      "goal": "Establish the scale of active documents, concurrent user expectations, and the real-time latency target.",
+      "opener": "What functional requirements and scale estimates do you want to define before we jump into the architecture?",
+      "evidence": {
+        "strong": "Identifies the core challenges: low-latency sync, handling simultaneous edits, and merging offline work, while asking about user volume.",
+        "adequate": "Lists basic CRUD features and concurrent editing, but misses the offline merge or latency bounds.",
+        "weak": "Focuses on irrelevant features like user profiles or file folders without establishing the real-time constraints."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How fast do you think a keystroke needs to travel to feel real-time?",
+        "What happens to a user's experience if their train goes through a tunnel?"
+      ],
+      "hints": [
+        "Think about what Google Docs does when you lose Wi-Fi.",
+        "Consider the difference between storing a document and letting 10 people type in it at once."
+      ],
+      "moveOnSummary": "Agreed on low-latency real-time sync, offline merging, and handling up to 50 concurrent editors.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.realtime",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "api-gateway",
+          "load-balancer",
+          "client",
+          "web-server"
+        ],
+        "keywords": [
+          "websocket",
+          "sse",
+          "polling",
+          "real-time",
+          "connection"
+        ]
+      },
+      "goal": "Establish a persistent connection model for bidirectional, low-latency sync.",
+      "opener": "How will clients connect to your system so they can send keystrokes and receive others' edits in real time?",
+      "evidence": {
+        "strong": "Selects WebSockets for bidirectional low-latency communication and places an API Gateway or load balancer to manage long-lived connections.",
+        "adequate": "Suggests Server-Sent Events (SSE) or WebSockets but struggles with how the backend handles the connections at scale.",
+        "weak": "Proposes HTTP short-polling or assumes standard REST API calls for every keystroke."
+      },
+      "misconceptions": [
+        {
+          "id": "polling.database",
+          "pattern": "Polling the database every second to get document updates.",
+          "challenge": "If a million users query the database every second, what will the load look like, and can we achieve the 100ms latency target?"
+        }
+      ],
+      "probes": [
+        "Why did you choose that specific protocol over standard HTTP requests?",
+        "How does the server push an update to a client who is just reading?"
+      ],
+      "hints": [
+        "HTTP requests have overhead on every call. Is there a way to keep the line open?",
+        "Look into protocols designed for full-duplex communication over a single TCP connection."
+      ],
+      "moveOnSummary": "Uses WebSockets to maintain persistent, bidirectional connections with clients.",
+      "learnTopics": [
+        "real-time-communication",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "hl.routing",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "router",
+          "load-balancer",
+          "service",
+          "cache"
+        ],
+        "keywords": [
+          "route",
+          "sticky",
+          "hash",
+          "session",
+          "affinity"
+        ]
+      },
+      "goal": "Route all editors of a specific document to the same backend server to simplify operation ordering.",
+      "opener": "If two users open the exact same document, how do their requests flow through your backend?",
+      "evidence": {
+        "strong": "Uses consistent hashing on the document ID or a session metadata store to ensure all connections for a doc hit the same stateful session server.",
+        "adequate": "Mentions routing them together but uses generic terms like 'sticky sessions' without explaining how the load balancer knows the doc ID.",
+        "weak": "Routes users to random servers and relies purely on a database or massive pub/sub fan-out to sync them."
+      },
+      "misconceptions": [
+        {
+          "id": "stateless.sync",
+          "pattern": "Assuming any stateless server can handle any keystroke instantly without holding document state.",
+          "challenge": "If Server A gets Alice's edit and Server B gets Bob's edit, how do they merge them in memory before saving to the database?"
+        }
+      ],
+      "probes": [
+        "If they land on different servers, how do those servers coordinate the exact order of edits?",
+        "What mechanism tells your load balancer which server currently hosts this document?"
+      ],
+      "hints": [
+        "Coordination is much faster in-memory. What if one server was 'in charge' of a document?",
+        "Think about consistent hashing or a Redis lookup table for active sessions."
+      ],
+      "moveOnSummary": "Routes all clients for a given document to a single designated session server.",
+      "learnTopics": [
+        "load-balancing",
+        "consistent-hashing"
+      ]
+    },
+    {
+      "id": "deep.conflict",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "ot",
+          "crdt",
+          "operational transformation",
+          "conflict",
+          "merge",
+          "concurrent",
+          "resolve"
+        ]
+      },
+      "goal": "Define a valid conflict resolution strategy (OT or CRDT) to ensure concurrent edits converge to the same state.",
+      "opener": "If two users type at the exact same position in the document simultaneously, how does the system merge these edits without scrambling the text?",
+      "evidence": {
+        "strong": "Explicitly compares OT (Operational Transformation) and CRDTs, selects one, and explains how operations are transformed or how vector clocks/tombstones ensure convergence.",
+        "adequate": "Mentions OT or CRDTs as the standard solution for text collaboration but is vague on the underlying mechanics of how index shifts are calculated.",
+        "weak": "Proposes last-writer-wins, standard database locks, or overwriting the full document on every keystroke."
+      },
+      "misconceptions": [
+        {
+          "id": "last.writer",
+          "pattern": "Sending the full document text on every edit and saving the last one received.",
+          "challenge": "If two users edit different paragraphs at the exact same time, won't one user's paragraph be deleted when the other's full document is saved?"
+        }
+      ],
+      "probes": [
+        "Can you walk me through an example where Alice types 'A' at index 0 and Bob types 'B' at index 0?",
+        "How do the clients agree on the final string if their local operations are applied out of order?"
+      ],
+      "hints": [
+        "Instead of sending the whole document, what if we just send 'Insert X at position Y'?",
+        "If Alice inserts at position 0, Bob's insertion at position 5 now needs to happen at position 6. What algorithm handles this shift?"
+      ],
+      "moveOnSummary": "Chose an OT or CRDT algorithm to deterministically merge concurrent text operations.",
+      "learnTopics": [
+        "crdts",
+        "clocks-and-ordering"
+      ]
+    },
+    {
+      "id": "deep.storage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-store",
+          "kv-store",
+          "t-s3",
+          "event-bus",
+          "queue",
+          "topic"
+        ],
+        "keywords": [
+          "log",
+          "append",
+          "snapshot",
+          "compact",
+          "event sourcing"
+        ]
+      },
+      "goal": "Persist an append-only operation log and periodically compact it into snapshots for fast read performance.",
+      "opener": "How is the document stored on disk so we can load it quickly without losing the granular history of all edits?",
+      "evidence": {
+        "strong": "Designs an event-sourced architecture with an append-only operation log and a background worker that periodically compacts ops into a snapshot.",
+        "adequate": "Suggests storing all operations in a database, but only mentions snapshotting after being prompted about load times.",
+        "weak": "Saves the full document string on every single edit, generating massive write load and losing the operation history."
+      },
+      "misconceptions": [
+        {
+          "id": "no.snapshots",
+          "pattern": "Storing only the operation log and replaying it from the beginning every time a user opens the document.",
+          "challenge": "If a document has been edited thousands of times over a year, how long will it take to load for a fresh client?"
+        }
+      ],
+      "probes": [
+        "What happens when a new user opens a document that has 50,000 historical operations?",
+        "How do you ensure the snapshotting process doesn't block ongoing real-time edits?"
+      ],
+      "hints": [
+        "Replaying 50,000 edits is slow. Can we save a 'checkpoint' of the document?",
+        "Think about separating the real-time write path from a background compaction job."
+      ],
+      "moveOnSummary": "Uses an append-only log for operations and periodically creates document snapshots for fast loading.",
+      "learnTopics": [
+        "event-sourcing-cqrs",
+        "write-ahead-log",
+        "nosql-database-types"
+      ]
+    },
+    {
+      "id": "deep.reconnect",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "mobile",
+          "desktop",
+          "local-cache"
+        ],
+        "keywords": [
+          "offline",
+          "reconnect",
+          "sync",
+          "buffer",
+          "local"
+        ]
+      },
+      "goal": "Buffer offline operations locally and synchronize them correctly with the server upon reconnection.",
+      "opener": "If a user loses their internet connection for 5 minutes, continues typing, and then reconnects, how does the system merge their offline work?",
+      "evidence": {
+        "strong": "Explains how the client buffers operations locally with logical timestamps or state vectors, and describes the reconciliation handshake upon reconnect.",
+        "adequate": "States the client saves edits locally and sends them in bulk on reconnect, but glosses over how the server resolves the retroactive conflicts.",
+        "weak": "Assumes offline edits are discarded, or suggests locking the document if the connection drops."
+      },
+      "misconceptions": [
+        {
+          "id": "overwrite.on.reconnect",
+          "pattern": "The reconnecting client simply pushes its full local document state to the server.",
+          "challenge": "What happens to the edits made by other users during those 5 minutes while this client was offline?"
+        }
+      ],
+      "probes": [
+        "What exact metadata does the client send when it reconnects?",
+        "How does the server know which operations the client missed while it was offline?"
+      ],
+      "hints": [
+        "The client has a local version, and the server has moved forward. How do they compare notes?",
+        "Could the client keep track of the last operation ID it received before going offline?"
+      ],
+      "moveOnSummary": "Clients buffer offline edits and exchange last-seen operation IDs upon reconnect to sync state.",
+      "learnTopics": [
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "deep.history",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "archive",
+          "database",
+          "storage",
+          "t-s3"
+        ],
+        "keywords": [
+          "history",
+          "version",
+          "revert",
+          "diff",
+          "restore"
+        ]
+      },
+      "goal": "Leverage the operation log and snapshots to view and restore past document versions.",
+      "opener": "Users need to view the document's history and recover earlier versions. How does your storage model support this?",
+      "evidence": {
+        "strong": "Explains how to load the closest snapshot before the target timestamp and replay the operation log forward to the exact point in time.",
+        "adequate": "Suggests taking full backups of the document every few minutes, but lacks a way to view second-by-second history.",
+        "weak": "Has no mechanism for history, or assumes the database's internal backups can be exposed to end users."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How would you generate a view of the document exactly as it was at 2:15 PM yesterday?",
+        "Does storing history impact the real-time editing performance?"
+      ],
+      "hints": [
+        "You already have an append-only log of every edit. How can you use that to travel back in time?",
+        "If you have a snapshot from 2:00 PM and the logs, how do you get to 2:15 PM?"
+      ],
+      "moveOnSummary": "Reconstructs historical versions by applying the operation log forward from an older snapshot.",
+      "learnTopics": [
+        "event-sourcing-cqrs"
+      ]
+    },
+    {
+      "id": "deep.failure",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "replica",
+          "cluster",
+          "leader"
+        ],
+        "keywords": [
+          "crash",
+          "failover",
+          "reconnect",
+          "node down",
+          "recovery"
+        ]
+      },
+      "goal": "Handle session server crashes without losing acknowledged edits or permanently dropping users.",
+      "opener": "What happens to the users and their edits if the session server currently managing their active document suddenly dies?",
+      "evidence": {
+        "strong": "Clients detect the drop and reconnect; the load balancer assigns a new server, which safely rehydrates its in-memory state from the latest snapshot and op log.",
+        "adequate": "Mentions the load balancer will route clients to a new server, but misses the need for the new server to rebuild the active document state.",
+        "weak": "Assumes the system goes down for those users or that real-time state is irreparably lost."
+      },
+      "misconceptions": [
+        {
+          "id": "unacknowledged.edits",
+          "pattern": "Assuming edits sent just before the crash are safe because they reached the server.",
+          "challenge": "If the server crashed before writing an edit to the database log, how does the new server know about it?"
+        }
+      ],
+      "probes": [
+        "Where does the new server get the document's current state from?",
+        "What happens to the keystrokes that were in the crashed server's memory but not yet saved to the database?"
+      ],
+      "hints": [
+        "WebSockets disconnect when a server crashes. What should the client code do next?",
+        "If an edit wasn't acknowledged by the server before the crash, the client still has it in its offline buffer."
+      ],
+      "moveOnSummary": "Clients auto-reconnect, and the new session server rehydrates state from the durable database.",
+      "learnTopics": [
+        "health-checks-failover",
+        "disaster-recovery",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "deep.broadcasting",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "cdn",
+          "topic",
+          "websocket",
+          "t-redis",
+          "t-pubsub"
+        ],
+        "keywords": [
+          "read heavy",
+          "broadcast",
+          "viewers",
+          "fan-out",
+          "spike"
+        ]
+      },
+      "goal": "Separate read-only connections from the editing session server to prevent it from being overwhelmed by viewers.",
+      "opener": "How would you handle a massive spike of read-only viewers without crashing the session server managing the edits?",
+      "evidence": {
+        "strong": "Introduces a pub/sub mechanism to fan out state changes to separate edge servers or CDN WebSockets specifically for read-only viewers.",
+        "adequate": "Suggests adding more session servers and syncing them via a database, recognizing the bottleneck but adding database load.",
+        "weak": "Assumes a single session server can hold 100,000 WebSocket connections easily without architectural changes."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If 100,000 people are watching, do they all need to be connected to the exact server handling the write conflicts?",
+        "How can we fan out the final merged document state efficiently?"
+      ],
+      "hints": [
+        "Read-only users don't generate conflicts. They just need the resulting text.",
+        "Consider using a Pub/Sub system like Redis or Kafka to broadcast updates to a fleet of viewing servers."
+      ],
+      "moveOnSummary": "Offloads read-only viewers to separate servers using a pub/sub fan-out pattern.",
+      "learnTopics": [
+        "pub-sub",
+        "fan-out"
+      ]
+    },
+    {
+      "id": "deep.compaction",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "worker",
+          "archive",
+          "t-s3",
+          "storage"
+        ],
+        "keywords": [
+          "compaction",
+          "milestone",
+          "archive",
+          "cold storage"
+        ]
+      },
+      "goal": "Implement frequent background snapshotting and cold storage archiving for extremely old operations.",
+      "opener": "For a very old, heavily edited document, how do you prevent the operation log and snapshot from degrading load times?",
+      "evidence": {
+        "strong": "Proposes tiered storage, archiving old operations to blob storage (S3), and ensuring snapshots are taken frequently enough that the replay delta is always small.",
+        "adequate": "Suggests taking snapshots more often, but keeps all historical operations in the hot database permanently.",
+        "weak": "Suggests deleting old history entirely to save space."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Do we need to keep operations from 3 years ago in our fast, expensive database?",
+        "How do you decide when to trigger a new snapshot?"
+      ],
+      "hints": [
+        "Operations that are already baked into an old snapshot are rarely read.",
+        "Think about hot storage versus cold blob storage."
+      ],
+      "moveOnSummary": "Archives old operations to cold storage and maintains frequent snapshots to keep the hot delta small.",
+      "learnTopics": [
+        "batch-vs-stream-processing",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "summary",
+          "trade-off",
+          "bottleneck",
+          "revisit"
+        ]
+      },
+      "goal": "Summarize the architecture concisely and acknowledge major trade-offs.",
+      "opener": "We're almost out of time. Could you summarize the flow of a single edit and mention one trade-off you'd revisit if you had more time?",
+      "evidence": {
+        "strong": "Clearly traces an edit from client to WebSocket, through conflict resolution in memory, to the durable log, and highlights a valid trade-off like CRDT metadata overhead.",
+        "adequate": "Summarizes the components but struggles to articulate a concrete technical trade-off.",
+        "weak": "Rambles through the diagram without a clear flow and claims the system has no bottlenecks."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If you had to change one database choice, which would it be and why?",
+        "What is the most complex part of this design to maintain?"
+      ],
+      "hints": [
+        "Think about the complexity of running stateful session servers.",
+        "Consider the storage cost of keeping every single operation forever."
+      ],
+      "moveOnSummary": "Provided a coherent end-to-end summary and acknowledged system complexities.",
+      "learnTopics": []
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "hot_doc",
+      "after": "hl.routing",
+      "prompt": "What if a famous person makes their document public and suddenly 100,000 people open it to read in real-time, while a few people are editing?",
+      "agendaItemId": "deep.broadcasting"
+    },
+    {
+      "id": "history_scale",
+      "after": "deep.history",
+      "prompt": "What if this document has been edited continuously for 5 years and the operation log has billions of rows? Replaying from a sparse snapshot might take too long.",
+      "agendaItemId": "deep.compaction"
+    }
+  ],
+  "vocabulary": [
+    "OT",
+    "CRDT",
+    "Operational Transformation",
+    "Conflict-free Replicated Data Type",
+    "WebSockets",
+    "SSE",
+    "Event Sourcing",
+    "Compaction",
+    "Snapshotting"
+  ],
+  "alternatives": [
+    {
+      "choice": "CRDTs (Conflict-free Replicated Data Types)",
+      "whenBetter": "When building a decentralized or offline-first editor where operations must merge cleanly without relying on a central ordering server."
+    },
+    {
+      "choice": "OT (Operational Transformation)",
+      "whenBetter": "When a central server is available to sequence operations, and the document structure is primarily simple rich text, which OT handles very efficiently."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Stateful Routing and Event Sourcing",
+      "outline": "The candidate explicitly chose between OT and CRDT, routing users to specific session servers to maintain in-memory state and ordering. They separated the fast-path WebSocket sync from the durable storage, proposing an append-only operation log with background snapshotting. They robustly handled edge cases like server failure, reconnects, and version history."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic WebSockets and Log",
+      "outline": "The candidate designed a working real-time sync mechanism using WebSockets and an operation log database. They understood the need to handle concurrent edits but were vague on the exact mathematical mechanics of OT or CRDTs. Snapshotting and failover were added only after prompting, but they eventually arrived at a workable solution."
+    },
+    {
+      "band": "weak",
+      "label": "CRUD with Full Document Saves",
+      "outline": "The candidate treated this as a standard CRUD application, suggesting full-document updates to a relational database on keystrokes. They struggled to achieve real-time latency, missed the complexities of conflict resolution, and had no mechanism for offline merging or fine-grained version history."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.1,
+    "high_level": 0.2,
+    "deep_dive": 0.6,
+    "wrap_up": 0.1
+  }
+}

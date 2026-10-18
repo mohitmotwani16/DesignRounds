@@ -1,0 +1,545 @@
+{
+  "opening": "Welcome. Today we're going to design a fraud detection data platform. Whenever you're ready, let's start by clarifying the scope and requirements.",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "qps",
+        "traffic",
+        "volume",
+        "scale",
+        "throughput"
+      ],
+      "answer": "Expect an average of 10,000 payment events per second, with peak traffic up to 30,000 events per second."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "sla",
+        "budget",
+        "checkout",
+        "performance"
+      ],
+      "answer": "The fraud decision must be returned within 100 milliseconds end-to-end to avoid blocking the user's checkout."
+    },
+    {
+      "id": "req.history",
+      "topics": [
+        "retention",
+        "historical data",
+        "storage",
+        "timeframe"
+      ],
+      "answer": "We keep up to 3 years of historical payment and signal data for model training and investigation."
+    },
+    {
+      "id": "req.models",
+      "topics": [
+        "ml",
+        "models",
+        "rules",
+        "engine",
+        "logic"
+      ],
+      "answer": "The decision relies on a combination of heuristic business rules and machine learning models."
+    },
+    {
+      "id": "req.investigators",
+      "topics": [
+        "explainability",
+        "traceability",
+        "audit",
+        "investigators",
+        "dashboard"
+      ],
+      "answer": "Investigators review flagged transactions after the fact. They need to see the exact data, rules, and model versions that produced the decision."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not listed, invite them to state a reasonable assumption and proceed.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "requirements",
+          "payments",
+          "users",
+          "checkout",
+          "investigators"
+        ]
+      },
+      "goal": "Identify the primary actors and the core input/output of the system.",
+      "opener": "How would you summarise the main requirements and users for this platform?",
+      "evidence": {
+        "strong": "Identifies the two distinct access patterns: synchronous checkout latency and asynchronous investigator analytics.",
+        "adequate": "Lists the need to ingest payments and return a fraud decision.",
+        "weak": "Misses the investigator persona or ignores the checkout latency constraint."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Who consumes the outputs of this system?",
+        "What are the distinct phases in the lifecycle of a payment's data?"
+      ],
+      "hints": [
+        "Think about what happens at the moment of purchase.",
+        "Consider what happens when a customer complains about a declined card the next day."
+      ],
+      "moveOnSummary": "We have the core requirements: fast online decisions and detailed offline audits.",
+      "learnTopics": [
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "throughput",
+          "peak",
+          "latency",
+          "storage"
+        ]
+      },
+      "goal": "Establish the throughput, latency constraints, and data volume.",
+      "opener": "What scale numbers do we need to design for?",
+      "evidence": {
+        "strong": "Estimates QPS, peak load, and calculates the massive storage footprint of 3 years of historical events.",
+        "adequate": "Asks for QPS and latency numbers.",
+        "weak": "Proceeds to architecture without bounding the problem size."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How much data does 3 years of history represent?",
+        "What is the difference between average and peak traffic here?"
+      ],
+      "hints": [
+        "Estimate the size of a single enriched payment event.",
+        "Multiply the event size by the average daily volume over 3 years."
+      ],
+      "moveOnSummary": "We agreed on 10k to 30k QPS, < 100ms latency, and petabytes of historical storage.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway",
+          "fraud-check",
+          "model-serving",
+          "database"
+        ],
+        "keywords": [
+          "flow",
+          "ingestion",
+          "processing",
+          "serving"
+        ]
+      },
+      "goal": "Draw a complete data flow from payment ingestion through decision to storage.",
+      "opener": "Could you draw the high-level architecture for this platform?",
+      "evidence": {
+        "strong": "Separates the critical path (checkout) from the asynchronous paths (feature computation, audit logging).",
+        "adequate": "Connects payment events to a decision service and a database.",
+        "weak": "Creates circular dependencies or places heavy data processing on the critical path."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Walk me through the lifecycle of a single payment event.",
+        "Where does the investigator UI connect to this architecture?"
+      ],
+      "hints": [
+        "Start with the checkout client sending a payment.",
+        "Show what the decision service needs to fetch before evaluating rules."
+      ],
+      "moveOnSummary": "We have a high-level view of ingestion, evaluation, and storage.",
+      "learnTopics": [
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "deep.streaming_features",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream",
+          "stream-processor",
+          "t-kafka",
+          "t-flink"
+        ],
+        "keywords": [
+          "velocity",
+          "sliding window",
+          "aggregation",
+          "stateful",
+          "stream"
+        ]
+      },
+      "goal": "Design a pipeline that computes real-time velocity features without querying databases at decision time.",
+      "opener": "How do you compute a feature like 'number of transactions from this card in the last 10 minutes'?",
+      "evidence": {
+        "strong": "Uses a stream processing engine to compute tumbling or sliding windows and writes the aggregated result to a low-latency KV store.",
+        "adequate": "Proposes updating a counter in a fast database upon every event.",
+        "weak": "Suggests running a SQL COUNT query over the recent events table during the checkout flow."
+      },
+      "misconceptions": [
+        {
+          "id": "query-at-runtime",
+          "pattern": "Querying raw events dynamically during the decision request.",
+          "challenge": "How long would a SELECT COUNT query take when run 30,000 times a second on a large table?"
+        }
+      ],
+      "probes": [
+        "How is the feature value made available to the decision service?",
+        "What happens to the window count when a new event arrives?"
+      ],
+      "hints": [
+        "We cannot afford complex queries within our 100ms budget.",
+        "Consider pre-computing these aggregates asynchronously as events flow in."
+      ],
+      "moveOnSummary": "We will pre-compute velocity features using a stream processor and push them to an online store.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks",
+        "batch-vs-stream-processing"
+      ]
+    },
+    {
+      "id": "deep.online_offline_parity",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "data-lake",
+          "warehouse"
+        ],
+        "keywords": [
+          "feature store",
+          "skew",
+          "point-in-time",
+          "training",
+          "offline"
+        ]
+      },
+      "goal": "Ensure that the features used for model training match exactly what the model sees in production.",
+      "opener": "How do you guarantee that the features used to train the model behave identically when served in production?",
+      "evidence": {
+        "strong": "Introduces a feature store abstraction that unifies batch and streaming definitions, ensuring point-in-time correctness for offline datasets.",
+        "adequate": "Mentions using the same code or shared libraries for both batch training and real-time computation.",
+        "weak": "Maintains two entirely separate codebases for offline SQL and online streaming without a sync mechanism."
+      },
+      "misconceptions": [
+        {
+          "id": "ignore-skew",
+          "pattern": "Assuming that identical database schemas guarantee identical feature values.",
+          "challenge": "If a data scientist updates the logic for a feature in the training pipeline, how does the real-time pipeline learn about it?"
+        }
+      ],
+      "probes": [
+        "How do data scientists access historical features for training?",
+        "What does 'point-in-time correctness' mean for this system?"
+      ],
+      "hints": [
+        "Training data needs to reflect what the system knew at the exact moment the historical transaction occurred.",
+        "Think about a central repository that manages feature definitions for both environments."
+      ],
+      "moveOnSummary": "We will use a feature store to maintain online/offline parity and prevent training-serving skew.",
+      "learnTopics": [
+        "feature-store",
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "deep.decision_latency",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "fraud-check",
+          "kv-store",
+          "t-redis"
+        ],
+        "keywords": [
+          "latency",
+          "parallel",
+          "inference",
+          "in-memory",
+          "redis"
+        ]
+      },
+      "goal": "Design the critical path to fetch features and evaluate models within the strict 100ms budget.",
+      "opener": "Walk me through exactly how a request gets processed within the 100ms budget.",
+      "evidence": {
+        "strong": "Uses an in-memory KV store for fast feature lookups, parallelises fetches, and hosts the model in a dedicated, optimised inference service.",
+        "adequate": "Uses a cache for features and clearly separates the evaluation logic from data ingestion.",
+        "weak": "Adds multiple sequential network hops or disk reads on the critical path."
+      },
+      "misconceptions": [
+        {
+          "id": "sequential-fetches",
+          "pattern": "Fetching features one by one from multiple services.",
+          "challenge": "If you have to fetch 50 features from 5 different services, how does that impact your latency budget?"
+        }
+      ],
+      "probes": [
+        "Where is the highest risk of latency on this path?",
+        "How do you deploy the machine learning model to ensure fast inference?"
+      ],
+      "hints": [
+        "Think about where the pre-computed features should live.",
+        "Consider how network calls add up."
+      ],
+      "moveOnSummary": "We rely on an in-memory KV store and parallel processing to meet the strict latency SLA.",
+      "learnTopics": [
+        "caching",
+        "model-serving",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "deep.audit_trail",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "audit-log",
+          "document-store",
+          "wide-column"
+        ],
+        "keywords": [
+          "immutable",
+          "versioning",
+          "snapshot",
+          "investigator",
+          "explainability"
+        ]
+      },
+      "goal": "Create a robust, queryable log of every decision and its precise context.",
+      "opener": "How does an investigator see exactly why a specific payment was declined yesterday?",
+      "evidence": {
+        "strong": "Designs an asynchronous write of an immutable snapshot containing the decision, rule/model version, and all input feature values to a scalable datastore.",
+        "adequate": "Saves the final decision and transaction ID into a database table for investigators.",
+        "weak": "Suggests querying the live feature store to see the user's data, ignoring that features change over time."
+      },
+      "misconceptions": [
+        {
+          "id": "live-query-for-audit",
+          "pattern": "Re-evaluating the user's current data to explain a past decision.",
+          "challenge": "If the user's balance changed since yesterday, how will the investigator know what the model saw at the time?"
+        }
+      ],
+      "probes": [
+        "What specific data points need to be saved alongside the decision?",
+        "How do we prevent writing this heavy audit log from slowing down the checkout?"
+      ],
+      "hints": [
+        "The investigator needs a snapshot of the exact state at decision time.",
+        "Think about using an event bus or message queue to decouple the logging."
+      ],
+      "moveOnSummary": "We will asynchronously sink full decision snapshots to a data warehouse or document store.",
+      "learnTopics": [
+        "event-sourcing-cqrs",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.fallback",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "fraud-check",
+          "api-gateway",
+          "service"
+        ],
+        "keywords": [
+          "timeout",
+          "circuit breaker",
+          "fallback",
+          "fail open"
+        ]
+      },
+      "goal": "Define the system's behaviour when features or models are unavailable or timing out.",
+      "opener": "What happens to the checkout flow if the feature store or model service goes down?",
+      "evidence": {
+        "strong": "Implements tight timeouts and circuit breakers, falling back to a static set of conservative business rules or failing open to preserve revenue.",
+        "adequate": "Mentions adding retries and a timeout.",
+        "weak": "Allows the checkout to block indefinitely or fail completely without a fallback strategy."
+      },
+      "misconceptions": [
+        {
+          "id": "infinite-retries",
+          "pattern": "Using exponential backoff and retries on the critical path.",
+          "challenge": "The customer is staring at a loading spinner. Can we afford to wait for a 2-second retry?"
+        }
+      ],
+      "probes": [
+        "How long do you wait for the model service before giving up?",
+        "If you have to bypass the model, how do you decide whether to approve or decline the transaction?"
+      ],
+      "hints": [
+        "Consider the business impact of blocking all sales versus absorbing some fraud risk.",
+        "Look into circuit breaker patterns."
+      ],
+      "moveOnSummary": "We will use circuit breakers and fall back to static rules to protect the checkout flow.",
+      "learnTopics": [
+        "circuit-breaker",
+        "retries-and-timeouts",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "deep.watermarks",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-flink"
+        ],
+        "keywords": [
+          "watermark",
+          "late events",
+          "event time",
+          "out of order"
+        ]
+      },
+      "goal": "Handle delayed or out-of-order events accurately in the streaming pipeline.",
+      "opener": "How do you ensure accurate velocity counts if a batch of delayed events arrives out of order?",
+      "evidence": {
+        "strong": "Explains event-time processing versus processing-time, using watermarks to handle late arrivals gracefully.",
+        "adequate": "Mentions relying on the timestamp in the payload rather than the ingestion time.",
+        "weak": "Assumes messages always arrive sequentially and on time."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What is the difference between event time and processing time?",
+        "How long do you keep a time window open waiting for late data?"
+      ],
+      "hints": [
+        "Events generated on the client device might take minutes to reach our servers.",
+        "Consider how stream processors track the progress of time."
+      ],
+      "moveOnSummary": "We will use event-time windowing and watermarks to process delayed data accurately.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "wrap.summary",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Summarise the architecture and highlight the most significant trade-offs made.",
+      "opener": "To wrap up, could you summarise the key trade-offs you made to meet the latency and explainability requirements?",
+      "evidence": {
+        "strong": "Clearly articulates the tension between data freshness, cost, and latency, and justifies the chosen fallback mechanisms.",
+        "adequate": "Lists the components used and their basic functions.",
+        "weak": "Struggles to identify trade-offs, claiming the architecture has no downsides."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If we halved the latency budget, what would you change?",
+        "What is the most fragile part of this design?"
+      ],
+      "hints": [
+        "Think about the cost of maintaining both a stream processor and a large feature store.",
+        "Reflect on how you handled failures on the critical path."
+      ],
+      "moveOnSummary": "We have reviewed the core architecture and its primary trade-offs.",
+      "learnTopics": [
+        "system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "late-events",
+      "after": "deep.streaming_features",
+      "prompt": "The third-party payment gateway experiences a network partition. Five minutes later, it sends all the delayed events at once, completely out of order. How does your pipeline handle this without corrupting the velocity features?",
+      "agendaItemId": "deep.watermarks"
+    }
+  ],
+  "vocabulary": [
+    "Flink",
+    "Kafka",
+    "feature store",
+    "online-offline skew",
+    "point-in-time correctness",
+    "velocity features",
+    "tumbling window",
+    "sliding window",
+    "event time",
+    "processing time"
+  ],
+  "alternatives": [
+    {
+      "choice": "Lambda architecture vs Kappa architecture for feature computation.",
+      "whenBetter": "Kappa (stream-only) is simpler to operate if the stream processor can replay history. Lambda is better if batch recalculations are frequently needed for massive historical datasets."
+    },
+    {
+      "choice": "Inline model scoring vs sidecar/asynchronous scoring.",
+      "whenBetter": "Inline scoring is required here due to the strict checkout latency budget. Asynchronous scoring is better for offline analytics or non-blocking fraud investigations."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive Feature Platform",
+      "outline": "The candidate designs a clear decoupled architecture. They use Kafka and Flink for real-time velocity features, pushing results to Redis. A dedicated feature store manages definitions to prevent online/offline skew. The critical path involves parallel feature fetching and fast model inference, protected by strict circuit breakers that fall back to static rules. Finally, they design an asynchronous event bus that captures the full decision context (features, versions, outcome) and writes it to a data warehouse for investigators."
+    },
+    {
+      "band": "adequate",
+      "label": "Working but Basic Pipeline",
+      "outline": "The candidate addresses the main requirements, separating ingestion from decision making. They suggest Redis for fast lookups but are vague on how the streaming features are computed, perhaps over-relying on basic application logic instead of a stream processor. They understand the latency constraint and include a cache. The audit trail logs decisions but might miss capturing the exact point-in-time feature values, making investigator analysis harder."
+    },
+    {
+      "band": "weak",
+      "label": "Synchronous Bottleneck",
+      "outline": "The candidate designs a system that queries a relational database for historical aggregates directly on the critical path, guaranteeing latency misses at scale. They do not address online/offline feature parity. The failure handling is inadequate, likely relying on blocking retries. The audit logging is either missing or performed synchronously, further degrading checkout performance."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

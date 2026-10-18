@@ -1,0 +1,527 @@
+{
+  "opening": "Welcome. Today we're going to design a data alerting system. Whenever you're ready, feel free to start exploring the requirements and roughing out the design on the canvas.",
+  "clarifications": [
+    {
+      "id": "scale",
+      "topics": [
+        "scale",
+        "volume",
+        "how many",
+        "size"
+      ],
+      "answer": "Assume we have about 10,000 datasets, and teams have defined roughly 50,000 rules across them."
+    },
+    {
+      "id": "frequency",
+      "topics": [
+        "frequency",
+        "how often",
+        "schedule",
+        "latency"
+      ],
+      "answer": "Rules are evaluated either on a cron schedule (e.g., every 5 minutes) or triggered immediately after an upstream pipeline completes."
+    },
+    {
+      "id": "channels",
+      "topics": [
+        "destinations",
+        "channels",
+        "where",
+        "slack",
+        "pagerduty"
+      ],
+      "answer": "Alerts need to route to the specific dataset owner's preferred channel, which could be Slack, PagerDuty, or Email based on severity."
+    },
+    {
+      "id": "rules",
+      "topics": [
+        "rule types",
+        "what kind of rules",
+        "checks"
+      ],
+      "answer": "The main types are freshness (did the table update today?), volume (did row count drop by 50%?), and business metrics (is the null rate above 5%?)."
+    },
+    {
+      "id": "evidence",
+      "topics": [
+        "evidence",
+        "context",
+        "payload",
+        "what to include"
+      ],
+      "answer": "An alert should include the failing query or metric, recent historical values, and ideally any known upstream failures."
+    }
+  ],
+  "clarificationPolicy": "Assume standard enterprise data engineering scales. If the candidate asks about something not listed, tell them to make a reasonable assumption and state it.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Identify the types of checks supported and the need for actionable, correctly routed notifications.",
+      "opener": "What specific rule types and alert outputs are you planning to support in this system?",
+      "evidence": {
+        "strong": "Categorises rules into freshness, volume, and data quality, and identifies that outputs require ownership mapping and severity.",
+        "adequate": "Lists basic data checks and mentions sending messages to Slack or email.",
+        "weak": "Focuses only on generic system metrics like CPU/RAM instead of data-specific rules."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What information does an on-call engineer need in the alert to actually debug the issue?"
+      ],
+      "hints": [
+        "Think about what a data engineer wants to see when a table fails.",
+        "If a null-rate check fails, what evidence would prove it?"
+      ],
+      "moveOnSummary": "Identified data quality rules and the need for evidence and ownership.",
+      "learnTopics": [
+        "data-quality",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Establish the evaluation frequency and total rule volume.",
+      "opener": "Do you have a sense of the scale and evaluation frequency we should design for?",
+      "evidence": {
+        "strong": "Estimates the number of datasets, rules, and evaluation frequency, noting that read queries to the warehouse will be the primary bottleneck.",
+        "adequate": "Asks for dataset and rule counts and writes them down.",
+        "weak": "Starts designing the architecture without considering how many checks run per minute."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How frequently do you think these rules need to be evaluated?"
+      ],
+      "hints": [
+        "Consider how many tables a typical enterprise has.",
+        "Are these checks running every millisecond or every few hours?"
+      ],
+      "moveOnSummary": "Established the scale of 50k rules across 10k datasets.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "notification-service",
+          "config",
+          "scheduler"
+        ],
+        "keywords": [
+          "end-to-end",
+          "flow",
+          "architecture",
+          "evaluate",
+          "send"
+        ]
+      },
+      "goal": "Outline the end-to-end flow from rule definition to alert notification.",
+      "opener": "Could you walk me through the high-level flow, starting from when a team defines a rule to when an alert fires?",
+      "evidence": {
+        "strong": "Draws a clear path from a configuration API to a scheduled evaluator, which queries the warehouse and pushes results to a notification pipeline.",
+        "adequate": "Shows a basic script or service reading rules and sending messages directly to a webhook.",
+        "weak": "Misses the evaluation engine entirely or creates circular, unclear dependencies."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where are the actual rules stored and managed?",
+        "Which component actually executes the SQL or metric query against the data?"
+      ],
+      "hints": [
+        "We need a place to store the rules.",
+        "We need a worker or service to run those rules against the data warehouse."
+      ],
+      "moveOnSummary": "Outlined the basic evaluation and notification pipeline.",
+      "learnTopics": [
+        "hld-vs-lld",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "hl.ownership",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-catalog",
+          "config",
+          "database"
+        ],
+        "keywords": [
+          "owner",
+          "routing",
+          "team",
+          "catalog",
+          "tags"
+        ]
+      },
+      "goal": "Map failing datasets to the correct owner and notification channel.",
+      "opener": "When an evaluation fails, how does the system know who to page and which channel to use?",
+      "evidence": {
+        "strong": "Integrates with a data catalog or uses rule metadata to dynamically look up the dataset owner and apply an escalation policy.",
+        "adequate": "Stores static email addresses or Slack channels directly inside the rule definition.",
+        "weak": "Routes all alerts to a global channel or relies on manual triage."
+      },
+      "misconceptions": [
+        {
+          "id": "global_channel",
+          "pattern": "Sends all alerts to a single #data-alerts Slack channel.",
+          "challenge": "If thousands of datasets fail, how does a specific team know which alerts they are responsible for?"
+        }
+      ],
+      "probes": [
+        "What happens if a team's on-call rotation changes? Do they have to update every rule?",
+        "How do we handle different severities, like paging vs just a Slack message?"
+      ],
+      "hints": [
+        "Consider decoupling the rule logic from the routing destination.",
+        "Is there a centralised place where data ownership is usually tracked?"
+      ],
+      "moveOnSummary": "Resolved ownership mapping via metadata/catalog lookups.",
+      "learnTopics": [
+        "incident-management",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.evaluator",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "evaluation",
+          "worker",
+          "event-bus",
+          "t-airflow"
+        ],
+        "keywords": [
+          "schedule",
+          "cron",
+          "event-driven",
+          "trigger",
+          "airflow"
+        ]
+      },
+      "goal": "Design an evaluation engine that supports both time-based and event-based triggers.",
+      "opener": "How exactly does the system trigger the evaluation of the rules at the scale you estimated?",
+      "evidence": {
+        "strong": "Uses a hybrid approach: a scheduler for time-based rules and an event bus listening to pipeline completions for event-driven checks.",
+        "adequate": "Relies purely on a scheduler like Airflow or a cron service polling every few minutes.",
+        "weak": "Attempts to evaluate all rules sequentially in a single process."
+      },
+      "misconceptions": [
+        {
+          "id": "pure_polling",
+          "pattern": "Only uses cron to poll the warehouse constantly.",
+          "challenge": "If a pipeline finishes at 2:03 AM, how quickly does the cron job catch it without wasting warehouse compute by polling every minute?"
+        }
+      ],
+      "probes": [
+        "How do we prevent overloading the data warehouse if thousands of rules run at exactly midnight?",
+        "Can we trigger a check immediately when an ETL job finishes?"
+      ],
+      "hints": [
+        "Think about how an orchestrator might notify our system.",
+        "Could we use an event queue to decouple the trigger from the execution worker?"
+      ],
+      "moveOnSummary": "Designed the evaluation workers and trigger mechanisms.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "message-queues",
+        "pub-sub"
+      ]
+    },
+    {
+      "id": "deep.state_dedupe",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "t-redis",
+          "database"
+        ],
+        "keywords": [
+          "dedupe",
+          "state",
+          "firing",
+          "resolved",
+          "cache"
+        ]
+      },
+      "goal": "Maintain an alert state machine to prevent noisy duplicate alerts for ongoing issues.",
+      "opener": "If a data volume check runs every 5 minutes and continues to fail for an hour, how do we ensure the owner doesn't get 12 identical alerts?",
+      "evidence": {
+        "strong": "Introduces a state store (like Redis or Postgres) to track alert status (OK, Firing, Resolved) and only notifies on state transitions or escalation intervals.",
+        "adequate": "Silences the specific rule ID for a hardcoded time window using a cache.",
+        "weak": "Relies entirely on the downstream tool (like PagerDuty) to handle deduplication."
+      },
+      "misconceptions": [
+        {
+          "id": "stateless_alerts",
+          "pattern": "Fires a notification every time the check returns false.",
+          "challenge": "Won't this create an alert storm and page the on-call engineer every 5 minutes for the same issue?"
+        }
+      ],
+      "probes": [
+        "Where exactly are you storing the fact that this alert is already active?",
+        "How does the system know when to send a 'Resolved' notification?"
+      ],
+      "hints": [
+        "We need to remember what happened in the previous run.",
+        "Think about using a key-value store to track the current state of each rule."
+      ],
+      "moveOnSummary": "Implemented stateful deduplication to prevent repeated alerts.",
+      "learnTopics": [
+        "redis",
+        "caching",
+        "incident-management"
+      ]
+    },
+    {
+      "id": "deep.grouping",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "aggregator",
+          "lineage",
+          "graph-db",
+          "queue",
+          "batch-processor"
+        ],
+        "keywords": [
+          "grouping",
+          "root cause",
+          "lineage",
+          "upstream",
+          "storm"
+        ]
+      },
+      "goal": "Group related alerts by upstream root causes to prevent alert storms.",
+      "opener": "If an upstream core table is delayed, 40 downstream datasets might fail their checks. How do we avoid paging the on-call engineer 40 separate times?",
+      "evidence": {
+        "strong": "Uses data lineage to identify the upstream root cause, suppresses downstream alerts, and sends one grouped notification detailing the blast radius.",
+        "adequate": "Batches alerts by team and time window, sending a single digest message.",
+        "weak": "Suggests aggressive global rate limiting, dropping notifications entirely."
+      },
+      "misconceptions": [
+        {
+          "id": "blind_rate_limit",
+          "pattern": "Just rate limit the team to 5 alerts per hour.",
+          "challenge": "If we drop alerts, how will the team know about the other 35 datasets that are currently broken once the first issue is fixed?"
+        }
+      ],
+      "probes": [
+        "How can the system programmatically know that these 40 tables depend on the same upstream table?",
+        "If we delay sending to group them, how long do we wait?"
+      ],
+      "hints": [
+        "Consider grouping alerts that happen in the same time window.",
+        "Does your metadata catalog track dependencies between tables?"
+      ],
+      "moveOnSummary": "Addressed alert storms using grouping and lineage-based suppression.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "incident-management",
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "deep.testing",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "experiment",
+          "t-gh-actions"
+        ],
+        "keywords": [
+          "test",
+          "dry run",
+          "shadow",
+          "staging"
+        ]
+      },
+      "goal": "Provide a safe mechanism for teams to test new rules without causing false alarms.",
+      "opener": "When a team writes a brand new metric rule, how can they verify it works without accidentally paging the whole company if the threshold is wrong?",
+      "evidence": {
+        "strong": "Proposes a shadow mode or dry-run evaluation that logs rule outcomes without triggering the notification pipeline.",
+        "adequate": "Suggests running rules against a staging environment or routing to a private test channel.",
+        "weak": "Assumes users will just test SQL queries manually before deploying."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Can we backtest a new rule against the last 7 days of data?"
+      ],
+      "hints": [
+        "What if the rule evaluates normally but skips the final sending step?",
+        "Could we add a 'status' field to the rule definition like 'testing' or 'active'?"
+      ],
+      "moveOnSummary": "Defined a shadow mode for safe rule testing.",
+      "learnTopics": [
+        "feature-flags",
+        "ci-cd-pipelines"
+      ]
+    },
+    {
+      "id": "deep.anomaly",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "ai-agent",
+          "batch-processor",
+          "timeseries-db",
+          "metrics"
+        ],
+        "keywords": [
+          "anomaly",
+          "baseline",
+          "seasonality",
+          "machine learning",
+          "dynamic"
+        ]
+      },
+      "goal": "Support dynamic baselines and seasonality for metric evaluation.",
+      "opener": "A team wants to alert on an 'unusual drop in row count' without hardcoding a threshold, since weekend traffic is naturally lower. How would you support that?",
+      "evidence": {
+        "strong": "Stores historical metric aggregates in a time-series DB and calculates z-scores or uses trailing windows with seasonality awareness to define the baseline.",
+        "adequate": "Compares the current value to a simple 7-day moving average.",
+        "weak": "Suggests adding 'weekend' hardcoded rules to every configuration."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where are we storing the historical data needed to calculate this baseline?",
+        "How do we prevent a baseline from skewing if the data has been broken for 3 days?"
+      ],
+      "hints": [
+        "We need to compare today's value with previous days.",
+        "Think about storing historical check results in a fast timeseries database."
+      ],
+      "moveOnSummary": "Incorporated dynamic baselines for anomaly detection.",
+      "learnTopics": [
+        "time-series-databases",
+        "data-quality",
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Identify the primary architectural bottleneck.",
+      "opener": "Looking at the final design, what do you consider the biggest bottleneck or single point of failure?",
+      "evidence": {
+        "strong": "Identifies the data warehouse compute as the bottleneck for running 50k analytical queries and suggests query optimisation or offloading metrics.",
+        "adequate": "Points out the evaluator service or the state database as a bottleneck.",
+        "weak": "Claims the system is infinitely scalable and has no bottlenecks."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If we double the number of rules, which component falls over first?"
+      ],
+      "hints": [
+        "Think about where the heavy computation happens.",
+        "Executing thousands of SQL queries at exactly midnight puts strain on what system?"
+      ],
+      "moveOnSummary": "Reviewed system bottlenecks, concluding the interview.",
+      "learnTopics": [
+        "capacity-planning",
+        "scalability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "anomaly_request",
+      "after": "deep.evaluator",
+      "prompt": "Some teams are finding static thresholds too noisy because their traffic drops naturally on weekends. They want dynamic anomaly detection.",
+      "agendaItemId": "deep.anomaly"
+    }
+  ],
+  "vocabulary": [
+    "deduplication",
+    "pagerduty",
+    "lineage",
+    "cron",
+    "airflow",
+    "escalation"
+  ],
+  "alternatives": [
+    {
+      "choice": "Event-driven evaluation vs Scheduled polling",
+      "whenBetter": "Event-driven is better when rules only need to run immediately after a pipeline finishes, saving warehouse compute compared to constant polling. Scheduled is better for continuous business metric monitoring."
+    },
+    {
+      "choice": "Pushing metrics to a timeseries DB vs querying the warehouse directly",
+      "whenBetter": "Pushing metric aggregates to a timeseries DB like Prometheus/InfluxDB is better for complex anomaly detection and fast alerting, avoiding expensive analytical queries on the main warehouse."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Stateful and Lineage-Aware",
+      "outline": "The candidate designed a robust rule engine that handles both scheduled cron triggers and pipeline completion events. They stored rule definitions in a configuration database linked to a data catalog for ownership routing. Crucially, they introduced a Redis-based state machine to track alert transitions (OK to Firing) to prevent deduplication noise, and utilized table lineage to group downstream failures under a single root-cause notification, demonstrating a deep understanding of operational realities."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic Deduplication",
+      "outline": "The candidate built a scheduled polling system that runs queries against the data warehouse every few minutes. They addressed alert storms by caching recently fired alert IDs in Redis for a set window, effectively muting duplicates. Ownership was handled via static configuration on the rules. While it meets the requirements, the polling approach might strain the warehouse, and silencing by time window is less sophisticated than tracking actual resolution state."
+    },
+    {
+      "band": "weak",
+      "label": "Stateless Scripts",
+      "outline": "The candidate proposed a set of scripts running sequentially to evaluate queries. Every failing query directly triggered an API call to Slack or an email. They did not include any state tracking, meaning an ongoing failure would page the owner repeatedly every time the script ran. The architecture lacked decoupling between evaluation and notification, and failed to address the core problem of alert storms."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.35,
+    "deep_dive": 0.4,
+    "wrap_up": 0.1
+  }
+}

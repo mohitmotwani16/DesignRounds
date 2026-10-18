@@ -1,0 +1,510 @@
+{
+  "opening": "Let's design a real-time fraud scoring system. Please go ahead and start by exploring the requirements and scale you think we'll need.",
+  "clarifications": [
+    {
+      "id": "scale.tps",
+      "topics": [
+        "tps",
+        "throughput",
+        "scale",
+        "volume",
+        "traffic"
+      ],
+      "answer": "Assume an average of 10,000 transactions per second, with peaks up to 50,000 TPS during holidays."
+    },
+    {
+      "id": "latency.budget",
+      "topics": [
+        "latency",
+        "time",
+        "speed",
+        "timeout",
+        "sla"
+      ],
+      "answer": "We have a strict budget of 50 to 100 milliseconds for our entire system to return a decision before the upstream authorization times out."
+    },
+    {
+      "id": "features.types",
+      "topics": [
+        "signals",
+        "features",
+        "data",
+        "inputs"
+      ],
+      "answer": "We rely on historical account data, device fingerprints, and recent velocity, such as the number of transactions on this card in the last hour."
+    },
+    {
+      "id": "feedback.timing",
+      "topics": [
+        "chargebacks",
+        "feedback",
+        "labels",
+        "truth",
+        "delay"
+      ],
+      "answer": "True fraud labels arrive via chargeback reports from banks, which typically come weeks after the transaction."
+    },
+    {
+      "id": "outcomes.actions",
+      "topics": [
+        "decision",
+        "result",
+        "action",
+        "output"
+      ],
+      "answer": "The system should output one of three actions: approve, decline, or send to a human analyst for review."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about unspecified business rules or integrations, tell them to make a sensible assumption for a major payment processor and state it clearly.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "latency",
+          "tps",
+          "features",
+          "outcomes"
+        ]
+      },
+      "goal": "Establish the strict latency constraints and the need for a delayed feedback loop.",
+      "opener": "Before we draw the architecture, what do you see as the primary constraints and outputs of this system?",
+      "evidence": {
+        "strong": "Explicitly identifies the strict latency budget and recognizes that feedback arrives much later than the prediction.",
+        "adequate": "Mentions scale and basic outcomes (approve/decline) but needs prompting about latency limits or the human review state.",
+        "weak": "Treats the system as a standard CRUD application without noting real-time constraints."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What states can a transaction end up in after we score it?",
+        "How fast does this decision need to happen?"
+      ],
+      "hints": [
+        "Think about what happens at a physical checkout terminal if our system takes five seconds to respond.",
+        "Consider what options we have if the model is only 60% sure about a transaction."
+      ],
+      "moveOnSummary": "Agreed on latency constraints and approve/decline/review outcomes.",
+      "learnTopics": [
+        "availability",
+        "system-design-interview-questions"
+      ]
+    },
+    {
+      "id": "hl.api",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "service",
+          "payment-service"
+        ],
+        "keywords": [
+          "synchronous",
+          "request",
+          "api",
+          "path",
+          "score"
+        ]
+      },
+      "goal": "Map out the synchronous critical path from request to final decision.",
+      "opener": "Could you walk me through the critical path for a single transaction arriving at our system?",
+      "evidence": {
+        "strong": "Draws a clear, streamlined path involving a scoring service, feature retrieval, and inference, keeping asynchronous work out of the path.",
+        "adequate": "Shows the request hitting a model, but clumps feature retrieval and rules into a single generic box.",
+        "weak": "Puts heavy database queries or message queues directly in the synchronous payment path."
+      },
+      "misconceptions": [
+        {
+          "id": "async.path",
+          "pattern": "Putting a Kafka queue between the API and the model to handle load.",
+          "challenge": "If we place a queue here, how does the payment gateway receive the decision in milliseconds?"
+        }
+      ],
+      "probes": [
+        "Which components does the request wait for before returning to the caller?"
+      ],
+      "hints": [
+        "Distinguish between what must happen immediately and what can happen after the customer leaves the store.",
+        "Trace the network hops a single request makes."
+      ],
+      "moveOnSummary": "Established the synchronous scoring flow.",
+      "learnTopics": [
+        "api-design",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.latency",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "feature-store",
+          "service"
+        ],
+        "keywords": [
+          "timeout",
+          "latency",
+          "ms",
+          "p99",
+          "budget",
+          "parallel"
+        ]
+      },
+      "goal": "Ensure the design meets the tight latency budget under peak load.",
+      "opener": "Given the traffic you estimated, how does your design guarantee we return a decision before the upstream timeout?",
+      "evidence": {
+        "strong": "Allocates the time budget across steps, uses parallel fetches where possible, and defines explicit timeouts for remote calls.",
+        "adequate": "Mentions fast storage and caching but lacks a concrete breakdown of how the milliseconds are spent.",
+        "weak": "Ignores network latency or assumes inference and data fetching are instantaneous."
+      },
+      "misconceptions": [
+        {
+          "id": "network.time",
+          "pattern": "Assuming sequential network calls within a microservices architecture will easily fit in the budget.",
+          "challenge": "If we make three sequential remote calls that take 20ms each at p99, what happens to our total response time?"
+        }
+      ],
+      "probes": [
+        "Can we fetch the features and run the model in parallel? Why or why not?",
+        "Where is the highest risk of latency spikes in this flow?"
+      ],
+      "hints": [
+        "Think about what happens if the model service pauses for garbage collection.",
+        "Consider how you might limit how long the scoring service waits for any single component."
+      ],
+      "moveOnSummary": "Addressed latency management and timeouts.",
+      "learnTopics": [
+        "latency-vs-throughput",
+        "retries-and-timeouts",
+        "fallacies-of-distributed-computing"
+      ]
+    },
+    {
+      "id": "deep.features",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "stream",
+          "t-redis",
+          "t-kafka",
+          "stream-processor"
+        ],
+        "keywords": [
+          "velocity",
+          "fresh",
+          "streaming",
+          "cache",
+          "aggregate"
+        ]
+      },
+      "goal": "Design a fast, up-to-date feature store for real-time velocity signals.",
+      "opener": "How do we calculate and serve features like 'number of declines on this device in the last hour' fast enough?",
+      "evidence": {
+        "strong": "Separates batch historical data from a real-time streaming pipeline (e.g., Flink/Kafka to Redis) that pre-computes velocity counters.",
+        "adequate": "Uses a cache for fast reads but proposes calculating aggregates on the fly during the scoring request.",
+        "weak": "Queries a relational database with aggregations on the critical path."
+      },
+      "misconceptions": [
+        {
+          "id": "on.the.fly",
+          "pattern": "Running COUNT() queries against a database during the scoring request.",
+          "challenge": "How will a count query across millions of rows perform when we have 50 milliseconds total?"
+        }
+      ],
+      "probes": [
+        "When does the counter for 'transactions in the last hour' actually get updated?",
+        "What data store is best suited for these low-latency feature reads?"
+      ],
+      "hints": [
+        "If we can't compute the count during the request, when should we compute it?",
+        "Consider using a stream processor to update a fast key-value store asynchronously."
+      ],
+      "moveOnSummary": "Designed an online feature store with streaming updates.",
+      "learnTopics": [
+        "feature-store",
+        "stream-processing-windows-watermarks",
+        "event-streaming-kafka",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.fallback",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "config",
+          "guardrails"
+        ],
+        "keywords": [
+          "fallback",
+          "fail",
+          "degrade",
+          "rules",
+          "timeout"
+        ]
+      },
+      "goal": "Define a safe degradation path when ML components fail or time out.",
+      "opener": "What exactly happens to the transaction if the feature store or the model goes down?",
+      "evidence": {
+        "strong": "Implements a local, fast rules-engine or configuration that acts as a fallback to approve/decline based on basic static data.",
+        "adequate": "States the system should fail open or closed, but lacks a mechanism for making a nuanced business decision.",
+        "weak": "Allows the request to fail entirely, dropping the transaction."
+      },
+      "misconceptions": [
+        {
+          "id": "fail.closed",
+          "pattern": "Failing all transactions when the model is down.",
+          "challenge": "If we decline all transactions during a 10-minute outage, what is the impact on the business?"
+        }
+      ],
+      "probes": [
+        "How do we decide which transactions to approve if we have no model score?",
+        "Where does this fallback logic live to ensure it executes quickly?"
+      ],
+      "hints": [
+        "What simple checks can we do on the transaction amount or merchant category without needing a model?",
+        "Think about where you would place these rules so they don't depend on the network."
+      ],
+      "moveOnSummary": "Defined a fallback policy for component failures.",
+      "learnTopics": [
+        "circuit-breaker",
+        "availability"
+      ]
+    },
+    {
+      "id": "deep.thresholds",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "database",
+          "service"
+        ],
+        "keywords": [
+          "threshold",
+          "score",
+          "tuning",
+          "business rules",
+          "bands"
+        ]
+      },
+      "goal": "Allow business users to adjust risk tolerance without redeploying the model.",
+      "opener": "If the fraud team wants to increase the review rate during a sudden attack, how do they do that in your system?",
+      "evidence": {
+        "strong": "Decouples the model output (a raw probability score) from the decision logic (thresholds stored in a fast configuration service).",
+        "adequate": "Suggests changing thresholds but implies they are part of the model code or require a full service redeployment.",
+        "weak": "Hard-codes approve/decline logic directly into the model inference step."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What exact output does the model provide to the next step?",
+        "How do we propagate a threshold change to the scoring service without latency?"
+      ],
+      "hints": [
+        "Separate the mathematical prediction from the business decision.",
+        "How do configuration changes usually get pushed to distributed services?"
+      ],
+      "moveOnSummary": "Separated model scoring from configurable business thresholds.",
+      "learnTopics": [
+        "feature-flags",
+        "machine-learning-system-architecture"
+      ]
+    },
+    {
+      "id": "deep.labels",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "batch-processor",
+          "warehouse",
+          "t-s3",
+          "t-snowflake"
+        ],
+        "keywords": [
+          "chargeback",
+          "retrain",
+          "labels",
+          "feedback",
+          "log",
+          "offline"
+        ]
+      },
+      "goal": "Close the loop with delayed ground truth to monitor and retrain the model.",
+      "opener": "A customer calls their bank to report fraud three weeks after a transaction. How does this system learn from that?",
+      "evidence": {
+        "strong": "Logs initial predictions and features to a data lake, then joins them asynchronously with incoming chargeback batch data for retraining.",
+        "adequate": "Mentions updating the database with chargebacks but doesn't explain how the historical features at the time of scoring are preserved.",
+        "weak": "Misses the feedback loop entirely or tries to update the real-time model directly with batch chargebacks."
+      },
+      "misconceptions": [
+        {
+          "id": "feature.drift",
+          "pattern": "Joining chargebacks against the current state of the user's account.",
+          "challenge": "If the user's velocity has changed over the last three weeks, which velocity should the model train on?"
+        }
+      ],
+      "probes": [
+        "Where do we store the exact features the model saw at the moment of the transaction?",
+        "How does the data science team access these joined records?"
+      ],
+      "hints": [
+        "Think about the difference between the user's state today versus their state when the transaction occurred.",
+        "Consider logging the input vector alongside the prediction."
+      ],
+      "moveOnSummary": "Designed the offline feedback loop for delayed labels.",
+      "learnTopics": [
+        "mlops-model-registry",
+        "data-warehouse-vs-data-lake",
+        "ml-model-monitoring"
+      ]
+    },
+    {
+      "id": "deep.hot_keys",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "t-redis",
+          "cache"
+        ],
+        "keywords": [
+          "spike",
+          "merchant",
+          "hot key",
+          "partition",
+          "sharding"
+        ]
+      },
+      "goal": "Handle uneven data distribution in the feature store.",
+      "opener": "What happens to your feature store if there is a massive spike in transactions for a single major merchant?",
+      "evidence": {
+        "strong": "Identifies hot key issues and proposes local caching, jitter, or specific sharding strategies to distribute the read/write load.",
+        "adequate": "Recognizes the load increase but relies solely on scaling up the database cluster.",
+        "weak": "Unaware of how a single hot partition can take down a key-value store."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If all those merchant requests hash to the same Redis node, how does that node survive?"
+      ],
+      "hints": [
+        "Think about what happens when a single partition receives 100x its normal traffic.",
+        "How can we serve reads for that merchant without hitting the central store every time?"
+      ],
+      "moveOnSummary": "Discussed hot partition mitigation.",
+      "learnTopics": [
+        "hot-partitions",
+        "caching",
+        "redis"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": []
+      },
+      "goal": "Critique the design and identify the first component to fail under 10x load.",
+      "opener": "Looking at the whole architecture, where is the biggest bottleneck if our traffic suddenly increases 10x?",
+      "evidence": {
+        "strong": "Points to specific infrastructure limits like feature store write throughput or model serving compute, and suggests concrete scaling steps.",
+        "adequate": "Gives a generic answer about the database or API gateway without tying it to the specific workload of ML scoring.",
+        "weak": "Claims the system will easily handle 10x without any changes."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which part of this system is the most expensive to scale horizontally?"
+      ],
+      "hints": [
+        "Compare the cost of scaling stateless APIs versus stateful stream processors or GPU instances."
+      ],
+      "moveOnSummary": "Identified system bottlenecks.",
+      "learnTopics": [
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.hot_merchant",
+      "after": "deep.features",
+      "prompt": "Let's say a massive product launch happens, and a single merchant drives 20,000 TPS for a few minutes. How does your feature store handle that concentrated load?",
+      "agendaItemId": "deep.hot_keys"
+    }
+  ],
+  "vocabulary": [
+    "chargeback",
+    "velocity",
+    "p99",
+    "inference",
+    "feature store",
+    "point of point",
+    "fallback"
+  ],
+  "alternatives": [
+    {
+      "choice": "Shadow scoring (running models asynchronously)",
+      "whenBetter": "When testing a new model in production without risking impact to the critical path latency."
+    },
+    {
+      "choice": "Rule-based engine as primary scoring layer",
+      "whenBetter": "When business logic is highly deterministic and must execute in under 10ms, acting as a filter before the heavier ML model."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Strict latency and streaming features",
+      "outline": "The candidate strictly controls the 50ms budget using concurrent requests and explicit timeouts. They design a robust online feature store using a stream processor (like Flink) reading from Kafka to update a fast Redis cluster with velocity features asynchronously. They decouple business thresholds from the model output, implement a fast rule-based fallback, and properly design the offline feedback loop to log point-in-time features for delayed chargeback joins."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic API and cache",
+      "outline": "The candidate designs a synchronous scoring API and recognizes the need to hit latency targets by using a cache for feature reads. They include a human review queue and understand outcomes. However, they struggle to explain how velocity features are computed in real-time without blocking the request, and their fallback strategy is somewhat vague."
+    },
+    {
+      "band": "weak",
+      "label": "Batch pipeline on critical path",
+      "outline": "The candidate proposes a heavy architecture that puts a message queue or a relational database with complex aggregations directly in the synchronous payment path. They fail to account for the strict latency budget, miss the timeouts and fallback logic, and ignore the delayed nature of chargebacks in the retraining loop."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

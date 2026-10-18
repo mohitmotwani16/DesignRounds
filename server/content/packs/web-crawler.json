@@ -1,0 +1,578 @@
+{
+  "opening": "Welcome! Today, I'd like you to design a distributed web crawler. Whenever you're ready, feel free to start.",
+  "clarifications": [
+    {
+      "id": "scale.pages",
+      "topics": [
+        "scale",
+        "how many",
+        "size",
+        "pages",
+        "billion"
+      ],
+      "answer": "Assume we want to crawl about 10 billion pages every month."
+    },
+    {
+      "id": "scale.throughput",
+      "topics": [
+        "throughput",
+        "qps",
+        "speed"
+      ],
+      "answer": "Given the monthly target, expect an average throughput of around 4,000 pages per second, but peak traffic could be higher."
+    },
+    {
+      "id": "scope.content",
+      "topics": [
+        "images",
+        "video",
+        "media",
+        "html",
+        "text",
+        "extract"
+      ],
+      "answer": "We only care about parsing HTML text and extracting links. You can ignore images, video, and other binary media for now."
+    },
+    {
+      "id": "scope.politeness",
+      "topics": [
+        "rate limit",
+        "politeness",
+        "concurrent",
+        "host",
+        "rules"
+      ],
+      "answer": "We must be strictly polite. Never hit a single host with more than one concurrent connection, and leave a few seconds of delay between requests to the same host."
+    },
+    {
+      "id": "scope.freshness",
+      "topics": [
+        "update",
+        "frequency",
+        "change",
+        "recrawl"
+      ],
+      "answer": "Pages change at different rates. We want to recrawl important or frequently updated pages more often than static ones."
+    },
+    {
+      "id": "scope.dedupe",
+      "topics": [
+        "duplicates",
+        "same content",
+        "deduplication"
+      ],
+      "answer": "Yes, you need to handle exact URL duplicates as well as pages with identical content hosted on different URLs."
+    }
+  ],
+  "clarificationPolicy": "If a constraint isn't mentioned, assume standard internet realities and choose a sensible default for a large-scale system.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scope",
+          "politeness",
+          "robots",
+          "constraints"
+        ]
+      },
+      "goal": "Identify what is being crawled, the scale, and the external constraints like politeness and site rules.",
+      "opener": "What requirements and constraints do you think are most important when designing a web crawler at this massive scale?",
+      "evidence": {
+        "strong": "Proactively identifies politeness, robots.txt adherence, and duplicate handling as core constraints alongside standard throughput.",
+        "adequate": "Mentions scale and parsing, but needs prompting to consider how we treat the target websites.",
+        "weak": "Focuses only on downloading files quickly without considering the impact on external targets or what happens with duplicate links."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do we ensure we don't accidentally overwhelm a small website?"
+      ],
+      "hints": [
+        "If we send 1,000 requests a second to a personal blog, what happens to it?",
+        "Are we allowed to crawl every single page on the internet?"
+      ],
+      "moveOnSummary": "Scope and politeness constraints established.",
+      "learnTopics": [
+        "system-design-roadmap",
+        "availability"
+      ]
+    },
+    {
+      "id": "req.scale",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "qps",
+          "storage",
+          "estimate",
+          "billion",
+          "math"
+        ]
+      },
+      "goal": "Estimate the throughput and storage required for 10 billion pages a month.",
+      "opener": "Given the target scale you've gathered, what does that mean for our requests per second and storage needs?",
+      "evidence": {
+        "strong": "Calculates ~4,000 requests per second. Estimates average page size and calculates storage in Petabytes, noting the need for compression.",
+        "adequate": "Attempts the math but makes a calculation mistake, or calculates QPS but forgets to map out the storage requirements.",
+        "weak": "Refuses to estimate or provides numbers that are multiple orders of magnitude off without noticing."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How much storage would that be per year if we keep historical versions?",
+        "Have you accounted for peaks, or just the average throughput?"
+      ],
+      "hints": [
+        "There are roughly 2.5 million seconds in a month.",
+        "If an average HTML page is 100KB, what does the entire monthly volume weigh?"
+      ],
+      "moveOnSummary": "Back-of-the-envelope capacity estimates completed.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "web-server",
+          "worker",
+          "database",
+          "queue"
+        ],
+        "keywords": [
+          "flow",
+          "fetch",
+          "store",
+          "pipeline"
+        ]
+      },
+      "goal": "Lay out the end-to-end cyclical flow from seed URLs to the frontier, fetcher, deduplication, and storage.",
+      "opener": "Could you walk me through the high-level architecture, starting from a set of seed URLs?",
+      "evidence": {
+        "strong": "Draws a clear, cyclical pipeline: Frontier to Fetcher to Parser to Dedupe to Frontier, with distinct components for storage and queues.",
+        "adequate": "Shows the main components but merges distinct responsibilities, like having the fetcher directly do all deduplication and storage.",
+        "weak": "Misses the cyclical nature of the crawler, designs a linear script, or omits critical stages like parsing or the queue."
+      },
+      "misconceptions": [
+        {
+          "id": "linear_flow",
+          "pattern": "Assuming a crawler is just a linear ETL job.",
+          "challenge": "Once you download a page, where do the new links found on that page go?"
+        }
+      ],
+      "probes": [
+        "Once a page is fetched and parsed, how exactly do its newly discovered links get back into the system?"
+      ],
+      "hints": [
+        "A crawler feeds itself. How does the output of the HTML parser connect back to the input of the fetcher?"
+      ],
+      "moveOnSummary": "Cyclical high-level architecture established.",
+      "learnTopics": [
+        "backend-system-design-roadmap",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.frontier",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "worker",
+          "scheduler"
+        ],
+        "keywords": [
+          "frontier",
+          "politeness",
+          "host",
+          "priority",
+          "scheduling"
+        ]
+      },
+      "goal": "Design a frontier that guarantees politeness (single worker ownership per host) and handles priorities.",
+      "opener": "How do you ensure we never overwhelm a single host with multiple concurrent requests from our distributed workers?",
+      "evidence": {
+        "strong": "Partitions the frontier by host hash, ensuring one worker owns a specific host. Uses back-queues per host to enforce the politeness delay.",
+        "adequate": "Mentions partitioning by host or adding delays, but the mechanism to enforce exactly one global connection is loose or relies heavily on a central database lock.",
+        "weak": "Uses a single global queue and hopes randomisation handles politeness, or applies aggressive locks that kill throughput."
+      },
+      "misconceptions": [
+        {
+          "id": "global_queue",
+          "pattern": "A single global Kafka topic or RabbitMQ queue can easily handle the frontier.",
+          "challenge": "If 10 URLs for the same host are pulled by 10 different workers at the exact same time, how do you prevent hitting the host 10 times concurrently?"
+        }
+      ],
+      "probes": [
+        "Walk me through the lifecycle of a URL from the frontier to the worker.",
+        "How do we handle a scenario where two different hostnames resolve to the same underlying IP address?"
+      ],
+      "hints": [
+        "If any worker can pull any URL at random, enforcing global rate limits is very difficult.",
+        "What if all URLs belonging to a specific host were always routed to the exact same worker?"
+      ],
+      "moveOnSummary": "Partitioned frontier by host hash with politeness back-queues.",
+      "learnTopics": [
+        "message-queues",
+        "consistent-hashing",
+        "rate-limiting"
+      ]
+    },
+    {
+      "id": "deep.url_dedupe",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "bloom-filter",
+          "kv-store",
+          "cache",
+          "t-redis"
+        ],
+        "keywords": [
+          "seen",
+          "dedupe",
+          "bloom filter",
+          "normalisation"
+        ]
+      },
+      "goal": "Efficiently check if a URL has been crawled before without exhausting memory or database I/O.",
+      "opener": "With billions of pages in the system, how do you efficiently check if we've already seen a newly discovered URL?",
+      "evidence": {
+        "strong": "Uses a Bloom filter in memory for extremely fast checks, backed by a persistent KV store. Mentions URL normalisation before checking.",
+        "adequate": "Uses a distributed cache like Redis or a database index to check for seen URLs. Understands memory will be large but doesn't optimise with probabilistic structures.",
+        "weak": "Queries a relational database for every single discovered link, which will immediately bottleneck the pipeline."
+      },
+      "misconceptions": [
+        {
+          "id": "db_lookup",
+          "pattern": "Just query the database to see if the URL exists.",
+          "challenge": "At 100,000 URLs discovered per second, can a standard relational database handle that many point reads?"
+        }
+      ],
+      "probes": [
+        "How much memory would storing a billion raw URLs take?",
+        "What happens if two functionally identical URLs have different tracking query parameters?"
+      ],
+      "hints": [
+        "Is there a data structure that trades a tiny false positive rate for massive memory savings?",
+        "Before we hash a URL to check it, should 'example.com/' and 'example.com' be treated as different pages?"
+      ],
+      "moveOnSummary": "Bloom filter for fast seen-URL checks with URL normalisation.",
+      "learnTopics": [
+        "probabilistic-data-structures",
+        "caching",
+        "dynamo-style-key-value-store"
+      ]
+    },
+    {
+      "id": "deep.content_dedupe",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "service",
+          "document-store"
+        ],
+        "keywords": [
+          "hash",
+          "simhash",
+          "checksum",
+          "content"
+        ]
+      },
+      "goal": "Identify and discard duplicate or near-duplicate content across completely different URLs.",
+      "opener": "How do you handle pages that have completely different URLs but the exact same content, or near-duplicate content?",
+      "evidence": {
+        "strong": "Calculates a cryptographic hash for exact matches and a locality-sensitive hash like Simhash for near-duplicates, comparing them against a stored index.",
+        "adequate": "Mentions generating a checksum of the HTML content to detect exact duplicates, but misses the complexity of near-duplicates.",
+        "weak": "Assumes deduplication by URL is enough, or suggests comparing the raw text of pages against each other in the database."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you detect when a news article is exactly the same, but has a different timestamp or ad banner?",
+        "Where are these content hashes stored and queried during the pipeline?"
+      ],
+      "hints": [
+        "Can we generate a fingerprint of the text that stays similar if the text is mostly the same?",
+        "What happens to a standard MD5 hash if a single character in the HTML changes?"
+      ],
+      "moveOnSummary": "Simhash or standard checksums for content deduplication.",
+      "learnTopics": [
+        "search-and-inverted-index",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.dns",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "dns",
+          "cache",
+          "local-cache"
+        ],
+        "keywords": [
+          "dns",
+          "resolution",
+          "ip"
+        ]
+      },
+      "goal": "Prevent DNS resolution from becoming a silent bottleneck for the fetchers.",
+      "opener": "DNS resolution can be surprisingly slow. How does your system handle resolving millions of domains without blocking the fetchers?",
+      "evidence": {
+        "strong": "Implements a dedicated DNS caching layer or local DNS resolvers on the worker nodes, respecting TTLs but avoiding external lookups per fetch.",
+        "adequate": "Mentions caching DNS results in a central store like Redis, though network hops are still involved for every resolution.",
+        "weak": "Relies entirely on the OS default DNS resolver for every HTTP request, heavily throttling throughput."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if a domain's IP changes frequently due to round-robin load balancing?",
+        "Where exactly does the DNS cache live in your architecture?"
+      ],
+      "hints": [
+        "If every HTTP request requires a round trip to an external DNS server, what happens to our latency?",
+        "Can we cache IP addresses locally on the fetcher machines themselves?"
+      ],
+      "moveOnSummary": "Local DNS caching on fetcher nodes.",
+      "learnTopics": [
+        "dns",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.fault_tolerance",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "storage",
+          "t-s3"
+        ],
+        "keywords": [
+          "crash",
+          "checkpoint",
+          "snapshot",
+          "recover"
+        ]
+      },
+      "goal": "Ensure the crawler can recover from worker crashes without losing the frontier state or getting stuck.",
+      "opener": "If a fetcher node crashes while processing a batch of URLs, how do we ensure we don't lose track of them or get stuck forever?",
+      "evidence": {
+        "strong": "Uses a checkpointing mechanism or a persistent message queue with a visibility timeout, so unacknowledged URLs are safely returned to the frontier.",
+        "adequate": "Mentions retries, but relies on a simple 'status' flag in a database that might stay in a 'processing' state forever if a worker violently dies.",
+        "weak": "Has no plan for worker crashes, assuming in-memory queues or fire-and-forget processing will suffice."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does the frontier definitively know a worker actually finished fetching a URL?",
+        "Where is the massive state of the frontier saved if the whole data center restarts?"
+      ],
+      "hints": [
+        "If a worker pulls a URL, what happens if it unplugs from the wall before finishing the fetch?",
+        "Think about how message queues handle unacknowledged messages."
+      ],
+      "moveOnSummary": "Visibility timeouts and persistent frontier checkpointing.",
+      "learnTopics": [
+        "delivery-semantics",
+        "disaster-recovery"
+      ]
+    },
+    {
+      "id": "deep.traps",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "service",
+          "firewall"
+        ],
+        "keywords": [
+          "trap",
+          "infinite",
+          "depth",
+          "calendar"
+        ]
+      },
+      "goal": "Prevent the crawler from getting stuck in infinite dynamically generated URL loops.",
+      "opener": "Some websites have infinite calendars or dynamically generated URLs. How do we avoid crawling these traps forever?",
+      "evidence": {
+        "strong": "Implements depth limits, tracks URL patterns per host, and sets a maximum page limit per domain to break loops.",
+        "adequate": "Mentions limiting the maximum depth from the seed URL, which works but might cut off legitimate deep content.",
+        "weak": "Doesn't consider crawler traps and assumes all links found should be blindly followed."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What if the infinite URLs all look slightly different, like constantly changing query parameters?",
+        "How do you enforce a page limit without breaking legitimate large sites like Wikipedia?"
+      ],
+      "hints": [
+        "If a site has a calendar where clicking 'next month' generates a new URL endlessly, how do we eventually stop?",
+        "Can we cap the number of pages we pull from a single domain based on its importance?"
+      ],
+      "moveOnSummary": "URL depth limits and pattern recognition for crawler traps.",
+      "learnTopics": [
+        "rate-limiting",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.queue_scheduling",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "worker",
+          "queue"
+        ],
+        "keywords": [
+          "starvation",
+          "delay",
+          "scheduling"
+        ]
+      },
+      "goal": "Dynamically schedule fetch tasks based on varying host limits without wasting worker CPU cycles on slow sites.",
+      "opener": "How do you efficiently schedule requests across multiple hosts with drastically different rate limits?",
+      "evidence": {
+        "strong": "Uses a priority queue of queues (like a min-heap), where hosts are scheduled based on their next allowed fetch time, entirely avoiding busy-waiting.",
+        "adequate": "Workers simply sleep or delay for slow hosts, which ties up processing threads, but demonstrates understanding of different rates.",
+        "weak": "Applies a single global rate limit to all hosts, severely bottlenecking fast and important sites."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If a worker has to wait 10 seconds for a host, what does its processing thread do in the meantime?"
+      ],
+      "hints": [
+        "Should a worker sit idle waiting for a slow host, or can it instantly pull a task for a different host?",
+        "How do we know which host is mathematically 'ready' to be fetched next?"
+      ],
+      "moveOnSummary": "Min-heap or priority queue scheduling hosts by next available time.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "summary",
+          "limit"
+        ]
+      },
+      "goal": "Critically evaluate the design to find the most likely breaking point at scale.",
+      "opener": "Looking at your final architecture, what is the biggest bottleneck as we scale to 100 billion pages?",
+      "evidence": {
+        "strong": "Identifies a specific, realistic bottleneck such as network egress costs, DNS resolution latency, or the sheer memory size of the URL deduplication state, and suggests a mitigation.",
+        "adequate": "Names a generic component like 'the database' without specifying exactly why it would fail in this particular context.",
+        "weak": "Claims the system is infinitely scalable and has no breaking points."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If we doubled the throughput tomorrow, which component would fall over first?"
+      ],
+      "hints": [
+        "Think about the sheer amount of data flowing through the fetchers over the network.",
+        "Where is the largest amount of state kept in memory?"
+      ],
+      "moveOnSummary": "Identified network or state bottlenecks in the wrap up.",
+      "learnTopics": [
+        "capacity-planning",
+        "scalability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "host_starvation",
+      "after": "deep.frontier",
+      "prompt": "Imagine a major site allows 100 requests per second, but a small blog allows only 1 request every 10 seconds. How does your frontier ensure the workers aren't starved waiting for the blog, while still fully utilising the major site's allowance?",
+      "agendaItemId": "deep.queue_scheduling"
+    }
+  ],
+  "vocabulary": [
+    "robots.txt",
+    "simhash",
+    "minhash",
+    "bloom filter",
+    "politeness window",
+    "frontier",
+    "seed URLs",
+    "crawler trap",
+    "URL normalisation",
+    "checkpointing"
+  ],
+  "alternatives": [
+    {
+      "choice": "Bloom filter vs Distributed KV Store for URL deduplication",
+      "whenBetter": "A Bloom filter is much better for saving memory when a tiny false positive rate (rarely missing a page) is acceptable. A KV store is the better choice if 100% exact deduplication is required and the system can afford the higher I/O and storage costs."
+    },
+    {
+      "choice": "Hash partitioning vs Consistent hashing for assigning hosts to workers",
+      "whenBetter": "Consistent hashing is the better choice if worker nodes are expected to scale up and down dynamically, as it minimizes the reshuffling of host assignments compared to basic modulo hash partitioning."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Comprehensive distributed crawler",
+      "outline": "The candidate immediately identified politeness as the primary constraint. They designed a robust frontier partitioned by host hash, ensuring single-worker ownership for politeness back-queues. They used a Bloom filter for memory-efficient URL deduplication and Simhash for near-duplicate content detection. DNS was cached locally on workers, and state was checkpointed to a durable store. Explanations were deep, and trade-offs between memory and exactness were clearly articulated."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but unoptimized",
+      "outline": "The candidate built a functional cyclical crawler with a queue, fetcher, and storage. They understood the need for politeness but struggled to implement a strict global enforcement, relying on a distributed lock that might impact throughput. They used a Redis set for URL deduplication, which works but would get expensive at a 10-billion scale. DNS and robots.txt were handled after a hint. Overall, a solid design but missing the most efficient large-scale optimizations."
+    },
+    {
+      "band": "weak",
+      "label": "Linear and unsafe script",
+      "outline": "The candidate designed a linear pipeline rather than a distributed system. They used a single global message queue for all URLs, completely missing the politeness constraint and likely causing DDoS on target servers. URL deduplication was attempted using raw database queries per link, ignoring the massive QPS load. They did not consider DNS bottlenecks, crawler traps, or worker failures."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.45,
+    "wrap_up": 0.15
+  }
+}

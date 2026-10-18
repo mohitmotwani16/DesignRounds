@@ -1,0 +1,508 @@
+{
+  "opening": "Welcome. Today we are going to design a text snippet sharing service. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "scale",
+        "traffic",
+        "qps",
+        "reads",
+        "writes",
+        "users"
+      ],
+      "answer": "Assume 10 million new snippets created per day, and about 100 million reads per day."
+    },
+    {
+      "id": "scale.size",
+      "topics": [
+        "size",
+        "storage",
+        "length",
+        "max"
+      ],
+      "answer": "Snippets can be up to 1 MB in size, but the average is around 10 KB."
+    },
+    {
+      "id": "features.expiry",
+      "topics": [
+        "expire",
+        "ttl",
+        "retention",
+        "delete"
+      ],
+      "answer": "Users can set a custom expiration time, or leave it to never expire."
+    },
+    {
+      "id": "features.access",
+      "topics": [
+        "access",
+        "visibility",
+        "private",
+        "auth",
+        "security"
+      ],
+      "answer": "Snippets can be public, unlisted where anyone with the link can view, or private where only the author can view."
+    },
+    {
+      "id": "features.abuse",
+      "topics": [
+        "abuse",
+        "spam",
+        "malware",
+        "limits"
+      ],
+      "answer": "We need basic protections against abuse, like rate limiting, but do not worry about deep content scanning for now."
+    }
+  ],
+  "clarificationPolicy": "If a requirement isn't specified, ask the candidate to state a reasonable assumption for a typical consumer web tool.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "reads",
+          "writes",
+          "users",
+          "size"
+        ]
+      },
+      "goal": "Establish the functional features and estimate the read and write load and storage needs.",
+      "opener": "What constraints and scale targets are you designing for?",
+      "evidence": {
+        "strong": "Asks about read to write ratios, snippet sizes, and visibility modes, calculating expected QPS.",
+        "adequate": "Lists basic create and read functions and guesses a scale.",
+        "weak": "Skips scale estimation entirely or misses the distinction between public and private snippets."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How much storage will we need per year?",
+        "What is the expected read QPS?"
+      ],
+      "hints": [
+        "Think about the ratio of people creating snippets versus reading them.",
+        "How large is a typical code snippet?"
+      ],
+      "moveOnSummary": "Agreed on 10M writes and 100M reads per day, up to 1MB per snippet.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway",
+          "service",
+          "database"
+        ],
+        "keywords": [
+          "api",
+          "create",
+          "read",
+          "database"
+        ]
+      },
+      "goal": "Outline a complete path for creating a snippet, storing it, and retrieving it.",
+      "opener": "Could you draw the high-level components needed to support creating and viewing snippets?",
+      "evidence": {
+        "strong": "Draws a clear flow from client to API, separating metadata and content storage, and includes a read cache.",
+        "adequate": "Shows an API and a database, but mixes metadata and large text content in one box.",
+        "weak": "Misses fundamental components like storage or draws disjointed flows that do not connect."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Walk me through what happens when a user clicks save.",
+        "How does a user retrieve a snippet?"
+      ],
+      "hints": [
+        "We need a way to receive the request, store it, and serve it back.",
+        "Where will the text itself live?"
+      ],
+      "moveOnSummary": "Drafted a high-level API and storage layer.",
+      "learnTopics": [
+        "hld-vs-lld",
+        "backend-system-design-roadmap"
+      ]
+    },
+    {
+      "id": "deep.id_gen",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "id-generator",
+          "database"
+        ],
+        "keywords": [
+          "base62",
+          "uuid",
+          "hash",
+          "random",
+          "collision",
+          "unguessable"
+        ]
+      },
+      "goal": "Design a strategy for generating short, unguessable IDs for unlisted snippets.",
+      "opener": "How will you generate the stable links for these snippets?",
+      "evidence": {
+        "strong": "Chooses random Base62 strings to ensure unlisted links cannot be guessed, and handles collisions.",
+        "adequate": "Suggests UUIDs which are too long, or sequential IDs which are too guessable, but adapts when prompted.",
+        "weak": "Fails to see why sequential IDs compromise unlisted snippets."
+      },
+      "misconceptions": [
+        {
+          "id": "sequential-ids",
+          "pattern": "Using auto-incrementing database IDs for the public link.",
+          "challenge": "If I create a snippet and get ID 100, what happens if I guess and try to visit ID 99?"
+        }
+      ],
+      "probes": [
+        "How do you ensure someone cannot easily guess the URL of an unlisted snippet?",
+        "How will you handle it if two snippets get the same random ID?"
+      ],
+      "hints": [
+        "A standard UUID is quite long for a sharing link. Can we make it shorter?",
+        "If we use a short random string, we might generate the same one twice. What then?"
+      ],
+      "moveOnSummary": "Settled on generating short random Base62 IDs with a collision check.",
+      "learnTopics": [
+        "unique-id-generation"
+      ]
+    },
+    {
+      "id": "deep.storage",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "t-s3"
+        ],
+        "keywords": [
+          "blob",
+          "s3",
+          "relational",
+          "nosql",
+          "metadata"
+        ]
+      },
+      "goal": "Choose an appropriate storage model for the metadata and the actual text payloads.",
+      "opener": "How are you storing the snippet data and its associated metadata?",
+      "evidence": {
+        "strong": "Splits small metadata into a database and potentially large 1MB content into object storage.",
+        "adequate": "Uses a relational database for everything, acknowledging potential performance issues with large text columns.",
+        "weak": "Ignores the 1MB max size and puts everything in a simple database without justification."
+      },
+      "misconceptions": [
+        {
+          "id": "db-only",
+          "pattern": "Storing 1MB files in a relational database without considering performance.",
+          "challenge": "How will your database perform when reading millions of 1MB text blobs per day?"
+        }
+      ],
+      "probes": [
+        "How does the 1MB max size influence your storage choice?",
+        "What metadata do we need to store alongside the text?"
+      ],
+      "hints": [
+        "Is a database the most efficient place to store large text blocks?",
+        "Consider the difference between structured data like expiry time and unstructured text."
+      ],
+      "moveOnSummary": "Decided to store metadata in a DB and content in Object Storage.",
+      "learnTopics": [
+        "object-storage",
+        "sql-vs-nosql"
+      ]
+    },
+    {
+      "id": "deep.expiry",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "database"
+        ],
+        "keywords": [
+          "ttl",
+          "cron",
+          "cleanup",
+          "expired",
+          "lazy"
+        ]
+      },
+      "goal": "Ensure expired snippets are no longer accessible and their storage is eventually reclaimed.",
+      "opener": "How will the system handle snippets that have an expiration time?",
+      "evidence": {
+        "strong": "Combines a lazy check on read to hide it immediately with an asynchronous batch job to clean up storage.",
+        "adequate": "Relies solely on a database TTL feature or a cron job, missing edge cases where a job lags.",
+        "weak": "Leaves expired data in storage indefinitely or checks expiration synchronously on every database scan."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-delete",
+          "pattern": "Deleting the record synchronously at the exact moment it expires.",
+          "challenge": "What triggers the deletion exactly at 3:00 PM if no user is making a request?"
+        }
+      ],
+      "probes": [
+        "What happens if a user requests a snippet a second after it expires, but your cleanup job hasn't run yet?",
+        "How do we remove the actual text from storage?"
+      ],
+      "hints": [
+        "We can check if it has expired when someone asks for it.",
+        "How do we free up the disk space eventually?"
+      ],
+      "moveOnSummary": "Designed a lazy expiration check coupled with an async cleanup job.",
+      "learnTopics": [
+        "database-indexing",
+        "distributed-task-scheduler"
+      ]
+    },
+    {
+      "id": "deep.caching",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cdn",
+          "cache",
+          "t-redis"
+        ],
+        "keywords": [
+          "cdn",
+          "redis",
+          "public",
+          "private",
+          "invalidation"
+        ]
+      },
+      "goal": "Scale read traffic safely, ensuring private snippets are not exposed.",
+      "opener": "Given the read-heavy nature of this service, how will you scale the read path?",
+      "evidence": {
+        "strong": "Caches public snippets on a CDN or distributed cache, but explicitly bypasses the CDN for private snippets to verify auth.",
+        "adequate": "Adds a cache but forgets to consider how private visibility affects caching until prompted.",
+        "weak": "Does not use caching at all or caches everything publicly, exposing private snippets."
+      },
+      "misconceptions": [
+        {
+          "id": "cache-private",
+          "pattern": "Caching all snippets on a public CDN.",
+          "challenge": "If a private snippet is cached on the CDN, how do we verify the requester is authorized to see it?"
+        }
+      ],
+      "probes": [
+        "How does your caching strategy change for a snippet marked private?",
+        "What happens to the cache if a snippet is deleted?"
+      ],
+      "hints": [
+        "A CDN is great for public data, but it does not know about our user logins.",
+        "How can we serve public snippets as fast as possible?"
+      ],
+      "moveOnSummary": "Implemented CDN caching for public snippets and direct reads with auth for private ones.",
+      "learnTopics": [
+        "caching",
+        "cdn",
+        "cache-strategies"
+      ]
+    },
+    {
+      "id": "deep.viral",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "cdn"
+        ],
+        "keywords": [
+          "hot key",
+          "viral",
+          "spike"
+        ]
+      },
+      "goal": "Prevent cache stampedes and handle hot partitions for viral snippets.",
+      "opener": "How do you protect your backend if a cache node fails during a massive spike for one specific snippet?",
+      "evidence": {
+        "strong": "Mentions local caching, cache stampede prevention via mutexes, or CDN edge caching.",
+        "adequate": "Relies on generic horizontal scaling or adding more cache nodes.",
+        "weak": "Does not understand how a single hot key bypasses standard sharding."
+      },
+      "misconceptions": [
+        {
+          "id": "sharding-fixes-hot-keys",
+          "pattern": "Assuming sharding fixes the problem.",
+          "challenge": "If everyone is requesting the exact same snippet ID, how does sharding the cache nodes help?"
+        }
+      ],
+      "probes": [
+        "How do we prevent 10,000 concurrent requests from hitting the database if the cache expires?",
+        "What if the CDN edge node hasn't cached it yet?"
+      ],
+      "hints": [
+        "Can the application servers keep a small local cache of the most popular items?",
+        "Look up cache stampede."
+      ],
+      "moveOnSummary": "Addressed hot keys with local caching and stampede prevention.",
+      "learnTopics": [
+        "cache-invalidation",
+        "hot-partitions"
+      ]
+    },
+    {
+      "id": "deep.abuse",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "api-gateway"
+        ],
+        "keywords": [
+          "rate limit",
+          "captcha",
+          "ip"
+        ]
+      },
+      "goal": "Protect the system from spam and excessive usage.",
+      "opener": "How can we prevent malicious actors from filling our storage with spam?",
+      "evidence": {
+        "strong": "Adds rate limiting by IP or user at the gateway and suggests payload size limits.",
+        "adequate": "Suggests a basic rate limiter but struggles to place it in the architecture.",
+        "weak": "Suggests manually reviewing snippets or ignores the problem."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you differentiate between a bot and a legitimate heavy user?",
+        "Where in the architecture should the rate limiter live?"
+      ],
+      "hints": [
+        "What component sees all incoming traffic first?",
+        "Can we limit how many times a single IP can call the create endpoint?"
+      ],
+      "moveOnSummary": "Added rate limiting and payload size restrictions.",
+      "learnTopics": [
+        "rate-limiting",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 1,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "failure",
+          "limits"
+        ]
+      },
+      "goal": "Critique the design to find limits and potential points of failure.",
+      "opener": "Looking at your final architecture, what is the biggest bottleneck as traffic grows 10x?",
+      "evidence": {
+        "strong": "Identifies database write limits or cache stampedes on viral snippets as the next challenge.",
+        "adequate": "Names generic components like the database without specifying why.",
+        "weak": "Claims the system will scale infinitely without issues."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens if a single public snippet goes viral and gets a million reads in a minute?",
+        "Which component will require scaling first?"
+      ],
+      "hints": [
+        "Think about what happens to the database if the cache goes down.",
+        "Where is the most data moving through the system?"
+      ],
+      "moveOnSummary": "Discussed single points of failure and scaling limits.",
+      "learnTopics": [
+        "availability",
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "viral-snippet",
+      "after": "deep.caching",
+      "prompt": "A celebrity posts a link to a snippet, and it suddenly gets 50,000 requests per second. How does your system hold up?",
+      "agendaItemId": "deep.viral"
+    },
+    {
+      "id": "abuse",
+      "after": "deep.storage",
+      "prompt": "We are noticing bots are creating thousands of snippets per second containing spam links. How do we mitigate this?",
+      "agendaItemId": "deep.abuse"
+    }
+  ],
+  "vocabulary": [
+    "Base62",
+    "UUID",
+    "TTL",
+    "CDN",
+    "S3",
+    "Pastebin",
+    "Stampede",
+    "Cron"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using a NoSQL Document Database for both metadata and content instead of Object Storage.",
+      "whenBetter": "When snippets are strictly limited to small sizes and operational simplicity is preferred over strict cost optimization for storage."
+    },
+    {
+      "choice": "Pre-generating a pool of IDs in advance.",
+      "whenBetter": "When low latency on the write path is critical, moving the cost of collision resolution out of the critical path."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Separated storage with robust IDs",
+      "outline": "The candidate accurately estimated the read-heavy scale and separated metadata into a relational database and content into object storage. They designed a robust ID generation strategy using Base62 to prevent guessing of unlisted links. They handled read scaling with a CDN for public snippets, explicitly bypassing it for private ones to ensure auth checks. Expiry was handled elegantly with lazy deletion on read and an async cleanup job."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic database with caching",
+      "outline": "The candidate built a working system using a single database for everything and added Redis for caching. They struggled initially with ID generation, proposing sequential IDs before correcting to random hashes. They implemented expiry using a background job but missed the lazy-delete optimization. Private snippets were handled, but the caching strategy did not clearly separate public and private data paths at first."
+    },
+    {
+      "band": "weak",
+      "label": "Incomplete data and caching model",
+      "outline": "The candidate struggled to define the access patterns and proposed storing large texts in a relational database without caching. They used predictable IDs, compromising unlisted snippet privacy. They did not have a clear strategy for expiring old snippets or protecting private ones from unauthorized access, lacking an understanding of how caches interact with authenticated data."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.3,
+    "deep_dive": 0.45,
+    "wrap_up": 0.1
+  }
+}

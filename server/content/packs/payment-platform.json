@@ -1,0 +1,542 @@
+{
+  "opening": "Welcome! Today we are going to design a payment processing platform. Whenever you're ready, feel free to kick things off.",
+  "clarifications": [
+    {
+      "id": "scale.traffic",
+      "topics": [
+        "qps",
+        "traffic",
+        "scale",
+        "volume"
+      ],
+      "answer": "Assume a peak of 500 payment requests per second."
+    },
+    {
+      "id": "scope.processors",
+      "topics": [
+        "processors",
+        "providers",
+        "external",
+        "stripe"
+      ],
+      "answer": "We integrate with two external payment processors, like Stripe and PayPal."
+    },
+    {
+      "id": "latency.sync",
+      "topics": [
+        "latency",
+        "async",
+        "synchronous",
+        "wait"
+      ],
+      "answer": "Payment initiation should block and return a synchronous response to the merchant if the processor replies quickly."
+    },
+    {
+      "id": "scope.payouts",
+      "topics": [
+        "payouts",
+        "withdrawals",
+        "merchant accounts"
+      ],
+      "answer": "We only handle collecting payments from customers. Merchant payouts are out of scope."
+    },
+    {
+      "id": "constraints.timeout",
+      "topics": [
+        "sla",
+        "timeout",
+        "processor delay"
+      ],
+      "answer": "External processors usually respond within 2 seconds, but can occasionally hang and time out at 30 seconds."
+    }
+  ],
+  "clarificationPolicy": "Assume moderate scale but zero tolerance for data loss or inconsistency; default to standard e-commerce payment flows if unspecified.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "requirements",
+          "scope",
+          "goals",
+          "customers",
+          "merchants"
+        ]
+      },
+      "goal": "Establish the focus on correctness, idempotency, and strict consistency over raw throughput.",
+      "opener": "What are the core requirements and guarantees this system must provide?",
+      "evidence": {
+        "strong": "Explicitly calls out no double charging, idempotency needs, and strict consistency as the primary drivers of the design.",
+        "adequate": "Lists basic functional steps like accepting requests and calling the processor.",
+        "weak": "Focuses heavily on low latency or massive scale without addressing correctness."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which is more important for this system: availability or consistency?"
+      ],
+      "hints": [
+        "Think about what happens when money is involved.",
+        "Consider the worst-case scenario for a customer using this platform."
+      ],
+      "moveOnSummary": "Agreed that consistency and avoiding duplicate charges are the top priorities.",
+      "learnTopics": [
+        "cap-theorem",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "hl.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "api-gateway",
+          "payment-service"
+        ],
+        "keywords": [
+          "gateway",
+          "flow",
+          "api",
+          "service",
+          "request"
+        ]
+      },
+      "goal": "Outline the synchronous path from the merchant to the payment service and out to the external processor.",
+      "opener": "Could you walk me through the high-level path a successful payment request takes?",
+      "evidence": {
+        "strong": "Draws a clear flow from merchant through an API gateway to a core payment service, which talks to the database and external processor.",
+        "adequate": "Shows the merchant calling the payment service and the payment service calling the processor.",
+        "weak": "Draws a complex, fragmented architecture before establishing the core request path, or routes client traffic directly to the processor."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which components sit between the merchant and the payment logic?"
+      ],
+      "hints": [
+        "Start with the merchant's API call.",
+        "What service actually holds the logic to talk to the payment provider?"
+      ],
+      "moveOnSummary": "Established the basic client-to-processor flow.",
+      "learnTopics": [
+        "api-gateway",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.idempotency",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "database",
+          "kv-store"
+        ],
+        "keywords": [
+          "idempotency key",
+          "header",
+          "duplicate",
+          "retry",
+          "cache"
+        ]
+      },
+      "goal": "Design a mechanism to safely handle merchant retries without duplicating a charge.",
+      "opener": "If a merchant's network drops and they retry the exact same payment request, how do we prevent a double charge?",
+      "evidence": {
+        "strong": "Stores idempotency keys in a database with a unique constraint, hashes the request payload to detect mismatches, and returns the cached response for exact matches.",
+        "adequate": "Uses an idempotency key to block duplicates but does not consider request payload validation or returning the original response.",
+        "weak": "Suggests checking if the user 'recently bought' the item, or relies on the external processor to catch the duplicate."
+      },
+      "misconceptions": [
+        {
+          "id": "idemp.redis",
+          "pattern": "Using a volatile cache like Redis for the only idempotency check.",
+          "challenge": "What happens to inflight retries if that cache node is restarted or evicts the key?"
+        }
+      ],
+      "probes": [
+        "Where exactly are you storing the idempotency key?",
+        "What if the merchant retries with the same key but a different payment amount?"
+      ],
+      "hints": [
+        "How do we know the retry is actually for the same request?",
+        "If the original request succeeded, what exactly should the retry return to the merchant?"
+      ],
+      "moveOnSummary": "Designed an idempotency system storing keys and responses to handle retries.",
+      "learnTopics": [
+        "idempotency",
+        "retries-and-timeouts"
+      ]
+    },
+    {
+      "id": "deep.state_machine",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "t-postgres",
+          "payment-service"
+        ],
+        "keywords": [
+          "status",
+          "pending",
+          "state transition",
+          "authorized",
+          "captured"
+        ]
+      },
+      "goal": "Define an explicit set of payment states and enforce valid transitions in the database.",
+      "opener": "How do you represent the lifecycle of a single payment in your data model?",
+      "evidence": {
+        "strong": "Defines explicit states (created, authorized, captured, failed) and uses database transactions or versioning to enforce strict, one-way state transitions.",
+        "adequate": "Adds a status column with basic states like 'pending' and 'success' but lacks transition guards.",
+        "weak": "Does not track payment state locally, or relies entirely on the external processor's state."
+      },
+      "misconceptions": [
+        {
+          "id": "state.overwrite",
+          "pattern": "Overwriting the status column without checking its previous value.",
+          "challenge": "If a delayed success webhook arrives after we've manually marked the payment as failed, how do we prevent the system from accepting it?"
+        }
+      ],
+      "probes": [
+        "How do you prevent a payment from moving from 'failed' to 'success'?",
+        "Can you write out the SQL or the locking strategy used when updating the state?"
+      ],
+      "hints": [
+        "Consider what states a payment goes through before and after we call the processor.",
+        "How can the database help ensure we don't accidentally apply an invalid state change?"
+      ],
+      "moveOnSummary": "Defined explicit payment states and database-level transition guards.",
+      "learnTopics": [
+        "transactions-isolation-levels",
+        "optimistic-vs-pessimistic-locking"
+      ]
+    },
+    {
+      "id": "deep.timeout",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "payment-provider",
+          "external-api",
+          "t-stripe"
+        ],
+        "keywords": [
+          "timeout",
+          "retry",
+          "unknown",
+          "pending",
+          "hangs"
+        ]
+      },
+      "goal": "Handle the unknown state when the external processor times out, avoiding blind retries.",
+      "opener": "If the connection to the external processor hangs and eventually times out, how does your system handle this specific payment?",
+      "evidence": {
+        "strong": "Leaves the payment in a 'pending' state, returns an unknown/pending status to the merchant, and relies on an asynchronous background job or webhook to query the processor for the final state.",
+        "adequate": "Returns an error to the merchant and manually checks the status later, but might struggle to explain how the merchant knows what to do.",
+        "weak": "Automatically retries the payment against the processor, risking a double charge."
+      },
+      "misconceptions": [
+        {
+          "id": "timeout.retry",
+          "pattern": "Retrying the charge if the first attempt times out.",
+          "challenge": "If the processor actually completed the charge but the network dropped the response, what happens on retry?"
+        }
+      ],
+      "probes": [
+        "What exactly do we tell the merchant when the timeout occurs?",
+        "How does the system eventually discover if the customer was charged or not?"
+      ],
+      "hints": [
+        "If we don't know the outcome, should we guess?",
+        "If we can't get an answer synchronously, how can we get it asynchronously?"
+      ],
+      "moveOnSummary": "Resolved timeouts by leaving the state as pending and resolving via background query.",
+      "learnTopics": [
+        "retries-and-timeouts",
+        "circuit-breaker"
+      ]
+    },
+    {
+      "id": "deep.ledger",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ledger",
+          "database",
+          "t-postgres"
+        ],
+        "keywords": [
+          "double-entry",
+          "credits",
+          "debits",
+          "immutable",
+          "balance"
+        ]
+      },
+      "goal": "Design an append-only, double-entry ledger to track balances accurately.",
+      "opener": "If we need to track merchant balances based on these payments, how would you structure that data?",
+      "evidence": {
+        "strong": "Designs an immutable, double-entry ledger table where every transaction has a matching credit and debit, allowing balances to be computed dynamically.",
+        "adequate": "Creates a transactions table to log events, but still uses a mutable 'balance' column for the source of truth.",
+        "weak": "Just updates a single 'balance' row for the merchant with no historical log."
+      },
+      "misconceptions": [
+        {
+          "id": "ledger.mutable",
+          "pattern": "Using a mutable balance column as the sole source of truth.",
+          "challenge": "If we discover a bug in how a fee was calculated yesterday, how do we rebuild the correct balances today?"
+        }
+      ],
+      "probes": [
+        "How do you ensure money isn't created or destroyed in your tables?",
+        "What happens if two concurrent payments try to update the same merchant's balance?"
+      ],
+      "hints": [
+        "Think about how accountants track money.",
+        "Instead of updating a single number, what if we only inserted new rows?"
+      ],
+      "moveOnSummary": "Structured financial data using a double-entry, append-only ledger.",
+      "learnTopics": [
+        "payment-system-ledger",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "deep.outbox",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "outbox",
+          "event-bus",
+          "t-kafka"
+        ],
+        "keywords": [
+          "webhook",
+          "event",
+          "cdc",
+          "transactional",
+          "notify"
+        ]
+      },
+      "goal": "Publish state changes to downstream services reliably without dual-write bugs.",
+      "opener": "When a payment succeeds, we need to notify the merchant via a webhook. How do you guarantee this event is sent if and only if the database commits?",
+      "evidence": {
+        "strong": "Uses the transactional outbox pattern to write the event to the same database in the same transaction, then tails the outbox to publish to a message broker.",
+        "adequate": "Writes to the database and then publishes to a queue, acknowledging the risk of failure between the two operations.",
+        "weak": "Fails to see the distributed transaction problem, or tries to publish to Kafka before committing to the database."
+      },
+      "misconceptions": [
+        {
+          "id": "outbox.dualwrite",
+          "pattern": "Committing to the database and then publishing to the event bus in sequence.",
+          "challenge": "What happens if the application crashes right after the database commit but before sending the message to the event bus?"
+        }
+      ],
+      "probes": [
+        "How are you handling the scenario where the database commit succeeds but the event bus is down?"
+      ],
+      "hints": [
+        "We can't guarantee two different systems will both commit. Can we put the event in the same system as the payment?",
+        "Consider using a dedicated table just for outbound events."
+      ],
+      "moveOnSummary": "Used the transactional outbox pattern to ensure reliable event publishing.",
+      "learnTopics": [
+        "outbox-pattern",
+        "two-phase-commit"
+      ]
+    },
+    {
+      "id": "deep.reconciliation",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "scheduler",
+          "storage"
+        ],
+        "keywords": [
+          "settlement",
+          "file",
+          "reconcile",
+          "mismatch",
+          "cron"
+        ]
+      },
+      "goal": "Verify the internal ledger matches the processor's view of reality.",
+      "opener": "How do we verify that our system's record of successful payments perfectly matches what the processor actually processed?",
+      "evidence": {
+        "strong": "Designs a daily batch job that ingests the processor's settlement file, joins it against the local ledger, and flags discrepancies for manual review.",
+        "adequate": "Suggests querying the processor API periodically for every transaction to verify status.",
+        "weak": "Assumes the systems will always be in sync and no external verification is needed."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What happens when the processor says a payment succeeded, but our database says it failed?",
+        "How do you handle the sheer volume of checking thousands of transactions a day?"
+      ],
+      "hints": [
+        "Processors usually provide end-of-day reports.",
+        "How can we automatically compare a large batch of external records against our database?"
+      ],
+      "moveOnSummary": "Designed a reconciliation batch job to compare local records against processor settlement files.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "batch-vs-stream-processing"
+      ]
+    },
+    {
+      "id": "deep.outage",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "worker",
+          "dlq"
+        ],
+        "keywords": [
+          "backlog",
+          "rate limit",
+          "recovery",
+          "circuit breaker"
+        ]
+      },
+      "goal": "Handle system recovery and backlogs gracefully after an external outage.",
+      "opener": "When an external processor recovers from a long outage, how do you manage the backlog without overwhelming the system again?",
+      "evidence": {
+        "strong": "Uses a circuit breaker to stop requests during the outage, and uses queues with rate limiting to trickle the backlog through upon recovery.",
+        "adequate": "Mentions queues to store pending requests but doesn't explicitly manage the recovery rate.",
+        "weak": "Allows all backlogged requests to retry simultaneously, causing a thundering herd."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you prevent our system from DDOSing the processor the second it comes back online?"
+      ],
+      "hints": [
+        "If thousands of payments are waiting, should we process them all at once?",
+        "Is there a pattern to stop traffic completely when a downstream service is failing?"
+      ],
+      "moveOnSummary": "Applied circuit breakers and rate-limited queues to handle outages and recovery.",
+      "learnTopics": [
+        "circuit-breaker",
+        "rate-limiting"
+      ]
+    },
+    {
+      "id": "wrap.review",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottlenecks",
+          "single point of failure",
+          "trade-offs"
+        ]
+      },
+      "goal": "Reflect on the design's limits and operational risks.",
+      "opener": "Looking at the design as a whole, what is the most significant operational risk or bottleneck, and how would you address it as traffic grows?",
+      "evidence": {
+        "strong": "Identifies database write throughput or lock contention as the bottleneck, and discusses sharding the ledger or connection pooling.",
+        "adequate": "Identifies single points of failure like the API gateway or cache, suggesting standard replication.",
+        "weak": "Claims the system has no bottlenecks or focuses entirely on stateless web tier scaling."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If our transaction volume 100x'd tomorrow, which exact component would break first?"
+      ],
+      "hints": [
+        "Where is the state stored, and how much concurrent writing can it handle?",
+        "Look at your central database."
+      ],
+      "moveOnSummary": "Reviewed the bottlenecks, focusing on database write scaling and contention.",
+      "learnTopics": [
+        "sharding",
+        "connection-pooling"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.outage",
+      "after": "deep.timeout",
+      "prompt": "The external payment processor goes down completely for two hours. How does your system handle the backlog of pending payments when it recovers?",
+      "agendaItemId": "deep.outage"
+    }
+  ],
+  "vocabulary": [
+    "idempotency",
+    "outbox",
+    "reconciliation",
+    "double-entry",
+    "capture",
+    "authorize",
+    "settlement",
+    "ledger",
+    "webhook"
+  ],
+  "alternatives": [
+    {
+      "choice": "Two-phase commit (2PC) instead of the Outbox pattern.",
+      "whenBetter": "When all systems involved are internal relational databases that support distributed transactions natively, though outbox is usually better across microservices."
+    },
+    {
+      "choice": "Event sourcing for the payment state.",
+      "whenBetter": "When full historical auditability is the absolute top priority and the team is comfortable with the complexity of rebuilding state, though explicit state with an append-only ledger is often simpler."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Thorough and reliable",
+      "outline": "Designs an end-to-end flow prioritizing correctness. Idempotency is handled robustly by hashing requests and storing keys. The database enforces strict state transitions. Timeouts are correctly marked as pending and resolved via webhooks or async polling. Uses a double-entry ledger for balances and the outbox pattern to guarantee webhook delivery. Includes a reconciliation job."
+    },
+    {
+      "band": "adequate",
+      "label": "Functional but misses edge cases",
+      "outline": "Establishes a solid synchronous flow. Uses idempotency keys but doesn't check payload hashes. Stores state in a database but relies on application logic rather than DB constraints for transitions. Handles timeouts but might need prompting to avoid blind retries. Misses the outbox pattern, risking dual-write bugs."
+    },
+    {
+      "band": "weak",
+      "label": "Prone to data loss or double charges",
+      "outline": "Focuses on throughput over consistency. Stores balances in mutable columns without a ledger. Suggests retrying payments automatically if the processor times out, leading to double charges. Lacks an idempotency strategy or relies entirely on a volatile cache."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.55,
+    "wrap_up": 0.1
+  }
+}

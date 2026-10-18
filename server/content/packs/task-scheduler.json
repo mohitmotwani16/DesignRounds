@@ -1,0 +1,601 @@
+{
+  "opening": "Welcome. Today we're going to design a distributed task scheduler. You can start whenever you're ready.",
+  "clarifications": [
+    {
+      "id": "scale.throughput",
+      "topics": [
+        "scale",
+        "throughput",
+        "volume",
+        "traffic",
+        "per day",
+        "qps"
+      ],
+      "answer": "Assume clients schedule a few million tasks per day."
+    },
+    {
+      "id": "req.types",
+      "topics": [
+        "types",
+        "cron",
+        "recurring",
+        "delayed",
+        "immediate"
+      ],
+      "answer": "The system should support both one-off delayed tasks and recurring cron tasks."
+    },
+    {
+      "id": "req.accuracy",
+      "topics": [
+        "accuracy",
+        "precision",
+        "latency",
+        "delay",
+        "exact",
+        "tight"
+      ],
+      "answer": "Tasks should run as close to their scheduled time as possible, ideally within seconds."
+    },
+    {
+      "id": "req.guarantees",
+      "topics": [
+        "guarantees",
+        "loss",
+        "drop",
+        "delivery",
+        "semantics",
+        "exactly-once",
+        "at-least-once"
+      ],
+      "answer": "Tasks must not be silently lost. Assume at-least-once execution is acceptable if a worker crashes."
+    },
+    {
+      "id": "req.payload",
+      "topics": [
+        "payload",
+        "size",
+        "content",
+        "body"
+      ],
+      "answer": "Each task has an ID, an execution time, and a small JSON payload, typically under a few kilobytes."
+    }
+  ],
+  "clarificationPolicy": "If the candidate asks about something not covered, ask them to state a reasonable assumption for an advanced, large-scale scheduling system and proceed.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "scale",
+          "recurring",
+          "delayed",
+          "guarantees",
+          "requirements",
+          "at-least-once"
+        ]
+      },
+      "goal": "Identify the core requirements, scale, and delivery guarantees of the scheduler.",
+      "opener": "To begin, what are the primary requirements and constraints you want to build this system for?",
+      "evidence": {
+        "strong": "Explicitly identifies at-least-once delivery, the need for idempotency, and the mix of delayed and recurring tasks.",
+        "adequate": "Notes basic scheduling and execution requirements but misses edge cases or explicit delivery guarantees.",
+        "weak": "Jumps into architecture without defining what the scheduler must guarantee or the scale it operates at."
+      },
+      "misconceptions": [
+        {
+          "id": "exactly-once",
+          "pattern": "Assumes exactly-once execution is trivial.",
+          "challenge": "In a distributed system, how do you guarantee exactly-once execution if the network drops the acknowledgment after a task runs?"
+        }
+      ],
+      "probes": [
+        "What happens to the task if the worker process crashes halfway through?",
+        "Are we only handling one-off tasks in the future?"
+      ],
+      "hints": [
+        "Think about what happens when components fail.",
+        "Consider what a cron job needs compared to a one-off delayed task."
+      ],
+      "moveOnSummary": "Agreed on at-least-once execution for delayed and recurring tasks.",
+      "learnTopics": [
+        "delivery-semantics",
+        "idempotency",
+        "system-design-roadmap"
+      ]
+    },
+    {
+      "id": "hl.arch",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "worker",
+          "database",
+          "queue"
+        ],
+        "keywords": [
+          "submit",
+          "store",
+          "dispatch",
+          "execute",
+          "flow",
+          "architecture"
+        ]
+      },
+      "goal": "Establish a high-level architecture separating submission, storage, scheduling, and execution.",
+      "opener": "Could you walk me through the high-level components from when a user submits a task to when it finishes executing?",
+      "evidence": {
+        "strong": "Clearly separates the persistent task store, the scheduling tier, the dispatch mechanism, and the worker pool.",
+        "adequate": "Connects an API to a database and workers, but merges the scheduling and execution layers.",
+        "weak": "Creates a monolithic design or uses a standard message queue as a long-term database for delayed tasks."
+      },
+      "misconceptions": [
+        {
+          "id": "queue-as-db",
+          "pattern": "Using a standard message queue for tasks delayed by months.",
+          "challenge": "Standard queues hold messages in memory or briefly on disk. How does a queue handle a task scheduled for next year?"
+        }
+      ],
+      "probes": [
+        "Which component actually waits for the clock to hit the exact execution time?",
+        "How do the workers receive the tasks from the scheduler?"
+      ],
+      "hints": [
+        "Where are these tasks saved while we wait for their execution time to arrive?",
+        "We need a component that actively looks for tasks that are due right now."
+      ],
+      "moveOnSummary": "Outlined the API, store, scheduler, and workers.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "hld-vs-lld"
+      ]
+    },
+    {
+      "id": "deep.store",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "document-db",
+          "wide-column",
+          "kv-store"
+        ],
+        "keywords": [
+          "partition",
+          "index",
+          "time bucket",
+          "query",
+          "scan"
+        ]
+      },
+      "goal": "Design a durable data model that allows efficient retrieval of due tasks without full table scans.",
+      "opener": "How does your scheduler efficiently query the database to find tasks that need to run right this second?",
+      "evidence": {
+        "strong": "Uses time-bucketed partitions or an indexed time-series approach, so the scheduler queries a small, specific slice of data.",
+        "adequate": "Adds an index on the execution time column but relies on a single database node or simple range queries.",
+        "weak": "Scans the entire table periodically to find due tasks."
+      },
+      "misconceptions": [
+        {
+          "id": "full-scan",
+          "pattern": "Scanning the whole table every tick.",
+          "challenge": "Given the volume you estimated, what is the latency and database load of scanning all rows every second?"
+        }
+      ],
+      "probes": [
+        "Can you write out the exact query or access pattern the scheduler uses?",
+        "What happens to the completed tasks in this table?"
+      ],
+      "hints": [
+        "Instead of searching everything, can we group tasks by the minute or second they are supposed to run?",
+        "Think about how we might partition the data based on time."
+      ],
+      "moveOnSummary": "Decided on a time-indexed or bucketed storage model.",
+      "learnTopics": [
+        "database-indexing",
+        "time-series-databases",
+        "sharding"
+      ]
+    },
+    {
+      "id": "deep.leases",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "worker",
+          "queue",
+          "dlq",
+          "retry"
+        ],
+        "keywords": [
+          "lease",
+          "timeout",
+          "crash",
+          "retry",
+          "ack",
+          "heartbeat"
+        ]
+      },
+      "goal": "Ensure task execution is resilient to worker crashes via leases and retries.",
+      "opener": "If a worker pulls a task and starts processing it, but the worker node completely loses power before finishing, how do we ensure the task isn't lost?",
+      "evidence": {
+        "strong": "Implements a lease mechanism with a visibility timeout, requires explicit ACKs on completion, and safely retries expired leases.",
+        "adequate": "Mentions timeouts and retries, but is vague on how the scheduler or queue reclaims the task.",
+        "weak": "Uses fire-and-forget dispatch or deletes the task immediately when the worker pulls it."
+      },
+      "misconceptions": [
+        {
+          "id": "delete-before-run",
+          "pattern": "Deleting the task when it is dispatched to a worker.",
+          "challenge": "If the task is deleted upon dispatch and the worker crashes, where can we recover the task from?"
+        }
+      ],
+      "probes": [
+        "How long does the scheduler wait before assuming the worker failed?",
+        "What if a task legitimately takes longer than the expected timeout to run?"
+      ],
+      "hints": [
+        "The worker needs to tell the system it finished. What if it never does?",
+        "Could we give the worker a temporary 'lease' or lock on the task?"
+      ],
+      "moveOnSummary": "Established lease timeouts and explicit acknowledgments for reliability.",
+      "learnTopics": [
+        "delivery-semantics",
+        "retries-and-timeouts",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "deep.scheduler",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "leader",
+          "t-etcd",
+          "t-consul"
+        ],
+        "keywords": [
+          "partition ownership",
+          "leader election",
+          "sharding",
+          "duplicate",
+          "lock"
+        ]
+      },
+      "goal": "Scale the scheduling tier while preventing multiple schedulers from dispatching the same task.",
+      "opener": "As we scale to millions of tasks, we'll need multiple scheduler nodes. How do we prevent two schedulers from pulling and dispatching the exact same task at the same time?",
+      "evidence": {
+        "strong": "Assigns ownership of specific time buckets or database partitions to individual schedulers using a coordination service.",
+        "adequate": "Uses distributed locks or optimistic concurrency on individual rows.",
+        "weak": "Ignores the race condition or assumes a single scheduler node will suffice forever."
+      },
+      "misconceptions": [
+        {
+          "id": "row-locks-for-all",
+          "pattern": "Locking individual rows for millions of tasks concurrently.",
+          "challenge": "What is the performance overhead of acquiring distributed locks on thousands of individual rows every second?"
+        }
+      ],
+      "probes": [
+        "How does a scheduler know which tasks it is responsible for?",
+        "What happens if one of the scheduler nodes crashes?"
+      ],
+      "hints": [
+        "Instead of fighting over individual tasks, could we assign a distinct subset of tasks to each scheduler?",
+        "Consider how partition assignment works in distributed systems."
+      ],
+      "moveOnSummary": "Partitioned scheduler responsibilities to avoid duplicate dispatch.",
+      "learnTopics": [
+        "leader-election",
+        "consistent-hashing",
+        "consensus"
+      ]
+    },
+    {
+      "id": "deep.recurring",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "recurring",
+          "cron",
+          "expand",
+          "next run",
+          "trigger"
+        ]
+      },
+      "goal": "Efficiently schedule infinite series of recurring tasks.",
+      "opener": "For a recurring cron job, how and when do we compute and store its future execution times?",
+      "evidence": {
+        "strong": "Expands the task dynamically, scheduling the next run only when the current run completes, preventing unbounded storage.",
+        "adequate": "Pre-computes and stores a finite batch of future runs (for example, the next year's worth).",
+        "weak": "Attempts to evaluate cron expressions dynamically across the whole database every second."
+      },
+      "misconceptions": [
+        {
+          "id": "infinite-expansion",
+          "pattern": "Trying to store all future occurrences of a cron job.",
+          "challenge": "A minutely cron job runs forever. How do you store infinite rows?"
+        }
+      ],
+      "probes": [
+        "If the cron definition changes, how do we update all the future scheduled runs?",
+        "Should the scheduler or the worker be responsible for queuing the next run?"
+      ],
+      "hints": [
+        "Do we need to store the task for 2028 today?",
+        "What if we just schedule the immediate next run, and then schedule the following one when this one finishes?"
+      ],
+      "moveOnSummary": "Handled recurring tasks by scheduling the next iteration on completion.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "event-sourcing-cqrs"
+      ]
+    },
+    {
+      "id": "deep.hotkeys",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "shard",
+          "wide-column"
+        ],
+        "keywords": [
+          "hot partition",
+          "midnight",
+          "burst",
+          "thundering herd"
+        ]
+      },
+      "goal": "Handle massive spikes in task scheduling for specific popular times.",
+      "opener": "Users often schedule tasks for exact hours, like exactly midnight. How does the data store handle a massive burst of tasks mapped to a single time bucket?",
+      "evidence": {
+        "strong": "Sub-partitions time buckets by hashing the task ID to distribute the load across multiple database nodes.",
+        "adequate": "Acknowledges the hot partition and suggests scaling up the database vertically.",
+        "weak": "Assumes standard indexing will magically resolve extreme write and read skews."
+      },
+      "misconceptions": [
+        {
+          "id": "index-solves-all",
+          "pattern": "Assuming an index prevents a single node from being overwhelmed.",
+          "challenge": "If all tasks for midnight are stored on the same database node, an index helps find them, but how do we prevent that one node's CPU from maxing out?"
+        }
+      ],
+      "probes": [
+        "How can we spread a single minute's bucket across multiple database shards?",
+        "What happens to the scheduler if the database becomes a bottleneck during this spike?"
+      ],
+      "hints": [
+        "If one time bucket is too big for one node, we need a composite partition key.",
+        "We can combine the execution time with a random number or task ID."
+      ],
+      "moveOnSummary": "Addressed hot partitions using a composite shard key.",
+      "learnTopics": [
+        "hot-partitions",
+        "sharding",
+        "database-indexing"
+      ]
+    },
+    {
+      "id": "deep.fencing",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "fencing",
+          "versioning",
+          "optimistic",
+          "cas",
+          "split brain",
+          "zombie",
+          "stale"
+        ]
+      },
+      "goal": "Handle split-brain scenarios in worker execution using fencing tokens or optimistic locking.",
+      "opener": "How do we handle the scenario where a slow worker wakes up and tries to complete a task that another worker has already taken over?",
+      "evidence": {
+        "strong": "Proposes fencing tokens, monotonic versions, or optimistic concurrency control on the final state update.",
+        "adequate": "Relies solely on database unique constraints or hopes idempotency handles it entirely.",
+        "weak": "Fails to recognize the concurrency issue, assuming leases magically prevent overlapping execution."
+      },
+      "misconceptions": [
+        {
+          "id": "lease-prevents-overlap",
+          "pattern": "Assuming a lease expiration kills the worker process.",
+          "challenge": "A lease is just a database timestamp. How does the database physically stop the remote worker process from doing work?"
+        }
+      ],
+      "probes": [
+        "If both workers try to update the database, how does the database know which one is valid?",
+        "What if the task involves calling a third-party API?"
+      ],
+      "hints": [
+        "Could we pass a version number or token to the worker that it must present when saving results?",
+        "Think about optimistic locking."
+      ],
+      "moveOnSummary": "Discussed fencing tokens and optimistic concurrency.",
+      "learnTopics": [
+        "optimistic-vs-pessimistic-locking",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "wrap.observability",
+      "stage": "wrap_up",
+      "dimension": "reliability",
+      "weight": 1,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "monitoring-dashboard",
+          "alerting",
+          "t-datadog"
+        ],
+        "keywords": [
+          "monitor",
+          "lag",
+          "metrics",
+          "alert",
+          "health"
+        ]
+      },
+      "goal": "Define critical metrics to ensure the scheduler is operating correctly.",
+      "opener": "Once this is in production, what is the most critical metric you would alert on to ensure tasks are running on time?",
+      "evidence": {
+        "strong": "Focuses on scheduling lag (the difference between scheduled time and actual execution time) and dead letter queue depth.",
+        "adequate": "Mentions standard CPU or memory metrics and general task failure rates.",
+        "weak": "Focuses only on generic infrastructure metrics without domain-specific scheduler health."
+      },
+      "misconceptions": [
+        {
+          "id": "cpu-only",
+          "pattern": "Only monitoring infrastructure metrics.",
+          "challenge": "If CPU is low but the schedulers stopped pulling tasks due to a logical bug, how would we know?"
+        }
+      ],
+      "probes": [
+        "How do we measure if the workers are falling behind?",
+        "What happens if tasks consistently fail and hit the retry limit?"
+      ],
+      "hints": [
+        "Think about the difference between when a task was supposed to run and when it actually ran.",
+        "Where do tasks go when they completely fail after all retries?"
+      ],
+      "moveOnSummary": "Identified scheduling lag and DLQ depth as key metrics.",
+      "learnTopics": [
+        "observability",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "wrap.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "limit",
+          "failure",
+          "single point"
+        ]
+      },
+      "goal": "Reflect on the design's limits and potential single points of failure.",
+      "opener": "Looking at the final architecture, what is the biggest bottleneck or limiting factor as this scales up?",
+      "evidence": {
+        "strong": "Accurately identifies database write limits or scheduler coordination overhead as primary bottlenecks and proposes mitigations.",
+        "adequate": "Points out a valid but minor component limit, such as network bandwidth.",
+        "weak": "Claims the system scales infinitely and has no bottlenecks."
+      },
+      "misconceptions": [
+        {
+          "id": "infinite-scale",
+          "pattern": "Assuming cloud services automatically resolve all bottlenecks.",
+          "challenge": "Even managed services have partition limits. Which part of your design will hit those limits first?"
+        }
+      ],
+      "probes": [
+        "If task volume increased drastically tomorrow, which component breaks first?",
+        "How would disaster recovery work if a region goes down?"
+      ],
+      "hints": [
+        "Look at where the most data is moving or being written concurrently.",
+        "Consider the database partition strategy and leader election constraints."
+      ],
+      "moveOnSummary": "Reviewed system limits and bottlenecks.",
+      "learnTopics": [
+        "fallacies-of-distributed-computing",
+        "disaster-recovery"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "worker-network-partition",
+      "after": "deep.leases",
+      "prompt": "What if the worker hasn't actually crashed, but its network connection to the scheduler is paused? Its lease expires, a new worker starts the task, and then the first worker's network recovers. How do you prevent them both writing the final result?",
+      "agendaItemId": "deep.fencing"
+    }
+  ],
+  "vocabulary": [
+    "cron",
+    "DLQ",
+    "ACK",
+    "NACK",
+    "idempotency",
+    "time wheel",
+    "lease",
+    "heartbeat",
+    "fencing token",
+    "bucket",
+    "partition"
+  ],
+  "alternatives": [
+    {
+      "choice": "Using a Time Wheel structure in memory.",
+      "whenBetter": "For highly precise, strictly ordered, in-memory execution scenarios where durability is less critical or backed by a fast Write-Ahead Log."
+    },
+    {
+      "choice": "Pre-expanding recurring tasks into the database.",
+      "whenBetter": "When we need to display a user's exact calendar of future tasks for months ahead, making read queries simpler."
+    },
+    {
+      "choice": "Pushing tasks to workers via RPC instead of workers pulling from a queue.",
+      "whenBetter": "When low latency is strictly prioritized over backpressure, and workers have highly predictable capacity."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust partitioned scheduling",
+      "outline": "The candidate designed a robust distributed architecture. They used a time-bucketed database to efficiently query due tasks. They solved worker reliability with lease timeouts and explicit acknowledgments, ensuring at-least-once delivery. They effectively scaled the schedulers by partitioning ownership using etcd, and correctly handled cron jobs by enqueueing the next iteration upon completion of the current one."
+    },
+    {
+      "band": "adequate",
+      "label": "Working but basic",
+      "outline": "The candidate built a working scheduler using a standard database and a message queue. They recognized the need for retries and worker leases. However, their database querying relied on simple indexes rather than efficient time-bucketing, and their scheduler nodes lacked strict partition ownership, leading to potential duplicate dispatches under load."
+    },
+    {
+      "band": "weak",
+      "label": "Polling bottleneck",
+      "outline": "The candidate designed a system that polled a relational database with full table scans every second. They lacked a lease or acknowledgment mechanism, meaning tasks were deleted upon dispatch and would be lost if a worker crashed. They struggled to articulate how multiple scheduler nodes would coordinate without stepping on each other."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.2,
+    "deep_dive": 0.5,
+    "wrap_up": 0.15
+  }
+}
