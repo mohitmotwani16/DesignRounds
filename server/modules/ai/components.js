@@ -28,6 +28,14 @@ export function componentKinds() {
   return new Set(kindToGroup.keys());
 }
 
+// Kinds that say nothing about a component's role: a client, a plain service or server.
+// Drawing one is evidence for a part only when its label names that part. (A worker, an
+// ID generator or a registry is a specific part, even if it's not "significant".)
+const ANONYMOUS_KINDS = new Set(["client", "mobile", "desktop", "tablet", "user", "users", "admin", "service", "microservice", "web-server", "function", "container", "cluster", "vm", "bff", "group", "text", "note"]);
+export function isAnonymousKind(kind) {
+  return ANONYMOUS_KINDS.has(kind);
+}
+
 export function isSignificantKind(kind) {
   const group = kindToGroup.get(kind);
   return group ? !MINOR_GROUPS.has(group) : !["group", "text", "note"].includes(kind);

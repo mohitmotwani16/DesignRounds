@@ -20,6 +20,8 @@ export const timeCheckText = (share, mode) => {
 };
 
 export const WRAP_UP_TEXT = "We're about at time, so let's wrap up. Give me a short summary of your design, the biggest bottleneck or risk you see in it, and what you'd improve with more time. Any questions for me?";
+// At time with a canvas too thin to review: the design has to be drawn before it can be reviewed.
+export const WRAP_UP_DRAW_TEXT = "We're about at time, so let's wrap up. First, get your design onto the canvas: the main components and how requests flow between them, since the review is of what you draw. Then give me a short summary, the biggest risk you see, and what you'd improve with more time.";
 export const IDLE_NUDGE_TEXT = "Take your time. Want to talk me through what you're thinking so far, or would a hint help?";
 export const DRAWING_NUDGE_TEXT = "Talk me through what you've drawn so far. What's the flow for the main request?";
 
@@ -30,13 +32,13 @@ const since = (at, now) => (at ? now - new Date(at).getTime() : Infinity);
 //   lastTurn { role, kind, at }, lastLearnerAt, lastProactiveAt, lastNudgeAt,
 //   proactiveLeft, focusExhausted, canvas { itemId, unexplained, major, changedSinceLearner }
 export function decideTick(context) {
-  const { typing, pending, now, mode, conventions, clock, timeWarnings, stage, lastTurn, lastLearnerAt, lastProactiveAt, lastNudgeAt, proactiveLeft, focusExhausted, canvas } = context;
+  const { typing, pending, now, mode, conventions, clock, timeWarnings, stage, lastTurn, lastLearnerAt, lastProactiveAt, lastNudgeAt, proactiveLeft, focusExhausted, canvas, canvasThin = false } = context;
   if (pending) return { action: "none", why: "busy" };
   if (typing) return { action: "none", why: "typing" };
 
   // Time thresholds, each announced once. At 100% the round moves to wrap-up.
   const share = clock.roundElapsedMs / clock.roundBudgetMs;
-  if (share >= 1 && stage !== "wrap_up") return { action: "template", move: "wrap_up", text: WRAP_UP_TEXT, threshold: 1 };
+  if (share >= 1 && stage !== "wrap_up") return { action: "template", move: "wrap_up", text: canvasThin ? WRAP_UP_DRAW_TEXT : WRAP_UP_TEXT, threshold: 1 };
   const due = conventions.timeWarnings.filter((threshold) => share >= threshold && !timeWarnings.includes(threshold));
   if (due.length && stage !== "wrap_up") {
     const threshold = Math.max(...due);

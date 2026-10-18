@@ -61,7 +61,24 @@ export function applyTurn({ items, state, plan, verified, turn }) {
 
   // 3. Opening the next item, in the same message.
   let focusItemId = state.focusItemId;
-  if (OPENING_MOVES.has(move) && verified.focusItemId) {
+  let lastDrawAskSeq = state.lastDrawAskSeq ?? null;
+  let componentsAtDrawAsk = state.componentsAtDrawAsk ?? null;
+  if (move === "ask_to_draw") {
+    // Asking for a drawing. When it moves the interview on (the next deep dive needs its
+    // part drawn first), the current item closes as it would have, and the drawn-to-be
+    // item becomes the focus without opening yet.
+    const target = verified.focusItemId ? byId.get(verified.focusItemId) : null;
+    if (target && focus && target.itemId !== focus.itemId) {
+      if (focus.status === "open") setStatus(focus, closeAs(focus, focus.band, bandAtLeast(focus.band, "adequate") ? "acknowledge_advance" : "move_on"), turn.interviewerSeq);
+      focusItemId = target.itemId;
+    } else if (focus) {
+      focusItemId = focus.itemId;
+    }
+    if (target) target.drawRequests = (target.drawRequests ?? 0) + 1;
+    lastDrawAskSeq = turn.interviewerSeq;
+    componentsAtDrawAsk = plan.canvas?.components ?? componentsAtDrawAsk;
+    events.push({ type: "draw_requested", payload: { itemId: target?.itemId ?? null, components: plan.canvas?.components ?? null } });
+  } else if (OPENING_MOVES.has(move) && verified.focusItemId) {
     const opened = byId.get(verified.focusItemId);
     if (opened && opened.status === "pending") setStatus(opened, "open", turn.interviewerSeq);
     focusItemId = verified.focusItemId;
@@ -109,6 +126,8 @@ export function applyTurn({ items, state, plan, verified, turn }) {
       hintsUsed: state.hintsUsed + (move === "hint" ? 1 : 0),
       clarificationsAsked: [...new Set([...state.clarificationsAsked, ...(verified.clarificationIds ?? [])])],
       ledgerVersion: state.ledgerVersion + 1,
+      lastDrawAskSeq,
+      componentsAtDrawAsk,
     },
     events,
   };

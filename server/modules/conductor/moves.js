@@ -4,7 +4,7 @@ export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
 
 // Moves the model may pick. `stay_silent` exists only for ticks: after a look at the
 // canvas the model may decide nothing needs asking.
-export const MODEL_MOVES = ["open", "probe", "challenge", "clarify", "explain", "hint", "acknowledge_advance", "move_on", "redirect", "curveball", "wrap_up", "stay_silent"];
+export const MODEL_MOVES = ["open", "probe", "challenge", "clarify", "explain", "hint", "acknowledge_advance", "move_on", "redirect", "curveball", "wrap_up", "ask_to_draw", "stay_silent"];
 // Moves the application writes from templates, never the model.
 export const TEMPLATE_MOVES = ["nudge", "time_check"];
 
@@ -29,6 +29,7 @@ export const KIND_FOR_MOVE = {
   redirect: "redirect",
   curveball: "question",
   wrap_up: "wrap_up",
+  ask_to_draw: "question",
   nudge: "nudge",
   time_check: "time_check",
 };

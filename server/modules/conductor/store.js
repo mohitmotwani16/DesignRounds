@@ -25,6 +25,7 @@ export function toItem(row) {
     evidence: row.evidence ?? [],
     openedSeq: row.opened_seq,
     closedSeq: row.closed_seq,
+    drawRequests: row.draw_requests ?? 0,
   };
 }
 
@@ -53,6 +54,8 @@ export function toRound(state) {
     lastProactiveAt: state.last_proactive_at,
     lastNudgeAt: state.last_nudge_at,
     pendingSince: state.pending_since,
+    lastDrawAskSeq: state.last_draw_ask_seq ?? null,
+    componentsAtDrawAsk: state.components_at_draw_ask ?? null,
   };
 }
 
@@ -89,9 +92,9 @@ async function writeItems(conn, sessionId, items, before) {
     await conn.query(
       `update interview_agenda_items
           set status = $3, band = $4, follow_ups = $5, hint_level = $6, challenges = $7,
-              misconceptions = $8::jsonb, evidence = $9::jsonb, opened_seq = $10, closed_seq = $11
+              misconceptions = $8::jsonb, evidence = $9::jsonb, opened_seq = $10, closed_seq = $11, draw_requests = $12
         where session_id = $1 and item_id = $2`,
-      [sessionId, item.itemId, item.status, item.band, item.followUps, item.hintLevel, item.challenges, JSON.stringify(item.misconceptions), JSON.stringify(item.evidence), item.openedSeq, item.closedSeq]
+      [sessionId, item.itemId, item.status, item.band, item.followUps, item.hintLevel, item.challenges, JSON.stringify(item.misconceptions), JSON.stringify(item.evidence), item.openedSeq, item.closedSeq, item.drawRequests ?? 0]
     );
   }
 }
@@ -160,12 +163,14 @@ export async function saveTurn({ session, before, result, learnerTurn, notes, in
               proactive_checks = proactive_checks + $13, last_proactive_at = case when $13 > 0 then now() else last_proactive_at end,
               last_nudge_at = case when $14 then now() else last_nudge_at end,
               last_tick_key = coalesce($15, last_tick_key),
+              last_draw_ask_seq = $16, components_at_draw_ask = $17,
               pending_since = null, updated_at = now()
         where session_id = $1 returning *`,
       [session.id, result.state.stage, result.state.focusItemId, JSON.stringify(result.state.assumptions), result.state.stageStartedMs, result.state.hintsUsed,
         JSON.stringify(result.state.clarificationsAsked), result.state.ledgerVersion, stateExtras.activeMs,
         JSON.stringify(stateExtras.covered), JSON.stringify(stateExtras.snapshot), JSON.stringify(stateExtras.timeWarnings),
-        stateExtras.proactive ? 1 : 0, Boolean(stateExtras.nudged), stateExtras.tickKey ?? null]
+        stateExtras.proactive ? 1 : 0, Boolean(stateExtras.nudged), stateExtras.tickKey ?? null,
+        result.state.lastDrawAskSeq ?? null, result.state.componentsAtDrawAsk ?? null]
     );
     await appendEvents(conn, session.id, result.events);
     if (creditId) await conn.query("update ai_credits set status = 'consumed', updated_at = now() where id = $1", [creditId]);

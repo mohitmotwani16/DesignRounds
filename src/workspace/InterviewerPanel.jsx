@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Clock, Eye, Lightbulb, LoaderCircle, MessageSquare, Mic, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Eye, Lightbulb, LoaderCircle, MessageSquare, Mic, PenLine, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
 const STAGES = [
@@ -277,6 +277,7 @@ function Turn({ turn, onFocusNode, labelFor, onFeedback }) {
         <span className="interview-turn-meta">
           Interviewer
           {noticed && <em><Eye size={11} /> Noticed on your canvas</em>}
+          {turn.asksToDraw && <em><PenLine size={11} /> Draw it on the canvas</em>}
           {kindLabels[turn.kind] && <em>{QUIET_KINDS.has(turn.kind) && <Clock size={11} />} {kindLabels[turn.kind]}</em>}
           {onFeedback && !QUIET_KINDS.has(turn.kind) && turn.kind !== "opening" && <TurnFeedback turnId={turn.id} onFeedback={onFeedback} />}
         </span>

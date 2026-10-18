@@ -38,15 +38,18 @@ const emptyContext = { technicalContext: "", communicationGaps: [] };
 export function fakeConductorReply({ plan, learnerText = "", trigger = "reply", openers = {} }) {
   const prefer = trigger === "hint"
     ? ["hint"]
-    : trigger.startsWith("tick") ? ["open", "probe", "move_on", "wrap_up"] : ["probe", "acknowledge_advance", "open", "move_on", "wrap_up", "clarify", "explain"];
+    : trigger.startsWith("tick") ? ["open", "probe", "move_on", "wrap_up", "ask_to_draw"] : ["probe", "acknowledge_advance", "ask_to_draw", "open", "move_on", "wrap_up", "clarify", "explain"];
   const move = prefer.find((candidate) => plan.allowedMoves.includes(candidate)) ?? plan.allowedMoves[0];
-  const focusItemId = move === "curveball" ? plan.curveball?.agendaItemId ?? "" : OPENING_MOVES.has(move) && move !== "open" ? plan.nextItemId ?? "" : plan.focusItemId ?? "";
+  const focusItemId = move === "curveball" ? plan.curveball?.agendaItemId ?? ""
+    : move === "ask_to_draw" ? plan.drawTarget ?? plan.focusItemId ?? ""
+      : OPENING_MOVES.has(move) && move !== "open" ? plan.nextItemId ?? "" : plan.focusItemId ?? "";
   const words = filterFillerWords(learnerText).split(/\s+/).filter(Boolean);
   const said = words.length >= 3 && trigger === "reply";
   const message = {
     hint: "(Sample hint) Think about which part of this gets the most traffic, and what happens when one machine isn't enough.",
     probe: "(Sample interviewer) Can you be more specific about how that works when traffic grows tenfold?",
     wrap_up: "(Sample interviewer) Let's wrap up. Summarise your design, the biggest risk in it, and what you'd improve.",
+    ask_to_draw: "(Sample interviewer) Before we go further, put that part on the canvas so we can look at it together.",
     stay_silent: "",
   }[move] ?? `(Sample interviewer) ${openers[focusItemId] ?? "Tell me more about that."}`;
   return {
