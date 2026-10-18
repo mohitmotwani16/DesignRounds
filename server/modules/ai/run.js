@@ -2,6 +2,7 @@ import { query } from "../../db.js";
 import { aiConfig } from "./config.js";
 import { AiError } from "./errors.js";
 import { createMessageExtractor } from "./message-stream.js";
+import { costOf, estimateTokens } from "./pricing.js";
 import { complete, streamComplete } from "./providers.js";
 import { describeIssues, toJsonSchema } from "./schema.js";
 
@@ -27,20 +28,50 @@ function parseOutput(task, raw) {
   return result.success ? { ok: true, data: result.data } : { ok: false, problem: describeIssues(result.error) };
 }
 
+// Provider errors that are never billed: the request was refused before any work.
+const UNBILLED = new Set(["rate_limited", "auth", "provider_error", "disabled", "refused"]);
+
+// Size of a request in characters (messages plus the schema we send with it), for
+// estimating the tokens of a call that ended without a usage report.
+function requestChars(messages, task) {
+  const text = (content) => (typeof content === "string" ? content.length : content.reduce((sum, part) => sum + String(part.text ?? "").length, 0));
+  return messages.reduce((sum, message) => sum + text(message.content), 0) + JSON.stringify(jsonSchemaFor(task).schema).length;
+}
+
+// An aborted call (timed out, stalled, cut off by the move gate) may still be billed for
+// what the provider processed; with no usage report its tokens are estimated and flagged.
+function abortedUsage(outcome, { chars, outputChars = 0 }) {
+  if (UNBILLED.has(outcome)) return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+  return { inputTokens: estimateTokens(chars), outputTokens: estimateTokens(outputChars), reasoningTokens: 0, estimated: true };
+}
+
 async function recordUsage(entry) {
   if (entry.meter === false) return;
+  const { costUsd, priceVersion } = costOf(entry);
   try {
     await query(
-      `insert into ai_usage (user_id, session_id, task, provider, model, outcome, attempts, input_tokens, output_tokens, latency_ms, cached_input_tokens)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `insert into ai_usage (user_id, session_id, task, provider, model, outcome, attempts, input_tokens, output_tokens, latency_ms, cached_input_tokens,
+                             reasoning_tokens, cache_write_tokens, cost_usd, price_version, cost_estimated)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
       [entry.userId ?? null, entry.sessionId ?? null, entry.task, aiConfig.vendor, entry.model, entry.outcome,
-        entry.attempts ?? 1, entry.inputTokens ?? null, entry.outputTokens ?? null, entry.latencyMs, entry.cachedInputTokens ?? null]
+        entry.attempts ?? 1, entry.inputTokens ?? null, entry.outputTokens ?? null, entry.latencyMs, entry.cachedInputTokens ?? null,
+        entry.reasoningTokens ?? null, entry.cacheWriteTokens ?? null, costUsd, priceVersion, Boolean(entry.estimated)]
     );
   } catch (error) {
     console.error("[ai] could not record usage:", error.message);
   }
   const cached = entry.cachedInputTokens ? ` cached=${entry.cachedInputTokens}` : "";
-  console.log(`[ai] ${entry.task} ${entry.outcome} model=${entry.model} in=${entry.inputTokens ?? "?"}${cached} out=${entry.outputTokens ?? "?"} ${entry.latencyMs}ms`);
+  const thinking = entry.reasoningTokens ? ` thinking=${entry.reasoningTokens}` : "";
+  const cost = costUsd == null ? "" : ` cost=${costUsd.toFixed(6)}${entry.estimated ? "~" : ""}`;
+  console.log(`[ai] ${entry.task} ${entry.outcome} model=${entry.model} in=${entry.inputTokens ?? "?"}${cached} out=${entry.outputTokens ?? "?"}${thinking}${cost} ${entry.latencyMs}ms`);
+}
+
+// The primary model that stalled before a fallback answered.
+async function recordAbandoned(meta, abandoned, chars) {
+  for (const entry of abandoned ?? []) {
+    const outcome = `abandoned_${String(entry.code || "error").toLowerCase()}`;
+    await recordUsage({ ...meta, model: entry.model, outcome, latencyMs: entry.latencyMs, ...abortedUsage(String(entry.code || "").toLowerCase(), { chars }) });
+  }
 }
 
 const STABILITY_ORDER = { global: 0, problem: 1, session: 2, turn: 3 };
@@ -89,7 +120,7 @@ export async function runTask(task, input, { userId, sessionId, meter = true } =
   if (aiConfig.provider === "fake") {
     await new Promise((resolve) => setTimeout(resolve, FAKE_LATENCY_MS));
     const data = task.output.parse(task.fake(input));
-    await recordUsage({ ...meta, model: "fake", outcome: "ok", latencyMs: FAKE_LATENCY_MS });
+    await recordUsage({ ...meta, model: "fake", outcome: "ok", inputTokens: 0, outputTokens: 0, latencyMs: FAKE_LATENCY_MS });
     return { data, model: "fake" };
   }
   if (!aiConfig.enabled) throw new AiError("DISABLED", "No AI provider is configured.");
@@ -97,15 +128,18 @@ export async function runTask(task, input, { userId, sessionId, meter = true } =
   const messages = messagesFor(task, input);
   for (let round = 1; round <= 2; round += 1) {
     const started = Date.now();
+    const chars = requestChars(messages, task);
     let completion;
     try {
       completion = await complete({ model: settings.model, baseUrl: settings.baseUrl, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs });
     } catch (error) {
-      await recordUsage({ ...meta, model: settings.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
+      const outcome = (error.code || "error").toLowerCase();
+      await recordUsage({ ...meta, model: settings.model, outcome, attempts: error.detail?.attempts, latencyMs: Date.now() - started, ...abortedUsage(outcome, { chars }) });
       if (error.detail) console.error(`[ai] ${task.name} ${error.code}:`, JSON.stringify(error.detail));
       throw error;
     }
-    const usage = { model: completion.model, attempts: completion.attempts, inputTokens: completion.inputTokens, cachedInputTokens: completion.cachedInputTokens, outputTokens: completion.outputTokens, latencyMs: Date.now() - started };
+    await recordAbandoned(meta, completion.abandoned, chars);
+    const usage = { model: completion.model, attempts: completion.attempts, inputTokens: completion.inputTokens, cachedInputTokens: completion.cachedInputTokens, cacheWriteTokens: completion.cacheWriteTokens, outputTokens: completion.outputTokens, reasoningTokens: completion.reasoningTokens, latencyMs: Date.now() - started };
     const parsed = completion.finishReason === "length"
       ? { ok: false, problem: "the reply was cut off before the JSON was complete; be more concise" }
       : parseOutput(task, completion.text);
@@ -155,7 +189,7 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
     const rejected = gateRejection(gate, JSON.stringify(data));
     if (rejected) throw rejected;
     await emitInChunks(data.message ?? "", onDelta);
-    await recordUsage({ ...meta, model: "fake", outcome: "ok", latencyMs: Date.now() - started });
+    await recordUsage({ ...meta, model: "fake", outcome: "ok", inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - started });
     return { data, model: "fake" };
   }
   if (!aiConfig.enabled) throw new AiError("DISABLED", "No AI provider is configured.");
@@ -177,9 +211,8 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
     let finishReason = null;
     let model = settings.model;
     let attempts = 1;
-    let inputTokens = null;
-    let cachedInputTokens = null;
-    let outputTokens = null;
+    let reported = {};
+    const chars = requestChars(messages, task);
     let gated = !gate;
     try {
       for await (const event of streamComplete({ model: settings.model, baseUrl: settings.baseUrl, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
@@ -192,21 +225,22 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
             gated = true;
           }
           forward(piece);
+        } else if (event.type === "abandoned") {
+          await recordAbandoned(meta, [event], chars);
         } else {
           finishReason = event.finishReason;
           model = event.model;
           attempts = event.attempts;
-          inputTokens = event.inputTokens;
-          cachedInputTokens = event.cachedInputTokens;
-          outputTokens = event.outputTokens;
+          reported = event;
         }
       }
     } catch (error) {
-      await recordUsage({ ...meta, model: settings.model, outcome: (error.code || "error").toLowerCase(), attempts: error.detail?.attempts, latencyMs: Date.now() - started });
+      const outcome = (error.code || "error").toLowerCase();
+      await recordUsage({ ...meta, model, outcome, attempts: error.detail?.attempts, latencyMs: Date.now() - started, ...abortedUsage(outcome, { chars, outputChars: text.length }) });
       if (error.detail) console.error(`[ai] ${task.name} ${error.code}:`, JSON.stringify(error.detail));
       throw error;
     }
-    const usage = { model, attempts, inputTokens, cachedInputTokens, outputTokens, latencyMs: Date.now() - started };
+    const usage = { model, attempts, inputTokens: reported.inputTokens, cachedInputTokens: reported.cachedInputTokens, cacheWriteTokens: reported.cacheWriteTokens, outputTokens: reported.outputTokens, reasoningTokens: reported.reasoningTokens, latencyMs: Date.now() - started };
     const parsed = finishReason === "length"
       ? { ok: false, problem: "the reply was cut off before the JSON was complete; be more concise" }
       : parseOutput(task, text);

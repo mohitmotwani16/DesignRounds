@@ -1,0 +1,29 @@
+{
+  "version": "2026-10-18",
+  "currency": "USD",
+  "notes": [
+    "Prices per 1M tokens (tokens) or per hour of audio (audio), on-demand/standard tier.",
+    "Thinking tokens are billed as output. cachedInput applies to implicit or explicit cache hits; cacheWrite to Claude cache writes.",
+    "Each model lists dated periods: a call is priced by the period it falls in (from inclusive, until exclusive, UTC dates).",
+    "Check these against the SKU prices in Cloud Billing (Billing > Pricing) and Groq's pricing page when a model or a promotion changes, then bump version.",
+    "A model missing here is recorded with cost_usd null, and `npm run ai:costs` reports it as unpriced."
+  ],
+  "models": {
+    "gemini-3.8-flash": [
+      { "until": "2027-01-01", "unit": "tokens", "input": 0.75, "cachedInput": 0.075, "output": 3.75, "note": "launch price, 50% off through 2026-12-31" },
+      { "from": "2027-01-01", "unit": "tokens", "input": 1.5, "cachedInput": 0.15, "output": 7.5 }
+    ],
+    "gemini-3.5-flash": [
+      { "unit": "tokens", "input": 1.5, "cachedInput": 0.15, "output": 9.0 }
+    ],
+    "gemini-3.1-pro-preview": [
+      { "unit": "tokens", "input": 2.0, "cachedInput": 0.2, "output": 12.0, "longContext": { "above": 200000, "input": 4.0, "cachedInput": 0.4, "output": 18.0 } }
+    ],
+    "whisper-large-v3-turbo": [
+      { "unit": "audio", "perHour": 0.04, "minSeconds": 10, "note": "Groq bills at least 10 seconds per request" }
+    ],
+    "fake": [
+      { "unit": "tokens", "input": 0, "cachedInput": 0, "output": 0 }
+    ]
+  }
+}

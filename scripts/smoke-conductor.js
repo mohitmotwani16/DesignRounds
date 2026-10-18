@@ -276,6 +276,10 @@ try {
     for (const type of ["round_started", "mode_changed", "move_planned", "item_status_changed", "stage_changed", "time_warning", "tick_model", "tick_rate_limited"]) assert.ok(types.has(type), `missing event ${type}`);
     const usage = await query("select task, outcome from ai_usage where session_id = $1 and task = 'interviewer'", [round.id]);
     assert.ok(usage.length >= 6 && usage.every((row) => row.outcome === "ok"));
+    // Every AI call of the round is priced, so the round has an exact cost.
+    const cost = await queryOne("select calls, unpriced_calls, price_version from analytics_round_cost r join ai_usage u using (session_id) where r.session_id = $1 limit 1", [round.id]);
+    assert.ok(Number(cost.calls) >= 6 && Number(cost.unpriced_calls) === 0, JSON.stringify(cost));
+    assert.ok(cost.price_version, "each call records the price table it was priced with");
   });
 
   await step("the canvas: a deep dive waits for its part to be drawn, then opens on it", async () => {

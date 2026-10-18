@@ -1,5 +1,6 @@
 import { query } from "../../db.js";
 import { isProduction } from "../../flags.js";
+import { costOf, PRICE_VERSION } from "./pricing.js";
 
 // Speech-to-text for voice answers, via any OpenAI-compatible transcription API
 // (default: Groq Whisper). With no key, development uses a fake transcriber and
@@ -133,11 +134,15 @@ export function deliveryFrom({ text, words }) {
 }
 
 async function recordUsage({ userId, sessionId, outcome, attempts, latencyMs, durationMs }) {
+  // Billed by audio length; a request refused before transcribing costs nothing.
+  const billed = outcome === "ok" || outcome === "timeout" || outcome === "invalid_output";
+  const audioMs = Number.isFinite(durationMs) ? Math.round(durationMs) : null;
+  const { costUsd, priceVersion } = billed ? costOf({ model: speechConfig.model, audioMs }) : { costUsd: 0, priceVersion: PRICE_VERSION };
   try {
     await query(
-      `insert into ai_usage (user_id, session_id, task, provider, model, outcome, attempts, latency_ms)
-       values ($1, $2, 'transcribe', $3, $4, $5, $6, $7)`,
-      [userId ?? null, sessionId ?? null, speechConfig.provider, speechConfig.model, outcome, attempts, latencyMs]
+      `insert into ai_usage (user_id, session_id, task, provider, model, outcome, attempts, latency_ms, audio_ms, cost_usd, price_version)
+       values ($1, $2, 'transcribe', $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [userId ?? null, sessionId ?? null, speechConfig.provider, speechConfig.model, outcome, attempts, latencyMs, audioMs, costUsd, priceVersion]
     );
   } catch (error) {
     console.error("[stt] could not record usage:", error.message);

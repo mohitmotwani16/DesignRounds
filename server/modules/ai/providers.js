@@ -3,6 +3,7 @@ import { aiConfig } from "./config.js";
 import { AiError } from "./errors.js";
 import { googleAccessToken } from "./gcp-auth.js";
 import { contentFromChunk, takeStreamLines } from "./openai-stream.js";
+import { usageFrom } from "./pricing.js";
 
 const MAX_TRANSPORT_RETRIES = 2;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,8 +106,7 @@ async function openAiCompatibleOnce({ model, baseUrl = aiConfig.baseUrl, message
         text: typeof choice?.message?.content === "string" ? choice.message.content : "",
         finishReason: choice?.finish_reason ?? null,
         model: payload.model || model,
-        inputTokens: payload.usage?.prompt_tokens ?? null,
-        outputTokens: payload.usage?.completion_tokens ?? null,
+        ...usageFrom(payload.usage),
         attempts: attempt + 1,
       };
     }
@@ -152,7 +152,8 @@ async function completeWithFallback(request) {
   } catch (error) {
     const elapsed = Date.now() - started;
     if (!fallbackAllowed(error, request.timeoutMs - elapsed)) throw error;
-    return openAiCompatible(fallbackRequest(request, error, elapsed));
+    const completion = await openAiCompatible(fallbackRequest(request, error, elapsed));
+    return { ...completion, abandoned: [{ model: request.model, code: error.code, latencyMs: elapsed }] };
   }
 }
 
@@ -180,6 +181,7 @@ export async function* streamComplete(request) {
   } catch (error) {
     const elapsed = Date.now() - started;
     if (shown || !fallbackAllowed(error, request.timeoutMs - elapsed)) throw error;
+    yield { type: "abandoned", model: request.model, code: error.code, latencyMs: elapsed };
     yield* streamWithPlans(fallbackRequest(request, error, elapsed));
   }
 }
@@ -210,6 +212,8 @@ async function* streamCompleteOnce(request) {
     messages: plainMessages(messages),
     max_tokens: maxTokens,
     stream: true,
+    // Without this an OpenAI-style stream may end with no usage, and the call can't be priced.
+    stream_options: { include_usage: true },
     response_format: { type: "json_schema", json_schema: { name: jsonSchema.name, schema: jsonSchema.schema, strict: true } },
   };
   if (effort) body.reasoning_effort = effort;
@@ -253,7 +257,7 @@ async function* streamCompleteOnce(request) {
       const payload = await response.json();
       const piece = contentFromChunk(payload);
       if (piece.text) yield { type: "delta", text: piece.text };
-      yield { type: "end", finishReason: piece.finishReason, model: piece.model || requestedModel, inputTokens: piece.inputTokens, outputTokens: piece.outputTokens, attempts: attempt + 1 };
+      yield { type: "end", finishReason: piece.finishReason, model: piece.model || requestedModel, ...piece.usage, attempts: attempt + 1 };
       return;
     }
 
@@ -263,8 +267,7 @@ async function* streamCompleteOnce(request) {
     let pending = "";
     let finishReason = null;
     let model = requestedModel;
-    let inputTokens = null;
-    let outputTokens = null;
+    let usage = {};
     let yielded = false;
     try {
       while (true) {
@@ -284,8 +287,7 @@ async function* streamCompleteOnce(request) {
           }
           if (piece.finishReason) finishReason = piece.finishReason;
           if (piece.model) model = piece.model;
-          if (piece.inputTokens != null) inputTokens = piece.inputTokens;
-          if (piece.outputTokens != null) outputTokens = piece.outputTokens;
+          if (piece.usage) usage = piece.usage;
         }
         if (done) { activeReader = null; break; }
       }
@@ -297,7 +299,7 @@ async function* streamCompleteOnce(request) {
       throw new AiError("NETWORK", "The AI reply was interrupted.", { cause: error.message, attempts: attempt + 1 });
     }
 
-    yield { type: "end", finishReason, model, inputTokens, outputTokens, attempts: attempt + 1 };
+    yield { type: "end", finishReason, model, ...usage, attempts: attempt + 1 };
     return;
   }
   } finally {
