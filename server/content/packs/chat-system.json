@@ -1,0 +1,704 @@
+{
+  "opening": "Welcome. Today we're going to design a chat system. Whenever you're ready, feel free to start by walking me through how you'd approach this.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "dau",
+        "users",
+        "scale",
+        "active",
+        "traffic"
+      ],
+      "answer": "Assume we have tens of millions of daily users, with millions of concurrent connections at peak."
+    },
+    {
+      "id": "scale.latency",
+      "topics": [
+        "latency",
+        "speed",
+        "fast",
+        "sla"
+      ],
+      "answer": "Messages should be delivered in well under a second when both users are online."
+    },
+    {
+      "id": "scope.group",
+      "topics": [
+        "group",
+        "channels",
+        "multiple",
+        "rooms"
+      ],
+      "answer": "Let's focus strictly on one-to-one messaging for now."
+    },
+    {
+      "id": "scope.media",
+      "topics": [
+        "images",
+        "video",
+        "media",
+        "attachments",
+        "files"
+      ],
+      "answer": "Assume we are only sending text messages for this design."
+    },
+    {
+      "id": "scope.history",
+      "topics": [
+        "history",
+        "retention",
+        "forever",
+        "delete"
+      ],
+      "answer": "Users expect to scroll back through their full chat history, so we store messages indefinitely."
+    },
+    {
+      "id": "scope.receipts",
+      "topics": [
+        "receipts",
+        "read",
+        "delivered",
+        "status"
+      ],
+      "answer": "We need to track when a message is sent by the server and when it is delivered to the recipient."
+    }
+  ],
+  "clarificationPolicy": "If asked about features outside of core text messaging, keep the scope tight to ensure the focus remains on real-time delivery and scaling.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "dau",
+          "concurrent",
+          "users",
+          "latency",
+          "scale",
+          "requirements"
+        ]
+      },
+      "goal": "Establish the core constraints, scale, and functional boundaries of the chat system.",
+      "opener": "What requirements and scale numbers do you want to target for this system?",
+      "evidence": {
+        "strong": "Defines expected concurrent connections, daily users, and latency goals. Clarifies whether group chat or media is in scope.",
+        "adequate": "Lists basic functional requirements like sending and receiving messages but misses concurrent scale.",
+        "weak": "Starts designing without establishing user numbers or latency expectations."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How many users do you expect to be online at the exact same time?",
+        "What are our latency expectations when both users have the app open?"
+      ],
+      "hints": [
+        "Think about the difference between daily active users and concurrent connections.",
+        "Consider what a user experiences if a message takes several seconds to arrive."
+      ],
+      "moveOnSummary": "Established one-to-one messaging scale and latency targets.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "latency-vs-throughput"
+      ]
+    },
+    {
+      "id": "hl.connection",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "api-gateway",
+          "client",
+          "load-balancer"
+        ],
+        "keywords": [
+          "connection",
+          "persistent",
+          "tcp",
+          "socket"
+        ]
+      },
+      "goal": "Establish persistent connections between clients and a scalable connection tier.",
+      "opener": "How will mobile clients connect to our servers to send and receive messages instantly?",
+      "evidence": {
+        "strong": "Uses WebSockets connected to a stateless-ish gateway tier. Understands these connections must remain open.",
+        "adequate": "Mentions WebSockets or long polling but lacks a clear gateway tier to manage them.",
+        "weak": "Uses standard HTTP request-response polling for instant messaging."
+      },
+      "misconceptions": [
+        {
+          "id": "polling",
+          "pattern": "HTTP polling is sufficient for instant messaging.",
+          "challenge": "If millions of users poll the server every second, how much load does that place on our backend?"
+        }
+      ],
+      "probes": [
+        "How do we maintain these connections at scale?",
+        "What protocol fits best for pushing data from the server to the client?"
+      ],
+      "hints": [
+        "HTTP request-response might be too slow for real-time delivery.",
+        "Think about protocols that keep a connection open in both directions."
+      ],
+      "moveOnSummary": "Uses WebSockets connected to a dedicated gateway tier.",
+      "learnTopics": [
+        "real-time-communication",
+        "api-gateway",
+        "load-balancing"
+      ]
+    },
+    {
+      "id": "hl.routing",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "cache",
+          "in-memory-db",
+          "t-redis",
+          "kv-store"
+        ],
+        "keywords": [
+          "session",
+          "presence",
+          "routing",
+          "online",
+          "connected to"
+        ]
+      },
+      "goal": "Track which gateway node holds the persistent connection for each online user.",
+      "opener": "When User A sends a message to User B, how does the system know which server User B is connected to?",
+      "evidence": {
+        "strong": "Introduces a session registry mapping user IDs to specific gateway nodes.",
+        "adequate": "Mentions looking up the user but does not define the component or data store clearly.",
+        "weak": "Assumes all servers know about all connections or broadcasts to all nodes."
+      },
+      "misconceptions": [
+        {
+          "id": "broadcast",
+          "pattern": "We can broadcast every message to all gateway servers to find the user.",
+          "challenge": "With millions of concurrent connections, what happens to our internal network if every single message is broadcast everywhere?"
+        }
+      ],
+      "probes": [
+        "Where exactly is this connection mapping stored?",
+        "How is this mapping updated when a user reconnects?"
+      ],
+      "hints": [
+        "We need a way to look up the specific gateway node holding User B's WebSocket.",
+        "Consider a fast, distributed key-value store to keep track of online users."
+      ],
+      "moveOnSummary": "Maintains a session registry in Redis to map users to gateway nodes.",
+      "learnTopics": [
+        "service-discovery",
+        "redis",
+        "caching"
+      ]
+    },
+    {
+      "id": "hl.persistence",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "microservice",
+          "queue",
+          "t-pubsub",
+          "wide-column"
+        ],
+        "keywords": [
+          "save",
+          "store",
+          "database",
+          "persist",
+          "history"
+        ]
+      },
+      "goal": "Ensure messages are reliably saved before acknowledging them, forming the core message ingestion flow.",
+      "opener": "Walk me through what happens on the backend to guarantee a message isn't lost after the sender hits send.",
+      "evidence": {
+        "strong": "Routes the message to a chat service that persists it to a database, then sends an ack to the sender.",
+        "adequate": "Saves to a database but is unclear on the exact sequence of the acknowledgement.",
+        "weak": "Delivers the message directly without saving, or sends the ack before persisting."
+      },
+      "misconceptions": [
+        {
+          "id": "deliver_first",
+          "pattern": "Delivery should happen before saving to reduce latency.",
+          "challenge": "If the server crashes right after delivering but before saving, and the recipient loses their device, what happens to the message history?"
+        }
+      ],
+      "probes": [
+        "At what exact point do we return the 'sent' receipt to the client?",
+        "How do these messages safely reach the database?"
+      ],
+      "hints": [
+        "We need to ensure the message is durably stored even if the recipient is offline.",
+        "Think about the sequence: when is it safe to tell the sender the message is sent?"
+      ],
+      "moveOnSummary": "Persists messages to a database via a chat service before acknowledging.",
+      "learnTopics": [
+        "delivery-semantics",
+        "acid-vs-base"
+      ]
+    },
+    {
+      "id": "dd.storage_schema",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "wide-column",
+          "t-cassandra",
+          "t-dynamodb"
+        ],
+        "keywords": [
+          "schema",
+          "partition",
+          "primary key",
+          "sort key",
+          "cassandra"
+        ]
+      },
+      "goal": "Design a database schema that efficiently supports appending new messages and retrieving recent chat history.",
+      "opener": "How would you structure the tables and partition the data in your message store?",
+      "evidence": {
+        "strong": "Partitions by conversation ID, sorts by timestamp or message ID, and selects a wide-column store.",
+        "adequate": "Uses a relational database with indexes on conversation ID and understands the append-heavy nature.",
+        "weak": "Partitions by user ID or message ID alone, lacking a fast way to query a single conversation."
+      },
+      "misconceptions": [
+        {
+          "id": "user_partition",
+          "pattern": "Partitioning by user ID is the most efficient way to store chats.",
+          "challenge": "If a conversation has two users, do we store the message twice, and how do we query for just that specific chat thread?"
+        }
+      ],
+      "probes": [
+        "What exact query do we run when a user opens a chat screen?",
+        "Given the high volume of writes, why did you choose this specific database type?"
+      ],
+      "hints": [
+        "Users typically load one specific conversation at a time, ordered chronologically.",
+        "Consider a data model where writes are very fast and we can fetch a range of recent messages quickly."
+      ],
+      "moveOnSummary": "Uses a wide-column store partitioned by conversation ID and ordered by time.",
+      "learnTopics": [
+        "nosql-database-types",
+        "database-indexing",
+        "sharding"
+      ]
+    },
+    {
+      "id": "dd.delivery_flow",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "t-pubsub",
+          "t-kafka",
+          "t-redis"
+        ],
+        "keywords": [
+          "forward",
+          "deliver",
+          "push to",
+          "route to"
+        ]
+      },
+      "goal": "Define the internal routing of a message from the ingestion service to the recipient's gateway node.",
+      "opener": "Once the message is saved and we know which gateway User B is on, how does the message physically get to that gateway?",
+      "evidence": {
+        "strong": "Uses a message broker, pub/sub, or direct RPC to push the message to the specific gateway node.",
+        "adequate": "Mentions forwarding it to the node but is vague on the protocol or failure handling.",
+        "weak": "Assumes the database will push it directly to the gateway."
+      },
+      "misconceptions": [
+        {
+          "id": "db_polling",
+          "pattern": "Gateway nodes continuously poll the database to see if their connected users have new messages.",
+          "challenge": "With millions of connections, how would polling the database every second impact its performance?"
+        }
+      ],
+      "probes": [
+        "What happens if the recipient's gateway node is temporarily unreachable?",
+        "Are you using point-to-point RPC or a broker here?"
+      ],
+      "hints": [
+        "The chat service needs to hand off the message to the gateway node.",
+        "Think about how backend microservices communicate asynchronously."
+      ],
+      "moveOnSummary": "Routes messages to the recipient's gateway using pub/sub or RPC.",
+      "learnTopics": [
+        "pub-sub",
+        "message-queues",
+        "monolith-vs-microservices"
+      ]
+    },
+    {
+      "id": "dd.offline_push",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "push",
+          "notification-service",
+          "t-firebase"
+        ],
+        "keywords": [
+          "offline",
+          "push notification",
+          "apns",
+          "fcm"
+        ]
+      },
+      "goal": "Handle delivery when the recipient does not have an active WebSocket connection.",
+      "opener": "What happens if User B's phone is in airplane mode when User A sends a message?",
+      "evidence": {
+        "strong": "Detects offline status via the registry, persists the message, and triggers a push notification service.",
+        "adequate": "Mentions push notifications but is unclear on how offline status is detected.",
+        "weak": "Discards the message or relies solely on the user polling later."
+      },
+      "misconceptions": [
+        {
+          "id": "socket_wakeup",
+          "pattern": "We can wake up the app using WebSockets.",
+          "challenge": "If the OS has killed the app in the background, can it still maintain a WebSocket connection?"
+        }
+      ],
+      "probes": [
+        "Which backend component decides to send the push notification?",
+        "What payload goes into the push notification?"
+      ],
+      "hints": [
+        "If they aren't in our session registry, how do we alert their phone?",
+        "Mobile OS platforms provide specific services for waking up backgrounded apps."
+      ],
+      "moveOnSummary": "Uses Apple/Google push notification services for offline users.",
+      "learnTopics": [
+        "push-notifications",
+        "mobile-release-engineering"
+      ]
+    },
+    {
+      "id": "dd.ordering_dedupe",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "id-generator",
+          "client"
+        ],
+        "keywords": [
+          "order",
+          "sequence",
+          "timestamp",
+          "duplicate",
+          "retry",
+          "idempotency"
+        ]
+      },
+      "goal": "Ensure messages appear in the correct order and handle client retries without creating duplicates.",
+      "opener": "If a client has a spotty connection and retries sending a message, how do we prevent it from showing up twice?",
+      "evidence": {
+        "strong": "Client generates a unique ID for idempotency, and the server uses conversation-scoped sequence numbers or server timestamps for ordering.",
+        "adequate": "Mentions deduplication by ID but relies on client timestamps for ordering.",
+        "weak": "Ignores retries entirely or assumes TCP guarantees exactly-once delivery end-to-end."
+      },
+      "misconceptions": [
+        {
+          "id": "client_time",
+          "pattern": "Client timestamps are reliable for ordering messages.",
+          "challenge": "What if User A's phone clock is set 5 minutes into the future?"
+        }
+      ],
+      "probes": [
+        "Who generates the message ID, the client or the server?",
+        "How do we guarantee the exact visual order of messages in a single conversation?"
+      ],
+      "hints": [
+        "To deduplicate, the server needs to recognize it has seen this exact payload before.",
+        "Think about who should be the authoritative source of truth for the order of events."
+      ],
+      "moveOnSummary": "Client generates IDs for deduplication; server assigns timestamps for ordering.",
+      "learnTopics": [
+        "idempotency",
+        "clocks-and-ordering",
+        "unique-id-generation"
+      ]
+    },
+    {
+      "id": "dd.catchup",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "client",
+          "database",
+          "api-gateway"
+        ],
+        "keywords": [
+          "reconnect",
+          "catch up",
+          "sync",
+          "cursor",
+          "last seen"
+        ]
+      },
+      "goal": "Allow a client to fetch missed messages efficiently after being offline for a period.",
+      "opener": "When User B turns off airplane mode after a week, how does their app retrieve all the messages they missed?",
+      "evidence": {
+        "strong": "Client sends a last-seen cursor on reconnect, and the server fetches only newer messages from the database.",
+        "adequate": "Mentions pulling missed messages but fetches the entire conversation history instead of a delta.",
+        "weak": "Relies entirely on push notifications to rebuild local application state."
+      },
+      "misconceptions": [
+        {
+          "id": "push_guarantee",
+          "pattern": "Push notifications guarantee delivery of all missed messages.",
+          "challenge": "What if the user received 100 messages while offline and the OS drops some of the notifications?"
+        }
+      ],
+      "probes": [
+        "How do we avoid sending them messages they already have stored locally?",
+        "Is this a push from the server or a pull from the client?"
+      ],
+      "hints": [
+        "The client already knows the last message it successfully received.",
+        "Think about how pagination works when querying a database."
+      ],
+      "moveOnSummary": "Client pulls missed messages using a last-seen cursor on reconnect.",
+      "learnTopics": [
+        "pagination",
+        "offline-first-sync"
+      ]
+    },
+    {
+      "id": "wu.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "load-balancer",
+          "cluster"
+        ],
+        "keywords": [
+          "crash",
+          "fail",
+          "bottleneck",
+          "rebalance",
+          "scale"
+        ]
+      },
+      "goal": "Identify single points of failure and explain how the system handles the sudden loss of a stateful component.",
+      "opener": "If one of our gateway nodes holding 100,000 WebSocket connections suddenly loses power, what happens across the system?",
+      "evidence": {
+        "strong": "Explains that clients detect the drop, reconnect to a new node, update the session registry, and pull missed messages.",
+        "adequate": "Mentions clients will reconnect but misses the necessary registry update.",
+        "weak": "Assumes the system fails gracefully on its own or requires manual intervention."
+      },
+      "misconceptions": [
+        {
+          "id": "lb_migrate",
+          "pattern": "The load balancer can seamlessly migrate open WebSockets to another server.",
+          "challenge": "A WebSocket is a stateful TCP connection. Can the load balancer move it to another server without the client knowing?"
+        }
+      ],
+      "probes": [
+        "How long does it take for the session registry to realize the node is dead?",
+        "What happens to messages routed to that dead node before the registry updates?"
+      ],
+      "hints": [
+        "Think about the client's perspective when its TCP connection is abruptly severed.",
+        "Once reconnected elsewhere, how do we update the routing information?"
+      ],
+      "moveOnSummary": "Clients reconnect, update the registry, and sync missed messages on node failure.",
+      "learnTopics": [
+        "health-checks-failover",
+        "load-balancing"
+      ]
+    },
+    {
+      "id": "dd.group_chat_expansion",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "t-pubsub"
+        ],
+        "keywords": [
+          "fan-out",
+          "group",
+          "members"
+        ]
+      },
+      "goal": "Adapt the one-to-one design to handle fan-out for group messages.",
+      "opener": "How does the ingestion and delivery flow change if one message needs to reach 100 users in a group?",
+      "evidence": {
+        "strong": "Fans out on delivery to 100 connections via pub/sub, but uses a single group chat record in the database.",
+        "adequate": "Understands fan-out is needed but copies the message 100 times in the database.",
+        "weak": "Fails to explain how to look up connections for multiple recipients."
+      },
+      "misconceptions": [
+        {
+          "id": "group_copy",
+          "pattern": "Group chats require copying the message to every user's inbox in the database.",
+          "challenge": "If a group has 1,000 members, how does writing 1,000 rows per message affect database latency?"
+        }
+      ],
+      "probes": [
+        "Where exactly does the fan-out happen in your architecture?",
+        "How do we track read receipts for groups?"
+      ],
+      "hints": [
+        "We only need to store the message text once.",
+        "How do we find the active gateway nodes for all the members of the group?"
+      ],
+      "moveOnSummary": "Uses fan-out on delivery and a unified group storage record.",
+      "learnTopics": [
+        "fan-out",
+        "pub-sub"
+      ]
+    },
+    {
+      "id": "dd.multi_device",
+      "stage": "deep_dive",
+      "dimension": "architecture",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "registry",
+          "t-redis"
+        ],
+        "keywords": [
+          "devices",
+          "multiple",
+          "laptop"
+        ]
+      },
+      "goal": "Handle multiple active sessions for a single user.",
+      "opener": "How does the session registry and routing change if a user is connected from three devices at once?",
+      "evidence": {
+        "strong": "Registry maps user ID to a list of gateway nodes, and delivery fans out to all active sessions.",
+        "adequate": "Recognizes the need to route to multiple devices but does not update the registry schema.",
+        "weak": "Assumes a user can only have one active connection at a time."
+      },
+      "misconceptions": [
+        {
+          "id": "single_socket",
+          "pattern": "A user can only have one active WebSocket at a time.",
+          "challenge": "What if the user has the app open on their phone and a web browser at the same time?"
+        }
+      ],
+      "probes": [
+        "What does the value in your Redis registry look like now?",
+        "How are read receipts synced across these devices?"
+      ],
+      "hints": [
+        "The mapping is no longer strictly one-to-one.",
+        "If they read a message on their phone, the laptop needs to know about it."
+      ],
+      "moveOnSummary": "Registry stores multiple session endpoints per user and fans out delivery.",
+      "learnTopics": [
+        "redis",
+        "pub-sub"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "curveball.group",
+      "after": "dd.storage_schema",
+      "prompt": "Suppose we now want to support group chats with up to 100 members. How does your storage and delivery model change?",
+      "agendaItemId": "dd.group_chat_expansion"
+    },
+    {
+      "id": "curveball.multidevice",
+      "after": "dd.delivery_flow",
+      "prompt": "What if User B is logged in on both their phone and their laptop? How do we route the message so both devices see it in real time?",
+      "agendaItemId": "dd.multi_device"
+    }
+  ],
+  "vocabulary": [
+    "WebSocket",
+    "pub/sub",
+    "presence service",
+    "UUID",
+    "wide-column store",
+    "Cassandra",
+    "DynamoDB",
+    "idempotency key",
+    "store-and-forward",
+    "read receipt",
+    "fan-out"
+  ],
+  "alternatives": [
+    {
+      "choice": "XMPP or MQTT instead of custom WebSockets.",
+      "whenBetter": "When building for IoT devices or when relying on established standards with built-in presence features."
+    },
+    {
+      "choice": "Deliver first, then persist asynchronously.",
+      "whenBetter": "When latency is strictly more important than durability, such as in ephemeral gaming chat."
+    },
+    {
+      "choice": "Pull-based model via long polling instead of push via WebSockets.",
+      "whenBetter": "When corporate firewalls block WebSockets, or infrastructure makes long-lived persistent connections difficult to manage."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Solid connection tier and delivery guarantees",
+      "outline": "Builds a clear connection tier using WebSockets and an API gateway. Uses a session registry in Redis to map active users to specific nodes. Persists messages to a wide-column store like Cassandra before acknowledging delivery. Handles idempotency with client-generated IDs and manages offline catch-up via a last-seen cursor."
+    },
+    {
+      "band": "adequate",
+      "label": "Working persistence but vague routing",
+      "outline": "Proposes WebSockets for real-time delivery and uses a database for persistence. Recognizes the need to look up connected users but is vague on the registry implementation. Outlines push notifications for offline users but misses deduplication logic for client retries."
+    },
+    {
+      "band": "weak",
+      "label": "Polling and missing session management",
+      "outline": "Attempts to use HTTP polling instead of persistent connections, creating significant scale issues. Does not separate the ingestion flow from the delivery flow. Misses the session registry entirely, assuming messages can easily find the right server without tracking active connections."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.35,
+    "deep_dive": 0.4,
+    "wrap_up": 0.1
+  }
+}

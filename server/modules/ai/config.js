@@ -127,6 +127,13 @@ export const aiConfig = {
     // Part of the final submission and runs alongside the review, so it must finish
     // well within the review's time.
     communication: { model: model.review, effort: "low", maxTokens: onVertex ? 6_000 : 4_000, timeoutMs: onVertex ? 150_000 : 90_000 },
+    // Offline Problem Pack builds (server/modules/pks): the strong model, never on a
+    // learner's request path, so it gets room to think and a long deadline.
+    pack_build: { model: model.review, effort: "medium", maxTokens: 32_000, timeoutMs: 280_000 },
+    // Checks a built pack's hidden facts against its guide; a short, cheap call.
+    pack_consistency: { model: model.chat, baseUrl: chatBaseUrl, effort: "low", maxTokens: 3_000, timeoutMs: 60_000 },
+    // Evaluation only (scripts/interview-sim.js): plays a candidate persona.
+    candidate_sim: { model: model.chat, baseUrl: chatBaseUrl, fallback, effort: "low", maxTokens: 2_000, timeoutMs: 60_000 },
   },
 };
 

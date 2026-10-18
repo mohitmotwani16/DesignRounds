@@ -1,0 +1,483 @@
+{
+  "opening": "Let's design our notification delivery service. How would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.volume",
+      "topics": [
+        "scale",
+        "volume",
+        "throughput",
+        "per second",
+        "traffic"
+      ],
+      "answer": "We process a few million notifications per hour on average, but we see sharp bursts during marketing campaigns."
+    },
+    {
+      "id": "scale.types",
+      "topics": [
+        "types",
+        "priority",
+        "mix",
+        "critical",
+        "marketing"
+      ],
+      "answer": "It is a mix of highly critical messages like 2FA codes, and large bulk marketing campaigns."
+    },
+    {
+      "id": "latency.expectations",
+      "topics": [
+        "latency",
+        "speed",
+        "time",
+        "sla"
+      ],
+      "answer": "Critical messages must arrive in seconds. Marketing notifications can take minutes or even a few hours."
+    },
+    {
+      "id": "providers.reliability",
+      "topics": [
+        "providers",
+        "reliability",
+        "fail",
+        "third party"
+      ],
+      "answer": "Assume third-party providers have tight rate limits and occasionally go down or experience high latency."
+    },
+    {
+      "id": "scope.channels",
+      "topics": [
+        "channels",
+        "email",
+        "sms",
+        "push",
+        "platforms"
+      ],
+      "answer": "We currently support SMS, email, and mobile push notifications."
+    }
+  ],
+  "clarificationPolicy": "If a candidate asks about anything not covered here, tell them to make a reasonable assumption that keeps the focus on reliable, high-volume delivery.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "2FA",
+          "marketing",
+          "bursts",
+          "priority",
+          "throughput"
+        ]
+      },
+      "goal": "Clarify the mix of traffic, latency expectations, and supported channels.",
+      "opener": "What requirements and scale numbers do you want to establish before we design?",
+      "evidence": {
+        "strong": "Proactively identifies the difference between critical and marketing messages and asks about provider limits.",
+        "adequate": "Asks for basic scale numbers and supported delivery channels.",
+        "weak": "Jumps straight to architecture without understanding the traffic shape or message priorities."
+      },
+      "misconceptions": [
+        {
+          "id": "same-latency",
+          "pattern": "Assuming all notifications share the same latency requirements.",
+          "challenge": "Do a login security code and a weekly newsletter have the same delivery urgency?"
+        }
+      ],
+      "probes": [
+        "How might the system handle different urgencies of messages?",
+        "What constraints might our external delivery partners impose?"
+      ],
+      "hints": [
+        "Think about the difference between a password reset and a promotional blast.",
+        "Consider what happens if we send millions of messages to a provider at once."
+      ],
+      "moveOnSummary": "We have established the need to handle millions of mixed-priority messages per hour across SMS, email, and push.",
+      "learnTopics": [
+        "system-design-interview",
+        "back-of-the-envelope-estimation"
+      ]
+    },
+    {
+      "id": "high_level.ingestion",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "queue",
+          "t-kafka",
+          "ingestion",
+          "worker"
+        ],
+        "keywords": [
+          "async",
+          "decouple",
+          "acknowledge",
+          "202"
+        ]
+      },
+      "goal": "Create an asynchronous intake pipeline that accepts requests and decouples them from slow providers.",
+      "opener": "Walk me through the path of a notification from the moment an internal service requests it.",
+      "evidence": {
+        "strong": "Designs an async API with an idempotency key that returns immediately, placing the message in a durable queue.",
+        "adequate": "Uses a message queue between the ingestion API and the delivery workers.",
+        "weak": "Designs a synchronous API that waits for the provider to respond before returning to the caller."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-delivery",
+          "pattern": "Waiting for the provider to respond before returning a success code to the caller.",
+          "challenge": "What happens to our internal services if the SMS provider is slow or down?"
+        }
+      ],
+      "probes": [
+        "What exactly does the ingestion API return to the calling service?",
+        "Where is the payload stored immediately after ingestion?"
+      ],
+      "hints": [
+        "We want internal services to continue working even if email delivery is delayed.",
+        "How do we acknowledge the request without waiting for the actual delivery?"
+      ],
+      "moveOnSummary": "We have an async intake API that drops messages into a message broker.",
+      "learnTopics": [
+        "api-design",
+        "message-queues",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "high_level.preferences",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "kv-store",
+          "users",
+          "worker"
+        ],
+        "keywords": [
+          "preferences",
+          "quiet hours",
+          "opt-out",
+          "filter",
+          "schedule"
+        ]
+      },
+      "goal": "Apply user preferences and quiet hours correctly without permanently dropping delayed messages.",
+      "opener": "Where and how do we apply user preferences and quiet hours in this flow?",
+      "evidence": {
+        "strong": "Evaluates preferences near send-time and uses a scheduler or delay queue for messages arriving during quiet hours.",
+        "adequate": "Filters out opt-outs at ingestion but struggles to handle pausing messages for quiet hours.",
+        "weak": "Ignores quiet hours completely or drops messages sent during that window."
+      },
+      "misconceptions": [
+        {
+          "id": "drop-quiet",
+          "pattern": "Dropping messages that are sent during a user's quiet hours.",
+          "challenge": "If a user has quiet hours at night, how do they receive a non-urgent message when they wake up?"
+        }
+      ],
+      "probes": [
+        "If a message arrives during a user's quiet hours, what exactly does the system do with it?",
+        "When does the system check the user's preferences: at ingestion or right before sending?"
+      ],
+      "hints": [
+        "We don't want to lose the message, just delay it.",
+        "Is there a way to hold a message in the queue until a specific time?"
+      ],
+      "moveOnSummary": "We query the user preferences store and either drop opt-outs or delay delivery using a scheduled queue.",
+      "learnTopics": [
+        "caching",
+        "database-indexing"
+      ]
+    },
+    {
+      "id": "deep.prioritization",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "worker",
+          "t-kafka"
+        ],
+        "keywords": [
+          "priority",
+          "separate queues",
+          "topics",
+          "starvation"
+        ]
+      },
+      "goal": "Ensure critical messages are processed immediately even during massive marketing bursts.",
+      "opener": "How do you guarantee a critical security code isn't delayed by a huge marketing campaign?",
+      "evidence": {
+        "strong": "Separates queues by priority and channel, assigning dedicated worker pools to the critical queues.",
+        "adequate": "Uses a single priority queue or adds a priority field to the message for workers to sort.",
+        "weak": "Uses one single FIFO queue for everything, leading to head-of-line blocking."
+      },
+      "misconceptions": [
+        {
+          "id": "single-queue-sort",
+          "pattern": "Using one queue and trying to sort messages by priority on the fly.",
+          "challenge": "If the queue has a million marketing messages ahead of one new 2FA code, how fast is the code processed?"
+        }
+      ],
+      "probes": [
+        "How exactly are the queues structured to prevent head-of-line blocking?",
+        "How do the workers know which messages to pick up first?"
+      ],
+      "hints": [
+        "Think about physical separation of message types.",
+        "What if we use entirely different topics for different priorities?"
+      ],
+      "moveOnSummary": "We use separate queues per priority and channel with dedicated workers to prevent starvation.",
+      "learnTopics": [
+        "message-queues",
+        "event-streaming-kafka",
+        "scalability"
+      ]
+    },
+    {
+      "id": "deep.reliability",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "retry",
+          "dlq",
+          "t-redis",
+          "kv-store"
+        ],
+        "keywords": [
+          "idempotency",
+          "deduplication",
+          "retries",
+          "exponential backoff",
+          "circuit breaker",
+          "failover"
+        ]
+      },
+      "goal": "Handle provider failures gracefully with retries, deduplication, and failover mechanisms.",
+      "opener": "What happens when our primary SMS provider goes down or times out?",
+      "evidence": {
+        "strong": "Implements an idempotency store to prevent duplicates, uses exponential backoff for retries, and includes circuit breakers for failover.",
+        "adequate": "Adds basic retries and mentions a dead-letter queue, but misses deduplication checks.",
+        "weak": "Drops messages on failure or retries endlessly without backoff."
+      },
+      "misconceptions": [
+        {
+          "id": "exactly-once",
+          "pattern": "Guaranteeing exactly-once delivery end-to-end without external deduplication.",
+          "challenge": "What if the provider sends the SMS but their network drops the HTTP 200 OK response back to us?"
+        }
+      ],
+      "probes": [
+        "How do we prevent duplicate deliveries when retrying a timed-out request?",
+        "Where is the idempotency key checked?"
+      ],
+      "hints": [
+        "What if the provider times out but actually sent the message?",
+        "How do we safely limit the number of times we try calling a broken API?"
+      ],
+      "moveOnSummary": "We use an idempotency cache, exponential backoff for retries, and fallback to a secondary provider if a circuit breaker trips.",
+      "learnTopics": [
+        "idempotency",
+        "retries-and-timeouts",
+        "circuit-breaker",
+        "delivery-semantics"
+      ]
+    },
+    {
+      "id": "deep.quotas",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "t-redis"
+        ],
+        "keywords": [
+          "rate limit",
+          "token bucket",
+          "quotas",
+          "throttling"
+        ]
+      },
+      "goal": "Implement global rate limiting to avoid breaching external provider quotas.",
+      "opener": "How do we ensure we don't breach a provider's strict per-second quotas globally?",
+      "evidence": {
+        "strong": "Uses a distributed rate limiter like a Redis-based token bucket before calling the provider.",
+        "adequate": "Implements local rate limits per worker but acknowledges it's an approximation.",
+        "weak": "Relies on the provider to reject requests and handles it via retries."
+      },
+      "misconceptions": [
+        {
+          "id": "local-limits",
+          "pattern": "Implementing local rate limits on each worker independently.",
+          "challenge": "If we scale out to 50 workers, how do they coordinate to stay under 100 requests per second total?"
+        }
+      ],
+      "probes": [
+        "How is the state of the rate limit shared across multiple concurrent workers?",
+        "What happens to the message if we hit the limit?"
+      ],
+      "hints": [
+        "Is there a centralized store we can use to count outbound requests?",
+        "Consider an algorithm like a token bucket in Redis."
+      ],
+      "moveOnSummary": "We use a distributed rate limiter to throttle outbound calls to the provider's limits.",
+      "learnTopics": [
+        "rate-limiting",
+        "redis"
+      ]
+    },
+    {
+      "id": "deep.tracking",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "webhook",
+          "event-bus",
+          "t-cassandra"
+        ],
+        "keywords": [
+          "status",
+          "receipt",
+          "callback",
+          "tracking"
+        ]
+      },
+      "goal": "Track the lifecycle and final delivery status of messages for internal reporting.",
+      "opener": "How can our internal services know if a message was successfully delivered or bounced?",
+      "evidence": {
+        "strong": "Designs an async status update flow via webhooks from providers writing to a high-throughput datastore.",
+        "adequate": "Updates a status database directly from the worker during the delivery attempt.",
+        "weak": "No status tracking, or relies on synchronous polling."
+      },
+      "misconceptions": [
+        {
+          "id": "sync-status",
+          "pattern": "Polling the provider continuously for delivery status.",
+          "challenge": "Will polling scale to millions of messages per hour?"
+        }
+      ],
+      "probes": [
+        "How do we receive asynchronous delivery receipts from external providers?",
+        "What kind of datastore is best suited for high-volume status updates?"
+      ],
+      "hints": [
+        "Providers usually offer a way to push status changes back to us.",
+        "Consider a webhook callback endpoint."
+      ],
+      "moveOnSummary": "We ingest provider webhooks to update delivery status asynchronously in a fast datastore.",
+      "learnTopics": [
+        "database-indexing"
+      ]
+    },
+    {
+      "id": "wrap_up.bottlenecks",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "bottleneck",
+          "single point of failure",
+          "limit"
+        ]
+      },
+      "goal": "Reflect on the design and identify remaining risks or limitations.",
+      "opener": "Looking at the final architecture, where is the biggest bottleneck or single point of failure?",
+      "evidence": {
+        "strong": "Identifies realistic limits like database write throughput for idempotency keys or external provider quotas.",
+        "adequate": "Mentions generic scaling concerns like needing more workers or database replication.",
+        "weak": "Claims the system has no bottlenecks and can scale infinitely."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If our traffic suddenly increased tenfold, which component would break first?"
+      ],
+      "hints": [
+        "Look at the data store handling idempotency.",
+        "Think about the external API quotas we don't control."
+      ],
+      "moveOnSummary": "We identified the key bottlenecks in our data stores and external limits.",
+      "learnTopics": [
+        "scalability",
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "rate-limits",
+      "after": "deep.reliability",
+      "prompt": "Our SMS provider just imposed a strict quota of 100 messages per second per tenant. How do we enforce this globally?",
+      "agendaItemId": "deep.quotas"
+    }
+  ],
+  "vocabulary": [
+    "deduplication",
+    "idempotency",
+    "circuit breaker",
+    "DLQ",
+    "dead letter queue",
+    "fan-out",
+    "2FA",
+    "webhook"
+  ],
+  "alternatives": [
+    {
+      "choice": "Evaluating user preferences at ingestion time instead of send time.",
+      "whenBetter": "Better if preferences rarely change and you want to save queue storage by dropping opt-outs early. The trade-off is that quiet hours are harder to schedule accurately."
+    },
+    {
+      "choice": "Using a workflow orchestrator instead of bare message queues.",
+      "whenBetter": "Better if notifications require complex multi-step state machines, such as sending an email first, and if no read receipt is received, falling back to an SMS."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Robust decoupled architecture",
+      "outline": "Separates ingestion from delivery using Kafka or SQS. Creates dedicated priority queues per channel to ensure critical messages are never blocked. Uses a fast key-value store for idempotency to prevent duplicates, and handles provider outages via circuit breakers, retries with exponential backoff, and a dead-letter queue."
+    },
+    {
+      "band": "adequate",
+      "label": "Basic queue-based processing",
+      "outline": "Uses a single message queue for asynchronous processing. Workers pull from the queue, check user preferences, and call external providers. Has basic retries implemented but might block critical security messages behind large marketing blasts due to a lack of queue separation."
+    },
+    {
+      "band": "weak",
+      "label": "Synchronous monolith",
+      "outline": "Makes synchronous API calls to external providers during the ingestion request. Stores everything in a relational database and uses a cron job to send delayed messages, leading to poor latency, massive bottlenecks, and duplicate deliveries on failure."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.35,
+    "deep_dive": 0.4,
+    "wrap_up": 0.1
+  }
+}
