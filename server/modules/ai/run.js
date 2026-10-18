@@ -31,10 +31,10 @@ async function recordUsage(entry) {
   if (entry.meter === false) return;
   try {
     await query(
-      `insert into ai_usage (user_id, session_id, task, provider, model, outcome, attempts, input_tokens, output_tokens, latency_ms)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `insert into ai_usage (user_id, session_id, task, provider, model, outcome, attempts, input_tokens, output_tokens, latency_ms, cached_input_tokens)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [entry.userId ?? null, entry.sessionId ?? null, entry.task, aiConfig.vendor, entry.model, entry.outcome,
-        entry.attempts ?? 1, entry.inputTokens ?? null, entry.outputTokens ?? null, entry.latencyMs]
+        entry.attempts ?? 1, entry.inputTokens ?? null, entry.outputTokens ?? null, entry.latencyMs, entry.cachedInputTokens ?? null]
     );
   } catch (error) {
     console.error("[ai] could not record usage:", error.message);
@@ -43,11 +43,45 @@ async function recordUsage(entry) {
   console.log(`[ai] ${entry.task} ${entry.outcome} model=${entry.model} in=${entry.inputTokens ?? "?"}${cached} out=${entry.outputTokens ?? "?"} ${entry.latencyMs}ms`);
 }
 
+const STABILITY_ORDER = { global: 0, problem: 1, session: 2, turn: 3 };
+
+// Context blocks (docs/design/README.md, section 3) become one system message and one
+// user message, ordered global -> problem -> session -> turn so the longest possible
+// prefix repeats from turn to turn and across learners. The last block of each stable
+// layer is marked `cache`: providers with explicit breakpoints (Claude) cache there,
+// prefix-caching providers just see the same text in the same order.
+export function messagesFromBlocks(blocks) {
+  const sorted = [...blocks].sort((a, b) => STABILITY_ORDER[a.stability] - STABILITY_ORDER[b.stability]);
+  const parts = (list) => list.map((block, index) => ({
+    text: block.text,
+    cache: block.stability !== "turn" && list[index + 1]?.stability !== block.stability,
+  }));
+  return [
+    { role: "system", content: parts(sorted.filter((block) => block.role === "system")) },
+    { role: "user", content: parts(sorted.filter((block) => block.role !== "system")) },
+  ];
+}
+
+function messagesFor(task, input) {
+  if (task.blocks) return messagesFromBlocks(task.blocks(input));
+  return [
+    { role: "system", content: task.system },
+    { role: "user", content: task.buildUser(input) },
+  ];
+}
+
+// The streamed reply's leading fields, read from the raw JSON before `message` starts.
+export function leadingFields(rawJson) {
+  const field = (name) => rawJson.match(new RegExp(`"${name}"\\s*:\\s*"([^"]*)"`))?.[1] ?? null;
+  return { move: field("move"), focusItemId: field("focusItemId") };
+}
+
 // Runs one AI task: builds its messages, calls the provider for schema-constrained
 // JSON, validates the result, and gives the model one chance to repair invalid
 // output. Every call is metered in ai_usage; no prompt or output text is logged.
 //
-// A task is { name, system, buildUser(input), output: zodSchema, fake(input) }.
+// A task is { name, output: zodSchema, fake(input) } plus either { system, buildUser(input) }
+// or { blocks(input) } returning context blocks.
 export async function runTask(task, input, { userId, sessionId, meter = true } = {}) {
   const settings = aiConfig.tasks[task.name];
   const meta = { task: task.name, userId, sessionId, meter };
@@ -60,10 +94,7 @@ export async function runTask(task, input, { userId, sessionId, meter = true } =
   }
   if (!aiConfig.enabled) throw new AiError("DISABLED", "No AI provider is configured.");
 
-  const messages = [
-    { role: "system", content: task.system },
-    { role: "user", content: task.buildUser(input) },
-  ];
+  const messages = messagesFor(task, input);
   for (let round = 1; round <= 2; round += 1) {
     const started = Date.now();
     let completion;
@@ -104,23 +135,32 @@ async function emitInChunks(text, onDelta) {
 // `message` string while the model is still writing. `onReset` runs before a repair
 // attempt so a partial reply can be replaced. Other fields, including private notes,
 // are never passed to `onDelta`.
-export async function runTaskStream(task, input, { userId, sessionId, meter = true, onDelta, onReset } = {}) {
+//
+// `gate(rawJsonSoFar)` runs once, just before the first piece of `message` would be
+// shown, when the fields written before it (for the Conductor: move and focusItemId)
+// are complete. Returning a reason cancels the stream with GATE_REJECTED, so nothing
+// the learner can see was produced by a move the application doesn't allow.
+function gateRejection(gate, raw) {
+  const reason = gate?.(raw);
+  return reason ? new AiError("GATE_REJECTED", String(reason), { ...leadingFields(raw), reason: String(reason) }) : null;
+}
+
+export async function runTaskStream(task, input, { userId, sessionId, meter = true, onDelta, onReset, gate } = {}) {
   const settings = aiConfig.tasks[task.name];
   const meta = { task: task.name, userId, sessionId, meter };
 
   if (aiConfig.provider === "fake") {
     const started = Date.now();
     const data = task.output.parse(task.fake(input));
+    const rejected = gateRejection(gate, JSON.stringify(data));
+    if (rejected) throw rejected;
     await emitInChunks(data.message ?? "", onDelta);
     await recordUsage({ ...meta, model: "fake", outcome: "ok", latencyMs: Date.now() - started });
     return { data, model: "fake" };
   }
   if (!aiConfig.enabled) throw new AiError("DISABLED", "No AI provider is configured.");
 
-  const messages = [
-    { role: "system", content: task.system },
-    { role: "user", content: task.buildUser(input) },
-  ];
+  const messages = messagesFor(task, input);
   let streamed = false;
   const forward = (text) => {
     if (!text) return;
@@ -140,11 +180,18 @@ export async function runTaskStream(task, input, { userId, sessionId, meter = tr
     let inputTokens = null;
     let cachedInputTokens = null;
     let outputTokens = null;
+    let gated = !gate;
     try {
       for await (const event of streamComplete({ model: settings.model, baseUrl: settings.baseUrl, fallback: settings.fallback, messages, jsonSchema: jsonSchemaFor(task), effort: settings.effort, maxTokens: settings.maxTokens, timeoutMs: settings.timeoutMs })) {
         if (event.type === "delta") {
           text += event.text;
-          forward(extractor.push(event.text));
+          const piece = extractor.push(event.text);
+          if (piece && !gated) {
+            const rejected = gateRejection(gate, text);
+            if (rejected) throw rejected;
+            gated = true;
+          }
+          forward(piece);
         } else {
           finishReason = event.finishReason;
           model = event.model;

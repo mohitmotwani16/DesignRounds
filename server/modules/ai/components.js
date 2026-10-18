@@ -23,6 +23,11 @@ function load() {
 
 const kindToGroup = load();
 
+// Every kind on the canvas, for validating references to them (Problem Pack triggers).
+export function componentKinds() {
+  return new Set(kindToGroup.keys());
+}
+
 export function isSignificantKind(kind) {
   const group = kindToGroup.get(kind);
   return group ? !MINOR_GROUPS.has(group) : !["group", "text", "note"].includes(kind);

@@ -7,6 +7,17 @@ import { list, oneOf, text } from "../schema.js";
 export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
 export const interviewerTemplateVersion = `interviewer-v3/${policyVersion}`;
 
+// Private notes on the learner's latest answer, shared with the v3 Conductor's schema.
+export const communicationNotes = z.object({
+  signals: list(oneOf(SIGNAL_IDS, "A communication signal."), { max: 4 }, "Signals clearly present in the learner's latest message. Empty when the trigger isn't 'reply'."),
+  note: text(240, "One specific sentence on how the learner communicated in their latest message. Empty when the trigger isn't 'reply'."),
+}).describe("Your private interviewer notes on HOW the learner communicated in their latest message. Never shown during the interview.");
+
+export const answerContextNotes = z.object({
+  technicalContext: text(900, "A concise, factual extraction of the learner's technical choices, assumptions, rationale, trade-offs, scale and unresolved technical questions from their latest answer. Do not invent details. Empty when the trigger isn't 'reply' or the answer contains no technical information."),
+  communicationGaps: list(oneOf(GAP_SIGNALS, "A communication gap clearly present in the learner's latest answer."), { max: 4 }, "Communication gaps in the latest answer only. Empty when the trigger isn't 'reply' or no gap is clearly present."),
+}).describe("A private structured extraction of the learner's latest answer, separate from the interviewer reply.");
+
 // `message` is first so a streamed reply can show the opening words before the
 // model fills in intent, stage, and the private communication notes.
 const output = z.object({
@@ -16,14 +27,8 @@ const output = z.object({
   nodeIds: list(z.string(), { max: 6 }, "Ids of the components this message is about; empty if none."),
   stage: oneOf(STAGES, "The interview stage after this turn."),
   coveredNodeIds: list(z.string(), { max: 40 }, "Ids of components the learner has now adequately explained, in notes or in the conversation, so they should not be asked about again."),
-  communication: z.object({
-    signals: list(oneOf(SIGNAL_IDS, "A communication signal."), { max: 4 }, "Signals clearly present in the learner's latest message. Empty when the trigger isn't 'reply'."),
-    note: text(240, "One specific sentence on how the learner communicated in their latest message. Empty when the trigger isn't 'reply'."),
-  }).describe("Your private interviewer notes on HOW the learner communicated in their latest message. Never shown during the interview."),
-  answerContext: z.object({
-    technicalContext: text(900, "A concise, factual extraction of the learner's technical choices, assumptions, rationale, trade-offs, scale and unresolved technical questions from their latest answer. Do not invent details. Empty when the trigger isn't 'reply' or the answer contains no technical information."),
-    communicationGaps: list(oneOf(GAP_SIGNALS, "A communication gap clearly present in the learner's latest answer."), { max: 4 }, "Communication gaps in the latest answer only. Empty when the trigger isn't 'reply' or no gap is clearly present."),
-  }).describe("A private structured extraction of the learner's latest answer, separate from the interviewer reply."),
+  communication: communicationNotes,
+  answerContext: answerContextNotes,
 });
 
 const instructions = `## Your task: live interviewer
@@ -60,7 +65,7 @@ Reply with a single JSON object that matches the provided schema. Write the mess
 
 const system = `${policy}\n\n${instructions}`;
 
-function formatTurns(turns) {
+export function formatTurns(turns) {
   if (!turns.length) return "(no messages yet)";
   return turns.map((turn) => {
     if (turn.role !== "learner") return `Interviewer (${turn.kind}): ${clean(turn.content, 1500)}`;
@@ -134,7 +139,7 @@ function fake({ trigger, turns, candidates = [], state }) {
 export const interviewerTask = { name: "interviewer", system, buildUser, output, fake };
 
 // Folds older turns into a compact running summary so long conversations stay cheap.
-const summaryOutput = z.object({
+export const summaryOutput = z.object({
   summary: text(3000, "Updated summary of the interview so far."),
 });
 

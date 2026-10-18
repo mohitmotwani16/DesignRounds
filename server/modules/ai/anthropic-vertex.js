@@ -46,17 +46,39 @@ function thinkingOff(model) {
   return { type: "disabled" };
 }
 
+// Content given as parts (run.js messagesFromBlocks) keeps its stability boundaries:
+// each part marked `cache` ends a stable layer and gets a cache breakpoint. Claude
+// allows four; context blocks use at most three.
+const MAX_BREAKPOINTS = 4;
+
+function textBlocks(content, budget) {
+  const parts = Array.isArray(content) ? content : [{ text: content, cache: false }];
+  return parts.filter((part) => part.text).map((part) => {
+    const blockParam = { type: "text", text: part.text };
+    if (part.cache && budget.left > 0) {
+      blockParam.cache_control = { type: "ephemeral" };
+      budget.left -= 1;
+    }
+    return blockParam;
+  });
+}
+
 export function buildParams({ model, messages, jsonSchema, effort, maxTokens }) {
-  const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+  const budget = { left: MAX_BREAKPOINTS };
+  const systemMessages = messages.filter((message) => message.role === "system");
+  // A plain-string system prompt is identical on every call of its task, so it is
+  // cached as a whole: repeat turns and reviews read it at a tenth of the input price.
+  const system = systemMessages.flatMap((message) => textBlocks(Array.isArray(message.content) ? message.content : [{ text: message.content, cache: true }], budget));
   const params = {
     model,
     max_tokens: maxTokens,
-    messages: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content })),
+    messages: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({
+      role,
+      content: Array.isArray(content) ? textBlocks(content, budget) : content,
+    })),
     output_config: { format: { type: "json_schema", schema: claudeSchemaFor(jsonSchema) } },
   };
-  // The task's system prompt is identical on every call, so it is cached: repeat
-  // interviewer turns and reviews read it at a tenth of the input price.
-  if (system) params.system = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+  if (system.length) params.system = system;
   if (effort === "none") {
     const thinking = thinkingOff(model);
     if (thinking) params.thinking = thinking;
