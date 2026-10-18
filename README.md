@@ -74,6 +74,28 @@ Staying signed in does not skip the check. Every time the site is opened, and ag
 
 Without a Cloudflare account, the dummy keys in `.env.example` render a checkbox that always passes. Those keys are for local development only. Production and preview deployments refuse email and Google sign-in until real keys are set.
 
+## Set up object storage (Cloudflare R2)
+
+Plus voice answers are stored as interview recordings. By default (no R2 variables) they live in Postgres `bytea`, which is fine locally but grows your database in production. **Cloudflare R2** is S3-compatible object storage with a generous free tier (10 GB-month, 1M writes and 10M reads per month, no egress fees) and low cost after that.
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/r2/overview), open **R2** and **Create bucket** (for example `designrounds-dev` and `designrounds-prod`).
+2. **Manage R2 API Tokens** → **Create API token** with **Object Read & Write** scoped to that bucket. Save the Access Key ID and Secret Access Key.
+3. Copy your **Account ID** from the R2 overview page.
+4. Add to `.env` (see `.env.example`):
+
+   ```
+   R2_ACCOUNT_ID=...
+   R2_ACCESS_KEY_ID=...
+   R2_SECRET_ACCESS_KEY=...
+   R2_BUCKET_NAME=designrounds-dev
+   ```
+
+5. Restart `npm run dev`. The API log should show `storage=cloudflare-r2/designrounds-dev`. Voice recordings are written under `interview-audio/<user>/<session>/<turn>.<ext>`; the database keeps only the key and metadata.
+
+**Retention:** raw audio (R2 or Postgres `bytea`) is deleted **30 days after transcription** by the daily maintenance job. The **verbatim transcript** (`interview_turns.content`), derived answer context, communication notes, and delivery metrics stay with the practice round until you delete the round or your account.
+
+Buckets are private: recordings are never served to the browser (only transcribed server-side). Use separate buckets for development and production.
+
 ## Set up AI reviews (free Gemini key)
 
 1. Sign in to [Google AI Studio](https://aistudio.google.com/apikey) with a Google account and click **Create API key**. No payment details are needed.
@@ -126,6 +148,7 @@ Copy `.env.example` to `.env`; every setting is optional locally.
 | `AUTH_SECRET` | Secret for hashing sign-in codes and signing OAuth state. **Required in production.** |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client. Both required together; omit both to disable Google sign-in. |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile on sign-in. Both required in production. Omit both locally to skip the check. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | Cloudflare R2 for voice interview recordings (and future blobs). All four required together; omit all four to keep recordings in Postgres locally. Optional `R2_JURISDICTION=eu` for EU buckets. |
 | `APP_ORIGIN`, `TRUST_PROXY`, `PORT` | Deployment settings for running behind a proxy or on a custom domain. |
 
 ## Project layout

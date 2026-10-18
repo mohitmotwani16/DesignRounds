@@ -6,6 +6,7 @@ import { devToolsEnabled, isProduction } from "../flags.js";
 import { deliveryMode, sendLoginCode, sendWelcomeEmail } from "../email.js";
 import { INTEREST_OPTIONS, interestLabel } from "../../src/data/interests.js";
 import { afterResponse, HttpError, createLimiter, parse, route } from "../http.js";
+import { deleteInterviewAudioForUser } from "../object-storage.js";
 import { assertHuman, networkKey, turnstileRequired, turnstileSiteKey } from "../turnstile.js";
 import { planFor } from "./plans.js";
 
@@ -612,6 +613,7 @@ identityRouter.delete("/me", requireUser, route(async (req, res) => {
   const { confirmEmail } = parse(deleteAccountBody, req.body);
   if (confirmEmail !== req.user.email) throw new HttpError(400, "CONFIRMATION_MISMATCH", "Type your account email to confirm deletion.");
   // Sessions, practice rounds, and diagram versions cascade with the user row.
+  await deleteInterviewAudioForUser(req.user.id);
   await query("delete from users where id = $1", [req.user.id]);
   await query("delete from login_codes where email = $1", [req.user.email]);
   res.clearCookie(COOKIE_NAME, { ...cookieOptions(), maxAge: undefined });

@@ -15,6 +15,7 @@ import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
 import { requireUser } from "./identity.js";
 import { hasInterviewer, limitsFor } from "./plans.js";
+import { deleteInterviewAudioForTurn, interviewAudioKey, objectStorage, putInterviewAudio } from "../object-storage.js";
 import { ownedSession, promptById } from "./practice.js";
 
 // A reply in progress blocks another for this long; longer than the slowest generation.
@@ -336,9 +337,16 @@ async function reserveLearnerTurn({ session, user, kind, content, requestId, hin
         [session.id, user.id, await nextSeq(conn, session.id), kind, content, requestId, session.diagram_version]
       );
       if (audio) {
+        let storageKey = null;
+        let data = audio.bytes;
+        if (objectStorage.enabled) {
+          storageKey = interviewAudioKey(user.id, session.id, learner.id, audio.mimeType);
+          await putInterviewAudio({ key: storageKey, bytes: audio.bytes, contentType: audio.mimeType });
+          data = null;
+        }
         await conn.query(
-          "insert into interview_audio (turn_id, user_id, mime_type, duration_ms, size_bytes, data) values ($1, $2, $3, $4, $5, $6)",
-          [learner.id, user.id, audio.mimeType, audio.durationMs, audio.bytes.length, audio.bytes]
+          "insert into interview_audio (turn_id, user_id, mime_type, duration_ms, size_bytes, data, storage_key) values ($1, $2, $3, $4, $5, $6, $7)",
+          [learner.id, user.id, audio.mimeType, audio.durationMs, audio.bytes.length, data, storageKey]
         );
         learner.audio_duration_ms = audio.durationMs;
       }
@@ -355,6 +363,7 @@ async function reserveLearnerTurn({ session, user, kind, content, requestId, hin
 // Undoes a reserved turn after a failure, so a retry with the same request id starts
 // cleanly (the client keeps the draft or recording) and no credit is spent.
 async function undoLearnerTurn(session, reserved) {
+  await deleteInterviewAudioForTurn(reserved.learner.id);
   await transaction(async (conn) => {
     await conn.query("delete from interview_turns where id = $1", [reserved.learner.id]);
     await releaseCredit(conn, reserved.creditId);
@@ -474,9 +483,10 @@ function speechHttpError(error) {
 }
 
 // A voice answer: the recording is transcribed, the transcript becomes the learner's
-// turn, and the interviewer replies exactly as it would to typed text. Delivery numbers
-// (pace, fillers, pauses) are kept for communication feedback. The transcript is never
-// sent to the client, and neither is the recording.
+// turn (interview_turns.content, kept for the life of the round), and the interviewer
+// replies exactly as it would to typed text. Raw audio is purged 30 days after
+// transcription (see maintenance.js); delivery numbers stay for communication feedback.
+// The transcript is never sent to the client, and neither is the recording.
 interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, res) => {
   if (!voiceAvailable) throw new HttpError(404, "NOT_FOUND", "No such endpoint.");
   const body = parse(audioBody, req.body);
