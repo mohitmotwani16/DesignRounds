@@ -224,7 +224,7 @@ ${transcript}`);
       return conn.queryOne(
         `insert into ai_reviews (session_id, user_id, credit_id, request_id, diagram_version, diagram_hash, prompt_id, prompt_version, rubric_version, template_version, provider, model, plan)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning *`,
-        [session.id, req.user.id, credit.id, requestId, session.diagram_version, diagramHash, session.prompt_id, session.prompt_version, rubric.version, templateVersion, aiConfig.vendor, aiConfig.model, planFor(req.user)]
+        [session.id, req.user.id, credit.id, requestId, session.diagram_version, diagramHash, session.prompt_id, session.prompt_version, rubric.version, templateVersion, aiConfig.vendor, aiConfig.tasks.review.model, planFor(req.user)]
       );
     });
   } catch (error) {
