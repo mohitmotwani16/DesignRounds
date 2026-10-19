@@ -174,6 +174,9 @@ export const api = {
   adminMembers: (email = "") => request("GET", `/admin/members${email ? `?email=${encodeURIComponent(email)}` : ""}`),
   setMemberPlan: (id, plan, expiresAt) => request("PUT", `/admin/members/${id}/plan`, { plan, expiresAt }),
   inviteMember: (email, plan, expiresAt) => request("POST", "/admin/invitations", { email, plan, expiresAt }),
+  plusWaitlistStatus: () => request("GET", "/plus/waitlist"),
+  joinPlusWaitlist: (body) => request("POST", "/plus/waitlist", body),
+  adminPlusWaitlist: () => request("GET", "/admin/plus-waitlist"),
   getInvitation: (token) => request("GET", `/invitations/${encodeURIComponent(token)}`),
   acceptInvitation: (token) => request("POST", `/invitations/${encodeURIComponent(token)}/accept`, {}),
 };

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { invitationEmail } from "./emails/invitation.js";
 import { loginCodeEmail } from "./emails/login-code.js";
+import { plusWaitlistEmail } from "./emails/plus-waitlist.js";
 import { welcomeEmail } from "./emails/welcome.js";
 import { isProduction } from "./flags.js";
 
@@ -67,6 +68,12 @@ export async function sendLoginCode(email, code, { expiresInMinutes }) {
 export async function sendWelcomeEmail(email, name) {
   const appUrl = ((process.env.APP_ORIGIN || "https://designrounds.in").split(",")[0].trim()).replace(/\/+$/, "");
   const { subject, text, html } = welcomeEmail({ name, appUrl });
+  await sendEmail({ to: email, subject, text, html });
+}
+
+export async function sendPlusWaitlistEmail(email) {
+  const appUrl = ((process.env.APP_ORIGIN || "https://designrounds.in").split(",")[0].trim()).replace(/\/+$/, "");
+  const { subject, text, html } = plusWaitlistEmail({ appUrl });
   await sendEmail({ to: email, subject, text, html });
 }
 

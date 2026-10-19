@@ -553,6 +553,19 @@
 .plus-actions .lp-btn { background: var(--accent-ink); color: var(--accent); }
 .plus-actions .lp-text-link { color: var(--accent-ink); text-decoration-color: currentColor; }
 .plus-status { margin: 0; display: flex; align-items: center; gap: 10px; font-size: var(--lp-lead); font-weight: 600; }
+.plus-status svg { flex: none; }
+.plus-joined { margin-top: 28px; }
+.plus-waitlist { margin-top: 28px; }
+.plus-waitlist .plus-actions { margin-top: 16px; }
+.plus-waitlist-field input { width: min(100%, 420px); height: 52px; padding: 0 20px; border: 1.5px solid color-mix(in srgb, var(--accent-ink) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--accent-ink) 12%, transparent); color: var(--accent-ink); font: inherit; font-size: var(--lp-body); }
+.plus-waitlist-field input::placeholder { color: var(--accent-ink); opacity: 0.7; }
+.plus-waitlist-field input:focus { outline: 0; border-color: var(--accent-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-ink) 30%, transparent); }
+.plus-waitlist .turnstile-field { margin-top: 16px; }
+.plus-waitlist .turnstile-slot { min-height: 65px; }
+.plus-waitlist .turnstile-slot iframe { max-width: 100%; }
+.plus-waitlist .lp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.plus-waitlist-note { display: block; margin-top: 14px; font-size: 14px; opacity: 0.85; }
+.plus-waitlist-error, .plus-waitlist .form-error { margin: 14px 0 0; color: var(--accent-ink); font-size: 14px; font-weight: 600; }
 
 .plus-features { margin: 40px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .plus-features li { padding: 24px; border-radius: 22px; background: var(--bg-sunken); transition: transform 0.25s var(--ease), background 0.2s; }
@@ -1260,6 +1273,10 @@
 .admin-grant div { display: flex; gap: 10px; }
 .admin-grant small { display: block; margin-top: 6px; color: var(--ink-4); }
 .admin-members .write-notice, .admin-members .form-error { margin: 0 0 12px; }
+.admin-waitlist-head { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-waitlist-head p { margin: 0; color: var(--ink-2); }
+.admin-waitlist-head .admin-buttons { margin-top: 0; }
+.admin-waitlist .write-notice, .admin-waitlist .form-error { margin: 0 0 12px; }
 .membership-row { padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
 .membership-identity { min-width: 180px; flex: 1; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
 .membership-identity small { color: var(--ink-4); font-size: 12.5px; }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, LoaderCircle, Mail, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Download, ExternalLink, LoaderCircle, Mail, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { CATEGORIES, categoryById } from "../learn/catalog.js";
@@ -40,7 +40,7 @@ function AdminHome() {
         <header className="write-head">
           <div>
             <h1><ShieldCheck size={24} /> Admin</h1>
-            <p>Review community articles and interviewer packs, manage admins, and grant expiring Plus access.</p>
+            <p>Review community articles and interviewer packs, manage admins, grant expiring Plus access, and see who asked for Plus.</p>
           </div>
         </header>
         <div className="admin-tabs" role="tablist">
@@ -49,8 +49,9 @@ function AdminHome() {
           <button role="tab" aria-selected={tab === "members"} onClick={() => setTab("members")}>Users & access</button>
           <button role="tab" aria-selected={tab === "invitations"} onClick={() => setTab("invitations")}>Invitations</button>
           <button role="tab" aria-selected={tab === "packs"} onClick={() => setTab("packs")}>Interviewer packs</button>
+          <button role="tab" aria-selected={tab === "waitlist"} onClick={() => setTab("waitlist")}>Plus waitlist</button>
         </div>
-        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : <InvitationForm />}
+        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : tab === "waitlist" ? <PlusWaitlist /> : <InvitationForm />}
       </div>
     </main>
   );
@@ -259,6 +260,77 @@ function InvitationForm() {
       </form>
       {notice && <p className="write-notice"><Check size={14} /> {notice}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
+// People who asked for Plus early access, newest first, ready to copy or export
+// when Plus opens.
+function PlusWaitlist() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    api.adminPlusWaitlist().then(setData).catch((loadError) => setError(loadError.message));
+  }, []);
+
+  async function copyEmails() {
+    setNotice("");
+    try {
+      await navigator.clipboard.writeText(data.entries.map((entry) => entry.email).join("\n"));
+      setNotice(`Copied ${data.entries.length} email${data.entries.length === 1 ? "" : "s"}.`);
+    } catch {
+      setError("Couldn't copy to the clipboard. Use Download CSV instead.");
+    }
+  }
+
+  function downloadCsv() {
+    const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const lines = [["email", "joined_at", "has_account", "plan", "notified_at"].join(",")]
+      .concat(data.entries.map((entry) => [entry.email, entry.joinedAt, entry.hasAccount, entry.plan ?? "", entry.notifiedAt ?? ""].map(quote).join(",")));
+    const url = URL.createObjectURL(new Blob([`${lines.join("\n")}\n`], { type: "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `plus-waitlist-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="admin-waitlist">
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {!data && !error && <p className="learn-loading"><LoaderCircle size={16} className="spin" /> Loading…</p>}
+      {data && (
+        <>
+          <div className="admin-waitlist-head">
+            <p><strong>{data.total}</strong> on the list · {data.lastWeek} in the last 7 days</p>
+            {data.entries.length > 0 && (
+              <div className="admin-buttons">
+                <button className="btn btn-ghost" onClick={copyEmails}><Copy size={14} /> Copy emails</button>
+                <button className="btn btn-ghost" onClick={downloadCsv}><Download size={14} /> Download CSV</button>
+              </div>
+            )}
+          </div>
+          {notice && <p className="write-notice"><Check size={14} /> {notice}</p>}
+          {data.entries.length === 0 ? (
+            <p className="write-empty">No one has asked for early access yet. The form is on the Plus page.</p>
+          ) : (
+            <ul className="write-list">
+              {data.entries.map((entry) => (
+                <li key={entry.email} className="admin-row">
+                  <span className="write-list-title">
+                    {entry.displayName || entry.email}
+                    <small>{entry.email} · {entry.hasAccount ? (entry.plan === "plus" ? "Account · Plus" : "Account · Free") : "Visitor"}{entry.notifiedAt ? " · notified" : ""}</small>
+                  </span>
+                  <span className="write-list-date">{formatDate(entry.joinedAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {data.total > data.entries.length && <p className="admin-hint">Showing the newest {data.entries.length} of {data.total}.</p>}
+        </>
+      )}
     </section>
   );
 }

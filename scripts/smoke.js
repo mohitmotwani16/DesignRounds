@@ -218,6 +218,33 @@ try {
     assert.equal(form.status, 415);
   });
 
+  await step("visitors join the Plus waitlist", async () => {
+    cookie = "";
+    const joined = await call("POST", "/api/v1/plus/waitlist", { email: "Waitlist@Example.com" });
+    assert.equal(joined.status, 201);
+    assert.deepEqual(joined.body, { joined: true });
+    const again = await call("POST", "/api/v1/plus/waitlist", { email: "waitlist@example.com" });
+    assert.equal(again.status, 200);
+    assert.deepEqual(again.body, { joined: true }, "a visitor can't tell whether an address was already listed");
+    const [row] = await query("select email, user_id from plus_waitlist where email = 'waitlist@example.com'");
+    assert.equal(row.user_id, null);
+    assert.equal((await call("POST", "/api/v1/plus/waitlist", {})).status, 400);
+    assert.equal((await call("POST", "/api/v1/plus/waitlist", { email: "not-an-email" })).status, 400);
+    assert.equal((await call("GET", "/api/v1/plus/waitlist")).status, 401);
+    assert.equal((await call("GET", "/api/v1/admin/plus-waitlist")).status, 401);
+
+    process.env.TURNSTILE_SITE_KEY = "3x00000000000000000000FF";
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    try {
+      assert.equal((await call("POST", "/api/v1/plus/waitlist", { email: "bot-waitlist@example.com" })).status, 403, "visitors pass the human check");
+      const human = await call("POST", "/api/v1/plus/waitlist", { email: "bot-waitlist@example.com", turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" });
+      assert.equal(human.status, 201);
+    } finally {
+      process.env.TURNSTILE_SITE_KEY = " ";
+      process.env.TURNSTILE_SECRET_KEY = " ";
+    }
+  });
+
   const email = "smoke@example.com";
   await step("email sign-in", async () => {
     const requested = await call("POST", "/api/v1/auth/request-code", { email });
@@ -558,6 +585,49 @@ try {
     const [welcomed] = await query("select welcome_email_sent_at, welcome_email_claimed_at from users where email = 'invited@example.com'");
     assert.ok(welcomed.welcome_email_sent_at || welcomed.welcome_email_claimed_at, "a new account is queued for its first-login welcome email");
     cookie = authorCookie;
+  });
+
+  await step("members join the Plus waitlist and admins see it", async () => {
+    const previousCookie = cookie;
+    const signInAs = async (address) => {
+      cookie = "";
+      // Earlier steps signed some of these in; skip the resend cooldown.
+      await query("delete from login_codes where email = $1", [address]);
+      const { body } = await call("POST", "/api/v1/auth/request-code", { email: address });
+      assert.equal((await call("POST", "/api/v1/auth/verify-code", { email: address, code: body.devCode })).status, 200);
+      return cookie;
+    };
+    await signInAs("plus-curious@example.com");
+    assert.equal((await call("GET", "/api/v1/plus/waitlist")).body.joined, false);
+    const joined = await call("POST", "/api/v1/plus/waitlist", { email: "someone-else@example.com" });
+    assert.equal(joined.status, 201);
+    assert.equal(joined.body.alreadyJoined, false);
+    assert.equal((await query("select 1 from plus_waitlist where email = 'someone-else@example.com'")).length, 0, "members join with their account email only");
+    assert.equal((await call("GET", "/api/v1/plus/waitlist")).body.joined, true);
+    assert.equal((await call("POST", "/api/v1/plus/waitlist", {})).body.alreadyJoined, true, "joining twice is idempotent");
+    assert.equal((await call("GET", "/api/v1/admin/plus-waitlist")).status, 403, "only admins can list the waitlist");
+
+    // A visitor who signs up later is linked to the account when they join again.
+    await signInAs("waitlist@example.com");
+    assert.equal((await call("GET", "/api/v1/plus/waitlist")).body.joined, true);
+    assert.equal((await call("POST", "/api/v1/plus/waitlist", {})).body.alreadyJoined, true);
+    const [linked] = await query("select user_id from plus_waitlist where email = 'waitlist@example.com'");
+    assert.ok(linked.user_id);
+
+    await signInAs("admin@example.com");
+    const list = await call("GET", "/api/v1/admin/plus-waitlist");
+    assert.equal(list.status, 200);
+    assert.equal(list.body.total, 3);
+    assert.equal(list.body.entries.length, 3);
+    const member = list.body.entries.find((entry) => entry.email === "plus-curious@example.com");
+    assert.equal(member.hasAccount, true);
+    assert.equal(list.body.entries.find((entry) => entry.email === "bot-waitlist@example.com").hasAccount, false);
+
+    // Deleting the account removes the address from the list.
+    await signInAs("plus-curious@example.com");
+    assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "plus-curious@example.com" })).status, 200);
+    assert.equal((await query("select 1 from plus_waitlist where email = 'plus-curious@example.com'")).length, 0);
+    cookie = previousCookie;
   });
 
   await step("sign out ends the session", async () => {
