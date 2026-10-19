@@ -71,7 +71,7 @@ Turnstile is Cloudflare's free replacement for a "not a robot" checkbox. On the 
 3. Put the site key and secret key in `.env` (see `.env.example`). Restart `npm run dev`. The API log should say `turnstile=on`.
 4. Open `/signin`. The check sits above the Google and email buttons. Email me a code and Continue with Google stay disabled until it succeeds. Resending a code asks for a fresh check, because each token works once and expires after five minutes.
 
-Staying signed in does not skip the check. Every time the site is opened, and again if the network changes (Wi-Fi to mobile data, another network, or a VPN), the signed-in page asks for Turnstile before any account request. The server remembers the network of the last pass and rejects the session from a different address until the visitor confirms again. Reloading the page starts a new check. Moving around the site does not.
+Staying signed in does not skip the check. The first time you open the site in a browser session while signed in, and again if the network changes (Wi-Fi to mobile data, another network, or a VPN), the signed-in page asks for Turnstile before any account request. Reloading in the same session re-runs Turnstile in the background without showing that page. The server remembers the network of the last pass and rejects the session from a different address until the visitor confirms again. Moving around the site does not ask again.
 
 Without a Cloudflare account, the dummy keys in `.env.example` render a checkbox that always passes. Those keys are for local development only. Production and preview deployments refuse email and Google sign-in until real keys are set.
 

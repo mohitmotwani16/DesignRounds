@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, getHumanLaunch, setHumanLaunch, setHumanRequiredHandler } from "./api.js";
+import { api, getHumanLaunch, readStoredHumanLaunch, setHumanLaunch, setHumanRequiredHandler } from "./api.js";
 
 const AuthContext = createContext(null);
 
@@ -8,26 +8,37 @@ function transport(type) {
   return type;
 }
 
+function hydrateLaunchFromStorage() {
+  const stored = readStoredHumanLaunch();
+  if (stored) setHumanLaunch(stored);
+  return stored;
+}
+
 export function AuthProvider({ children, initialStatus = "loading" }) {
   const [state, setState] = useState({ status: initialStatus, user: null, error: null });
   const [googleAuth, setGoogleAuth] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState(null);
   const [humanCheckRequired, setHumanCheckRequired] = useState(false);
-  const [humanLaunch, setHumanLaunchState] = useState("");
+  const [humanLaunch, setHumanLaunchState] = useState(() => hydrateLaunchFromStorage());
+  const [silentHumanRecheck, setSilentHumanRecheck] = useState(() => Boolean(readStoredHumanLaunch()));
   const [humanReason, setHumanReason] = useState("launch");
 
-  const noteLaunch = useCallback((id) => {
+  const noteLaunch = useCallback((id, { oauthHandoff = false, keepSilentRecheck = false } = {}) => {
     setHumanLaunch(id);
     setHumanLaunchState(id || "");
     if (id) {
-      setHumanReason("launch");
+      if (!oauthHandoff) setHumanReason("launch");
       setHumanCheckRequired(true);
+      if (!keepSilentRecheck) setSilentHumanRecheck(false);
+    } else {
+      setSilentHumanRecheck(false);
     }
   }, []);
 
   const requireHuman = useCallback((reason) => {
     setHumanLaunch("");
     setHumanLaunchState("");
+    setSilentHumanRecheck(false);
     setHumanReason(reason === "network" || reason === "NETWORK_CHANGED" ? "network" : "launch");
   }, []);
 
@@ -37,7 +48,8 @@ export function AuthProvider({ children, initialStatus = "loading" }) {
       setGoogleAuth(Boolean(google));
       setTurnstileSiteKey(siteKey || null);
       setHumanCheckRequired(Boolean(required));
-      if (launchId) noteLaunch(launchId);
+      if (launchId) noteLaunch(launchId, { oauthHandoff: true });
+      else if (!user) noteLaunch("");
       setState({ status: user ? "signed-in" : "signed-out", user, error: null });
     } catch (error) {
       setState({ status: "signed-out", user: null, error });
@@ -93,9 +105,11 @@ export function AuthProvider({ children, initialStatus = "loading" }) {
     turnstileSiteKey,
     humanCheckRequired,
     humanLaunch,
+    silentHumanRecheck,
     humanReason,
     noteLaunch,
     confirmHuman,
+    requireHuman,
     setUser: (user) => setState({ status: user ? "signed-in" : "signed-out", user, error: null }),
     refresh,
     signOut: async () => {
@@ -105,7 +119,7 @@ export function AuthProvider({ children, initialStatus = "loading" }) {
         setState({ status: "signed-out", user: null, error: null });
       }
     },
-  }), [state, googleAuth, turnstileSiteKey, humanCheckRequired, humanLaunch, humanReason, noteLaunch, confirmHuman, refresh]);
+  }), [state, googleAuth, turnstileSiteKey, humanCheckRequired, humanLaunch, silentHumanRecheck, humanReason, noteLaunch, confirmHuman, requireHuman, refresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

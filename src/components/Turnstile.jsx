@@ -27,7 +27,7 @@ function loadTurnstile() {
 // and show a checkbox when Cloudflare wants a human to confirm. The token is
 // single-use: pass a new resetKey after each submission so the next attempt
 // gets a fresh one.
-export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", onToken }) {
+export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", invisible = false, onToken }) {
   const slot = useRef(null);
   const widgetId = useRef(null);
   const onTokenRef = useRef(onToken);
@@ -45,7 +45,7 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", onT
       renderedId = window.turnstile.render(slot.current, {
         sitekey: siteKey,
         theme: theme === "dark" ? "dark" : "light",
-        appearance: "always",
+        ...(invisible ? { size: "invisible" } : { appearance: "always" }),
         action,
         callback: (token) => {
           setProblem("");
@@ -67,7 +67,7 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", onT
       if (renderedId != null && window.turnstile) window.turnstile.remove(renderedId);
       widgetId.current = null;
     };
-  }, [siteKey, theme, action]);
+  }, [siteKey, theme, action, invisible]);
 
   useEffect(() => {
     if (!resetKey || widgetId.current == null || !window.turnstile) return;

@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { findPrompt, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
+import { BackgroundHumanCheck } from "./components/BackgroundHumanCheck.jsx";
 import { HumanCheck } from "./components/HumanCheck.jsx";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
@@ -32,6 +33,7 @@ const loadingScreen = <FullPageMessage title="Loading…"><LoaderCircle size={18
 export default function App({ authStatus }) {
   return (
     <AuthProvider initialStatus={authStatus}>
+      <BackgroundHumanCheck />
       <Routes />
     </AuthProvider>
   );
@@ -58,8 +60,8 @@ function Routes() {
     navigate(`/start/${promptId}`);
   }, [auth.user]);
 
-  // A saved login survives a reload. Ask for a fresh human check on every launch,
-  // and again when the signed-in network no longer matches.
+  // A saved login survives a reload. Ask on a new browser session or network change;
+  // reloads in the same session re-check Turnstile in the background.
   if (auth.status === "signed-in" && auth.humanCheckRequired && !auth.humanLaunch && path !== "/signin") {
     return <HumanCheck />;
   }
