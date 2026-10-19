@@ -6,7 +6,7 @@ import { TurnstileWidget } from "./Turnstile.jsx";
 import { navigate } from "../router.js";
 
 const COPY = {
-  launch: "Confirm you're human to continue. This runs each time you open DesignRounds, even when you're still signed in.",
+  launch: "Confirm you're human to continue. This runs once per browser session while you're signed in. Reloading the page doesn't ask again.",
   network: "Your connection changed — for example Wi-Fi to mobile data, another network, or a VPN. Confirm you're human to continue.",
 };
 

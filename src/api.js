@@ -9,12 +9,21 @@ export class ApiError extends Error {
   }
 }
 
-// This page load's human-check id. It is not stored, so a reload starts over.
+// Human-check id for this browser tab session (also in sessionStorage across reloads).
+const HUMAN_LAUNCH_STORAGE_KEY = "dr_human_launch";
 let humanLaunch = "";
 let onHumanRequired = () => {};
 
+export function readStoredHumanLaunch() {
+  try { return sessionStorage.getItem(HUMAN_LAUNCH_STORAGE_KEY) || ""; } catch { return ""; }
+}
+
 export function setHumanLaunch(id) {
   humanLaunch = id || "";
+  try {
+    if (id) sessionStorage.setItem(HUMAN_LAUNCH_STORAGE_KEY, id);
+    else sessionStorage.removeItem(HUMAN_LAUNCH_STORAGE_KEY);
+  } catch { /* preference only */ }
 }
 
 export function getHumanLaunch() {
