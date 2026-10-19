@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoaderCircle, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth.jsx";
 import { Logo } from "./site.jsx";
@@ -17,20 +17,18 @@ export function HumanCheck() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(event) {
-    event.preventDefault();
-    if (!token) return;
+  // Continue as soon as Turnstile passes; no extra click.
+  useEffect(() => {
+    if (!token || busy) return;
     setBusy(true);
     setError("");
-    try {
-      await confirmHuman(token);
-    } catch (requestError) {
+    confirmHuman(token).catch((requestError) => {
       setError(requestError.message);
       setToken("");
       setResetKey((value) => value + 1);
       setBusy(false);
-    }
-  }
+    });
+  }, [token, busy, confirmHuman]);
 
   return (
     <main className="auth-page site">
@@ -39,15 +37,19 @@ export function HumanCheck() {
         <span className="auth-icon"><ShieldCheck size={20} /></span>
         <h1 id="human-title">Confirm you're human</h1>
         <p className="auth-lede">{COPY[humanReason] || COPY.launch}</p>
-        <form onSubmit={submit}>
+        <div>
           {turnstileSiteKey ? (
             <TurnstileWidget siteKey={turnstileSiteKey} action="continue" resetKey={resetKey} onToken={setToken} />
           ) : (
             <p className="form-error" role="alert">Human verification isn't configured yet.</p>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="btn btn-primary btn-lg auth-submit" disabled={busy || !token}>{busy ? <LoaderCircle size={16} className="spin" /> : null}Continue</button>
-        </form>
+          {busy && (
+            <p className="auth-submit" aria-live="polite">
+              <LoaderCircle size={16} className="spin" /> Continuing…
+            </p>
+          )}
+        </div>
         <div className="auth-secondary">
           <button type="button" className="text-button" onClick={() => signOut()}>Sign out</button>
         </div>
