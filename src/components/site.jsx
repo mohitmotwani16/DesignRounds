@@ -49,11 +49,11 @@ export function SiteNav() {
   const signedIn = status === "signed-in";
   const close = () => setOpen(false);
   const current = (match) => (match ? "page" : undefined);
-  const links = (
+  const navLinks = (profileLabel) => (
     <>
       <Link className="nav-link-btn" to={LEARN_PATH} onClick={close} aria-current={current(path === LEARN_PATH || path.startsWith(`${LEARN_PATH}/`))}>Learn</Link>
       <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
-      {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>My rounds</Link>}
+      {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>{profileLabel}</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
     </>
   );
@@ -62,7 +62,7 @@ export function SiteNav() {
     <header className={`nav ${scrolled || open ? "scrolled" : ""}`}>
       <div className="wrap nav-inner" ref={sheetRef}>
         <Logo />
-        <nav className="nav-links" aria-label="Main">{links}</nav>
+        <nav className="nav-links" aria-label="Main">{navLinks("My rounds")}</nav>
         <div className="nav-actions">
           {signedIn && <UserMenu />}
           {status === "signed-out" && (
@@ -76,7 +76,7 @@ export function SiteNav() {
           {open ? <X size={20} /> : <Menu size={20} />}
         </button>
         <div className={`nav-sheet ${open ? "open" : ""}`}>
-          <nav aria-label="Mobile">{links}</nav>
+          <nav aria-label="Mobile">{navLinks("My Account")}</nav>
           <div className="nav-sheet-actions">
             {signedIn ? (
               <>
