@@ -616,6 +616,7 @@ identityRouter.delete("/me", requireUser, route(async (req, res) => {
   await deleteInterviewAudioForUser(req.user.id);
   await query("delete from users where id = $1", [req.user.id]);
   await query("delete from login_codes where email = $1", [req.user.email]);
+  await query("delete from plus_waitlist where email = $1", [req.user.email]);
   res.clearCookie(COOKIE_NAME, { ...cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
 }));

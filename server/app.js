@@ -14,6 +14,7 @@ import { articlesRouter } from "./modules/articles.js";
 import { maintenanceRouter } from "./modules/maintenance.js";
 import { catalogRouter } from "./modules/catalog.js";
 import { roundsRouter } from "./modules/rounds.js";
+import { waitlistRouter } from "./modules/waitlist.js";
 import { devRouter, devToolsEnabled } from "./modules/dev.js";
 import { guideFor } from "./modules/ai/guides.js";
 import { syncAnswerPools } from "./modules/answers/store.js";
@@ -75,6 +76,8 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use("/v1", roundsRouter);
   // Before the routers that require sign-in for everything: published articles are public.
   api.use("/v1", articlesRouter);
+  // Visitors can join the Plus waitlist without an account.
+  api.use("/v1", waitlistRouter);
   api.use("/v1", identityRouter);
   api.use("/v1", practiceRouter);
   api.use("/v1", reviewsRouter);
