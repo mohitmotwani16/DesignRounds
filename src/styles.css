@@ -213,6 +213,7 @@ a { color: inherit; text-decoration: none; }
 .button-plus:focus-visible { outline: 2px solid var(--plus); outline-offset: 2px; }
 .locked-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--bd-eceef2); }
 .locked-foot p { margin: 0; color: var(--fg-7a8494); font-size: 12.5px; line-height: 1.55; }
+.locked-foot-title { margin: 0 0 4px; color: var(--fg-3f4b5f); font-size: 13px; font-weight: 650; }
 .locked-links { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 16px; }
 .locked-link { padding: 0; border: 0; background: none; color: var(--fg-3f4b5f); font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; text-decoration-color: var(--bd-cdd2db); text-underline-offset: 3px; cursor: pointer; }
 .locked-link:hover { text-decoration-color: currentColor; }

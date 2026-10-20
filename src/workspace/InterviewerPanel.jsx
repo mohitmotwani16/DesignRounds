@@ -88,16 +88,25 @@ function LockedInterviewer({ interview, onShowReview }) {
         </section>
       ) : (
         <section className="locked-offer" aria-labelledby="locked-offer-title">
-          <h4 id="locked-offer-title"><Crown size={15} aria-hidden="true" /> {trial === "used" ? "You've used your free round" : "Included with Plus"}</h4>
-          <p>Plus includes the interviewer on every round, along with every question in the library.</p>
+          <h4 id="locked-offer-title"><Crown size={15} aria-hidden="true" /> {trial === "used" ? "You've had your free interviewer round" : "The interviewer is part of Plus"}</h4>
+          <p>{trial === "used"
+            ? "Keep practising out loud with Plus: the interviewer on every round, feedback on how you explain your design, and every question in the library."
+            : "Plus includes the interviewer on every round, feedback on how you explain your design, and every question in the library."}</p>
           <div className="locked-actions">
-            <a className="button button-plus button-small interviewer-cta" href="/plus" target="_blank" rel="noopener">See Plus <ArrowRight size={14} /></a>
+            <a className="button button-plus button-small interviewer-cta" href="/plus" target="_blank" rel="noopener">Get Plus <ArrowRight size={14} /></a>
           </div>
         </section>
       )}
 
       <footer className="locked-foot">
-        <p>Not now? Finish the round and get a written review of your design. It reads each component's “Why this choice?” note.</p>
+        {trial === "available" ? (
+          <p>Not now? Finish the round and get a written review of your design. It reads each component's “Why this choice?” note.</p>
+        ) : (
+          <>
+            <h4 className="locked-foot-title">Your design still gets a review</h4>
+            <p>Finish the round for a written review of what you drew. Without the interviewer, it's based on your diagram and the “Why this choice?” notes alone, so it can't judge how you explain your design. Put your reasoning in those notes.</p>
+          </>
+        )}
         <div className="locked-links">
           <button type="button" className="locked-link" onClick={onShowReview}>Go to Review</button>
           {trial === "available" && <a className="locked-link" href="/plus" target="_blank" rel="noopener">What's in Plus</a>}
