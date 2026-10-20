@@ -74,9 +74,9 @@ function Workspace({ session, prompt }) {
   const [saveState, setSaveState] = useState("saved");
   const [panelOpen, setPanelOpen] = useState(() => readPreference("designrounds:interviewer-open", "true") !== "false");
   const plan = useAuth().user?.plan;
-  // Free plans can't use the live interviewer, so they start on the Review tab, except
-  // on their free interviewer round.
-  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" || (plan !== "plus" && !session.interviewerTrial) ? "review" : "interviewer"));
+  // An active round opens on the Interviewer tab for everyone: free learners see the
+  // free interviewer round offer (or what Plus adds) there. A finished round opens on Review.
+  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" ? "review" : "interviewer"));
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
   const [showPrompt, setShowPrompt] = useState(() => initial.nodes.length === 0 && session.diagramVersion === 0);
   const [snap, setSnap] = useState(true);
