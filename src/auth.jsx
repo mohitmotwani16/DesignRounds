@@ -124,6 +124,10 @@ export function AuthProvider({ children, initialStatus = "loading" }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// Whether the user's Plus membership is active. The server already reports an
+// expired membership as "free", so the plan alone is enough.
+export const isPlus = (user) => user?.plan === "plus";
+
 export function useAuth() {
   return useContext(AuthContext);
 }

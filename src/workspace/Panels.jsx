@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Check, ClipboardCheck, Clock3, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, ClipboardCheck, Clock3, Crown, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Sparkles, X } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
 import { shortcutGroups } from "./shortcuts.js";
 import { useEscape } from "../components/ui.jsx";
@@ -9,6 +9,8 @@ import { ReviewPanel } from "./ReviewPanel.jsx";
 // Right-hand panel: the interviewer conversation and the round's final review.
 export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor }) {
   const tabs = [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
+  // On free plans the interviewer is a Plus feature (or the one free round), and the tab says so.
+  const interviewerLocked = interview.status === "ready" && interview.access !== "full";
   return (
     <aside className={`interviewer-panel ${tab === "review" ? "panel-wide" : ""}`}>
       <div className="interviewer-header side-panel-header">
@@ -16,6 +18,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
           {tabs.map(([id, label, Icon]) => (
             <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>
               <Icon size={14} /> {label}
+              {id === "interviewer" && interviewerLocked && <span className="tab-plus" title="Plus feature"><Crown size={11} aria-hidden="true" /><span className="sr-only">, Plus feature</span></span>}
               {id === "interviewer" && unread > 0 && tab !== "interviewer" && <span className="tab-badge" aria-label={`${unread} new`}>{unread}</span>}
             </button>
           ))}

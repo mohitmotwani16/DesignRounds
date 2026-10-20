@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenCheck, Check, ChevronRight, Clock3, Crown, Gauge, LoaderCircle, LockKeyhole, MessageSquareText, Network, TriangleAlert } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Check, ChevronRight, Clock3, Gauge, LoaderCircle, LockKeyhole, MessageSquareText, Network, TriangleAlert } from "lucide-react";
 import excerpts from "virtual:guide-excerpts";
 import { findPrompt, getTrack, prompts } from "../data/prompts.js";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { LevelMeter, RoundCard, SiteFooter } from "../components/site.jsx";
+import { AccessBadge, LevelMeter, RoundCard, SiteFooter } from "../components/site.jsx";
 import { promptIcon } from "../components/ui.jsx";
 import { Link } from "../router.js";
 import { trackPath } from "../seo.js";
@@ -76,7 +76,7 @@ export default function RoundPage({ id, onStart }) {
             <LevelMeter level={prompt.difficulty} />
             <span><Clock3 size={14} /> {prompt.minutes} minutes</span>
             <span>{prompt.category}</span>
-            {free ? <span className="badge badge-free">Free</span> : <span className="badge badge-plus"><Crown size={12} /> Plus</span>}
+            <AccessBadge round={prompt} user={user} />
           </div>
           <div className="rp-actions">
             {start}

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, Clock3, Crown, Layers2, LockKeyhole, LogOut, Menu, X } from "lucide-react";
+import { ArrowRight, Check, Clock3, Crown, Layers2, LockKeyhole, LockKeyholeOpen, LogOut, Menu, X } from "lucide-react";
 import { getTrack, tracks } from "../data/prompts.js";
 import { CATEGORIES, LEARN_PATH, topicMeta, topicPath } from "../learn/catalog.js";
-import { useAuth } from "../auth.jsx";
+import { isPlus, useAuth } from "../auth.jsx";
 import { Link, navigate, useRoute } from "../router.js";
 import { roundPath, trackPath } from "../seo.js";
-import { ThemePicker, UserMenu, promptIcon } from "./ui.jsx";
+import { Avatar, ThemePicker, UserMenu, promptIcon } from "./ui.jsx";
+import { openReportProblem } from "./ReportProblem.jsx";
 
 // Landing-page sections linked from the header and footer, as /#<id> anchors.
 export const SECTIONS = [
@@ -80,7 +81,7 @@ export function SiteNav() {
           <div className="nav-sheet-actions">
             {signedIn ? (
               <>
-                <span className="nav-sheet-identity">{user.email}</span>
+                <span className="nav-sheet-identity"><Avatar user={user} size="md" /><span>{user.email}</span></span>
                 <button className="btn btn-ghost" onClick={async () => { close(); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
               </>
             ) : (
@@ -120,6 +121,7 @@ export function SiteFooter() {
               <li><Link to="/about">About</Link></li>
               <li><Link to="/privacy">Privacy</Link></li>
               <li><Link to="/terms">Terms</Link></li>
+              <li><button type="button" className="foot-link-button" onClick={openReportProblem}>Report a problem</button></li>
             </ul>
           </div>
           <div>
@@ -160,20 +162,30 @@ export function LevelMeter({ level }) {
   return <span className="level" data-level={LEVEL[level] || 1}><i aria-hidden="true"><b /><b /><b /></i>{level}</span>;
 }
 
+// The access badge for a round: Free, Plus (locked), or Unlocked for a Plus
+// member looking at a Plus round.
+export function AccessBadge({ round, user }) {
+  if (round.access === "free") return <span className="badge badge-free">Free</span>;
+  if (isPlus(user)) return <span className="badge badge-unlocked"><LockKeyholeOpen size={12} /> Unlocked</span>;
+  return <span className="badge badge-plus"><Crown size={12} /> Plus</span>;
+}
+
 // A practice round in the catalog. The title links to the round's page (and the
 // link covers the card); the chip starts the round directly.
 export function RoundCard({ round, onStart, status, index = 0 }) {
+  const { user } = useAuth();
   const Icon = promptIcon(round.icon);
   const track = getTrack(round.track);
-  const free = round.access === "free";
+  const unlocked = round.access !== "free" && isPlus(user);
+  const playable = round.access === "free" || unlocked;
   return (
-    <article className={`round tone-${track.color}`} style={{ "--i": index % 12 }}>
+    <article className={`round tone-${track.color} ${unlocked ? "round-unlocked" : ""}`} style={{ "--i": index % 12 }}>
       <div className="round-top">
         <span className="round-icon"><Icon size={19} strokeWidth={1.9} /></span>
         <span className="round-badges">
           {status === "in_progress" && <span className="badge badge-progress">In progress</span>}
           {status === "completed" && <span className="badge badge-done"><Check size={12} /> Done</span>}
-          {free ? <span className="badge badge-free">Free</span> : <span className="badge badge-plus"><Crown size={12} /> Plus</span>}
+          <AccessBadge round={round} user={user} />
         </span>
       </div>
       <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>{round.category}</span></div>
@@ -184,9 +196,9 @@ export function RoundCard({ round, onStart, status, index = 0 }) {
           <LevelMeter level={round.difficulty} />
           <span><Clock3 size={13} /> {round.minutes} min</span>
         </span>
-        <button className={`round-go ${free ? "" : "locked"}`} onClick={() => onStart(round.id)} aria-label={`${free ? (status === "in_progress" ? "Resume" : "Start") : "Plus round"}: ${round.title}`}>
-          {free ? (status === "in_progress" ? "Resume" : "Start") : <><LockKeyhole size={12} /> Plus</>}
-          {free && <ArrowRight size={13} className="nudge" />}
+        <button className={`round-go ${playable ? "" : "locked"}`} onClick={() => onStart(round.id)} aria-label={`${playable ? (status === "in_progress" ? "Resume" : "Start") : "Plus round"}: ${round.title}`}>
+          {playable ? (status === "in_progress" ? "Resume" : "Start") : <><LockKeyhole size={12} /> Plus</>}
+          {playable && <ArrowRight size={13} className="nudge" />}
         </button>
       </div>
     </article>

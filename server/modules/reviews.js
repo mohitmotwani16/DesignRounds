@@ -13,7 +13,7 @@ import { reviewTask, reviewTemplateVersion } from "./ai/tasks/review.js";
 import { requireUser } from "./identity.js";
 import { communicationInput, interviewTranscript } from "./interviews.js";
 import { debrief, reviewLedger } from "./conductor/index.js";
-import { hasFullFeedback, limitsFor, planFor } from "./plans.js";
+import { hasFullFeedback, limitsFor, onTrial, planFor } from "./plans.js";
 import { referencePoolFor } from "./answers/store.js";
 import { ownedSession, promptById } from "./practice.js";
 
@@ -29,19 +29,19 @@ const db = { query, queryOne };
 
 const MONTH_START = "(date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')";
 
-async function readAllowance(conn, user, sessionId) {
-  const limits = limitsFor(user);
+async function readAllowance(conn, user, session) {
+  const limits = limitsFor(user, session);
   const row = await conn.queryOne(
     `select count(*) filter (where session_id = $2) as round_used,
             count(*) filter (where created_at >= ${MONTH_START}) as month_used,
             ${MONTH_START} + interval '1 month' as month_resets_at
        from ai_credits
       where user_id = $1 and kind = 'review' and status <> 'released'`,
-    [user.id, sessionId]
+    [user.id, session.id]
   );
   const round = { used: Number(row.round_used), limit: limits.reviewsPerRound };
   const month = { used: Number(row.month_used), limit: limits.reviewsPerMonth, resetsAt: row.month_resets_at };
-  return { plan: planFor(user), round, month, remaining: Math.max(0, Math.min(round.limit - round.used, month.limit - month.used)) };
+  return { plan: planFor(user), trial: onTrial(user, session), round, month, remaining: Math.max(0, Math.min(round.limit - round.used, month.limit - month.used)) };
 }
 
 // Fails reviews left pending by a crash or restart and gives their credits back.
@@ -166,7 +166,7 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
   const session = await ownedSession(req);
   await expireStale(db, session.id);
   const rows = await query("select * from ai_reviews where session_id = $1 and user_id = $2 order by created_at desc limit 20", [session.id, req.user.id]);
-  const full = hasFullFeedback(req.user);
+  const full = hasFullFeedback(req.user, session);
   // After a v3 round: what each agenda item got, and what a strong answer adds.
   const roundDebrief = session.status === "completed"
     ? await debrief(session.id, session.prompt_id).catch((error) => { console.error("[ai] debrief failed:", error.message); return null; })
@@ -180,7 +180,7 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
   );
   res.json({
     reviews: rows.map((row) => present(row, full)),
-    allowance: await readAllowance(db, req.user, session.id),
+    allowance: await readAllowance(db, req.user, session),
     aiAvailable: aiConfig.enabled,
     debrief: roundDebrief,
     interview: interview?.spoke ? { engine: interview.engine, rated: interview.rated } : null,
@@ -190,13 +190,13 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
 reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
   const { requestId } = parse(requestBody, req.body);
   const session = await ownedSession(req);
-  const full = hasFullFeedback(req.user);
+  const full = hasFullFeedback(req.user, session);
 
   // A retried request (same requestId) returns what the first attempt produced.
   const replay = await queryOne("select * from ai_reviews where user_id = $1 and request_id = $2", [req.user.id, requestId]);
   if (replay) {
     if (replay.session_id !== session.id) throw new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used for another round.");
-    return res.json({ review: present(replay, full), reused: true, allowance: await readAllowance(db, req.user, session.id) });
+    return res.json({ review: present(replay, full), reused: true, allowance: await readAllowance(db, req.user, session) });
   }
 
   if (!aiConfig.enabled) throw toHttpError(new AiError("DISABLED"));
@@ -223,7 +223,7 @@ ${transcript}`);
       order by created_at desc limit 1`,
     [session.id, diagramHash, rubric.version, templateVersion]
   );
-  if (existing) return res.json({ review: present(existing, full), reused: true, allowance: await readAllowance(db, req.user, session.id) });
+  if (existing) return res.json({ review: present(existing, full), reused: true, allowance: await readAllowance(db, req.user, session) });
 
   if (!(await reviewLimiter(req.user.id))) throw new HttpError(429, "RATE_LIMITED", "Too many review requests. Try again later.");
 
@@ -237,7 +237,7 @@ ${transcript}`);
       if (await conn.queryOne("select id from ai_reviews where session_id = $1 and status = 'pending'", [session.id])) {
         throw new HttpError(409, "REVIEW_IN_PROGRESS", "A review for this round is already being generated.");
       }
-      const allowance = await readAllowance(conn, req.user, session.id);
+      const allowance = await readAllowance(conn, req.user, session);
       if (allowance.round.used >= allowance.round.limit) throw new HttpError(403, "REVIEW_LIMIT_ROUND", limitMessage("round", allowance));
       if (allowance.month.used >= allowance.month.limit) throw new HttpError(403, "REVIEW_LIMIT_MONTH", limitMessage("month", allowance));
       const credit = await conn.queryOne("insert into ai_credits (user_id, session_id, kind) values ($1, $2, 'review') returning id", [req.user.id, session.id]);
@@ -272,5 +272,5 @@ ${transcript}`);
   }
   const result = { ...normalize(output.data, design), communication: await communication };
   const saved = await settle(pending, { status: "succeeded", result, model: output.model });
-  res.status(201).json({ review: present(saved, full), reused: false, allowance: await readAllowance(db, req.user, session.id) });
+  res.status(201).json({ review: present(saved, full), reused: false, allowance: await readAllowance(db, req.user, session) });
 }));

@@ -16,7 +16,8 @@ import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
 import { changeMode, handleLearnerTurn, handleTick, presentV3State, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
 import { requireUser } from "./identity.js";
-import { hasInterviewer, limitsFor } from "./plans.js";
+import { hasInterviewer, isPlus, limitsFor } from "./plans.js";
+import { claimTrial, trialStatus } from "./trial.js";
 import { deleteInterviewAudioForTurn, interviewAudioKey, objectStorage, putInterviewAudio } from "../object-storage.js";
 import { ownedSession, promptById } from "./practice.js";
 
@@ -117,13 +118,13 @@ async function nextSeq(conn, sessionId) {
   return Number(row.seq);
 }
 
-async function readAllowance(conn, user, sessionId, state) {
-  const limits = limitsFor(user);
+async function readAllowance(conn, user, session, state) {
+  const limits = limitsFor(user, session);
   const row = await conn.queryOne(
     `select count(*) filter (where session_id = $2) as round_used,
             count(*) filter (where created_at >= ${MONTH_START}) as month_used
        from ai_credits where user_id = $1 and kind = 'interview_turn' and status <> 'released'`,
-    [user.id, sessionId]
+    [user.id, session.id]
   );
   return {
     turns: { used: Number(row.round_used), limit: limits.interviewTurnsPerRound },
@@ -197,7 +198,7 @@ async function maybeSummarize(session) {
 
 function taskInput({ session, state, turns, trigger, selectedNodeId, design, changes, candidates, user }) {
   const prompt = promptById.get(session.prompt_id);
-  const limits = limitsFor(user);
+  const limits = limitsFor(user, session);
   return {
     prompt,
     guide: guideFor(prompt.id),
@@ -289,7 +290,9 @@ interviewsRouter.use(requireUser);
 
 interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) => {
   const session = await ownedSession(req);
-  if (!hasInterviewer(req.user)) return res.json({ access: "locked", turns: [], aiAvailable: aiConfig.enabled, voice: false });
+  if (!hasInterviewer(req.user, session)) {
+    return res.json({ access: "locked", trial: await trialStatus(db, req.user, session), turns: [], aiAvailable: aiConfig.enabled, voice: false });
+  }
 
   // The first visit to an active round opens the interview (a fixed message, no model
   // call). A question with a published Problem Pack opens on the v3 Conductor, which
@@ -319,8 +322,27 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
     voice: voiceAvailable,
     turns: turns.map(presentTurn),
     state: state ? presentState(state, session.prompt_id) : null,
-    allowance: await readAllowance(db, req.user, session.id, state),
+    allowance: await readAllowance(db, req.user, session, state),
   });
+}));
+
+// Spends the learner's one free interviewer round on this round (issue #75). Only a
+// free learner, on a free question that is still in progress, can start it; starting
+// it again on the same round is a no-op.
+interviewsRouter.post("/sessions/:sessionId/interview/trial", route(async (req, res) => {
+  const session = await ownedSession(req);
+  if (isPlus(req.user)) throw new HttpError(409, "ALREADY_PLUS", "Your Plus plan already includes the interviewer on every round.");
+  if (session.interviewer_trial) return res.json({ started: false });
+  const status = await trialStatus(db, req.user, session);
+  if (status === "not_eligible") throw new HttpError(403, "TRIAL_NOT_ELIGIBLE", "The free interviewer round works on free questions.");
+  if (status === "round_finished") throw new HttpError(409, "ROUND_FINISHED", "This round is finished. Start a free question to use your interviewer round.");
+  const started = await transaction(async (conn) => {
+    await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
+    return claimTrial(conn, req.user, session);
+  });
+  if (!started) throw new HttpError(409, "TRIAL_USED", "You've already used your free interviewer round. Plus includes the interviewer on every round.");
+  console.log("[trial] interviewer trial started");
+  res.status(201).json({ started: true });
 }));
 
 // Reserves a learner turn: checks the reply allowance, records the turn (and a voice
@@ -333,7 +355,7 @@ async function reserveLearnerTurn({ session, user, kind, content, requestId, hin
       if (state.pending_since && Date.now() - new Date(state.pending_since).getTime() < PENDING_MS) {
         throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
       }
-      const allowance = await readAllowance(conn, user, session.id, state);
+      const allowance = await readAllowance(conn, user, session, state);
       if (allowance.turns.used >= allowance.turns.limit) throw new HttpError(403, "INTERVIEW_LIMIT_ROUND", `You've used all ${allowance.turns.limit} interviewer replies for this round. Finish the round to get your review.`);
       if (allowance.month.used >= allowance.month.limit) throw new HttpError(403, "INTERVIEW_LIMIT_MONTH", "You've used this month's interviewer replies. They reset at the start of next month.");
       if (hint && allowance.hints.used >= allowance.hints.limit) throw new HttpError(403, "HINT_LIMIT", `You've used all ${allowance.hints.limit} hints for this round.`);
@@ -412,7 +434,7 @@ async function deliverLearnerReply(req, res, { session, reserved, hint = false }
     return {
       turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
       state: presentState(result.state, session.prompt_id),
-      allowance: await readAllowance(db, req.user, session.id, result.state),
+      allowance: await readAllowance(db, req.user, session, result.state),
     };
   };
   const summarize = () => afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
@@ -459,7 +481,7 @@ const TOO_FAST = "You're sending messages very quickly. Wait a moment and try ag
 interviewsRouter.post("/sessions/:sessionId/interview/messages", route(async (req, res) => {
   const body = parse(messageBody, req.body);
   const session = await ownedSession(req);
-  if (!hasInterviewer(req.user)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
+  if (!hasInterviewer(req.user, session)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
   const replay = await replayed(req, session, body.requestId, "message");
   if (replay) return res.json(replay);
 
@@ -500,7 +522,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, 
   if (!voiceAvailable) throw new HttpError(404, "NOT_FOUND", "No such endpoint.");
   const body = parse(audioBody, req.body);
   const session = await ownedSession(req);
-  if (!hasInterviewer(req.user)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
+  if (!hasInterviewer(req.user, session)) throw new HttpError(403, "PLAN_REQUIRED", "The live interviewer is part of the Plus plan.");
   const replay = await replayed(req, session, body.requestId, "audio");
   if (replay) return res.json(replay);
 
@@ -555,7 +577,7 @@ async function v3Tick(req, res, session, state, body) {
         await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
         const fresh = await conn.queryOne("select * from interview_state where session_id = $1", [session.id]);
         if (fresh.pending_since && Date.now() - new Date(fresh.pending_since).getTime() < PENDING_MS) return null;
-        const allowance = await readAllowance(conn, req.user, session.id, fresh);
+        const allowance = await readAllowance(conn, req.user, session, fresh);
         if (allowance.turns.used >= allowance.turns.limit || allowance.month.used >= allowance.month.limit) return null;
         const credit = await conn.queryOne("insert into ai_credits (user_id, session_id, kind) values ($1, $2, 'interview_turn') returning id", [req.user.id, session.id]);
         await conn.query("update interview_state set pending_since = now() where session_id = $1", [session.id]);
@@ -573,7 +595,7 @@ async function v3Tick(req, res, session, state, body) {
   try {
     const result = await handleTick({ session, user: req.user, stateRow: state, body, reserveCredit, releaseCredit: release });
     if (result.action === "none") return none(result.reason);
-    res.json({ action: result.action, turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session.id, result.state) });
+    res.json({ action: result.action, turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session, result.state) });
   } catch (error) {
     console.error("[ai] tick failed:", error.code || error.message);
     return none("error");
@@ -583,7 +605,7 @@ async function v3Tick(req, res, session, state, body) {
 interviewsRouter.post("/sessions/:sessionId/interview/tick", route(async (req, res) => {
   const body = parse(tickBody, req.body);
   const session = await ownedSession(req);
-  if (!hasInterviewer(req.user) || session.status !== "in_progress" || !aiConfig.enabled) return res.json({ action: "none", reason: "unavailable" });
+  if (!hasInterviewer(req.user, session) || session.status !== "in_progress" || !aiConfig.enabled) return res.json({ action: "none", reason: "unavailable" });
   const state = await transaction((conn) => ensureState(conn, session));
   if (state.engine === "v3") return v3Tick(req, res, session, state, body);
   // v2 rounds only look at the canvas; idle and visibility ticks are v3 behaviours.
@@ -595,7 +617,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/tick", route(async (req, r
 interviewsRouter.post("/sessions/:sessionId/interview/check", route(async (req, res) => {
   const body = parse(checkBody, req.body);
   const session = await ownedSession(req);
-  if (!hasInterviewer(req.user) || session.status !== "in_progress" || !aiConfig.enabled) return res.json({ action: "none", reason: "unavailable" });
+  if (!hasInterviewer(req.user, session) || session.status !== "in_progress" || !aiConfig.enabled) return res.json({ action: "none", reason: "unavailable" });
   const state = await transaction((conn) => ensureState(conn, session));
   if (state.engine === "v3") return v3Tick(req, res, session, state, { reason: "canvas_quiet", typing: false, selectedNodeId: body.selectedNodeId });
   return v2Check(req, res, session, state, body);
@@ -617,7 +639,7 @@ async function v2Check(req, res, session, state, body) {
     return none("nothing_to_ask");
   }
 
-  const limits = limitsFor(req.user);
+  const limits = limitsFor(req.user, session);
   let reserved;
   try {
     reserved = await transaction(async (conn) => {
@@ -628,7 +650,7 @@ async function v2Check(req, res, session, state, body) {
       if (fresh.proactive_checks >= limits.proactiveChecksPerRound) return null;
       const last = await conn.queryOne("select role, kind, created_at from interview_turns where session_id = $1 order by seq desc limit 1", [session.id]);
       if (last?.role === "interviewer" && QUESTION_KINDS.has(last.kind) && Date.now() - new Date(last.created_at).getTime() < OPEN_QUESTION_MS) return null;
-      const allowance = await readAllowance(conn, req.user, session.id, fresh);
+      const allowance = await readAllowance(conn, req.user, session, fresh);
       if (allowance.turns.used >= allowance.turns.limit || allowance.month.used >= allowance.month.limit) return null;
       const credit = await conn.queryOne("insert into ai_credits (user_id, session_id, kind) values ($1, $2, 'interview_turn') returning id", [req.user.id, session.id]);
       await conn.query("update interview_state set pending_since = now(), proactive_checks = proactive_checks + 1, last_proactive_at = now() where session_id = $1", [session.id]);
@@ -662,7 +684,7 @@ async function v2Check(req, res, session, state, body) {
       return res.json({ action: "skip" });
     }
     const result = await saveInterviewerTurn({ session, state: reserved.state, output: { ...data, intent: data.intent === "answer" ? "question" : data.intent }, trigger: "proactive", design, creditId: reserved.creditId, hint: false });
-    res.json({ action: "ask", turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session.id, result.state) });
+    res.json({ action: "ask", turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session, result.state) });
   } catch (error) {
     await transaction(async (conn) => {
       await releaseCredit(conn, reserved.creditId);

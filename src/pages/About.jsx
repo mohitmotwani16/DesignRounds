@@ -1,6 +1,5 @@
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { tracks } from "../data/prompts.js";
-import { aiLimits } from "../data/plans.js";
 import { SiteFooter } from "../components/site.jsx";
 import { Link } from "../router.js";
 import { trackPath } from "../seo.js";
@@ -32,8 +31,8 @@ export default function AboutPage() {
 
           <h2>Pricing</h2>
           <ul>
-            <li><strong>Free:</strong> practice rounds in every discipline, the full canvas, and {aiLimits.free.reviewsPerRound} AI review per round (up to {aiLimits.free.reviewsPerMonth} a month) with scores on every dimension. No credit card.</li>
-            <li><strong>Plus (coming soon):</strong> every round, the live AI interviewer, {aiLimits.plus.reviewsPerRound} reviews per round, and full coaching on each decision. Pricing will be announced at launch.</li>
+            <li><strong>Free:</strong> free questions in every discipline, the full canvas, an AI review of your design with scores on every dimension, and your first round with the live AI interviewer. No credit card.</li>
+            <li><strong>Plus (coming soon):</strong> every question, the live AI interviewer on every round, feedback on how you communicate, more reviews per round, and full coaching on each decision. Pricing will be announced at launch.</li>
           </ul>
 
           <h2>Your data</h2>

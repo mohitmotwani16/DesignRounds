@@ -21,14 +21,24 @@ select.text-input { padding-right: 8px; cursor: pointer; }
 .user-menu { position: relative; }
 .account-button { height: 36px; padding: 0 10px 0 11px; display: inline-flex; align-items: center; gap: 7px; color: var(--fg-36425a); border: 1px solid var(--bd-e1e4e9); border-radius: 8px; background: var(--bg-ffffff); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s; }
 .account-button:hover, .account-button.open { border-color: var(--bd-cdd2db); background: var(--bg-f7f8fa); }
-.account-button > svg:first-child { color: var(--fg-6b7790); }
+.account-button:has(.avatar-plus) { padding-left: 9px; }
 .account-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-chevron { color: var(--fg-8f99a8); transition: transform .15s; }
 .account-button.open .account-chevron { transform: rotate(180deg); }
 .user-menu-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: 240px; padding: 6px; border: 1px solid var(--bd-e3e6eb); border-radius: 10px; background: var(--bg-ffffff); box-shadow: 0 14px 40px rgba(22, 32, 48, .14); animation: modal-in .12s ease-out; }
-.user-menu-identity { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--bd-eef0f3); margin-bottom: 4px; }
+.user-menu-identity { padding: 8px 10px 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--bd-eef0f3); margin-bottom: 4px; }
+.user-menu-identity-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .user-menu-identity strong { color: var(--fg-253146); font-size: 13px; }
-.user-menu-identity span { overflow: hidden; color: var(--fg-7f8999); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.user-menu-identity-text > span { overflow: hidden; color: var(--fg-7f8999); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Avatar: initials in a circle. Plus members get a ring with a see-through gap,
+   drawn as an outline so it adds no layout and sits on any background. */
+.avatar { position: relative; flex: none; display: inline-grid; place-items: center; border-radius: 50%; color: var(--fg-3f4bb3); background: var(--bg-eef0fc); font-weight: 700; line-height: 1; letter-spacing: .2px; }
+.avatar-sm { width: 22px; height: 22px; font-size: 9.5px; }
+.avatar-md { width: 32px; height: 32px; font-size: 12px; }
+.avatar-lg { width: 56px; height: 56px; font: 700 20px/1 var(--serif); }
+.avatar-plus { color: var(--plus); background: var(--plus-soft); outline: 1.5px solid var(--plus); outline-offset: 1.5px; }
+.avatar-lg.avatar-plus { outline-width: 2px; outline-offset: 3px; }
 .user-menu-popover button { width: 100%; padding: 9px 10px; display: flex; align-items: center; gap: 9px; color: var(--fg-46526a); border: 0; border-radius: 6px; background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
 .user-menu-popover button:hover { background: var(--bg-f4f5f8); }
 .user-menu-popover button svg { color: var(--fg-8590a2); }
@@ -66,11 +76,15 @@ select.text-input { padding-right: 8px; cursor: pointer; }
 /* Profile */
 .profile-page { min-height: calc(100vh - 76px); padding-top: 36px; }
 .profile-hero { display: flex; align-items: center; gap: 16px; }
-.profile-avatar { width: 56px; height: 56px; flex: none; display: grid; place-items: center; color: var(--fg-3f4bb3); border-radius: 50%; background: var(--bg-eef0fc); font: 700 20px/1 var(--serif); }
 .profile-identity { min-width: 0; }
 .profile-identity h1 { margin: 0; color: var(--fg-253146); font: 600 28px/1.2 var(--serif); letter-spacing: -.9px; }
 .profile-identity p { margin: 5px 0 0; color: var(--fg-6f7a8b); font-size: 14px; }
 .plan-badge { margin-left: auto; padding: 6px 12px; color: var(--fg-63826b); border: 1px solid var(--bd-dbe9de); border-radius: 20px; background: var(--bg-f5faf6); font-size: 12px; font-weight: 600; }
+.plan-badge-plus { display: inline-flex; align-items: center; gap: 6px; color: var(--plus); border-color: var(--plus-line); background: var(--plus-soft); font-weight: 500; white-space: nowrap; }
+.plan-badge-plus b { font-weight: 700; }
+.plan-badge-plus a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--plus-line); }
+.plan-badge-plus a:hover { text-decoration-color: currentColor; }
+.plan-badge-plus.ending { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .profile-stats { margin: 24px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--bd-e6e8ed); border-radius: 10px; background: var(--bg-ffffff); }
 .profile-stats div { padding: 16px 18px; border-left: 1px solid var(--bd-eceef2); }
 .profile-stats div:first-child { border-left: 0; }
@@ -125,6 +139,9 @@ select.text-input { padding-right: 8px; cursor: pointer; }
   .history-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .field-row { grid-template-columns: 1fr; }
   .auth-card { padding: 24px 20px; }
+  .profile-hero { flex-wrap: wrap; }
+  .plan-badge { margin-left: 0; }
+  .plan-badge-plus { flex-wrap: wrap; white-space: normal; }
 }
 
 /* Developer tools (development builds only) */

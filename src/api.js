@@ -153,6 +153,7 @@ export const api = {
   listReviews: (id) => request("GET", `/sessions/${id}/reviews`),
   requestReview: (id, requestId) => request("POST", `/sessions/${id}/reviews`, { requestId }),
   getInterview: (id) => request("GET", `/sessions/${id}/interview`),
+  startInterviewerTrial: (id) => request("POST", `/sessions/${id}/interview/trial`, {}),
   sendInterviewMessage: (id, body, handlers) => streamRequest("POST", `/sessions/${id}/interview/messages`, body, handlers),
   sendInterviewAudio: (id, body, handlers) => streamRequest("POST", `/sessions/${id}/interview/audio`, body, handlers),
   interviewTick: (id, body) => request("POST", `/sessions/${id}/interview/tick`, body),
@@ -186,6 +187,9 @@ export const api = {
   plusWaitlistStatus: () => request("GET", "/plus/waitlist"),
   joinPlusWaitlist: (body) => request("POST", "/plus/waitlist", body),
   adminPlusWaitlist: () => request("GET", "/admin/plus-waitlist"),
+  reportProblem: (body) => request("POST", "/reports", body),
+  adminReports: () => request("GET", "/admin/reports"),
+  setReportStatus: (id, status) => request("PATCH", `/admin/reports/${id}`, { status }),
   getInvitation: (token) => request("GET", `/invitations/${encodeURIComponent(token)}`),
   acceptInvitation: (token) => request("POST", `/invitations/${encodeURIComponent(token)}/accept`, {}),
 };

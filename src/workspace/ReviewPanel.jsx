@@ -12,7 +12,7 @@ function plural(count, word) {
 
 function allowanceText(allowance) {
   if (!allowance) return "";
-  const plan = allowance.plan === "plus" ? "Plus" : "Free plan";
+  const plan = allowance.plan === "plus" ? "Plus" : allowance.trial ? "Free interviewer round" : "Free plan";
   const monthLeft = Math.max(0, allowance.month.limit - allowance.month.used);
   return `${plan}: ${allowance.round.used} of ${plural(allowance.round.limit, "review")} used for this round · ${monthLeft} left this month`;
 }
@@ -104,7 +104,7 @@ export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor })
         <div className="review-card review-intro">
           <span className="review-kicker"><Sparkles size={13} /> READY FOR REVIEW</span>
           <h3>Get feedback on your design.</h3>
-          <p>{allowance.plan === "plus"
+          <p>{allowance.plan === "plus" || allowance.trial
             ? "Your review includes scores, evidence, and specific improvements for every dimension."
             : "Your free review includes your overall score, every dimension's score, and your top strength and risk. Plus adds detailed evidence, improvements, and follow-up questions."}</p>
           <ReviewButton canRequest={canRequest} onClick={requestReview} label="Get my review" allowance={allowance} aiAvailable={data.aiAvailable} />

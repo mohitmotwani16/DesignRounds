@@ -192,5 +192,7 @@ export function tickPlan({ base, kind, itemId = null, items }) {
   }
   const item = items.find((entry) => entry.itemId === itemId);
   const move = !item || item.status === "pending" ? "open" : "probe";
-  return { ...base, focusItemId: itemId ?? base.focusItemId, nextItemId: move === "open" ? itemId : base.nextItemId, allowedMoves: [move, "stay_silent"] };
+  // The tick only gets here for a major part of the design nobody has talked about yet,
+  // so the interviewer asks about it rather than deciding to stay quiet.
+  return { ...base, focusItemId: itemId ?? base.focusItemId, nextItemId: move === "open" ? itemId : base.nextItemId, allowedMoves: [move] };
 }

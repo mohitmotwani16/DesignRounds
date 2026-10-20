@@ -108,11 +108,11 @@ test("plan: next item never goes back a stage", () => {
   assert.equal(clockOf({ state: baseState({ activeMs: 90_000, stageStartedMs: 30_000 }), pacing: pack.pacing, minutes: 40 }).stageElapsedMs, 60_000);
 });
 
-test("tickPlan: a canvas question opens or probes the mapped item, or stays silent", () => {
+test("tickPlan: a canvas question opens or probes the mapped item, and always asks", () => {
   const items = ledger({ "req.scale": { status: "open" } });
   const base = planFor(items, baseState());
-  assert.deepEqual(tickPlan({ base, kind: "canvas", itemId: "deep.cache", items }).allowedMoves, ["open", "stay_silent"]);
-  assert.deepEqual(tickPlan({ base, kind: "canvas", itemId: "req.scale", items }).allowedMoves, ["probe", "stay_silent"]);
+  assert.deepEqual(tickPlan({ base, kind: "canvas", itemId: "deep.cache", items }).allowedMoves, ["open"]);
+  assert.deepEqual(tickPlan({ base, kind: "canvas", itemId: "req.scale", items }).allowedMoves, ["probe"]);
   assert.deepEqual(tickPlan({ base, kind: "stage", items }).allowedMoves, ["move_on"]);
 });
 
@@ -277,10 +277,13 @@ test("ticks: each time threshold is announced once, then wrap-up at 100%", () =>
   assert.equal(at(41, [0.8]).move, "wrap_up");
 });
 
-test("ticks: an unexplained canvas change mapped to the agenda calls the model, unless cooling down", () => {
-  assert.deepEqual(tick({ canvas: { unexplained: true, itemId: "deep.cache" } }), { action: "model", kind: "canvas", itemId: "deep.cache" });
-  assert.equal(tick({ canvas: { unexplained: true, itemId: "deep.cache" }, lastProactiveAt: ago(30_000) }).action, "none");
-  assert.equal(tick({ canvas: { unexplained: true, itemId: "deep.cache" }, lastTurn: { role: "interviewer", kind: "question", at: ago(60_000) } }).action, "none");
+test("ticks: an undiscussed part of the design calls the model, unless cooling down or a question was just asked", () => {
+  const canvas = { unexplained: true, itemId: "deep.cache" };
+  assert.deepEqual(tick({ canvas }), { action: "model", kind: "canvas", itemId: "deep.cache" });
+  assert.equal(tick({ canvas, lastProactiveAt: ago(30_000) }).action, "none");
+  assert.equal(tick({ canvas, lastTurn: { role: "interviewer", kind: "question", at: ago(30_000) } }).action, "none", "the learner gets a moment to answer");
+  assert.equal(tick({ canvas, lastTurn: { role: "interviewer", kind: "question", at: ago(90_000) } }).action, "model", "after a minute, the canvas question can come");
+  assert.equal(tick({ canvas, lastTurn: { role: "interviewer", kind: "opening", at: ago(5_000) } }).action, "model", "the opening message never blocks it");
 });
 
 test("ticks: an overrun stage with an exhausted focus moves on through the model", () => {

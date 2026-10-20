@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { SiteFooter } from "../components/site.jsx";
 import { Link } from "../router.js";
 
-export const PRIVACY_UPDATED = "October 19, 2026";
+export const PRIVACY_UPDATED = "October 20, 2026";
 export const CONTACT_EMAIL = "designrounds.app@gmail.com";
 
 // What we collect, why, who processes it and how to delete it. Keep this in step with
@@ -28,6 +28,7 @@ export default function PrivacyPage() {
             <li><strong>Security and sign-in records:</strong> one-time sign-in codes (stored only as a hash), the browser user-agent of each signed-in session, and IP addresses used for rate limiting and abuse prevention.</li>
             <li><strong>Human check:</strong> Cloudflare Turnstile checks that a sign-in, the first time you open the site in a browser session while signed in, and a change of network (such as Wi-Fi to mobile data) comes from a person. Reloading the page in the same session runs the check in the background without blocking the site. We store the network address of the last successful check with your session so a different connection asks again. We receive only a pass or fail from Cloudflare. Cloudflare sees the page address, your IP address, and browser signals it uses to tell visitors from bots. This is not an advertising or analytics cookie.</li>
             <li><strong>Plus early-access list:</strong> if you ask for early access to Plus, we store your email address and when you asked, and send you one confirmation. We use it only to tell you when Plus opens. Ask us to remove it at any time; deleting your account removes it too.</li>
+            <li><strong>Problem reports:</strong> if you report a problem, we store your email address, what you wrote, the page you were on and your browser's user agent, so we can investigate and reply. Deleting your account removes your reports.</li>
             <li><strong>Usage counts:</strong> how many AI reviews and interviewer replies you've used, so plan limits can be applied.</li>
           </ul>
 
@@ -60,6 +61,7 @@ export default function PrivacyPage() {
           <ul>
             <li>Your account, designs, interview transcripts, derived answer context and reviews are kept until you delete them or your account.</li>
             <li>Voice recordings are deleted 30 days after they're transcribed. The transcript and delivery measurements stay with the practice round until you delete it or your account.</li>
+            <li>Your free interviewer round is recorded against a one-way hash of your email address, not the address itself. That hash is kept after you delete your account, so the free round can't be claimed twice.</li>
             <li>Sign-in codes are deleted within a day, expired sessions are removed daily, and rate-limit records are removed once their time window ends.</li>
           </ul>
 

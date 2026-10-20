@@ -10,7 +10,8 @@ import { useTopic } from "../learn/topics.js";
 import { communityArticle, communityInCategory, loadCommunityArticle, loadedCommunityArticle, useCommunityArticles } from "../learn/community.js";
 import { markdownToBlocks } from "../learn/markdown.js";
 import { Rich, plainText } from "../components/rich.jsx";
-import { LevelMeter, SiteFooter } from "../components/site.jsx";
+import { AccessBadge, LevelMeter, SiteFooter } from "../components/site.jsx";
+import { useAuth } from "../auth.jsx";
 import { Link, useRoute } from "../router.js";
 import { roundPath, trackPath, TRACK_SEO } from "../seo.js";
 
@@ -170,6 +171,7 @@ function RoundLinks({ ids }) {
 
 // The interview-questions guide: every round, grouped by discipline, then level.
 function QuestionsByTrack() {
+  const { user } = useAuth();
   return tracks.map((track) => {
     const rounds = prompts.filter((prompt) => prompt.track === track.id)
       .sort((a, b) => LEVEL_ORDER.indexOf(a.difficulty) - LEVEL_ORDER.indexOf(b.difficulty));
@@ -182,7 +184,7 @@ function QuestionsByTrack() {
             <li key={prompt.id}>
               <h3><Link to={roundPath(prompt.id)}>{prompt.title}</Link></h3>
               <p>{prompt.description} <strong>Tests:</strong> {prompt.considerations.join(", ").toLowerCase()}.</p>
-              <span className="question-facts"><LevelMeter level={prompt.difficulty} /> <span><Clock3 size={13} /> {prompt.minutes} min</span>{prompt.access === "free" ? <span className="badge badge-free">Free</span> : <span className="badge badge-plus">Plus</span>}</span>
+              <span className="question-facts"><LevelMeter level={prompt.difficulty} /> <span><Clock3 size={13} /> {prompt.minutes} min</span><AccessBadge round={prompt} user={user} /></span>
             </li>
           ))}
         </ol>

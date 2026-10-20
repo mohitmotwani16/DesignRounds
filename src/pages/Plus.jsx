@@ -1,27 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, LoaderCircle, MessageCircle, Minus } from "lucide-react";
 import { api } from "../api.js";
-import { COMMUNICATION, PLUS_FEATURES, RUBRIC, aiLimits } from "../data/plans.js";
+import { COMMUNICATION, PLUS_FEATURES, RUBRIC } from "../data/plans.js";
 import { SiteFooter, useReveal } from "../components/site.jsx";
 import { useAuth } from "../auth.jsx";
 import { Link } from "../router.js";
 import { topicPath } from "../learn/catalog.js";
 import { TurnstileWidget } from "../components/Turnstile.jsx";
 
-const free = aiLimits.free;
-const plus = aiLimits.plus;
-
 // Free against Plus, row by row. true and false render as a mark; text is shown as is.
+// No counts here (questions, reviews): the free tier is described by what it covers.
 const COMPARE = [
-  ["Free rounds in every discipline", true, true],
-  ["Every round in the library, every level", false, true],
+  ["Practice questions", "A selection in every discipline", "Every question, every level"],
   ["Architecture canvas with autosave and version history", true, true],
-  ["AI review scored on the full rubric", true, true],
-  ["Reviews", `${free.reviewsPerRound} per round, up to ${free.reviewsPerMonth} a month`, `${plus.reviewsPerRound} per round, up to ${plus.reviewsPerMonth} a month`],
+  ["Live AI interviewer, by voice or text", "Your first round, on a free question", "Every round"],
+  ["Feedback on how you communicate", "In your free interviewer round", true],
+  ["Hints when you're stuck", "In your free interviewer round", true],
+  ["AI review of your design, scored on the full rubric", true, true],
+  ["What the review reads", "Your diagram and “Why this choice?” notes", "Your diagram, notes and the interview"],
   ["Review detail", "Scores, top strength and top risk", "Coaching on every decision"],
-  ["Live AI interviewer, by voice or text", false, true],
-  ["Feedback on how you communicate", false, true],
-  ["Hints when you're stuck", false, true],
+  ["Review again after fixing your design", false, true],
   ["System design handbook and roadmaps", true, true],
 ];
 

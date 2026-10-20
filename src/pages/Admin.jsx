@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Copy, Download, ExternalLink, LoaderCircle, Mail, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowLeft, Bug, Check, Copy, Download, ExternalLink, LoaderCircle, Mail, RotateCcw, Save, Search, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { CATEGORIES, categoryById } from "../learn/catalog.js";
@@ -40,7 +40,7 @@ function AdminHome() {
         <header className="write-head">
           <div>
             <h1><ShieldCheck size={24} /> Admin</h1>
-            <p>Review community articles and interviewer packs, manage admins, grant expiring Plus access, and see who asked for Plus.</p>
+            <p>Review community articles and interviewer packs, manage admins, grant expiring Plus access, see who asked for Plus, and work through problem reports.</p>
           </div>
         </header>
         <div className="admin-tabs" role="tablist">
@@ -50,8 +50,9 @@ function AdminHome() {
           <button role="tab" aria-selected={tab === "invitations"} onClick={() => setTab("invitations")}>Invitations</button>
           <button role="tab" aria-selected={tab === "packs"} onClick={() => setTab("packs")}>Interviewer packs</button>
           <button role="tab" aria-selected={tab === "waitlist"} onClick={() => setTab("waitlist")}>Plus waitlist</button>
+          <button role="tab" aria-selected={tab === "reports"} onClick={() => setTab("reports")}>Problem reports</button>
         </div>
-        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : tab === "waitlist" ? <PlusWaitlist /> : <InvitationForm />}
+        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : tab === "waitlist" ? <PlusWaitlist /> : tab === "reports" ? <ProblemReports /> : <InvitationForm />}
       </div>
     </main>
   );
@@ -329,6 +330,76 @@ function PlusWaitlist() {
             </ul>
           )}
           {data.total > data.entries.length && <p className="admin-hint">Showing the newest {data.entries.length} of {data.total}.</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
+// Problems people reported from the site (issue #71), open ones first. Resolving
+// one only files it away; it can be reopened.
+function ProblemReports() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(null);
+
+  useEffect(() => {
+    api.adminReports().then(setData).catch((loadError) => setError(loadError.message));
+  }, []);
+
+  async function setStatus(report, status) {
+    setBusyId(report.id);
+    setError("");
+    try {
+      const saved = await api.setReportStatus(report.id, status);
+      setData((current) => ({
+        ...current,
+        open: current.open + (status === "open" ? 1 : -1),
+        reports: current.reports.map((item) => (item.id === saved.id ? { ...item, status: saved.status, resolvedAt: saved.resolvedAt } : item)),
+      }));
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section className="admin-waitlist admin-reports">
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {!data && !error && <p className="learn-loading"><LoaderCircle size={16} className="spin" /> Loading…</p>}
+      {data && (
+        <>
+          <div className="admin-waitlist-head">
+            <p><strong>{data.open}</strong> open · {data.total} in total</p>
+          </div>
+          {data.reports.length === 0 ? (
+            <p className="write-empty">No problems reported yet. The form is linked from the footer, the account menu and the workspace.</p>
+          ) : (
+            <ul className="write-list">
+              {data.reports.map((report) => (
+                <li key={report.id} className={`admin-report ${report.status === "resolved" ? "resolved" : ""}`}>
+                  <div className="admin-report-head">
+                    <span className="write-list-title">
+                      {report.displayName || report.email}
+                      <small>{report.email} · {report.hasAccount ? "Account" : "Visitor"}{report.page ? ` · ${report.page}` : ""}</small>
+                    </span>
+                    <span className="write-list-date">{formatDate(report.createdAt)}</span>
+                  </div>
+                  <p className="admin-report-message">{report.message}</p>
+                  {report.userAgent && <p className="admin-report-agent">{report.userAgent}</p>}
+                  <div className="admin-buttons">
+                    <a className="btn btn-ghost" href={`mailto:${report.email}?subject=${encodeURIComponent("Your DesignRounds problem report")}`}><Mail size={14} /> Reply</a>
+                    {report.status === "open"
+                      ? <button className="btn btn-ghost" disabled={busyId === report.id} onClick={() => setStatus(report, "resolved")}><Check size={14} /> Mark resolved</button>
+                      : <button className="btn btn-ghost" disabled={busyId === report.id} onClick={() => setStatus(report, "open")}><RotateCcw size={14} /> Reopen</button>}
+                    {report.status === "resolved" && <span className="admin-report-status"><Bug size={13} /> Resolved {formatDate(report.resolvedAt)}</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {data.total > data.reports.length && <p className="admin-hint">Showing {data.reports.length} of {data.total}.</p>}
         </>
       )}
     </section>

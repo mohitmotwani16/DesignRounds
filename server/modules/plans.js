@@ -18,9 +18,15 @@ export function isPlus(user) {
 
 export const planFor = (user) => isPlus(user) ? "plus" : "free";
 
-export function limitsFor(user) {
+// A free learner's interviewer trial round (practice_sessions.interviewer_trial) gets
+// the trial allowances; every other round follows the learner's plan. Pass the session
+// wherever one is in hand, so a trial round is recognised.
+export const onTrial = (user, session) => !isPlus(user) && Boolean(session?.interviewer_trial);
+
+export function limitsFor(user, session = null) {
+  if (onTrial(user, session)) return aiLimits.trial;
   return aiLimits[planFor(user)] || aiLimits.free;
 }
 
-export const hasFullFeedback = (user) => isPlus(user);
-export const hasInterviewer = (user) => limitsFor(user).interviewTurnsPerRound > 0;
+export const hasFullFeedback = (user, session = null) => isPlus(user) || onTrial(user, session);
+export const hasInterviewer = (user, session = null) => limitsFor(user, session).interviewTurnsPerRound > 0;
