@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Clock, Eye, Gift, Lightbulb, LoaderCircle, MessageSquare, Mic, PenLine, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, MessageSquare, Mic, PenLine, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
 import { api } from "../api.js";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
@@ -64,11 +64,12 @@ function LockedInterviewer({ interview, onShowReview }) {
         </ul>
         {trial === "available" ? (
           <div className="interviewer-trial">
+            <span className="interviewer-trial-kicker"><Crown size={12} /> Plus · free for one round</span>
             {confirming ? (
               <>
                 <p><strong>Use your free interviewer round on this question?</strong> Every account gets one. It covers this whole round, including feedback on how you communicate, and can't be moved to another round later.</p>
                 <div className="interviewer-trial-actions">
-                  <button className="button button-dark button-small" onClick={startTrial} disabled={starting}>
+                  <button className="button button-plus button-small" onClick={startTrial} disabled={starting}>
                     {starting ? <LoaderCircle size={14} className="spin" /> : <Gift size={14} />} Start my free round
                   </button>
                   <button className="button button-outline button-small" onClick={() => setConfirming(false)} disabled={starting}>Not now</button>
@@ -78,7 +79,7 @@ function LockedInterviewer({ interview, onShowReview }) {
               <>
                 <p><Gift size={14} /> <span>Your first interviewer round is free. Try it on this question.</span></p>
                 <div className="interviewer-trial-actions">
-                  <button className="button button-dark button-small" onClick={() => setConfirming(true)}>Try it free <ArrowRight size={14} /></button>
+                  <button className="button button-plus button-small" onClick={() => setConfirming(true)}>Try it free <ArrowRight size={14} /></button>
                   {getPlus(false)}
                 </div>
               </>

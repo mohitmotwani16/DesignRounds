@@ -31,6 +31,7 @@
   --plus: #b45309;
   --plus-soft: #fdf3e2;
   --plus-line: #f1d4a4;
+  --plus-ink: #ffffff;
   --danger: #be123c;
   --invert-bg: #14151a;
   --invert-ink: #f6f6f8;
@@ -78,6 +79,7 @@
   --plus: #fbbf24;
   --plus-soft: rgba(251, 191, 36, 0.1);
   --plus-line: rgba(251, 191, 36, 0.3);
+  --plus-ink: #1c1404;
   --danger: #fb7185;
   --invert-bg: #f3f3f6;
   --invert-ink: #0d0e12;
@@ -117,7 +119,7 @@
   --grid-dot: rgba(0, 0, 0, 0.08);
   --glow: rgba(0, 0, 0, 0.06);
   --ok: #111111; --ok-soft: #efefef;
-  --plus: #111111; --plus-soft: #efefef; --plus-line: #cfcfcf;
+  --plus: #111111; --plus-soft: #efefef; --plus-line: #cfcfcf; --plus-ink: #ffffff;
   --danger: #111111;
   --invert-bg: #111111; --invert-ink: #f6f6f6; --invert-ink-2: #a8a8a8; --invert-line: #2c2c2c;
   --t-violet: #222; --t-violet-soft: #ededed;
