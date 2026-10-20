@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
+import { playChime, primeChime } from "./chime.js";
 
 // The canvas has to be still this long before the interviewer looks at it, and it looks
 // at most this often. The server applies its own, stricter rules on top.
@@ -27,6 +28,16 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
 
   useEffect(() => () => { generation.current += 1; }, []);
 
+  // Audio can only start after the learner has interacted with the page.
+  useEffect(() => {
+    window.addEventListener("pointerdown", primeChime, { once: true });
+    window.addEventListener("keydown", primeChime, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", primeChime);
+      window.removeEventListener("keydown", primeChime);
+    };
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const result = await api.getInterview(sessionId);
@@ -43,15 +54,22 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     return { ...current, ...extra, ...(extra.state ? { receivedAt: Date.now() } : {}), turns: [...current.turns, ...turns.filter((turn) => !known.has(turn.id))] };
   });
 
-  const streamHandlers = (gen) => ({
-    onDelta: (text) => {
-      if (generation.current !== gen || !text) return;
-      setReplyText((current) => (current ?? "") + text);
-    },
-    onReset: () => {
-      if (generation.current === gen) setReplyText("");
-    },
-  });
+  // The chime plays as the interviewer starts replying (the first streamed text), or
+  // when the reply arrives whole if it wasn't streamed.
+  const streamHandlers = (gen) => {
+    const handlers = {
+      chimed: false,
+      onDelta: (text) => {
+        if (generation.current !== gen || !text) return;
+        if (!handlers.chimed) { handlers.chimed = true; playChime(); }
+        setReplyText((current) => (current ?? "") + text);
+      },
+      onReset: () => {
+        if (generation.current === gen) setReplyText("");
+      },
+    };
+    return handlers;
+  };
 
   const send = useCallback(async (content, intent = "message") => {
     if (pendingRef.current) return false;
@@ -67,9 +85,13 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     setReplyText("");
     try {
       await settleSave();
-      const result = await api.sendInterviewMessage(sessionId, { requestId: attempt.current.id, content, intent, selectedNodeId: selectedIdRef.current }, streamHandlers(gen));
+      const handlers = streamHandlers(gen);
+      const result = await api.sendInterviewMessage(sessionId, { requestId: attempt.current.id, content, intent, selectedNodeId: selectedIdRef.current }, handlers);
       attempt.current = null;
-      if (generation.current === gen) appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+      if (generation.current === gen) {
+        if (!handlers.chimed) playChime();
+        appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+      }
       return true;
     } catch (error) {
       const retryable = error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY";
@@ -100,8 +122,12 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     try {
       await settleSave();
       const data = await blobToBase64(recording.blob);
-      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data, selectedNodeId: selectedIdRef.current }, streamHandlers(gen));
-      if (generation.current === gen) appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+      const handlers = streamHandlers(gen);
+      const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data, selectedNodeId: selectedIdRef.current }, handlers);
+      if (generation.current === gen) {
+        if (!handlers.chimed) playChime();
+        appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+      }
       return true;
     } catch (error) {
       if (generation.current === gen) setSendError({ message: error.message, intent: "audio", recording, retryable: error.status === 0 || error.status >= 500 || error.code === "INTERVIEWER_BUSY" });
@@ -127,6 +153,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
       const result = await api.interviewTick(sessionId, { reason, typing: typingRef.current, selectedNodeId: selectedIdRef.current });
       if ((result.action === "ask" || result.action === "say") && result.turn) {
         appendTurns([result.turn], { state: result.state, allowance: result.allowance });
+        playChime();
         if (result.action === "ask") onProactiveTurn?.();
       }
     } catch {

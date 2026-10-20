@@ -1,3 +1,4 @@
+import { suppressChime } from "./chime.js";
 import { useEffect, useRef, useState } from "react";
 import { Mic, Send, Trash2 } from "lucide-react";
 
@@ -35,6 +36,7 @@ export function useVoiceRecorder({ onRecorded }) {
     window.clearInterval(recording.timer);
     recording.stream.getTracks().forEach((track) => track.stop());
     if (active.current === recording) active.current = null;
+    suppressChime(false);
   };
 
   function finish(keep) {
@@ -84,6 +86,7 @@ export function useVoiceRecorder({ onRecorded }) {
 
     const recording = { recorder, stream, chunks: [], startedAt: performance.now(), keep: false, durationMs: 0, timer: 0 };
     active.current = recording;
+    suppressChime(true);
     recorder.ondataavailable = (event) => { if (event.data.size) recording.chunks.push(event.data); };
     recorder.onstop = () => {
       release(recording);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, Mic, PenLine, RefreshCw, Send, ThumbsDown, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, Mic, PenLine, RefreshCw, Send, ThumbsDown, Volume2, VolumeX, X } from "lucide-react";
 import { api } from "../api.js";
+import { useInterviewerSound } from "./chime.js";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
 const STAGES = [
@@ -119,6 +120,7 @@ function LockedInterviewer({ interview, onShowReview }) {
 function Conversation({ interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
   const { turns, state, allowance, pending, pendingAudio, outgoing, replyText, sendError } = interview;
   const [draft, setDraft] = useState("");
+  const [soundOn, toggleSound] = useInterviewerSound();
   const listRef = useRef(null);
   const stageIndex = Math.max(0, STAGES.findIndex(([id]) => id === state?.stage));
   const repliesLeft = allowance ? Math.max(0, allowance.turns.limit - allowance.turns.used) : 0;
@@ -174,6 +176,10 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
           ))}
         </ol>
         {v3 && <RoundClock clock={state.clock} receivedAt={interview.receivedAt} paused={roundFinished} />}
+        <button type="button" className="interview-sound" onClick={toggleSound} aria-pressed={soundOn}
+          aria-label={soundOn ? "Mute the reply sound" : "Play a sound when the interviewer replies"} title={soundOn ? "Reply sound on" : "Reply sound off"}>
+          {soundOn ? <Volume2 size={15} aria-hidden="true" /> : <VolumeX size={15} aria-hidden="true" />}
+        </button>
       </div>
 
       <div className="interviewer-body interview-thread" ref={listRef} role="log" aria-relevant="additions" aria-label="Interview conversation">

@@ -437,6 +437,10 @@ kbd { min-width: 22px; padding: 2px 6px; display: inline-block; color: var(--fg-
    clock-driven turns, per-message feedback. */
 .interview-stagebar { display: flex; align-items: center; gap: 10px; padding-right: 14px; border-bottom: 1px solid var(--bd-f0f1f4); }
 .interview-stagebar .interview-stages { flex: 1; min-width: 0; border-bottom: 0; }
+.interview-sound { flex: none; width: 30px; height: 30px; display: grid; place-items: center; color: var(--fg-7a8494); border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.interview-sound:hover { color: var(--fg-36425a); background: var(--bg-f2f4f7); }
+.interview-sound[aria-pressed="false"] { color: var(--fg-a2aab5); }
+.interview-sound:focus-visible { outline: 2px solid var(--fg-5964d8); outline-offset: 1px; }
 .interview-clock { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; color: var(--fg-6b7686); border: 1px solid var(--bd-eceef3); border-radius: 999px; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .interview-clock.late { color: var(--fg-8a5a12); border-color: var(--bd-f0e2c4); background: var(--bg-fdf9ef); }
 .interview-clock.over { color: var(--fg-ffffff); border-color: var(--bd-5964d8); background: var(--bg-5964d8); }
