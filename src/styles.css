@@ -178,7 +178,7 @@ a { color: inherit; text-decoration: none; }
 
 
 /* Interviewer panel */
-.interviewer-panel { width: 340px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--bd-e7e9ed); background: var(--bg-ffffff); }
+.interviewer-panel { width: var(--panel-width, 340px); flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--bd-e7e9ed); background: var(--bg-ffffff); }
 .interviewer-header { min-height: 56px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--bd-ebeef1); }
 .panel-close { width: 30px; height: 30px; margin-left: 2px; padding: 0; display: grid; place-items: center; color: var(--fg-8b95a3); border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; }
 .panel-close:hover { color: var(--fg-4d596d); border-color: var(--bd-eceef1); background: var(--bg-fafbfc); }
@@ -191,19 +191,32 @@ a { color: inherit; text-decoration: none; }
 .interviewer-perks li { display: flex; align-items: center; gap: 8px; }
 .interviewer-perks svg { flex: none; color: var(--fg-5964d8); }
 .interviewer-empty .interviewer-cta { text-decoration: none; }
-/* The free interviewer round offer (issue #75). */
-.interviewer-trial { width: 100%; padding: 12px 14px; border: 1px solid var(--plus-line); border-radius: 10px; background: var(--plus-soft); }
-.interviewer-trial-kicker { margin-bottom: 8px; display: inline-flex; align-items: center; gap: 6px; color: var(--plus); font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
-.interviewer-trial > p { margin: 0; display: flex; align-items: flex-start; gap: 8px; color: var(--fg-3f4b5f); font-size: 13.5px; line-height: 1.55; }
-.interviewer-trial > p svg { flex: none; margin-top: 3px; color: var(--plus); }
-.interviewer-trial > p strong { color: var(--fg-2b3649); }
-.interviewer-trial > p:has(strong) { display: block; }
-.interviewer-trial-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
-.interviewer-trial-actions .interviewer-cta { text-decoration: none; }
-.interviewer-trial .button-plus { color: var(--plus-ink); border-color: var(--plus); background: var(--plus); }
-.interviewer-trial .button-plus:hover:not(:disabled) { filter: brightness(1.08); }
-.interviewer-trial .form-error { margin-top: 8px; }
-.interviewer-empty .interviewer-trial-used { margin: 0 0 12px; color: var(--fg-6b7686); font-size: 13px; }
+/* Locked interviewer (free plans): the Plus amber is the only accent here. */
+.locked-interviewer { gap: 18px; }
+.locked-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.locked-icon { width: 38px; height: 38px; display: grid; place-items: center; color: var(--plus); border-radius: 10px; background: var(--plus-soft); }
+.locked-badge { height: 24px; padding: 0 9px; display: inline-flex; align-items: center; gap: 5px; color: var(--plus); border: 1px solid var(--plus-line); border-radius: 999px; background: var(--plus-soft); font-size: 12px; font-weight: 600; }
+.locked-title { margin: 0 0 6px; color: var(--fg-2b3649); font: 600 19px/1.3 var(--serif); letter-spacing: -.3px; text-wrap: balance; }
+.locked-lede { margin: 0; color: var(--fg-6b7686); font-size: 14px; line-height: 1.6; }
+.locked-perks { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--fg-3f4b5f); font-size: 13.5px; }
+.locked-perks li { display: flex; align-items: center; gap: 8px; }
+.locked-perks svg { flex: none; color: var(--plus); }
+.locked-offer { padding: 14px 16px; border: 1px solid var(--plus-line); border-radius: 12px; background: var(--plus-soft); }
+.locked-offer h4 { margin: 0; display: flex; align-items: center; gap: 7px; color: var(--fg-2b3649); font-size: 14.5px; font-weight: 650; }
+.locked-offer h4 svg { flex: none; color: var(--plus); }
+.locked-offer p { margin: 6px 0 0; color: var(--fg-5f6b7d); font-size: 13px; line-height: 1.55; }
+.locked-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.locked-actions .interviewer-cta { text-decoration: none; }
+.locked-offer .form-error { margin-top: 10px; }
+.button-plus { color: var(--plus-ink); border-color: var(--plus); background: var(--plus); }
+.button-plus:hover:not(:disabled) { filter: brightness(1.08); }
+.button-plus:focus-visible { outline: 2px solid var(--plus); outline-offset: 2px; }
+.locked-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--bd-eceef2); }
+.locked-foot p { margin: 0; color: var(--fg-7a8494); font-size: 12.5px; line-height: 1.55; }
+.locked-links { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 16px; }
+.locked-link { padding: 0; border: 0; background: none; color: var(--fg-3f4b5f); font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; text-decoration-color: var(--bd-cdd2db); text-underline-offset: 3px; cursor: pointer; }
+.locked-link:hover { text-decoration-color: currentColor; }
+.locked-link:focus-visible { outline: 2px solid var(--fg-5964d8); outline-offset: 2px; border-radius: 3px; }
 .interviewer-example { margin: 0; padding: 16px 18px; border-left: 3px solid var(--bd-d9dcf5); border-radius: 0 10px 10px 0; background: var(--bg-fafafe); }
 .interviewer-example figcaption { color: var(--fg-8a93a1); font-size: 11.5px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
 .interviewer-example blockquote { margin: 8px 0 0; color: var(--fg-3f4b5f); font-size: 14px; line-height: 1.6; }

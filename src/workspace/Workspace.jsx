@@ -18,6 +18,7 @@ import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
 import { CanvasActions, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
 import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
+import { PanelResizer } from "./PanelResizer.jsx";
 import { useInterview } from "./useInterview.js";
 import { useAuth } from "../auth.jsx";
 import { useTheme } from "../theme.js";
@@ -78,6 +79,9 @@ function Workspace({ session, prompt }) {
   // free interviewer round offer (or what Plus adds) there. A finished round opens on Review.
   const [panelTab, setPanelTab] = useState(() => (session.status === "completed" ? "review" : "interviewer"));
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
+  // Side panel widths the learner dragged to (null: the CSS default), kept per browser.
+  const [paletteWidth, setPaletteWidth] = usePanelWidth("designrounds:palette-width", PALETTE_WIDTH);
+  const [panelWidth, setPanelWidth] = usePanelWidth("designrounds:panel-width", SIDE_PANEL_WIDTH);
   const [showPrompt, setShowPrompt] = useState(() => initial.nodes.length === 0 && session.diagramVersion === 0);
   const [snap, setSnap] = useState(true);
   // Designing on a phone is cramped; say so once per visit (dismissible).
@@ -558,7 +562,10 @@ function Workspace({ session, prompt }) {
       {smallScreenNotice && <div className="workspace-banner info">Designing works best on a laptop or tablet. Your work saves automatically, so you can switch devices anytime. <button onClick={() => { setSmallScreenNotice(false); writeSessionFlag("designrounds:small-screen-dismissed", "1"); }}>Got it</button></div>}
       {legacy && !readOnly && <div className="workspace-banner info"><Upload size={14} /> We found a design for this round saved in this browser before accounts existed. <button onClick={importLegacy}>Import it</button><button className="banner-dismiss" onClick={() => setLegacy(null)}>Dismiss</button></div>}
 
-      <div className="workspace-body">
+      <div className="workspace-body" style={{
+        ...(paletteWidth ? { "--palette-width": `${paletteWidth}px` } : {}),
+        ...(panelWidth ? { "--panel-width": `${panelWidth}px` } : {}),
+      }}>
         <aside className="tool-rail" aria-label="Canvas tools">
           <button className={`rail-tool ${paletteOpen ? "active" : ""}`} title="Toggle component library (B)" aria-label="Toggle component library" aria-pressed={paletteOpen} onClick={() => setPaletteOpen((value) => !value)}><LayoutPanelLeft size={17} /></button>
           <span className="rail-separator" />
@@ -576,6 +583,7 @@ function Workspace({ session, prompt }) {
         </aside>
 
         {paletteOpen && <Palette onAdd={addItem} disabled={readOnly} outline={outline} selectedIds={selectedIds} onFocusNode={focusNode} />}
+        {paletteOpen && <PanelResizer side="left" label="Resize component library" width={paletteWidth} onResize={setPaletteWidth} {...PALETTE_WIDTH} />}
 
         <section className="canvas-column" aria-label="System design canvas">
           <div className="canvas-topbar">
@@ -663,6 +671,8 @@ function Workspace({ session, prompt }) {
           </div>
         </section>
 
+        {panelOpen && <PanelResizer side="right" label={`Resize ${panelTab === "review" ? "review" : "interviewer"} panel`} width={panelWidth} onResize={setPanelWidth}
+          {...SIDE_PANEL_WIDTH} defaultWidth={panelTab === "review" ? SIDE_PANEL_WIDTH.reviewWidth : SIDE_PANEL_WIDTH.defaultWidth} />}
         {panelOpen && (
           <SidePanel tab={panelTab} onTab={setPanelTab} onClose={togglePanel} interview={interview} unread={unread}
             selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} />
@@ -697,6 +707,19 @@ function findFreeSpot(nodes, preferred, size = { width: 178, height: 64 }) {
     }
   }
   return preferred;
+}
+
+// Limits for the resizable side panels; defaults match the CSS widths.
+const PALETTE_WIDTH = { defaultWidth: 284, min: 220, max: 440 };
+const SIDE_PANEL_WIDTH = { defaultWidth: 340, reviewWidth: 380, min: 300, max: 640 };
+
+function usePanelWidth(key, { min, max }) {
+  const [width, setWidth] = useState(() => {
+    const stored = Number(readPreference(key, ""));
+    return stored >= min && stored <= max ? stored : null;
+  });
+  useEffect(() => { writePreference(key, width ? String(width) : ""); }, [key, width]);
+  return [width, setWidth];
 }
 
 function readPreference(key, fallback) {

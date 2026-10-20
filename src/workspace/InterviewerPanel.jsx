@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, MessageSquare, Mic, PenLine, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, Mic, PenLine, RefreshCw, Send, ThumbsDown, X } from "lucide-react";
 import { api } from "../api.js";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
@@ -26,9 +26,11 @@ export function InterviewerPanel({ interview, roundFinished, selected, onClearSe
   return <Conversation interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} />;
 }
 
-// Free plans: invite the learner to talk the design through, and show what that adds.
-// On a free question they can spend their one free interviewer round here (issue #75);
-// otherwise the Plus page opens in a new tab so the round stays where it is.
+// Free plans. The interviewer is a Plus feature, and the panel says so first: one
+// accent (the Plus amber), one primary action per state, and the free alternative
+// (the written review) as a quiet link at the end.
+//   available    -> the learner's one free interviewer round, with a confirm step
+//   used / other -> Plus (opens in a new tab so the round stays where it is)
 function LockedInterviewer({ interview, onShowReview }) {
   const trial = interview.trial;
   const [confirming, setConfirming] = useState(false);
@@ -44,60 +46,63 @@ function LockedInterviewer({ interview, onShowReview }) {
     } catch (startError) {
       setError(startError.message);
       setStarting(false);
+      setConfirming(false);
       // The server's answer is the truth: reload so a used trial stops being offered.
       interview.reload();
     }
   }
 
-  const getPlus = (dark) => <a className={`button ${dark ? "button-dark" : "button-outline"} button-small interviewer-cta`} href="/plus" target="_blank" rel="noopener">Get Plus <ArrowRight size={14} /></a>;
-
   return (
-    <div className="interviewer-body">
-      <div className="interviewer-empty">
-        <span className="interviewer-empty-icon"><Mic size={19} /></span>
-        <h3>Talk your solution through with the interviewer</h3>
-        <p>Explain your design out loud or in chat, the way you would in the room. The interviewer asks why, pushes on the weak spots, and gives you feedback on how clearly you communicate, not just on what you drew.</p>
-        <ul className="interviewer-perks">
-          <li><Sparkles size={14} /> Follow-up questions on every choice</li>
-          <li><Sparkles size={14} /> Feedback on clarity, structure and confidence</li>
-          <li><Sparkles size={14} /> Hints when you're stuck</li>
-        </ul>
-        {trial === "available" ? (
-          <div className="interviewer-trial">
-            <span className="interviewer-trial-kicker"><Crown size={12} /> Plus · free for one round</span>
-            {confirming ? (
-              <>
-                <p><strong>Use your free interviewer round on this question?</strong> Every account gets one. It covers this whole round, including feedback on how you communicate, and can't be moved to another round later.</p>
-                <div className="interviewer-trial-actions">
-                  <button className="button button-plus button-small" onClick={startTrial} disabled={starting}>
-                    {starting ? <LoaderCircle size={14} className="spin" /> : <Gift size={14} />} Start my free round
-                  </button>
-                  <button className="button button-outline button-small" onClick={() => setConfirming(false)} disabled={starting}>Not now</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p><Gift size={14} /> <span>Your first interviewer round is free. Try it on this question.</span></p>
-                <div className="interviewer-trial-actions">
-                  <button className="button button-plus button-small" onClick={() => setConfirming(true)}>Try it free <ArrowRight size={14} /></button>
-                  {getPlus(false)}
-                </div>
-              </>
-            )}
-            {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="interviewer-body locked-interviewer">
+      <header className="locked-head">
+        <span className="locked-icon" aria-hidden="true"><Mic size={18} /></span>
+        <span className="locked-badge"><Crown size={12} aria-hidden="true" /> Plus feature</span>
+      </header>
+      <div>
+        <h3 className="locked-title">Practise out loud with an AI interviewer</h3>
+        <p className="locked-lede">Explain your design by voice or chat while you draw. The interviewer asks why, pushes on weak spots and moves you through the round, like a real one.</p>
+      </div>
+      <ul className="locked-perks">
+        <li><Check size={14} aria-hidden="true" /> Follow-up questions on every choice</li>
+        <li><Check size={14} aria-hidden="true" /> Feedback on how clearly you explain</li>
+        <li><Check size={14} aria-hidden="true" /> Hints when you're stuck</li>
+      </ul>
+
+      {trial === "available" ? (
+        <section className="locked-offer" aria-labelledby="locked-offer-title">
+          <h4 id="locked-offer-title"><Gift size={15} aria-hidden="true" /> Your first round is free</h4>
+          <p>One per account, on any free question. It covers this whole round, and can't be moved once started.</p>
+          {confirming ? (
+            <div className="locked-actions" role="group" aria-label="Confirm free interviewer round">
+              <button className="button button-plus button-small" onClick={startTrial} disabled={starting} autoFocus>
+                {starting && <LoaderCircle size={14} className="spin" />} Use it on this question
+              </button>
+              <button className="button button-outline button-small" onClick={() => setConfirming(false)} disabled={starting}>Cancel</button>
+            </div>
+          ) : (
+            <div className="locked-actions">
+              <button className="button button-plus button-small" onClick={() => setConfirming(true)}>Start free interviewer round <ArrowRight size={14} /></button>
+            </div>
+          )}
+          {error && <p className="form-error" role="alert">{error} Refresh the page if this keeps happening.</p>}
+        </section>
+      ) : (
+        <section className="locked-offer" aria-labelledby="locked-offer-title">
+          <h4 id="locked-offer-title"><Crown size={15} aria-hidden="true" /> {trial === "used" ? "You've used your free round" : "Included with Plus"}</h4>
+          <p>Plus includes the interviewer on every round, along with every question in the library.</p>
+          <div className="locked-actions">
+            <a className="button button-plus button-small interviewer-cta" href="/plus" target="_blank" rel="noopener">See Plus <ArrowRight size={14} /></a>
           </div>
-        ) : (
-          <>
-            {trial === "used" && <p className="interviewer-trial-used">You've used your free interviewer round. Plus includes the interviewer on every round.</p>}
-            {getPlus(true)}
-          </>
-        )}
-      </div>
-      <div className="interviewer-note">
-        <MessageSquare size={16} />
-        <p><strong>Your free plan includes a final review of each round.</strong> Explain your reasoning in each component's “Why this choice?” note, since the review reads them.</p>
-      </div>
-      <button className="button button-outline button-small interviewer-cta" onClick={onShowReview}>Go to Review <ArrowRight size={14} /></button>
+        </section>
+      )}
+
+      <footer className="locked-foot">
+        <p>Not now? Finish the round and get a written review of your design. It reads each component's “Why this choice?” note.</p>
+        <div className="locked-links">
+          <button type="button" className="locked-link" onClick={onShowReview}>Go to Review</button>
+          {trial === "available" && <a className="locked-link" href="/plus" target="_blank" rel="noopener">What's in Plus</a>}
+        </div>
+      </footer>
     </div>
   );
 }

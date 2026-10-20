@@ -36,8 +36,16 @@
 .rail-separator { width: 20px; height: 1px; margin: 4px 0; background: var(--bg-e9ebef); }
 .rail-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
 
+/* Drag handles between the canvas and the side panels (PanelResizer.jsx). The hit
+   area is 10px wide and overlaps the panel border; a 2px line shows on hover/focus. */
+.panel-resizer { position: relative; z-index: 6; flex: none; width: 10px; margin: 0 -5px; cursor: col-resize; touch-action: none; outline: none; }
+.panel-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; border-radius: 2px; background: transparent; transition: background .12s; }
+.panel-resizer:hover::after, .panel-resizer:active::after { background: var(--bd-c9cdf2); }
+.panel-resizer:focus-visible::after { background: var(--fg-5964d8); }
+body.is-resizing-panel, body.is-resizing-panel * { cursor: col-resize !important; user-select: none !important; }
+
 /* Component library sidebar */
-.component-sidebar { z-index: 2; width: 284px; flex: none; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--bd-e6e8ed); background: var(--bg-ffffff); }
+.component-sidebar { z-index: 2; width: var(--palette-width, 284px); flex: none; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--bd-e6e8ed); background: var(--bg-ffffff); }
 .sidebar-tabs { flex: none; padding: 0 14px; display: flex; gap: 18px; border-bottom: 1px solid var(--bd-eceef1); }
 .sidebar-tabs button { padding: 13px 0 10px; display: inline-flex; align-items: center; gap: 6px; color: var(--fg-7c8696); border: 0; border-bottom: 2px solid transparent; background: transparent; font-size: 13px; font-weight: 500; cursor: pointer; }
 .sidebar-tabs button.active { color: var(--fg-2f3b51); border-bottom-color: var(--bd-5964d8); font-weight: 600; }
@@ -199,12 +207,13 @@ textarea.inline-edit { font-weight: 400; line-height: 1.5; resize: none; }
 .danger-text:hover { border-color: var(--bd-efcaca) !important; background: var(--bg-fdf2f2) !important; }
 
 /* Side panel tabs and final review */
-.interviewer-panel.panel-wide { width: 380px; }
+.interviewer-panel.panel-wide { width: var(--panel-width, 380px); }
 .side-panel-header { justify-content: space-between; }
 .side-panel-tabs { display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bg-f3f4f7); }
 .side-panel-tabs button { height: 34px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; color: var(--fg-6b7686); border: 0; border-radius: 7px; background: transparent; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .side-panel-tabs button:hover { color: var(--fg-344055); }
 .side-panel-tabs button.active { color: var(--fg-3f4bb3); background: var(--bg-ffffff); box-shadow: 0 1px 2px rgba(25, 35, 55, .1); }
+.tab-plus { width: 18px; height: 18px; display: inline-grid; place-items: center; color: var(--plus); border-radius: 999px; background: var(--plus-soft); }
 .button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 .review-body { min-height: 0; flex: 1; overflow: auto; padding: 22px 20px; display: flex; flex-direction: column; gap: 16px; color: var(--fg-3a4659); font-size: 14px; line-height: 1.6; }
@@ -289,11 +298,14 @@ textarea.inline-edit { font-weight: 400; line-height: 1.5; resize: none; }
 .review-disclaimer { margin: 0; color: var(--fg-9aa2ad); font-size: 12px; text-align: center; }
 
 @media (max-width: 1240px) {
-  .interviewer-panel { width: 320px; }
-  .interviewer-panel.panel-wide { width: 350px; }
-  .component-sidebar { width: 264px; }
+  .interviewer-panel { width: var(--panel-width, 320px); }
+  .interviewer-panel.panel-wide { width: var(--panel-width, 350px); }
+  .component-sidebar { width: var(--palette-width, 264px); }
 }
 @media (max-width: 1080px) {
+  /* The side panel overlays the canvas here, so it keeps a fixed width. */
+  .panel-resizer { display: none; }
+  .interviewer-panel, .interviewer-panel.panel-wide { width: 340px; }
   .interviewer-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 10; box-shadow: -8px 0 24px rgba(32, 46, 67, .1); }
   .canvas-footer > span:nth-child(2) { display: none; }
 }
