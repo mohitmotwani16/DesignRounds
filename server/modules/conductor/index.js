@@ -3,7 +3,7 @@ import { queryOne } from "../../db.js";
 import { interviewerV3Enabled } from "../../flags.js";
 import { canvasNotes, diffSnapshots, snapshotOf } from "../ai/canvas.js";
 import { filterFillerWords, parseAnswerContext } from "../ai/communication.js";
-import { isSignificantKind } from "../ai/components.js";
+import { isAnonymousKind, isSignificantKind } from "../ai/components.js";
 import { aiConfig } from "../ai/config.js";
 import { clean, describeDiagram, nameComponents } from "../ai/context.js";
 import { AiError } from "../ai/errors.js";
@@ -243,6 +243,40 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   });
 }
 
+// The major parts of the design the interviewer hasn't discussed yet, best first: a
+// component that matters on its own (a store, cache, queue, gateway...) or a specific one
+// the agenda asks about (a worker, scheduler...), with no "Why this choice?" note, that
+// hasn't come up in the conversation and hasn't been asked about. Agenda matches come
+// first; a significant component off the agenda still counts once it's connected to the
+// design, and is asked about under the current focus item. Generic boxes (a plain
+// service, a client) never trigger a question on their own.
+function undiscussedParts({ diagram, covered, items, agenda, stage, focusItemId }) {
+  const degree = new Map();
+  for (const edge of diagram?.edges ?? []) {
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+  const fallback = items.find((item) => item.itemId === focusItemId && !CLOSED.has(item.status))?.itemId
+    ?? items.find((item) => !CLOSED.has(item.status) && item.stage === stage)?.itemId
+    ?? null;
+  const parts = [];
+  for (const entry of diffSnapshots(null, snapshotOf(diagram), diagram).added) {
+    if (entry.hasNote || covered.has(entry.id) || isAnonymousKind(entry.kind)) continue;
+    const onAgenda = canvasItemFor([entry], items, agenda, stage);
+    if (onAgenda) parts.push({ ...onAgenda, onAgenda: true });
+    else if (isSignificantKind(entry.kind) && (degree.get(entry.id) ?? 0) > 0 && fallback) parts.push({ itemId: fallback, entry, onAgenda: false });
+  }
+  return parts.sort((a, b) => Number(b.onAgenda) - Number(a.onAgenda));
+}
+
+// What the model is told about the part it should ask about.
+function partToAskAbout(part) {
+  return [
+    `Not discussed yet: [${part.entry.id}] ${part.entry.kind} "${part.entry.label}", with no "Why this choice?" note${part.onAgenda ? "" : " (not on your agenda, so tie it to the current focus)"}.`,
+    "Ask one short question about this component, the way an interviewer would when they notice it on the whiteboard: why they added it, what it does for this system's main use case, or what they'd use instead and what that trades off. Name the component.",
+  ].join("\n");
+}
+
 // Maps a significant, unexplained new component to the agenda item it most likely
 // belongs to, through the pack's trigger kinds.
 function canvasItemFor(added, items, agenda, stage) {
@@ -270,8 +304,8 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     const current = snapshotOf(session.diagram);
     const diff = diffSnapshots(round.snapshot, current, session.diagram);
     const covered = new Set(round.covered);
-    const unexplained = diff.added.filter((entry) => isSignificantKind(entry.kind) && !entry.hasNote && !covered.has(entry.id));
-    const mapped = canvasItemFor(unexplained, items, agenda, round.stage);
+    const parts = undiscussedParts({ diagram: session.diagram, covered, items, agenda, stage: round.stage, focusItemId: round.focusItemId });
+    const mapped = parts[0] ?? null;
     const { last, lastLearnerAt } = await store.lastTurns(session.id);
     const focus = focusItem(items, round);
     const focusExhausted = Boolean(focus && (focus.followUps >= conventions.maxFollowUpsPerItem || bandAtLeast(focus.band, "adequate")));
@@ -288,7 +322,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
 
     if (decision.action === "none") {
       // Minor or already-explained changes are absorbed so they never trigger a question.
-      await store.touchState(session.id, { activeMs: round.activeMs, snapshot: unexplained.length ? undefined : current });
+      await store.touchState(session.id, { activeMs: round.activeMs, snapshot: parts.length ? undefined : current });
       return { action: "none", reason: decision.why };
     }
 
@@ -324,7 +358,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       const turns = await store.recentTurns(session.id, round.summarizedThrough);
       const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes, trigger: "tick", turn: { kind: "tick", text: "" }, canvas: signalsFor({ session, record, round, turns }) });
       const plan = tickPlan({ base, kind: decision.kind, itemId: decision.itemId, items });
-      const changes = mapped ? `Added: [${mapped.entry.id}] ${mapped.entry.kind} "${mapped.entry.label}" (no note)` : "";
+      const changes = decision.kind === "canvas" && mapped ? partToAskAbout(mapped) : "";
       const { verified, flags } = await converse({ ctx, session, user, turns, plan, trigger: `tick:${decision.kind}`, learner: null, changes });
       if (verified.move === "stay_silent" || !verified.message) {
         await releaseCredit(creditId);
@@ -336,7 +370,8 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       const saved = await store.saveTurn({
         session, before: items, result, learnerTurn: null, notes: null,
         interviewer: { kind: KIND_FOR_MOVE[verified.move] ?? "question", trigger: "tick", content: nameComponents(verified.message, design.labels), move: verified.move, agendaItemId: verified.focusItemId, nodeIds: verified.nodeIds },
-        stateExtras: { activeMs: round.activeMs, covered: [...new Set([...round.covered, ...verified.coveredNodeIds])], snapshot: current, timeWarnings: round.timeWarnings, proactive: true, tickKey },
+        // The part asked about counts as discussed, so it's never asked about twice.
+        stateExtras: { activeMs: round.activeMs, covered: [...new Set([...round.covered, ...verified.coveredNodeIds, ...(decision.kind === "canvas" && mapped ? [mapped.entry.id] : [])])], snapshot: current, timeWarnings: round.timeWarnings, proactive: true, tickKey },
         creditId,
       });
       return { action: "ask", ...saved };

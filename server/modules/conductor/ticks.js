@@ -3,8 +3,12 @@
 // the model (and reserve a credit).
 
 const QUESTION_KINDS = new Set(["opening", "question", "probe", "challenge", "hint", "clarification", "redirect", "wrap_up"]);
-// An unanswered question older than this no longer blocks a question about the canvas.
+// An unanswered question older than this no longer counts as waiting for an answer.
 const OPEN_QUESTION_MS = 3 * 60_000;
+// A question about the canvas waits this long after the interviewer's last question, so
+// the learner has a moment to answer it. The opening message doesn't count: learners
+// often start drawing instead of answering it.
+const CANVAS_WAIT_MS = 60_000;
 
 export const timeCheckText = (share, mode) => {
   const percent = Math.round(share * 100);
@@ -52,8 +56,9 @@ export function decideTick(context) {
   if (clock.stageElapsedMs > clock.stageBudgetMs * conventions.stageOverrunFactor && focusExhausted && !cooling && !questionOpen && proactiveLeft > 0 && stage !== "wrap_up") {
     return { action: "model", kind: "stage" };
   }
-  // Something significant appeared on the canvas, unexplained, and it maps to the agenda.
-  if (canvas?.unexplained && canvas.itemId && !cooling && !questionOpen && proactiveLeft > 0) {
+  // A major part of the design is on the canvas that nobody has talked about yet.
+  const canvasWait = lastTurn?.role === "interviewer" && QUESTION_KINDS.has(lastTurn.kind) && lastTurn.kind !== "opening" && since(lastTurn.at, now) < CANVAS_WAIT_MS;
+  if (canvas?.unexplained && canvas.itemId && !cooling && !canvasWait && proactiveLeft > 0) {
     return { action: "model", kind: "canvas", itemId: canvas.itemId };
   }
   const nudgedRecently = since(lastNudgeAt, now) < conventions.idleNudgeMs;
