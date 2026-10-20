@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ArrowUp, BookOpen, Check, Database, Layers2, ListOrdered, MessageCircle, MonitorSmartphone, Network, Server, Sparkles, Workflow, Zap } from "lucide-react";
 import { prompts, tracks } from "../data/prompts.js";
-import { RUBRIC, aiLimits } from "../data/plans.js";
+import { RUBRIC } from "../data/plans.js";
 import { FAQS } from "../data/faqs.js";
 import { SiteFooter, useReveal } from "../components/site.jsx";
 import { isPlus, useAuth } from "../auth.jsx";
@@ -368,7 +368,6 @@ function Rubric() {
 // ------------------------------------------------------------------ pricing
 
 function Pricing({ onStart }) {
-  const free = aiLimits.free;
   const { user } = useAuth();
   return (
     <section className="lp-pricing" id="pricing" aria-labelledby="lp-pricing-title">
@@ -376,7 +375,7 @@ function Pricing({ onStart }) {
       <article className="lp-plan lp-plan-free reveal">
         <h3>Free</h3>
         <p className="lp-plan-for">For practising and seeing where you stand.</p>
-        <p className="lp-plan-body">Free rounds in every discipline, the full canvas with autosave and version history, an AI review of each round, up to {free.reviewsPerMonth} a month, scored on every rubric dimension, and one round with the live AI interviewer.</p>
+        <p className="lp-plan-body">Free questions in every discipline, the full canvas with autosave and version history, an AI review of your design scored on every rubric dimension, and your first round with the live AI interviewer.</p>
         <div className="lp-plan-foot">
           <p className="lp-price">₹0<small>forever</small></p>
           <StartRoundButton onStart={onStart} className="btn lp-btn lp-btn-on-accent" />
