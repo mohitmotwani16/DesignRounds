@@ -19,7 +19,7 @@ const COMPARE = [
   ["AI review scored on the full rubric", true, true],
   ["Reviews", `${free.reviewsPerRound} per round, up to ${free.reviewsPerMonth} a month`, `${plus.reviewsPerRound} per round, up to ${plus.reviewsPerMonth} a month`],
   ["Review detail", "Scores, top strength and top risk", "Coaching on every decision"],
-  ["Live AI interviewer, by voice or text", false, true],
+  ["Live AI interviewer, by voice or text", "One round, on a free question", true],
   ["Feedback on how you communicate", false, true],
   ["Hints when you're stuck", false, true],
   ["System design handbook and roadmaps", true, true],

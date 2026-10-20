@@ -77,7 +77,7 @@ async function context({ session, user, stateRow }) {
   const round = store.toRound(stateRow);
   const prompt = promptById.get(session.prompt_id);
   const record = await getPack(prompt.id, round.packVersion);
-  const conventions = await ucsConventions({ version: round.ucsVersion, mode: round.mode, hintsPerRound: limitsFor(user).hintsPerRound });
+  const conventions = await ucsConventions({ version: round.ucsVersion, mode: round.mode, hintsPerRound: limitsFor(user, session).hintsPerRound });
   round.activeMs = accrueActiveMs({ activeMs: round.activeMs, lastActivityAt: round.lastActivityAt, now: Date.now(), capMs: conventions.activityGapCapMs });
   const items = await store.itemsFor(session.id);
   const design = describeDiagram(session.diagram);
@@ -275,7 +275,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     const { last, lastLearnerAt } = await store.lastTurns(session.id);
     const focus = focusItem(items, round);
     const focusExhausted = Boolean(focus && (focus.followUps >= conventions.maxFollowUpsPerItem || bandAtLeast(focus.band, "adequate")));
-    const limits = limitsFor(user);
+    const limits = limitsFor(user, session);
     const decision = decideTick({
       typing: Boolean(body.typing),
       pending: Boolean(round.pendingSince && now - new Date(round.pendingSince).getTime() < 90_000),

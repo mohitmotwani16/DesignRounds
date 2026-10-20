@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, CircleCheck, Clock3, LoaderCircle, LogOut, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Clock3, Crown, LoaderCircle, LogOut, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import { api } from "../api.js";
-import { useAuth } from "../auth.jsx";
+import { isPlus, useAuth } from "../auth.jsx";
 import { interestLabel } from "../data/interests.js";
 import { findPrompt, getTrack } from "../data/prompts.js";
-import { promptIcon } from "../components/ui.jsx";
+import { Avatar, promptIcon } from "../components/ui.jsx";
 import { SiteFooter } from "../components/site.jsx";
-import { navigate } from "../router.js";
+import { Link, navigate } from "../router.js";
 import { ProfileFields, profileValues } from "./Onboarding.jsx";
 import { relativeTime } from "./Library.jsx";
 
@@ -86,12 +86,12 @@ export default function ProfilePage({ onStart }) {
   return (
     <main className="profile-page page-width">
       <header className="profile-hero">
-        <span className="profile-avatar" aria-hidden="true">{initials(user.displayName || user.email)}</span>
+        <Avatar user={user} size="lg" />
         <div className="profile-identity">
           <h1>{user.displayName || "Your profile"}</h1>
           <p>{[user.headline, interestSummary(user), user.experienceLevel].filter(Boolean).join(" · ") || user.email}</p>
         </div>
-        <span className="plan-badge">{user.plan === "plus" ? `Plus plan · through ${user.planExpiresAt}` : "Free plan"}</span>
+        <PlanStatus user={user} />
       </header>
 
       <dl className="profile-stats">
@@ -191,7 +191,35 @@ function interestSummary(user) {
   return labels.length ? labels.join(", ") : user.targetRole;
 }
 
-function initials(name) {
-  const parts = name.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
-  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?";
+// The one place a member sees their plan's details. Plus is granted for a fixed
+// period (there's no billing yet), so it shows when it ends rather than a renewal,
+// and turns into a warning in the last two weeks.
+function PlanStatus({ user }) {
+  if (!isPlus(user)) return <span className="plan-badge">Free plan</span>;
+  const daysLeft = user.planExpiresAt ? daysUntil(user.planExpiresAt) : null;
+  const ending = daysLeft !== null && daysLeft <= 14;
+  return (
+    <span className={`plan-badge plan-badge-plus ${ending ? "ending" : ""}`}>
+      <Crown size={13} /> <b>Plus</b>
+      {user.planExpiresAt && <><span aria-hidden="true">·</span>{ending ? endingLabel(daysLeft) : `Active through ${formatDate(user.planExpiresAt)}`}</>}
+      <span aria-hidden="true">·</span><Link to="/plus">What's included</Link>
+    </span>
+  );
+}
+
+// Whole days from today (local) to an inclusive YYYY-MM-DD end date.
+function daysUntil(date) {
+  const [year, month, day] = date.split("-").map(Number);
+  const today = new Date();
+  return Math.round((new Date(year, month - 1, day) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000);
+}
+
+function endingLabel(daysLeft) {
+  if (daysLeft <= 0) return "Ends today";
+  return daysLeft === 1 ? "Ends tomorrow" : `Ends in ${daysLeft} days`;
+}
+
+function formatDate(date) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }

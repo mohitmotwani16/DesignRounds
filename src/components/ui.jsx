@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, ArrowUpRight, Bell, Check, CircleUser, Clock3, Crown, Database, Fingerprint, Flag, FileText, FlaskConical, Globe2,
+  ArrowRight, ArrowUpRight, Bell, Bug, Check, CircleUser, Clock3, Crown, Database, Fingerprint, Flag, FileText, FlaskConical, Globe2,
   HardDrive, Hash, Image, Layers2, Link2, ListOrdered, LockKeyhole, LogOut, Menu, MessageSquare, MonitorSmartphone,
   Network, RefreshCcw, Search, Server, Settings2, ShieldCheck, Sparkles, SquarePen, Waypoints, Zap, KeyRound, Lock,
-  ChevronDown, UserRound, X,
+  ChevronDown, X,
 } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
 import { api } from "../api.js";
-import { useAuth } from "../auth.jsx";
+import { isPlus, useAuth } from "../auth.jsx";
 import { THEMES, setTheme, useTheme } from "../theme.js";
+import { openReportProblem } from "./ReportProblem.jsx";
 import { navigate, useRoute } from "../router.js";
 
 export function Brand({ onClick, className = "" }) {
@@ -41,6 +42,23 @@ function useDismiss(open, setOpen, ref) {
 
 const firstName = (user) => (user.displayName || user.email.split("@")[0]).split(" ")[0];
 
+export function initials(name) {
+  const parts = name.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?";
+}
+
+// The user's initials in a circle. Plus members get a ring around it, the one
+// place outside the profile that tells them their membership is on.
+export function Avatar({ user, size = "sm" }) {
+  const plus = isPlus(user);
+  return (
+    <span className={`avatar avatar-${size} ${plus ? "avatar-plus" : ""}`} title={plus ? "Plus member" : undefined}>
+      <span aria-hidden="true">{initials(user.displayName || user.email)}</span>
+      {plus && <span className="sr-only">Plus member</span>}
+    </span>
+  );
+}
+
 export function UserMenu({ compact = false }) {
   const { user, signOut, setUser } = useAuth();
   const [open, setOpen] = useState(false);
@@ -49,14 +67,14 @@ export function UserMenu({ compact = false }) {
   if (!user) return null;
   return (
     <div className="user-menu" ref={ref}>
-      <button className={`account-button ${open ? "open" : ""}`} onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open} aria-label="Account menu">
-        <UserRound size={16} />
+      <button className={`account-button ${open ? "open" : ""}`} onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open} aria-label={isPlus(user) ? "Account menu, Plus member" : "Account menu"}>
+        <Avatar user={user} />
         {!compact && <span className="account-name">{firstName(user)}</span>}
         <ChevronDown size={14} className="account-chevron" />
       </button>
       {open && (
         <div className="user-menu-popover" role="menu">
-          <div className="user-menu-identity"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></div>
+          <div className="user-menu-identity"><Avatar user={user} size="md" /><span className="user-menu-identity-text"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></span></div>
           <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & practice history</button>
           <button role="menuitem" onClick={() => { setOpen(false); navigate("/learn/write"); }}><SquarePen size={15} /> My articles</button>
           {user.isAdmin && <button role="menuitem" onClick={() => { setOpen(false); navigate("/admin"); }}><ShieldCheck size={15} /> Admin</button>}
@@ -67,6 +85,7 @@ export function UserMenu({ compact = false }) {
             }}><FlaskConical size={15} /> Dev: switch to {user.plan === "plus" ? "Free" : "Plus"} <span className="dev-plan-pill">{user.plan}</span></button>
           )}
           <ThemePicker />
+          <button role="menuitem" onClick={() => { setOpen(false); openReportProblem(); }}><Bug size={15} /> Report a problem</button>
           <button role="menuitem" onClick={async () => { setOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
         </div>
       )}

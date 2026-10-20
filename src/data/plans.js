@@ -4,6 +4,9 @@
 export const aiLimits = {
   free: { reviewsPerRound: 1, reviewsPerMonth: 5, interviewTurnsPerRound: 0, interviewTurnsPerMonth: 0, hintsPerRound: 0, proactiveChecksPerRound: 0 },
   plus: { reviewsPerRound: 3, reviewsPerMonth: 60, interviewTurnsPerRound: 40, interviewTurnsPerMonth: 800, hintsPerRound: 3, proactiveChecksPerRound: 25 },
+  // A free learner's one interviewer trial round (one per email): the Plus interviewer
+  // for that round only, with the free review counts. Its month cap is one round's worth.
+  trial: { reviewsPerRound: 1, reviewsPerMonth: 5, interviewTurnsPerRound: 40, interviewTurnsPerMonth: 40, hintsPerRound: 3, proactiveChecksPerRound: 25 },
 };
 
 // What a review scores, in the server rubric's order (server/modules/ai/rubric.js),

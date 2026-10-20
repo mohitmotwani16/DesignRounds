@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowUp, BookOpen, Database, Layers2, ListOrdered, MessageCircle, MonitorSmartphone, Network, Server, Sparkles, Workflow, Zap } from "lucide-react";
+import { ArrowRight, ArrowUp, BookOpen, Check, Database, Layers2, ListOrdered, MessageCircle, MonitorSmartphone, Network, Server, Sparkles, Workflow, Zap } from "lucide-react";
 import { prompts, tracks } from "../data/prompts.js";
 import { RUBRIC, aiLimits } from "../data/plans.js";
 import { FAQS } from "../data/faqs.js";
 import { SiteFooter, useReveal } from "../components/site.jsx";
+import { isPlus, useAuth } from "../auth.jsx";
 import { StartRoundButton } from "../components/StartRound.jsx";
 import { Link, useRoute } from "../router.js";
 import { LEARN_PATH, topicPath } from "../learn/catalog.js";
@@ -273,6 +274,7 @@ const SHOWN = 8;
 
 function RoleRounds() {
   const [active, setActive] = useState(tracks[0].id);
+  const plus = isPlus(useAuth().user);
   const tabsRef = useRef(null);
   const onKeyDown = (event) => {
     const index = tracks.findIndex((track) => track.id === active);
@@ -312,7 +314,7 @@ function RoleRounds() {
             <ul className="lp-qcards">
               {list.slice(0, SHOWN).map((prompt, index) => (
                 <li key={prompt.id} className="lp-qcard" style={{ "--q": index }}>
-                  <p className="lp-qcard-tags"><span className={prompt.access === "free" ? "lp-tag lp-tag-free" : "lp-tag"}>{prompt.access === "free" ? "Free" : "Plus"}</span><span>{prompt.difficulty}</span><span>{prompt.minutes} min</span></p>
+                  <p className="lp-qcard-tags"><span className={prompt.access === "free" ? "lp-tag lp-tag-free" : "lp-tag"}>{prompt.access === "free" ? "Free" : plus ? "Unlocked" : "Plus"}</span><span>{prompt.difficulty}</span><span>{prompt.minutes} min</span></p>
                   <h3><Link to={roundPath(prompt.id)}>{shortTitle(prompt.title)}</Link></h3>
                   <p className="lp-qcard-desc">{prompt.description}</p>
                   <span className="lp-qcard-go" aria-hidden="true"><ArrowRight size={16} /></span>
@@ -367,13 +369,14 @@ function Rubric() {
 
 function Pricing({ onStart }) {
   const free = aiLimits.free;
+  const { user } = useAuth();
   return (
     <section className="lp-pricing" id="pricing" aria-labelledby="lp-pricing-title">
       <h2 id="lp-pricing-title" className="sr-only">Pricing</h2>
       <article className="lp-plan lp-plan-free reveal">
         <h3>Free</h3>
         <p className="lp-plan-for">For practising and seeing where you stand.</p>
-        <p className="lp-plan-body">Free rounds in every discipline, the full canvas with autosave and version history, and an AI review of each round, up to {free.reviewsPerMonth} a month, scored on every rubric dimension.</p>
+        <p className="lp-plan-body">Free rounds in every discipline, the full canvas with autosave and version history, an AI review of each round, up to {free.reviewsPerMonth} a month, scored on every rubric dimension, and one round with the live AI interviewer.</p>
         <div className="lp-plan-foot">
           <p className="lp-price">₹0<small>forever</small></p>
           <StartRoundButton onStart={onStart} className="btn lp-btn lp-btn-on-accent" />
@@ -385,7 +388,9 @@ function Pricing({ onStart }) {
         <p className="lp-plan-body">Every round, a live AI interviewer you can talk your design through with, feedback on how you communicate, hints, more reviews per round and coaching on every decision.</p>
         <div className="lp-plan-foot">
           <p className="lp-price">Plus<small>launching soon</small></p>
-          <Link className="btn lp-btn" to="/plus">Get Plus <ArrowRight size={17} className="nudge" /></Link>
+          {isPlus(user)
+            ? <Link className="btn lp-btn" to="/plus">You're on Plus <Check size={17} /></Link>
+            : <Link className="btn lp-btn" to="/plus">Get Plus <ArrowRight size={17} className="nudge" /></Link>}
         </div>
       </article>
     </section>

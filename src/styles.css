@@ -191,6 +191,16 @@ a { color: inherit; text-decoration: none; }
 .interviewer-perks li { display: flex; align-items: center; gap: 8px; }
 .interviewer-perks svg { flex: none; color: var(--fg-5964d8); }
 .interviewer-empty .interviewer-cta { text-decoration: none; }
+/* The free interviewer round offer (issue #75). */
+.interviewer-trial { width: 100%; padding: 12px 14px; border: 1px solid var(--bd-c9cdf2); border-radius: 10px; background: var(--bg-f1f2fd); }
+.interviewer-trial > p { margin: 0; display: flex; align-items: flex-start; gap: 8px; color: var(--fg-3f4b5f); font-size: 13.5px; line-height: 1.55; }
+.interviewer-trial > p svg { flex: none; margin-top: 3px; color: var(--fg-5964d8); }
+.interviewer-trial > p strong { color: var(--fg-2b3649); }
+.interviewer-trial > p:has(strong) { display: block; }
+.interviewer-trial-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.interviewer-trial-actions .interviewer-cta { text-decoration: none; }
+.interviewer-trial .form-error { margin-top: 8px; }
+.interviewer-empty .interviewer-trial-used { margin: 0 0 12px; color: var(--fg-6b7686); font-size: 13px; }
 .interviewer-example { margin: 0; padding: 16px 18px; border-left: 3px solid var(--bd-d9dcf5); border-radius: 0 10px 10px 0; background: var(--bg-fafafe); }
 .interviewer-example figcaption { color: var(--fg-8a93a1); font-size: 11.5px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
 .interviewer-example blockquote { margin: 8px 0 0; color: var(--fg-3f4b5f); font-size: 14px; line-height: 1.6; }

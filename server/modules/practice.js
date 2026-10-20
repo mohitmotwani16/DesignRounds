@@ -78,6 +78,8 @@ function toSummary(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
+    // This round is the learner's free interviewer round (issue #75).
+    interviewerTrial: Boolean(row.interviewer_trial),
   };
 }
 
@@ -94,7 +96,7 @@ practiceRouter.use(requireUser);
 
 practiceRouter.get("/sessions", route(async (req, res) => {
   const rows = await query(
-    `select id, prompt_id, status, diagram_version, created_at, updated_at, completed_at,
+    `select id, prompt_id, status, diagram_version, created_at, updated_at, completed_at, interviewer_trial,
             jsonb_array_length(diagram -> 'nodes') as component_count
        from practice_sessions where user_id = $1
       order by updated_at desc limit 200`,

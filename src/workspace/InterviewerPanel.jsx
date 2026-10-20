@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Clock, Eye, Lightbulb, LoaderCircle, MessageSquare, Mic, PenLine, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Eye, Gift, Lightbulb, LoaderCircle, MessageSquare, Mic, PenLine, RefreshCw, Send, Sparkles, ThumbsDown, X } from "lucide-react";
+import { api } from "../api.js";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
 
 const STAGES = [
@@ -21,13 +22,35 @@ export function InterviewerPanel({ interview, roundFinished, selected, onClearSe
       </div>
     );
   }
-  if (interview.access !== "full") return <LockedInterviewer onShowReview={onShowReview} />;
+  if (interview.access !== "full") return <LockedInterviewer interview={interview} onShowReview={onShowReview} />;
   return <Conversation interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} />;
 }
 
 // Free plans: invite the learner to talk the design through, and show what that adds.
-// The Plus page opens in a new tab so the round stays where it is.
-function LockedInterviewer({ onShowReview }) {
+// On a free question they can spend their one free interviewer round here (issue #75);
+// otherwise the Plus page opens in a new tab so the round stays where it is.
+function LockedInterviewer({ interview, onShowReview }) {
+  const trial = interview.trial;
+  const [confirming, setConfirming] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function startTrial() {
+    setStarting(true);
+    setError("");
+    try {
+      await api.startInterviewerTrial(interview.sessionId);
+      await interview.reload();
+    } catch (startError) {
+      setError(startError.message);
+      setStarting(false);
+      // The server's answer is the truth: reload so a used trial stops being offered.
+      interview.reload();
+    }
+  }
+
+  const getPlus = (dark) => <a className={`button ${dark ? "button-dark" : "button-outline"} button-small interviewer-cta`} href="/plus" target="_blank" rel="noopener">Get Plus <ArrowRight size={14} /></a>;
+
   return (
     <div className="interviewer-body">
       <div className="interviewer-empty">
@@ -39,7 +62,35 @@ function LockedInterviewer({ onShowReview }) {
           <li><Sparkles size={14} /> Feedback on clarity, structure and confidence</li>
           <li><Sparkles size={14} /> Hints when you're stuck</li>
         </ul>
-        <a className="button button-dark button-small interviewer-cta" href="/plus" target="_blank" rel="noopener">Get Plus <ArrowRight size={14} /></a>
+        {trial === "available" ? (
+          <div className="interviewer-trial">
+            {confirming ? (
+              <>
+                <p><strong>Use your free interviewer round on this question?</strong> Every account gets one. It covers this whole round, including feedback on how you communicate, and can't be moved to another round later.</p>
+                <div className="interviewer-trial-actions">
+                  <button className="button button-dark button-small" onClick={startTrial} disabled={starting}>
+                    {starting ? <LoaderCircle size={14} className="spin" /> : <Gift size={14} />} Start my free round
+                  </button>
+                  <button className="button button-outline button-small" onClick={() => setConfirming(false)} disabled={starting}>Not now</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p><Gift size={14} /> <span>Your first interviewer round is free. Try it on this question.</span></p>
+                <div className="interviewer-trial-actions">
+                  <button className="button button-dark button-small" onClick={() => setConfirming(true)}>Try it free <ArrowRight size={14} /></button>
+                  {getPlus(false)}
+                </div>
+              </>
+            )}
+            {error && <p className="form-error" role="alert">{error}</p>}
+          </div>
+        ) : (
+          <>
+            {trial === "used" && <p className="interviewer-trial-used">You've used your free interviewer round. Plus includes the interviewer on every round.</p>}
+            {getPlus(true)}
+          </>
+        )}
       </div>
       <div className="interviewer-note">
         <MessageSquare size={16} />

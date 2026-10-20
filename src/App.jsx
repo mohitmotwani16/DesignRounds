@@ -6,6 +6,7 @@ import { findPrompt, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
 import { BackgroundHumanCheck } from "./components/BackgroundHumanCheck.jsx";
 import { HumanCheck } from "./components/HumanCheck.jsx";
+import { ReportProblemHost } from "./components/ReportProblem.jsx";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
 import { recommendedFreeRound } from "./data/free-rounds.js";
@@ -35,6 +36,7 @@ export default function App({ authStatus }) {
     <AuthProvider initialStatus={authStatus}>
       <BackgroundHumanCheck />
       <Routes />
+      <ReportProblemHost />
     </AuthProvider>
   );
 }

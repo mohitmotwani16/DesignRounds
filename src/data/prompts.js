@@ -59,24 +59,18 @@ export const prompts = [
   },
   {
     id: "chat-system", title: "Design a chat system", description: "Create a real-time messaging experience for millions of people.",
-    track: "software-engineering", access: "free", category: "Messaging", difficulty: "Intermediate", minutes: 45, icon: "message", color: "blue", popular: true,
-    requirements: ["Users can exchange messages in one-to-one conversations.", "Messages should appear in near real time.", "Users can see whether messages were sent and delivered."],
+    track: "software-engineering", access: "paid", category: "Messaging", difficulty: "Intermediate", minutes: 45, icon: "message", color: "blue", popular: true,
     considerations: ["WebSocket connections", "Message ordering", "Offline delivery"],
-    expectedOutcome: "A message-ingestion and delivery flow, connection strategy, durable message store, and clear delivery guarantees.",
   },
   {
     id: "news-feed", title: "Design a news feed", description: "Deliver a relevant, fresh feed as people and publishers post.",
-    track: "software-engineering", access: "free", category: "Data systems", difficulty: "Advanced", minutes: 50, icon: "feed", color: "orange", popular: true,
-    requirements: ["Users can publish posts and follow other users.", "A personalized feed displays posts from followed accounts.", "The feed remains responsive when a post goes viral."],
+    track: "software-engineering", access: "paid", category: "Data systems", difficulty: "Advanced", minutes: 50, icon: "feed", color: "orange", popular: true,
     considerations: ["Fan-out strategy", "Feed freshness", "Ranking"],
-    expectedOutcome: "A feed-generation approach with a justified fan-out strategy, ranking boundary, and plan for hot accounts.",
   },
   {
     id: "file-storage", title: "Design cloud file storage", description: "Sync large files reliably across devices and collaborators.",
-    track: "software-engineering", access: "free", category: "Storage", difficulty: "Advanced", minutes: 50, icon: "storage", color: "green",
-    requirements: ["Users can upload, download, and organize files.", "A file is accessible across a user's devices.", "Interrupted large uploads can recover safely."],
+    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 50, icon: "storage", color: "green",
     considerations: ["Chunked uploads", "Metadata and blobs", "Sync conflicts"],
-    expectedOutcome: "A metadata/blob-storage design, resumable upload flow, synchronization behavior, and access-control boundaries.",
   },
   {
     id: "rate-limiter", title: "Design an API rate limiter", description: "Protect a public API without slowing down well-behaved clients.",
@@ -95,10 +89,8 @@ export const prompts = [
   },
   {
     id: "ticket-booking", title: "Design a high-demand ticketing platform", description: "Sell limited-inventory tickets fairly when a popular event goes on sale.",
-    track: "software-engineering", access: "free", category: "Transactions", difficulty: "Advanced", minutes: 50, icon: "booking", color: "orange",
-    requirements: ["Customers can find events and select available seats.", "A seat cannot be sold to multiple customers.", "Temporary reservations expire when checkout is abandoned."],
+    track: "software-engineering", access: "paid", category: "Transactions", difficulty: "Advanced", minutes: 50, icon: "booking", color: "orange",
     considerations: ["Inventory consistency", "Reservation expiry", "Sale traffic spikes"],
-    expectedOutcome: "An event discovery and seat inventory model, a reservation/checkout state machine, and a plan for contention and traffic surges.",
   },
   {
     id: "notification-service", title: "Design a notification delivery service", description: "Deliver timely, preference-aware messages across email, push, and SMS.",
@@ -114,10 +106,8 @@ export const prompts = [
   },
   {
     id: "autocomplete", title: "Design a search autocomplete service", description: "Suggest useful completions quickly as users type into a search box.",
-    track: "software-engineering", access: "free", category: "Search", difficulty: "Intermediate", minutes: 40, icon: "autocomplete", color: "violet",
-    requirements: ["Suggestions appear with low latency as a query is typed.", "Popular and recent searches can influence ranking.", "The index can incorporate new trends without full service downtime."],
+    track: "software-engineering", access: "paid", category: "Search", difficulty: "Intermediate", minutes: 40, icon: "autocomplete", color: "violet",
     considerations: ["Prefix indexing", "Ranking and freshness", "Sharding and caching"],
-    expectedOutcome: "A query-serving path and update pipeline, an index/ranking approach, and trade-offs for freshness, latency, and privacy.",
   },
   {
     id: "collaborative-editor", title: "Design a collaborative document editor", description: "Let multiple people edit and comment on the same document in real time.",
@@ -126,10 +116,8 @@ export const prompts = [
   },
   {
     id: "paste-service", title: "Design a text snippet sharing service", description: "Create and share short text snippets with optional expiry and access controls.",
-    track: "software-engineering", access: "free", category: "Storage", difficulty: "Beginner", minutes: 35, icon: "paste", color: "rose",
-    requirements: ["A user can create a snippet and share a stable link.", "Snippets can expire or be restricted to authorized viewers.", "Read traffic can be served efficiently as usage grows."],
+    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Beginner", minutes: 35, icon: "paste", color: "rose",
     considerations: ["Identifier generation", "Expiry and deletion", "Abuse prevention"],
-    expectedOutcome: "A create/read API, content-storage model, expiry mechanism, and controls for caching, access, and misuse.",
   },
   {
     id: "payment-platform", title: "Design a payment processing platform", description: "Accept payment requests reliably without charging a customer twice.",
@@ -145,10 +133,8 @@ export const prompts = [
   },
   {
     id: "distributed-cache", title: "Design a distributed caching service", description: "Serve frequently accessed data quickly across a growing fleet of application nodes.",
-    track: "software-engineering", access: "free", category: "Storage", difficulty: "Advanced", minutes: 50, icon: "cache", color: "blue",
-    requirements: ["Clients can read, write, and expire cached keys.", "The service scales out while keeping request latency predictable.", "Node loss does not make the entire cache unavailable."],
+    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 50, icon: "cache", color: "blue",
     considerations: ["Partitioning and replication", "Eviction and expiry", "Hot keys"],
-    expectedOutcome: "A key-partitioning and replication strategy, eviction/invalidation semantics, and a plan for hot partitions and node failures.",
   },
   {
     id: "api-gateway", title: "Design a multi-tenant API gateway", description: "Route external API traffic safely to independently operated backend services.",
@@ -165,24 +151,18 @@ export const prompts = [
   },
   {
     id: "realtime-analytics", title: "Design a real-time analytics platform", description: "Turn a large event stream into operational metrics people can act on.",
-    track: "data-engineering", access: "free", category: "Streaming", difficulty: "Advanced", minutes: 50, icon: "analytics", color: "teal", popular: true,
-    requirements: ["Producers emit events continuously from multiple regions.", "Dashboards show fresh aggregates with a defined latency target.", "Replays and duplicate events do not inflate results."],
+    track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Advanced", minutes: 50, icon: "analytics", color: "teal", popular: true,
     considerations: ["Event time vs processing time", "Windowing", "Replay and deduplication"],
-    expectedOutcome: "An event ingestion and stream-processing design, window semantics, serving store, and recovery/replay strategy.",
   },
   {
     id: "etl-framework", title: "Design a reusable ETL/ELT framework", description: "Give many teams a consistent way to build, run, and operate data pipelines.",
-    track: "data-engineering", access: "free", category: "Orchestration", difficulty: "Advanced", minutes: 50, icon: "pipeline", color: "violet", popular: true,
-    requirements: ["Teams can define pipelines with shared conventions and reusable connectors.", "Runs support retries, backfills, and dependency management.", "Operators can inspect ownership, lineage, and run health."],
+    track: "data-engineering", access: "paid", category: "Orchestration", difficulty: "Advanced", minutes: 50, icon: "pipeline", color: "violet", popular: true,
     considerations: ["Declarative task definitions", "Idempotent retries", "Multi-tenant isolation"],
-    expectedOutcome: "A separation of control and execution planes, a task/DAG contract, retry and backfill semantics, and a plugin boundary.",
   },
   {
     id: "clickstream", title: "Design clickstream event tracking at scale", description: "Collect trustworthy product events from web and mobile clients.",
-    track: "data-engineering", access: "free", category: "Event ingestion", difficulty: "Advanced", minutes: 45, icon: "events", color: "orange", popular: true,
-    requirements: ["Web and mobile SDKs can buffer and deliver events.", "The platform handles bursts and temporarily offline clients.", "Consumers can evolve event schemas without breaking old producers."],
+    track: "data-engineering", access: "paid", category: "Event ingestion", difficulty: "Advanced", minutes: 45, icon: "events", color: "orange", popular: true,
     considerations: ["SDK batching", "Schema evolution", "PII minimization"],
-    expectedOutcome: "A client-to-lake ingestion path, schema registry or contract strategy, delivery guarantees, and privacy controls.",
   },
   {
     id: "data-alerting", title: "Design a data alerting system", description: "Notify the right owner when pipelines, data freshness, or business metrics go wrong.",
@@ -209,24 +189,18 @@ export const prompts = [
   },
   {
     id: "feature-store", title: "Design a feature store", description: "Serve consistent ML features for both training jobs and online predictions.",
-    track: "machine-learning", access: "free", category: "ML platforms", difficulty: "Advanced", minutes: 50, icon: "features", color: "blue",
-    requirements: ["Teams can define and reuse versioned features.", "Training data can be reconstructed as of an event time.", "Online inference reads fresh features within a latency budget."],
+    track: "machine-learning", access: "paid", category: "ML platforms", difficulty: "Advanced", minutes: 50, icon: "features", color: "blue",
     considerations: ["Point-in-time correctness", "Offline/online parity", "Backfills"],
-    expectedOutcome: "An offline/online store boundary, feature materialization flow, point-in-time join semantics, and freshness monitoring.",
   },
   {
     id: "training-platform", title: "Design a distributed model training platform", description: "Schedule reproducible training jobs across shared compute and data.",
-    track: "machine-learning", access: "free", category: "Training systems", difficulty: "Advanced", minutes: 55, icon: "training", color: "teal",
-    requirements: ["Researchers can submit versioned training runs.", "Jobs request suitable accelerators and recover from failure.", "Artifacts and metrics are traceable to code and data versions."],
+    track: "machine-learning", access: "paid", category: "Training systems", difficulty: "Advanced", minutes: 55, icon: "training", color: "teal",
     considerations: ["Resource scheduling", "Checkpointing", "Experiment lineage"],
-    expectedOutcome: "A job control plane, resource allocation strategy, durable checkpoint/artifact flow, and reproducibility model.",
   },
   {
     id: "model-serving", title: "Design a low-latency ML model serving platform", description: "Deploy models safely and handle variable inference traffic.",
-    track: "machine-learning", access: "free", category: "Inference", difficulty: "Advanced", minutes: 45, icon: "serve", color: "orange",
-    requirements: ["Teams can publish and roll back versioned models.", "Inference meets latency and availability targets under bursty load.", "The system captures useful quality and performance signals."],
+    track: "machine-learning", access: "paid", category: "Inference", difficulty: "Advanced", minutes: 45, icon: "serve", color: "orange",
     considerations: ["Batching", "Autoscaling", "Canary rollout"],
-    expectedOutcome: "A model registry-to-serving path, rollout strategy, resource isolation, and inference observability.",
   },
   {
     id: "rag-search", title: "Design a retrieval-augmented generation system", description: "Answer questions from a changing document collection with traceable sources.",
@@ -253,24 +227,18 @@ export const prompts = [
   },
   {
     id: "multi-region", title: "Design a multi-region failover strategy", description: "Keep a customer-facing service available through a regional outage.",
-    track: "platform-infrastructure", access: "free", category: "Resilience", difficulty: "Advanced", minutes: 50, icon: "regions", color: "blue",
-    requirements: ["A regional failure is detected and traffic is redirected.", "Recovery objectives for data loss and recovery time are explicit.", "Failback does not cause split-brain or replay errors."],
+    track: "platform-infrastructure", access: "paid", category: "Resilience", difficulty: "Advanced", minutes: 50, icon: "regions", color: "blue",
     considerations: ["RTO and RPO", "Replication lag", "Failover testing"],
-    expectedOutcome: "A failure model, replication and routing approach, recovery/failback procedure, and operational test plan.",
   },
   {
     id: "service-discovery", title: "Design service discovery for a growing fleet", description: "Let services find healthy endpoints as instances scale and move.",
-    track: "platform-infrastructure", access: "free", category: "Networking", difficulty: "Intermediate", minutes: 40, icon: "discovery", color: "teal",
-    requirements: ["Services can register and discover endpoints.", "Unhealthy instances stop receiving new traffic.", "Discovery remains useful during partial control-plane failure."],
+    track: "platform-infrastructure", access: "paid", category: "Networking", difficulty: "Intermediate", minutes: 40, icon: "discovery", color: "teal",
     considerations: ["Health checks", "Caching and TTL", "Control-plane availability"],
-    expectedOutcome: "A registration and lookup protocol, health lifecycle, caching strategy, and behavior during control-plane outages.",
   },
   {
     id: "secrets-platform", title: "Design a secrets management platform", description: "Distribute and rotate credentials safely across services and environments.",
-    track: "platform-infrastructure", access: "free", category: "Security", difficulty: "Advanced", minutes: 45, icon: "security", color: "rose",
-    requirements: ["Services receive only the credentials they are authorized to use.", "Secret values can rotate without avoidable outages.", "Access and changes leave an auditable trail."],
+    track: "platform-infrastructure", access: "paid", category: "Security", difficulty: "Advanced", minutes: 45, icon: "security", color: "rose",
     considerations: ["Identity-based access", "Rotation workflow", "Audit and revocation"],
-    expectedOutcome: "A secret lifecycle and access-control model, delivery mechanism, rotation/revocation flow, and audit boundary.",
   },
   {
     id: "deployment-platform", title: "Design a safe deployment platform", description: "Roll out changes across hundreds of services with fast, safe rollback.",
@@ -296,17 +264,13 @@ export const prompts = [
   },
   {
     id: "unique-id-generator", title: "Design a unique ID generator", description: "Issue unique, roughly sortable IDs at high rate across data centers.",
-    track: "distributed-systems", access: "free", category: "Coordination", difficulty: "Beginner", minutes: 30, icon: "id", color: "violet",
-    requirements: ["Every generated ID is unique across all generators.", "IDs are roughly ordered by creation time.", "Generation keeps working if a coordination service is briefly unavailable."],
+    track: "distributed-systems", access: "paid", category: "Coordination", difficulty: "Beginner", minutes: 30, icon: "id", color: "violet",
     considerations: ["Snowflake-style layout", "Clock skew", "Worker ID assignment"],
-    expectedOutcome: "An ID layout with justified bit allocation, worker identity assignment, clock-skew handling, and throughput limits.",
   },
   {
     id: "distributed-message-queue", title: "Design a distributed message queue", description: "Build a durable, partitioned log that producers and consumers can rely on.",
-    track: "distributed-systems", access: "free", category: "Messaging", difficulty: "Advanced", minutes: 55, icon: "queue", color: "blue",
-    requirements: ["Producers append messages to named topics.", "Consumer groups read independently and can resume after failure.", "Acknowledged messages are not lost when a broker fails."],
+    track: "distributed-systems", access: "paid", category: "Messaging", difficulty: "Advanced", minutes: 55, icon: "queue", color: "blue",
     considerations: ["Partitions and ordering", "Replication and ISR", "Consumer offsets"],
-    expectedOutcome: "A topic/partition model, replication and leader-election approach, offset management, retention, and delivery semantics.",
   },
   {
     id: "distributed-lock-service", title: "Design a distributed lock service", description: "Let services coordinate exclusive access without deadlocks or split brain.",
@@ -332,17 +296,13 @@ export const prompts = [
   },
   {
     id: "image-feed-client", title: "Design an image-heavy feed client", description: "Keep an infinite photo feed smooth on slow networks and older phones.",
-    track: "frontend-mobile", access: "free", category: "Performance", difficulty: "Intermediate", minutes: 40, icon: "image", color: "rose",
-    requirements: ["The feed scrolls smoothly with thousands of items.", "Images load quickly at an appropriate resolution for the device.", "The app stays usable on flaky connections."],
+    track: "frontend-mobile", access: "paid", category: "Performance", difficulty: "Intermediate", minutes: 40, icon: "image", color: "rose",
     considerations: ["List virtualization", "Image CDN and sizes", "Caching and prefetch"],
-    expectedOutcome: "A client rendering architecture, pagination API, image sizing and caching strategy, and offline/error states.",
   },
   {
     id: "mobile-release-flags", title: "Design mobile release and feature flags", description: "Ship app changes safely when users update on their own schedule.",
-    track: "frontend-mobile", access: "free", category: "Release engineering", difficulty: "Beginner", minutes: 35, icon: "flag", color: "orange",
-    requirements: ["Features can be turned on for a subset of users.", "A bad feature can be disabled without a new app release.", "Old app versions keep working against newer backends."],
+    track: "frontend-mobile", access: "paid", category: "Release engineering", difficulty: "Beginner", minutes: 35, icon: "flag", color: "orange",
     considerations: ["Remote config", "Staged rollout", "API versioning"],
-    expectedOutcome: "A flag evaluation and delivery design, rollout and kill-switch flow, and a compatibility strategy for old clients.",
   },
   {
     id: "collaborative-whiteboard", title: "Design a collaborative whiteboard client", description: "Let many people draw on one canvas in real time without conflicts.",
@@ -359,33 +319,13 @@ export const prompts = [
 // Concepts a learner should be comfortable with before attempting each round.
 const prerequisites = {
   "url-shortener": ["HTTP redirects (301 vs 302)", "Hashing and base62 encoding", "Key-value stores", "Read-through caching"],
-  "chat-system": ["WebSockets and long-lived connections", "Message queues", "Ordering and idempotency", "Online presence basics"],
-  "news-feed": ["Fan-out on write vs read", "Caching hot data", "Social graph modeling", "Pagination with cursors"],
-  "file-storage": ["Object storage (blobs)", "Chunking and checksums", "Metadata databases", "Conflict resolution"],
-  "ticket-booking": ["Transactions and isolation levels", "Optimistic vs pessimistic locking", "Reservation TTLs", "Queueing under traffic spikes"],
   "notification-service": ["Message queues and workers", "Retries with backoff", "Idempotency keys", "Push, email, and SMS providers"],
-  "autocomplete": ["Tries and prefix search", "Top-k ranking", "Caching at the edge", "Batch index rebuilding"],
-  "paste-service": ["Unique ID generation", "Object vs database storage", "TTL-based expiry", "Basic abuse prevention"],
   "task-scheduler": ["Delayed and cron scheduling", "Leases and heartbeats", "At-least-once delivery", "Retries and dead-letter queues"],
-  "distributed-cache": ["Consistent hashing", "Eviction policies (LRU, LFU)", "Replication basics", "Cache invalidation strategies"],
   "scd2-warehouse": ["Dimensional modeling (facts and dimensions)", "Slowly changing dimensions", "Business vs surrogate keys", "Idempotent batch loads"],
-  "realtime-analytics": ["Stream processing basics", "Event time vs processing time", "Windowed aggregation", "Columnar / OLAP stores"],
-  "etl-framework": ["DAG orchestration (e.g. Airflow)", "Incremental loads and backfills", "Idempotent tasks", "Data lineage"],
-  "clickstream": ["Event schemas and evolution", "Client-side batching", "Message logs (e.g. Kafka)", "PII handling"],
   "recommendation-engine": ["Candidate generation vs ranking", "Collaborative filtering", "Embeddings basics", "A/B testing"],
-  "feature-store": ["Online vs offline storage", "Point-in-time correct joins", "Batch and streaming materialization", "Training/serving skew"],
-  "training-platform": ["GPU scheduling basics", "Data vs model parallelism", "Checkpointing", "Experiment tracking"],
-  "model-serving": ["Model versioning", "Request batching", "Autoscaling", "Canary releases"],
   "service-platform": ["CI/CD pipelines", "Containers and Kubernetes", "Service templates", "Self-service vs guardrails"],
-  "multi-region": ["RTO and RPO", "Synchronous vs asynchronous replication", "DNS and global load balancing", "Failover testing"],
-  "service-discovery": ["Service registries", "Health checks", "Client-side vs server-side load balancing", "TTLs and caching"],
-  "secrets-platform": ["Workload identity", "Encryption and KMS", "Secret rotation", "Audit logging"],
   "key-value-store": ["Consistent hashing", "Replication and quorums", "CAP and consistency models", "Gossip and failure detection"],
-  "unique-id-generator": ["Bit layouts (Snowflake IDs)", "Clock skew", "Worker ID assignment", "UUID trade-offs"],
-  "distributed-message-queue": ["Append-only logs", "Partitions and ordering", "Leader/follower replication", "Consumer offsets"],
   "offline-first-sync": ["Local databases on mobile", "Change logs and sync cursors", "Conflict resolution", "Reconnect and retry handling"],
-  "image-feed-client": ["List virtualization", "Responsive images and CDNs", "Client-side caching", "Cursor-based pagination"],
-  "mobile-release-flags": ["Feature flags and remote config", "Staged rollouts", "API versioning", "App store release cycles"],
 };
 for (const prompt of prompts) prompt.prerequisites = prerequisites[prompt.id] ?? [];
 

@@ -85,6 +85,8 @@
 .canvas-topbar-actions { gap: 4px; }
 .topbar-action { height: 28px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; color: var(--fg-5f6b7d); border: 0; border-radius: 5px; background: transparent; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .topbar-action:hover { color: var(--fg-36425a); background: var(--bg-f2f4f7); }
+.canvas-footer-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.canvas-footer-link:hover { color: var(--fg-36425a); }
 .canvas-action-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--bg-e9ebef); }
 .button-chat-reopen { color: var(--fg-5863c8); border: 1px solid var(--bd-e0e2f5); background: var(--bg-f5f5fc); }
 .canvas-content { position: relative; min-height: 0; flex: 1; overflow: hidden; }

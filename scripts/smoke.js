@@ -33,6 +33,7 @@ for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", 
 const { createApp } = await import("../server/app.js");
 const { close, query } = await import("../server/db.js");
 const { prompts } = await import("../src/data/prompts.js");
+const { aiLimits } = await import("../src/data/plans.js");
 const { recommendedFreeRound } = await import("../src/data/free-rounds.js");
 const { filterFillerWords } = await import("../server/modules/ai/communication.js");
 const { interviewerTask } = await import("../server/modules/ai/tasks/interviewer.js");
@@ -627,6 +628,98 @@ try {
     await signInAs("plus-curious@example.com");
     assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "plus-curious@example.com" })).status, 200);
     assert.equal((await query("select 1 from plus_waitlist where email = 'plus-curious@example.com'")).length, 0);
+    cookie = previousCookie;
+  });
+
+  // Signs in as another address for a step; the caller restores `cookie` afterwards.
+  const signInAs = async (address) => {
+    cookie = "";
+    await query("delete from login_codes where email = $1", [address]);
+    const { body } = await call("POST", "/api/v1/auth/request-code", { email: address });
+    assert.equal((await call("POST", "/api/v1/auth/verify-code", { email: address, code: body.devCode })).status, 200);
+  };
+
+  await step("one free interviewer round per email, on a free question", async () => {
+    const previousCookie = cookie;
+    const [first, second, third] = prompts.filter((entry) => entry.access === "free");
+    await signInAs("trial@example.com");
+    const round = (await call("POST", "/api/v1/sessions", { promptId: first.id })).body.session;
+    assert.equal(round.interviewerTrial, false);
+    const locked = await call("GET", `/api/v1/sessions/${round.id}/interview`);
+    assert.equal(locked.body.access, "locked");
+    assert.equal(locked.body.trial, "available");
+
+    const started = await call("POST", `/api/v1/sessions/${round.id}/interview/trial`, {});
+    assert.equal(started.status, 201);
+    assert.equal((await call("POST", `/api/v1/sessions/${round.id}/interview/trial`, {})).body.started, false, "starting it again on the same round is a no-op");
+    const open = await call("GET", `/api/v1/sessions/${round.id}/interview`);
+    assert.equal(open.body.access, "full");
+    assert.equal(open.body.allowance.turns.limit, aiLimits.trial.interviewTurnsPerRound);
+    assert.equal((await call("GET", `/api/v1/sessions/${round.id}`)).body.session.interviewerTrial, true);
+    const reviews = await call("GET", `/api/v1/sessions/${round.id}/reviews`);
+    assert.equal(reviews.body.allowance.trial, true);
+    assert.equal(reviews.body.allowance.round.limit, aiLimits.trial.reviewsPerRound, "review counts stay on the free plan");
+
+    const other = (await call("POST", "/api/v1/sessions", { promptId: second.id })).body.session;
+    assert.equal((await call("GET", `/api/v1/sessions/${other.id}/interview`)).body.trial, "used");
+    const again = await call("POST", `/api/v1/sessions/${other.id}/interview/trial`, {});
+    assert.equal(again.status, 409);
+    assert.equal(again.body.error.code, "TRIAL_USED");
+
+    // The trial is tied to the address, so a fresh account for it doesn't get another.
+    assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "trial@example.com" })).status, 200);
+    await signInAs("trial@example.com");
+    const fresh = (await call("POST", "/api/v1/sessions", { promptId: third.id })).body.session;
+    assert.equal((await call("GET", `/api/v1/sessions/${fresh.id}/interview`)).body.trial, "used");
+    assert.equal((await query("select count(*)::int as n from interviewer_trials"))[0].n, 1);
+    cookie = previousCookie;
+  });
+
+  await step("anyone can report a problem; admins see and resolve it", async () => {
+    const previousCookie = cookie;
+    cookie = "";
+    const message = "The review button does nothing when I click it.";
+    const visitor = await call("POST", "/api/v1/reports", { email: "Reporter@Example.com", message, page: "/library" });
+    assert.equal(visitor.status, 201);
+    assert.equal((await call("POST", "/api/v1/reports", { email: "reporter@example.com", message: "too short" })).status, 400);
+    assert.equal((await call("POST", "/api/v1/reports", { message })).status, 400, "visitors give an email");
+    assert.equal((await call("POST", "/api/v1/reports", { email: "reporter@example.com", message, page: "https://example.com/x" })).status, 400, "only a path is stored");
+    assert.equal((await call("GET", "/api/v1/admin/reports")).status, 401);
+
+    process.env.TURNSTILE_SITE_KEY = "3x00000000000000000000FF";
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    try {
+      assert.equal((await call("POST", "/api/v1/reports", { email: "bot@example.com", message })).status, 403, "visitors pass the human check");
+      assert.equal((await call("POST", "/api/v1/reports", { email: "bot@example.com", message, turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" })).status, 201);
+    } finally {
+      process.env.TURNSTILE_SITE_KEY = " ";
+      process.env.TURNSTILE_SECRET_KEY = " ";
+    }
+
+    await signInAs("reporter-member@example.com");
+    assert.equal((await call("POST", "/api/v1/reports", { email: "someone-else@example.com", message, page: "/profile" })).status, 201);
+    const [row] = await query("select email, user_id, user_agent from problem_reports where page = '/profile'");
+    assert.equal(row.email, "reporter-member@example.com", "members report with their account email");
+    assert.ok(row.user_id);
+    assert.equal((await call("GET", "/api/v1/admin/reports")).status, 403, "only admins can list reports");
+
+    await signInAs("admin@example.com");
+    const list = await call("GET", "/api/v1/admin/reports");
+    assert.equal(list.status, 200);
+    assert.equal(list.body.total, 3);
+    assert.equal(list.body.open, 3);
+    const report = list.body.reports.find((entry) => entry.page === "/library");
+    assert.equal(report.email, "reporter@example.com");
+    const resolved = await call("PATCH", `/api/v1/admin/reports/${report.id}`, { status: "resolved" });
+    assert.equal(resolved.body.status, "resolved");
+    assert.ok(resolved.body.resolvedAt);
+    assert.equal((await call("GET", "/api/v1/admin/reports")).body.open, 2);
+    assert.equal((await call("PATCH", `/api/v1/admin/reports/${crypto.randomUUID()}`, { status: "resolved" })).status, 404);
+
+    // Deleting the account removes the reports sent from it.
+    await signInAs("reporter-member@example.com");
+    assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "reporter-member@example.com" })).status, 200);
+    assert.equal((await query("select 1 from problem_reports where email = 'reporter-member@example.com'")).length, 0);
     cookie = previousCookie;
   });
 

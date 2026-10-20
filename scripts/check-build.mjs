@@ -30,7 +30,12 @@ const { loadGuideExcerpts } = await import(pathToFileURL(path.join(root, "server
 const allExcerpts = loadGuideExcerpts();
 // Text that is public by design (a Plus round's teaser: title, description, concepts).
 const { prompts: publicPrompts } = await import(pathToFileURL(path.join(root, "src", "data", "prompts.js")).href);
-const publicTexts = new Set(publicPrompts.flatMap((prompt) => [prompt.title, prompt.description, prompt.category, ...prompt.considerations]));
+// Handbook topic names are public too, and a round's prerequisite can name one.
+const { TOPICS } = await import(pathToFileURL(path.join(root, "src", "learn", "catalog.js")).href);
+const publicTexts = new Set([
+  ...publicPrompts.flatMap((prompt) => [prompt.title, prompt.description, prompt.category, ...prompt.considerations]),
+  ...TOPICS.flatMap((topic) => [topic.title, topic.short]),
+]);
 const plusTexts = Object.entries(plusBriefs).flatMap(([id, brief]) => [
   ...(brief.requirements ?? []), ...(brief.prerequisites ?? []), brief.expectedOutcome,
   allExcerpts[id]?.scale, ...(allExcerpts[id]?.questions ?? []), ...(allExcerpts[id]?.mistakes ?? []),

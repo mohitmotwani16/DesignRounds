@@ -10,6 +10,7 @@ import {
 import { api } from "../api.js";
 import { findPrompt } from "../data/prompts.js";
 import { Brand, FullPageMessage, UserMenu } from "../components/ui.jsx";
+import { openReportProblem } from "../components/ReportProblem.jsx";
 import { navigate } from "../router.js";
 import { getItem } from "./catalog.jsx";
 import { createNode, decorateEdge, hydrateDiagram, newId, serializeDiagram } from "./diagram.js";
@@ -73,8 +74,9 @@ function Workspace({ session, prompt }) {
   const [saveState, setSaveState] = useState("saved");
   const [panelOpen, setPanelOpen] = useState(() => readPreference("designrounds:interviewer-open", "true") !== "false");
   const plan = useAuth().user?.plan;
-  // Free plans can't use the live interviewer, so they start on the Review tab.
-  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" || plan !== "plus" ? "review" : "interviewer"));
+  // Free plans can't use the live interviewer, so they start on the Review tab, except
+  // on their free interviewer round.
+  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" || (plan !== "plus" && !session.interviewerTrial) ? "review" : "interviewer"));
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
   const [showPrompt, setShowPrompt] = useState(() => initial.nodes.length === 0 && session.diagramVersion === 0);
   const [snap, setSnap] = useState(true);
@@ -645,7 +647,7 @@ function Workspace({ session, prompt }) {
             {singleNode && inspectedId === singleNode.id && (
               <NodeInspector id={singleNode.id} type={singleNode.type} data={singleNode.data} readOnly={readOnly}
                 onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection}
-                ask={plan !== "plus" ? "plus" : status !== "in_progress" ? "finished" : "available"} onAsk={askAboutSelection} />
+                ask={interview.access !== "full" ? "plus" : status !== "in_progress" ? "finished" : "available"} onAsk={askAboutSelection} />
             )}
             {singleEdge && (
               <EdgeInspector edge={singleEdge} sourceLabel={labelFor(singleEdge.source)} targetLabel={labelFor(singleEdge.target)} readOnly={readOnly} focusLabel={focusEdgeLabel}
@@ -657,7 +659,7 @@ function Workspace({ session, prompt }) {
           </div>
           <div className="canvas-footer">
             <span><MousePointer2 size={13} /> Drag to move around · Shift + drag to select several · Double-click to rename</span>
-            <span><Command size={12} /> Press <kbd>?</kbd> for keyboard shortcuts</span>
+            <span><Command size={12} /> Press <kbd>?</kbd> for keyboard shortcuts <span aria-hidden="true">·</span> <button type="button" className="canvas-footer-link" onClick={openReportProblem}>Report a problem</button></span>
           </div>
         </section>
 

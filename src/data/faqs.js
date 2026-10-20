@@ -4,7 +4,7 @@ export const FAQS = [
   {
     topic: "Price",
     question: "Is DesignRounds free?",
-    answer: "Yes. Design rounds in every discipline, the full canvas and an AI review for every round are free, with no credit card. Plus adds every round in the library, a live AI interviewer, feedback on how you communicate and deeper coaching.",
+    answer: "Yes. Design rounds in every discipline, the full canvas, an AI review for every round and one round with the live AI interviewer are free, with no credit card. Plus adds every round in the library, the live AI interviewer on every round, feedback on how you communicate and deeper coaching.",
   },
   {
     topic: "Basics",
