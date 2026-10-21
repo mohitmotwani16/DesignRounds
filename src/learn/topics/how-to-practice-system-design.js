@@ -112,7 +112,8 @@ export default {
       "**Weeks 2–4:** shift most of your time to complete rounds with feedback. After each round, read a worked solution and question every difference. Repeat your weakest rounds.",
       "**Final week:** do one or two mock interviews with a person to rehearse the pressure and the conversation.",
     ] },
+    { type: "p", text: "For specific books, guides, AI practice platforms and mock interview services, compared side by side, see [the best system design interview resources](/learn/best-system-design-interview-resources)." },
     { type: "p", text: "Ready to start? Pick a question from the [practice library](/library) or begin with a [URL shortener](/system-design/url-shortener), a classic first round." },
   ],
-  related: ["system-design-interview", "system-design-template", "core-design-challenges", "system-design-interview-questions", "back-of-the-envelope-estimation"],
+  related: ["best-system-design-interview-resources", "system-design-interview", "system-design-template", "core-design-challenges", "system-design-interview-questions", "back-of-the-envelope-estimation"],
 };

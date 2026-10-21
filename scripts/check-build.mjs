@@ -93,7 +93,8 @@ for (const url of urls) {
   else if (description[0].length < 70 || description[0].length > 170) fail(`${route}: description is ${description[0].length} chars`);
   if (canonical.length !== 1 || canonical[0] !== url.replace(/\/$/, "") && canonical[0] !== url) fail(`${route}: canonical ${JSON.stringify(canonical)} != ${url}`);
   if (h1.length !== 1) fail(`${route}: ${h1.length} <h1> elements`);
-  if (!/<meta name="robots" content="index, follow"/.test(html)) fail(`${route}: not indexable`);
+  if (!/<meta name="robots" content="index, follow[",]/.test(html)) fail(`${route}: not indexable`);
+  else if (!html.includes("max-snippet:-1")) fail(`${route}: robots meta limits snippets (AI Overviews quote only what snippets allow)`);
   if (!html.includes('<div id="root"><')) fail(`${route}: root is empty (not prerendered)`);
   for (const json of one(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
     try { JSON.parse(json.replace(/\\u003c/g, "<")); } catch { fail(`${route}: invalid JSON-LD`); }
@@ -112,7 +113,13 @@ for (const file of ["404.html", "app.html", "robots.txt", "llms.txt", "og.png", 
 const indexNowKey = readdirSync(dist).find((name) => /^[0-9a-f]{32}\.txt$/.test(name));
 if (!indexNowKey) fail("missing IndexNow key file (dist/<32 hex>.txt)");
 else if (readFileSync(path.join(dist, indexNowKey), "utf8").trim() !== indexNowKey.slice(0, -4)) fail("IndexNow key file content does not match its name");
-if (existsSync(path.join(dist, "404.html")) && !/<meta name="robots" content="noindex"/.test(readFileSync(path.join(dist, "404.html"), "utf8"))) fail("404.html is indexable");
+// AI search crawlers must be named and never blocked from the site root.
+if (existsSync(path.join(dist, "robots.txt"))) {
+  const robots = readFileSync(path.join(dist, "robots.txt"), "utf8");
+  for (const agent of ["OAI-SearchBot", "Google-Extended", "PerplexityBot", "Claude-SearchBot", "Bingbot"]) if (!robots.includes(`User-agent: ${agent}`)) fail(`robots.txt does not name ${agent}`);
+  if (/^Disallow: \/\s*$/m.test(robots)) fail("robots.txt disallows the whole site for some crawler");
+}
+if (existsSync(path.join(dist, "404.html")) &&!/<meta name="robots" content="noindex"/.test(readFileSync(path.join(dist, "404.html"), "utf8"))) fail("404.html is indexable");
 if (existsSync(path.join(dist, "app.html")) && !/noindex/.test(readFileSync(path.join(dist, "app.html"), "utf8"))) fail("app.html is indexable");
 
 if (problems.length) {
