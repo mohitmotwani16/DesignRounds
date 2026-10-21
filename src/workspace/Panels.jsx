@@ -12,7 +12,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
   // On free plans the interviewer is a Plus feature (or the one free round), and the tab says so.
   const interviewerLocked = interview.status === "ready" && interview.access !== "full";
   return (
-    <aside className={`interviewer-panel ${tab === "review" ? "panel-wide" : ""}`}>
+    <aside className={`interviewer-panel ${tab === "review" ? "panel-wide" : ""}`} data-tour="panel">
       <div className="interviewer-header side-panel-header">
         <div className="side-panel-tabs" role="tablist" aria-label="Side panel">
           {tabs.map(([id, label, Icon]) => (

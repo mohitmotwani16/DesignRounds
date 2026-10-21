@@ -60,7 +60,7 @@ export const Palette = memo(function Palette({ onAdd, disabled, outline, selecte
   }
 
   return (
-    <aside className="component-sidebar" aria-label="Component library">
+    <aside className="component-sidebar" aria-label="Component library" data-tour="library">
       <div className="sidebar-tabs" role="tablist">
         <button role="tab" aria-selected={tab === "library"} className={tab === "library" ? "active" : ""} onClick={() => setTab("library")}>Components</button>
         <button role="tab" aria-selected={tab === "outline"} className={tab === "outline" ? "active" : ""} onClick={() => setTab("outline")}>Outline <span className="count-badge">{outline.length}</span></button>
