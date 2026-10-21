@@ -6,7 +6,7 @@ import { setServerLocation } from "./router.js";
 import { SiteFooter, SiteNav } from "./components/site.jsx";
 import { AuthProvider } from "./auth.jsx";
 
-export { publicPaths, routeMeta, metaHtml, SITE, SITE_UPDATED, TRACK_SEO, roundPath, trackPath } from "./seo.js";
+export { publicPaths, routeMeta, metaHtml, SITE, SITE_SUMMARY, SITE_UPDATED, TRACK_SEO, roundPath, trackPath } from "./seo.js";
 export { prompts, tracks, getTrack } from "./data/prompts.js";
 export { CATEGORIES, LEARN_PATH, LEARN_UPDATED, TOPICS, topicMeta, topicPath } from "./learn/catalog.js";
 export { preloadAllTopics } from "./learn/topics.js";

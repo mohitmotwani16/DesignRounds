@@ -6,6 +6,16 @@
 // Keep answers short, plain and self-contained: they are read out of context.
 
 export const SEARCH_INTENT = {
+  "best-system-design-interview-resources": {
+    keywords: ["best system design interview resources", "best website to practice system design", "system design interview practice platform", "free ai system design mock interview", "system design mock interview online", "best system design course", "best system design book", "data engineering system design practice", "ml system design interview practice"],
+    faq: [
+      { q: "What is the best website to practice system design interviews?", a: "It depends on the job. For learning concepts, the free System Design Primer or a handbook; for worked interview designs, Alex Xu's books (ByteByteGo) or Hello Interview; for practicing full rounds with feedback, an AI practice platform such as DesignRounds or Hello Interview's guided practice; and for a final rehearsal, a mock interview with a person." },
+      { q: "Is there a free AI system design mock interview?", a: "Yes. DesignRounds has free practice rounds in every discipline, free AI reviews scored on six dimensions every month, and a free round with its live AI interviewer. Hello Interview also offers AI-guided practice that is free to start." },
+      { q: "Where can I practice data engineering or ML system design interviews?", a: "Most system design resources focus on backend problems. DesignRounds has separate practice rounds and roadmaps for data engineering, machine learning, platform and infrastructure, distributed systems, and frontend and mobile interviews." },
+      { q: "Can AI practice replace a mock interview with a person?", a: "Not entirely. AI practice is best for volume: many full, timed rounds with consistent feedback. A mock with an experienced engineer gives calibrated feedback and rehearses the human conversation, so most candidates do one or two in the final week." },
+      { q: "What is the best book for system design interviews?", a: "Alex Xu's System Design Interview: An Insider's Guide (volumes 1 and 2) for interview-style worked problems, and Designing Data-Intensive Applications by Martin Kleppmann and Chris Riccomini for depth on storage, replication and consistency." },
+    ],
+  },
   "data-engineering-roadmap": {
     keywords: ["data engineering roadmap", "data engineering roadmap 2026", "how to become a data engineer", "data engineer learning path", "data engineering interview preparation", "data engineering system design roadmap"],
     faq: [

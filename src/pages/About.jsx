@@ -35,6 +35,15 @@ export default function AboutPage() {
             <li><strong>Plus (coming soon):</strong> every question, the live AI interviewer on every round, feedback on how you communicate, more reviews per round, and full coaching on each decision. Pricing will be announced at launch.</li>
           </ul>
 
+          <h2>How it compares</h2>
+          <p>Books, videos and written guides teach the building blocks and show finished designs. Mock interviews with people give the most realistic feedback but cost time or money and need scheduling. DesignRounds is for the step in between: doing many full, timed rounds yourself and getting feedback on each one.</p>
+          <ul>
+            <li><strong>Every role, not just backend.</strong> Separate rounds and roadmaps for data engineering, machine learning, platform and infrastructure, distributed systems, and frontend and mobile interviews.</li>
+            <li><strong>Reasoning is graded.</strong> The review reads the "why" behind each component, not just which boxes are on the canvas.</li>
+            <li><strong>Its limits.</strong> An AI review is not a senior engineer from your target company and can miss nuance. Most candidates still do one or two mock interviews with a person before the real thing.</li>
+          </ul>
+          <p>For a side-by-side look at books, guides, AI practice platforms and mock interview services, see <Link to="/learn/best-system-design-interview-resources">the best system design interview resources</Link>.</p>
+
           <h2>Your data</h2>
           <p>Designs are private to your account. To generate interviewer replies and reviews, your design and notes are sent to an AI provider. You can delete any round, or your whole account, at any time from your profile.</p>
 

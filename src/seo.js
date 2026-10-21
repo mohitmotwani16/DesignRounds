@@ -83,7 +83,15 @@ const fitTitle = (...variants) => variants.find((title) => title.length <= 65) ?
 
 const absolute = (path) => `${SITE.url}${path === "/" ? "" : path}`;
 const clamp = (text, max = 158) => (text.length <= max ? text : `${text.slice(0, max - 1).replace(/\s+\S*$/, "")}…`);
-const organization = { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: SITE.name, url: SITE.url, logo: `${SITE.url}/icon-512.png` };
+// The one-sentence description of the product, repeated word for word in structured
+// data, llms.txt and the About page so search engines and AI assistants see one entity.
+export const SITE_SUMMARY = "DesignRounds is a system design interview practice platform: realistic design problems for every engineering role, an architecture canvas, an AI interviewer and a rubric-based review of every round.";
+
+const organization = { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: SITE.name, url: SITE.url, logo: `${SITE.url}/icon-512.png`, description: SITE_SUMMARY };
+
+// Indexable pages allow full-length text snippets and large image previews: Google's AI
+// Overviews and AI Mode quote a page only as far as its snippet rules allow.
+const INDEXABLE = "index, follow, max-snippet:-1, max-image-preview:large";
 const breadcrumbs = (items) => ({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -114,7 +122,7 @@ export function publicPaths() {
 }
 
 export function routeMeta(path) {
-  const base = { title: `${SITE.name} — ${SITE.tagline}`, description: "", canonical: absolute(path), robots: "index, follow", ogType: "website", jsonLd: [], notFound: false };
+  const base = { title: `${SITE.name} — ${SITE.tagline}`, description: "", canonical: absolute(path), robots: INDEXABLE, ogType: "website", jsonLd: [], notFound: false };
 
   if (PRIVATE.test(path)) return { ...base, title: `${SITE.name}`, robots: "noindex, nofollow", canonical: null };
 
@@ -133,7 +141,15 @@ export function routeMeta(path) {
           url: SITE.url,
           applicationCategory: "EducationalApplication",
           operatingSystem: "Web browser",
-          description: "System design interview practice: realistic prompts, an architecture canvas, an AI interviewer, and rubric-based reviews.",
+          description: SITE_SUMMARY,
+          audience: { "@type": "Audience", audienceType: "Software engineers preparing for system design interviews" },
+          featureList: [
+            "Practice rounds for backend, data engineering, machine learning, platform and infrastructure, distributed systems, and frontend and mobile roles",
+            "Architecture canvas with labeled synchronous and asynchronous connections",
+            "AI interviewer that asks follow-up questions about design decisions",
+            "Rubric-based review scored on six dimensions",
+            "Free system design handbook and role roadmaps",
+          ],
           offers: { "@type": "Offer", price: "0", priceCurrency: "INR", description: "Free plan" },
         },
         {

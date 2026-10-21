@@ -338,6 +338,7 @@ export const CATEGORIES = [
       { slug: "problem-decomposition-framework", title: "Problem Decomposition: Verbs, Nouns and Adjectives in System Design", short: "Decomposition framework", level: "Beginner", description: "Turn a vague system design prompt into requirements: verbs become use cases, nouns become owned entities, adjectives become constraints that justify components.", published: NOTES },
       { slug: "system-design-interview-questions", title: "System Design Interview Questions to Practice, by Role and Level", short: "Interview questions", level: "Beginner", description: "System design interview questions grouped by role (SDE, data engineering, ML, platform, distributed systems, frontend) and level, with what each one tests.", published: "2026-10-14" },
       { slug: "how-to-practice-system-design", title: "How to Study and Practice System Design (Without Memorizing Answers)", short: "How to practice", level: "Beginner", description: "How to study system design: why memorized answers fail, what to learn in which order, and how books, mock interviews and AI practice fit together.", published: "2026-10-14" },
+      { slug: "best-system-design-interview-resources", title: "Best System Design Interview Prep Resources and Tools (2026)", short: "Best prep resources", level: "Beginner", description: "The best system design interview resources compared: books, guides, AI practice platforms and mock interviews, what each costs and which to pick.", published: "2026-10-21" },
     ],
   },
   {
