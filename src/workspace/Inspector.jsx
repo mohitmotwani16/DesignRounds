@@ -105,6 +105,7 @@ export const EdgeInspector = memo(function EdgeInspector({ edge, sourceLabel, ta
         <div className="inspector-actions">
           <div className="inspector-row">
             <button className="button button-outline button-small" onClick={onReverse}><Repeat size={13} /> Reverse</button>
+            {edge.data?.bend && <button className="button button-outline button-small" onClick={() => { onBegin(); onChange(edge.id, { data: { bend: undefined } }); }}>Straighten</button>}
             <button className="button button-outline button-small danger-text" onClick={onDelete}><Trash2 size={13} /> Delete</button>
           </div>
         </div>
