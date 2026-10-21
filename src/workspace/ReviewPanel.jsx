@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, MessageSquareText, RefreshCw, Sparkles, Target } from "lucide-react";
+import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, MessageSquareText, RefreshCw, Scale, Sparkles, Target } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 
@@ -279,6 +279,9 @@ function ReviewResult({ review, onFocusNode, labelFor }) {
   const full = review.access === "full";
   const [open, setOpen] = useState(null);
   const locked = review.locked;
+  const adjustedCount = review.dimensions.filter((dimension) => dimension.adjustment).length;
+  // Older reviews have no descriptions or adjustments; their rows open only on Plus.
+  const expandable = (dimension) => full || Boolean(dimension.description || dimension.adjustment);
   return (
     <article className="review-result" aria-label="Design review">
       {review.sample && <div className="review-sample">Sample review: no AI provider is configured on this server.</div>}
@@ -295,25 +298,43 @@ function ReviewResult({ review, onFocusNode, labelFor }) {
         <h4>Rubric</h4>
         <ul className="review-dimensions">
           {review.dimensions.map((dimension) => {
-            const expanded = open === dimension.id;
+            const canOpen = expandable(dimension);
+            const expanded = canOpen && open === dimension.id;
+            const gaps = full ? review.risks.filter((risk) => risk.dimension === dimension.id) : [];
             return (
               <li key={dimension.id} className={`rating-${dimension.rating}`}>
-                <button className="review-dimension-row" aria-expanded={full ? expanded : undefined} disabled={!full} onClick={() => setOpen(expanded ? null : dimension.id)}>
-                  <span className="review-dimension-name">{dimension.name}</span>
+                <button className="review-dimension-row" aria-expanded={canOpen ? expanded : undefined} disabled={!canOpen} onClick={() => setOpen(expanded ? null : dimension.id)}>
+                  <span className="review-dimension-name">{dimension.name}{dimension.adjustment && <Scale size={12} className="review-adjusted-mark" aria-label="Score adjusted" />}</span>
                   <span className="review-dimension-score">{dimension.score}/10</span>
-                  {full && <ChevronDown size={14} className={expanded ? "rotated" : ""} />}
+                  {canOpen && <ChevronDown size={14} className={expanded ? "rotated" : ""} />}
                   <span className="review-bar"><span style={{ width: `${dimension.score * 10}%` }} /></span>
                 </button>
-                {full && expanded && (
+                {expanded && (
                   <div className="review-dimension-detail">
-                    <ul>{dimension.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-                    <p><strong>Improve:</strong> {dimension.improvement}</p>
+                    {dimension.description && <p className="review-dimension-description">{dimension.description}</p>}
+                    {dimension.adjustment && (
+                      <p className="review-adjustment"><Scale size={12} /> <span>Adjusted from {dimension.adjustment.from} to {dimension.score}: {dimension.adjustment.reason}</span></p>
+                    )}
+                    {full && (
+                      <>
+                        <ul>{dimension.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+                        {gaps.length > 0 && (
+                          <ul className="review-dimension-gaps">
+                            {gaps.map((risk) => <li key={risk.point}><span className={`review-severity severity-${risk.severity}`}>{risk.severity}</span>{risk.point}</li>)}
+                          </ul>
+                        )}
+                        <p><strong>Improve:</strong> {dimension.improvement}</p>
+                      </>
+                    )}
                   </div>
                 )}
               </li>
             );
           })}
         </ul>
+        {adjustedCount > 0 && (
+          <p className="review-adjusted-line"><Scale size={12} /> Scores are checked against your diagram{review.dimensions.some((dimension) => dimension.adjustment?.rule === "interview-notepad") ? ", the interview" : ""} and the review's own findings. {adjustedCount === 1 ? "One score was" : `${adjustedCount} scores were`} adjusted; open {adjustedCount === 1 ? "it" : "them"} to see why.</p>
+        )}
         {!full && <p className="review-locked-line"><LockKeyhole size={12} /> Evidence and an improvement for each dimension are part of Plus.</p>}
       </section>
 

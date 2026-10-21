@@ -36,6 +36,11 @@ export function isAnonymousKind(kind) {
   return ANONYMOUS_KINDS.has(kind);
 }
 
+// The catalog group a kind belongs to ("databases", "cache", ...), or null if unknown.
+export function groupOf(kind) {
+  return kindToGroup.get(kind) ?? null;
+}
+
 export function isSignificantKind(kind) {
   const group = kindToGroup.get(kind);
   return group ? !MINOR_GROUPS.has(group) : !["group", "text", "note"].includes(kind);

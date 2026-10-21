@@ -7,6 +7,7 @@ import { describeDiagram, fingerprint, nameComponents } from "./ai/context.js";
 import { AiError, toHttpError } from "./ai/errors.js";
 import { bandFor, overallScore, rubric } from "./ai/rubric.js";
 import { runTask } from "./ai/run.js";
+import { constrainScores, scoringVersion } from "./ai/scoring.js";
 import { guideFor } from "./ai/guides.js";
 import { communicationTask, communicationTemplateVersion } from "./ai/tasks/communication.js";
 import { reviewTask, reviewTemplateVersion } from "./ai/tasks/review.js";
@@ -71,19 +72,30 @@ async function settle(review, fields) {
 }
 
 // Shapes validated model output into the stored review: rubric names and weights,
-// bands and the overall score computed here, and component references limited to
-// components that exist in the reviewed design.
-export function normalize(data, design) {
+// dimension scores checked against deterministic constraints (ai/scoring.js), bands
+// and the overall score computed here, and component references limited to
+// components that exist in the reviewed design. The context carries the interview
+// facts the constraints use: the notepad items on v3 rounds and whether the learner spoke.
+export function normalize(data, design, { ledgerItems = null, spoke = false } = {}) {
   // Safety net for the prompt rule: any "[node-id]" left in text becomes the component's label.
   data = nameComponents(data, design.labels);
-  const known = (ids) => [...new Set(ids)].filter((id) => design.componentIds.has(id));
+  // Models sometimes copy an id with its brackets ("[api]"); keep the reference either way.
+  const known = (ids) => [...new Set(ids.map((id) => id.replace(/^\[(.*)\]$/, "$1")))].filter((id) => design.componentIds.has(id));
   const byId = new Map(data.dimensions.map((dimension) => [dimension.id, dimension]));
+  const modelScores = Object.fromEntries(data.dimensions.map((dimension) => [dimension.id, dimension.score]));
+  const { scores, adjustments } = constrainScores(modelScores, { design, decisions: data.decisions, risks: data.risks, ledgerItems, spoke });
+  const adjusted = new Map(adjustments.map((adjustment) => [adjustment.dimension, adjustment]));
   const dimensions = rubric.dimensions.map((definition) => {
     const entry = byId.get(definition.id);
-    const band = bandFor(entry.score);
-    return { id: definition.id, name: definition.name, weight: definition.weight, score: entry.score, rating: band.rating, ratingLabel: band.label, evidence: entry.evidence, improvement: entry.improvement };
+    const band = bandFor(scores[definition.id]);
+    const adjustment = adjusted.get(definition.id);
+    return {
+      id: definition.id, name: definition.name, description: definition.summary, weight: definition.weight,
+      score: scores[definition.id], rating: band.rating, ratingLabel: band.label, evidence: entry.evidence, improvement: entry.improvement,
+      adjustment: adjustment ? { from: adjustment.from, rule: adjustment.rule, reason: adjustment.reason } : null,
+    };
   });
-  const score = overallScore(Object.fromEntries(dimensions.map((dimension) => [dimension.id, dimension.score])));
+  const score = overallScore(scores);
   const band = bandFor(score / 10);
   const severityRank = { high: 0, medium: 1, low: 2 };
   return {
@@ -95,6 +107,8 @@ export function normalize(data, design) {
     nextSteps: data.nextSteps,
     followUpQuestions: data.followUpQuestions,
     assumptions: data.assumptions,
+    // What the model scored and what the constraints changed, for audits and tuning.
+    scoring: { version: scoringVersion, modelScore: overallScore(modelScores), adjustments },
     reasoning: {
       summary: data.reasoningSummary,
       // Counted from the diagram, not judged by the model.
@@ -210,6 +224,8 @@ reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
   // On a v3 round the notepad carries pre-judged evidence, so the transcript can be shorter.
   const ledger = await reviewLedger(session.id, prompt.id);
   const transcript = await interviewTranscript(session.id, ledger ? 6_000 : 12_000);
+  // Whether the learner answered anything out loud or typed: spoken reasoning counts too.
+  const spoke = Boolean((await queryOne("select exists (select 1 from interview_turns where session_id = $1 and role = 'learner') as spoke", [session.id]))?.spoke);
   // The conversation is part of what is reviewed, so a changed transcript is a changed submission.
   const diagramHash = fingerprint(`${design.text}
 ${transcript}`);
@@ -270,7 +286,7 @@ ${transcript}`);
     if (error instanceof AiError) throw toHttpError(error);
     throw error;
   }
-  const result = { ...normalize(output.data, design), communication: await communication };
+  const result = { ...normalize(output.data, design, { ledgerItems: ledger?.items ?? null, spoke }), communication: await communication };
   const saved = await settle(pending, { status: "succeeded", result, model: output.model });
   res.status(201).json({ review: present(saved, full), reused: false, allowance: await readAllowance(db, req.user, session) });
 }));
