@@ -17,6 +17,7 @@ import { createNode, decorateEdge, hydrateDiagram, newId, serializeDiagram } fro
 import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
 import { CanvasActions, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
+import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from "./CanvasTour.jsx";
 import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
 import { PanelResizer } from "./PanelResizer.jsx";
 import { useInterview } from "./useInterview.js";
@@ -74,7 +75,8 @@ function Workspace({ session, prompt }) {
   const [status, setStatus] = useState(session.status);
   const [saveState, setSaveState] = useState("saved");
   const [panelOpen, setPanelOpen] = useState(() => readPreference("designrounds:interviewer-open", "true") !== "false");
-  const plan = useAuth().user?.plan;
+  const { status: authStatus, user } = useAuth();
+  const plan = user?.plan;
   // An active round opens on the Interviewer tab for everyone: free learners see the
   // free interviewer round offer (or what Plus adds) there. A finished round opens on Review.
   const [panelTab, setPanelTab] = useState(() => (session.status === "completed" ? "review" : "interviewer"));
@@ -88,6 +90,7 @@ function Workspace({ session, prompt }) {
   const [smallScreenNotice, setSmallScreenNotice] = useState(() => window.innerWidth < 760 && readSessionFlag("designrounds:small-screen-dismissed") !== "1");
   const [showMinimap, setShowMinimap] = useState(() => window.innerWidth > 760);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [tourOn, setTourOn] = useState(false);
   const [focusEdgeLabel, setFocusEdgeLabel] = useState(0);
   const [legacy, setLegacy] = useState(() => (initial.nodes.length || session.diagramVersion > 0 ? null : readLegacyCanvas(prompt.id)));
   const reactFlow = useReactFlow();
@@ -389,7 +392,7 @@ function Workspace({ session, prompt }) {
   shortcuts.current = {
     undo, redo, duplicateSelection, copySelection, paste, deleteSelection, clearSelection, nudgeSelection, selectAll,
     focusComponentSearch, togglePanel, flush, addItem, reactFlow,
-    modalOpen: showPrompt || showShortcuts,
+    modalOpen: showPrompt || showShortcuts || tourOn,
     singleNodeId: singleNode?.id,
   };
   useEffect(() => {
@@ -539,6 +542,40 @@ function Workspace({ session, prompt }) {
 
   const saveLabel = readOnly ? "Read-only" : { saved: "Saved", saving: "Saving…", error: "Offline, retrying", conflict: "Not saved", "signed-out": "Signed out" }[saveState];
 
+  // First canvas visit for this signed-in account. The brief (when a round is new)
+  // finishes first, then the walkthrough runs once and stays dismissed.
+  const tourSteps = useMemo(() => canvasTourSteps(readOnly), [readOnly]);
+  const tourLayout = useRef(null);
+  const layoutNow = useRef({ paletteOpen, panelOpen, panelTab });
+  layoutNow.current = { paletteOpen, panelOpen, panelTab };
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
+  useEffect(() => {
+    if (tourOn || authStatus !== "signed-in" || !user?.id) return undefined;
+    if (showPrompt || showShortcuts) return undefined;
+    if (canvasTourSeen(user.id)) return undefined;
+    const timer = window.setTimeout(() => setTourOn(true), 400);
+    return () => window.clearTimeout(timer);
+  }, [authStatus, user?.id, showPrompt, showShortcuts, tourOn]);
+  const onTourStep = useCallback((step) => {
+    if (!tourLayout.current) tourLayout.current = { ...layoutNow.current };
+    if (step.targets?.includes("library")) setPaletteOpen(true);
+    if (step.tab) {
+      setPanelOpen(true);
+      setPanelTab(step.tab);
+    }
+  }, []);
+  const closeTour = useCallback(() => {
+    if (userIdRef.current) markCanvasTourSeen(userIdRef.current);
+    const previous = tourLayout.current;
+    if (previous) {
+      setPaletteOpen(previous.paletteOpen);
+      setPanelOpen(previous.panelOpen);
+      setPanelTab(previous.panelTab);
+    }
+    setTourOn(false);
+  }, []);
+
   return (
     <main className="workspace-shell">
       <header className="workspace-header">
@@ -549,8 +586,8 @@ function Workspace({ session, prompt }) {
           <span className={`save-indicator ${readOnly ? "readonly" : saveState}`} role="status"><span />{saveLabel}</span>
           <span className="header-v-divider" />
           {readOnly
-            ? <button className="workspace-exit" onClick={reopenRound}><RotateCcw size={13} /> Reopen round</button>
-            : <button className="workspace-exit" onClick={finishRound}><CircleCheck size={13} /> Finish round</button>}
+            ? <button className="workspace-exit" data-tour="finish" onClick={reopenRound}><RotateCcw size={13} /> Reopen round</button>
+            : <button className="workspace-exit" data-tour="finish" onClick={finishRound}><CircleCheck size={13} /> Finish round</button>}
           <button className="workspace-exit" onClick={exitRound}><ArrowLeft size={13} /> Exit</button>
           <UserMenu compact />
         </div>
@@ -566,7 +603,7 @@ function Workspace({ session, prompt }) {
         ...(paletteWidth ? { "--palette-width": `${paletteWidth}px` } : {}),
         ...(panelWidth ? { "--panel-width": `${panelWidth}px` } : {}),
       }}>
-        <aside className="tool-rail" aria-label="Canvas tools">
+        <aside className="tool-rail" aria-label="Canvas tools" data-tour="rail">
           <button className={`rail-tool ${paletteOpen ? "active" : ""}`} title="Toggle component library (B)" aria-label="Toggle component library" aria-pressed={paletteOpen} onClick={() => setPaletteOpen((value) => !value)}><LayoutPanelLeft size={17} /></button>
           <span className="rail-separator" />
           <button className="rail-tool" title="Add a service (S)" aria-label="Add a service" disabled={readOnly} onClick={() => addItem(getItem("service"))}><Plus size={19} /></button>
@@ -596,7 +633,7 @@ function Workspace({ session, prompt }) {
               {!panelOpen && <button className="topbar-action button-chat-reopen" onClick={togglePanel}><MessageSquare size={13} /> {panelTab === "review" ? "Review" : "Interviewer"}{unread > 0 && <span className="tab-badge">{unread}</span>}</button>}
             </div>
           </div>
-          <div className="canvas-content" ref={canvasRef} onPointerDownCapture={() => { pointerDown.current = true; }}>
+          <div className="canvas-content" data-tour="canvas" ref={canvasRef} onPointerDownCapture={() => { pointerDown.current = true; }}>
             <CanvasActions.Provider value={canvasActions}>
               <ReactFlow
                 nodes={nodes}
@@ -644,7 +681,7 @@ function Workspace({ session, prompt }) {
             </CanvasActions.Provider>
 
             {nodes.length === 0 && !legacy && (
-              <div className="empty-canvas">
+              <div className="empty-canvas" data-tour="connect">
                 <span className="empty-canvas-icon"><Network size={22} /></span>
                 <h3>A clean slate.</h3>
                 <p>{readOnly ? "This round was finished without any components." : <>Click or drag components from the library.<br />Connect them by dragging from a node's edge dot.</>}</p>
@@ -680,6 +717,7 @@ function Workspace({ session, prompt }) {
       </div>
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
       {showPrompt && <PromptModal prompt={prompt} fresh={nodes.length === 0} onClose={() => setShowPrompt(false)} />}
+      {tourOn && <CanvasTour steps={tourSteps} layoutKey={`${paletteOpen}:${panelOpen}:${panelTab}`} onStep={onTourStep} onDone={closeTour} />}
     </main>
   );
 }
