@@ -2,16 +2,18 @@ import { z } from "zod";
 import { clean } from "../context.js";
 import { policy, policyVersion } from "../prompts/policy.js";
 import { dimensionIds, rubric } from "../rubric.js";
+import { scoringVersion } from "../scoring.js";
 import { integer, list, oneOf, text } from "../schema.js";
 
-const TEMPLATE = "review-v7";
+const TEMPLATE = "review-v8";
 
 // Identifies everything that shaped a review's instructions, stored with each review.
 // The pool fingerprint is part of it so a newly built reference pool calibrates the
 // next review instead of being ignored behind a cached one.
 // A v3 round adds its pinned pack version: the review also reads the interview notepad.
+// The scoring rules are part of it too, since they shape the stored scores.
 export function reviewTemplateVersion(guide, pool = null, ledger = null) {
-  const base = `${TEMPLATE}/${policyVersion}/${guide ? `guide-${guide.version}` : "no-guide"}/${pool ? `pool-${pool.fingerprint}` : "no-pool"}`;
+  const base = `${TEMPLATE}/${scoringVersion}/${policyVersion}/${guide ? `guide-${guide.version}` : "no-guide"}/${pool ? `pool-${pool.fingerprint}` : "no-pool"}`;
   return ledger ? `${base}/${ledger.packVersion}` : base;
 }
 
@@ -34,6 +36,7 @@ const output = z.object({
     point: text(220, "A gap, risk, or mistake, stated specifically."),
     whyItMatters: text(400, "The concrete consequence for this system."),
     severity: oneOf(["high", "medium", "low"], "How much this would hurt the design in practice."),
+    dimension: oneOf(dimensionIds, "The rubric dimension this gap mainly affects."),
     nodeIds: nodeRefs,
   }), { min: 0, max: 5 }, "Most severe first. Empty only if there is genuinely nothing important missing."),
   nextSteps: list(text(300, "One action."), { min: 1, max: 4 }, "Prioritised actions the learner should take to improve this design."),
@@ -82,6 +85,8 @@ Scoring scale for each dimension (integers 0-10):
 - 3-4: major gaps; only touched on.
 - 0-2: absent or incorrect.
 A design with only a few components should score low on most dimensions. Score each dimension independently.
+
+Keep the numbers consistent with your own judgements; they are checked in code after you reply. A dimension with a high-severity gap can't be strong. The trade-offs score must agree with how you rated each decision's explanation, and the architecture score with how many decisions you found over-engineered or unnecessary. Tag every risk with the dimension it mainly affects.
 
 Reply with a single JSON object that matches the provided schema.`;
 
@@ -155,8 +160,8 @@ function fake({ design }) {
     })),
     strengths: [{ point: "Sample strength.", detail: "Shown so the review screen can be developed offline.", nodeIds: ids.slice(0, 1) }],
     risks: [
-      { point: "Sample high-severity risk.", whyItMatters: "Placeholder text.", severity: "high", nodeIds: ids.slice(1, 2) },
-      { point: "Sample medium-severity risk.", whyItMatters: "Placeholder text.", severity: "medium", nodeIds: [] },
+      { point: "Sample high-severity risk.", whyItMatters: "Placeholder text.", severity: "high", dimension: "reliability", nodeIds: ids.slice(1, 2) },
+      { point: "Sample medium-severity risk.", whyItMatters: "Placeholder text.", severity: "medium", dimension: "scalability", nodeIds: [] },
     ],
     nextSteps: ["Sample next step one.", "Sample next step two."],
     followUpQuestions: ["Sample follow-up question?"],

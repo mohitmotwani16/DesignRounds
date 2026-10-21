@@ -1,41 +1,48 @@
 // The rubric every final review is scored against. Bump `version` whenever a
 // dimension, weight, or band changes; stored reviews keep the version they used.
+// `summary` is the learner-facing description; `guide` is what the reviewer applies.
 export const rubric = {
   version: "general-v2",
   dimensions: [
     {
       id: "requirements",
       name: "Requirements & scope",
+      summary: "Who uses the system, what it must do, and the scale, latency and consistency it has to meet.",
       weight: 15,
       guide: "Identifies who uses the system and what it must do; states scale, read/write mix, latency and consistency needs, and sensible scope limits. Evidence: requirement-shaped notes, labels, or components that reflect stated needs.",
     },
     {
       id: "architecture",
       name: "High-level architecture",
+      summary: "A complete, connected request and data flow with clear responsibilities, sized to the problem.",
       weight: 20,
       guide: "A coherent end-to-end request and data flow that satisfies the functional requirements, with clear component responsibilities and correctly directed connections. The design is proportionate: no components the problem does not need, and nothing essential missing for the stated scale.",
     },
     {
       id: "data",
       name: "Data model & storage",
+      summary: "Storage that fits the access patterns, with keys, partitioning and data lifecycle where they matter.",
       weight: 15,
       guide: "Storage choices fit the access patterns; key entities, partitioning or indexing, and data lifecycle are considered where they matter.",
     },
     {
       id: "scalability",
       name: "Scale & performance",
+      summary: "How the design carries the expected load: caching, scaling out, async work and hot spots.",
       weight: 15,
       guide: "Handles the expected load: caching, horizontal scaling, asynchronous work, hot-spot and fan-out handling, and latency on the critical path.",
     },
     {
       id: "reliability",
       name: "Reliability & security",
+      summary: "What happens when parts fail, how data is kept safe, and how the system is secured and observed.",
       weight: 15,
       guide: "Failure modes, redundancy, retries and idempotency, delivery guarantees, observability, and basic security such as authentication and protection of sensitive data.",
     },
     {
       id: "tradeoffs",
       name: "Trade-offs & reasoning",
+      summary: "Why each significant choice was made, when it would be wrong, and what you weighed against it.",
       weight: 20,
       guide: "Explains why each significant choice was made, how it works, when it would be the wrong choice, and what alternatives were rejected, mainly through component 'why' notes, decision notes, and connection labels. Reasons must be correct and tied to requirements or scale; naming a technology is not a reason. Unexplained choices earn little here even if they are good.",
     },

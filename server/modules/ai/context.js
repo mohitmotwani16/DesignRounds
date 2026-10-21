@@ -67,6 +67,10 @@ export function describeDiagram(diagram) {
   }
   if (texts.length) lines.push("", `Text labels: ${texts.map((node) => quoted(node.data.label, 120)).sort().join(", ")}`);
 
+  // A component is connected if an edge touches it or the zone it sits in.
+  const endpoints = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+  const isolatedCount = components.filter((node) => !endpoints.has(node.id) && !endpoints.has(zoneOf(node, zones)?.id)).length;
+
   return {
     text: lines.join("\n"),
     componentCount: components.length,
@@ -76,6 +80,9 @@ export function describeDiagram(diagram) {
     decisionNoteCount: notes.length,
     labelledEdgeCount: edges.filter((edge) => edge.label?.trim()).length,
     labels: new Map(components.map((node) => [node.id, clean(node.data.label, 120) || clean(node.data.kind, 64)])),
+    // For the deterministic score checks (ai/scoring.js); not part of the text above.
+    components: components.map((node) => ({ id: node.id, kind: clean(node.data.kind, 64), label: clean(node.data.label, 120), note: clean(node.data.note, 600) })),
+    isolatedCount,
   };
 }
 

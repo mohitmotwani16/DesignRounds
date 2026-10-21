@@ -61,7 +61,7 @@ for (const entry of cases) {
       const refs = [...data.strengths, ...data.risks].flatMap((item) => item.nodeIds);
       const unknownRefs = refs.filter((id) => !design.componentIds.has(id));
       if (unknownRefs.length) problems.push(`unknown nodeIds: ${unknownRefs.join(" ")}`);
-      runs.push({ score: review.overall.score, dimensions: Object.fromEntries(review.dimensions.map((dimension) => [dimension.id, dimension.score])), problems, ms: Date.now() - started, review });
+      runs.push({ score: review.overall.score, modelScore: review.scoring.modelScore, adjustments: review.scoring.adjustments, dimensions: Object.fromEntries(review.dimensions.map((dimension) => [dimension.id, dimension.score])), problems, ms: Date.now() - started, review });
     } catch (error) {
       if (error.code === "RATE_LIMITED") { quotaHit = true; break; }
       runs.push({ score: null, problems: [`error ${error.code || ""} ${error.message}`], ms: Date.now() - started });
@@ -78,6 +78,10 @@ for (const entry of cases) {
   const dims = runs[0]?.dimensions ? Object.values(runs[0].dimensions).join("/") : "-";
   console.log(`${ok ? "PASS" : "FAIL"}  ${entry.id.padEnd(18)} score ${scores.join(",").padEnd(8)} dims ${dims.padEnd(18)} ${Math.round(runs.reduce((sum, run) => sum + run.ms, 0) / runs.length)}ms`);
   for (const problem of problems) console.log(`      - ${problem}`);
+  // What the deterministic constraints changed, so a rule that fires too often is visible.
+  for (const run of runs.filter((entry) => entry.adjustments?.length)) {
+    console.log(`      · model ${run.modelScore} -> ${run.score}: ${run.adjustments.map((adjustment) => `${adjustment.dimension} ${adjustment.from}->${adjustment.to} (${adjustment.rule})`).join(", ")}`);
+  }
   results.push({ id: entry.id, ok, problems, runs });
 }
 

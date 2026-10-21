@@ -423,7 +423,9 @@ export async function reviewLedger(sessionId, promptId) {
   });
   const record = await getPack(promptId, state.pack_version);
   const packReview = renderProblem(record, { task: "review" }).filter((entry) => entry.id === "pks.review").map((entry) => entry.text).join("\n\n");
-  return { addendum, text: `<interview_ledger>\n${lines.join("\n")}\n</interview_ledger>`, packReview, packVersion: state.pack_version, mode: state.mode };
+  // The structured items back the deterministic score checks (ai/scoring.js).
+  const scoring = items.map((item) => ({ dimension: item.dimension, weight: item.weight, status: item.status, band: item.band }));
+  return { addendum, text: `<interview_ledger>\n${lines.join("\n")}\n</interview_ledger>`, packReview, packVersion: state.pack_version, mode: state.mode, items: scoring };
 }
 
 // After the round: per agenda item, what was covered and what a strong answer adds

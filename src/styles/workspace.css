@@ -272,6 +272,13 @@ body.dragging-edge, body.dragging-edge * { cursor: move !important; user-select:
 .review-dimension-detail { padding: 4px 6px 10px; color: var(--fg-5a6578); }
 .review-dimension-detail ul { margin: 0 0 6px; padding-left: 17px; }
 .review-dimension-detail p { margin: 0; }
+.review-dimension-detail .review-dimension-description { margin: 0 0 8px; color: var(--fg-6b7686); font-size: 12.5px; }
+.review-dimension-detail .review-adjustment { margin: 0 0 8px; padding: 6px 8px; display: flex; align-items: flex-start; gap: 6px; border-radius: 6px; background: var(--bg-f6f7fa); color: var(--fg-4d596c); font-size: 12.5px; }
+.review-adjustment svg, .review-adjusted-line svg { flex: none; margin-top: 3px; }
+.review-adjusted-mark { margin-left: 6px; color: var(--fg-8a93a1); vertical-align: -1px; }
+.review-adjusted-line { margin: 12px 0 0; display: flex; align-items: flex-start; gap: 8px; color: var(--fg-6b7686); font-size: 12.5px; line-height: 1.5; }
+.review-dimension-detail .review-dimension-gaps { padding-left: 0; list-style: none; }
+.review-dimension-gaps li + li { margin-top: 4px; }
 .review-locked-line { margin: 14px 0 0; display: flex; align-items: flex-start; gap: 8px; color: var(--fg-8a93a1); font-size: 12.5px; line-height: 1.5; }
 .review-locked-line svg { flex: none; margin-top: 3px; }
 .review-point + .review-point { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--bd-f0f1f4); }

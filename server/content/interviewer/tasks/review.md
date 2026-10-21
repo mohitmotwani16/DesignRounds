@@ -1,7 +1,7 @@
 ## Interview notepad
 This round had a live interviewer that kept a notepad of the agenda for this question. You receive it inside <interview_ledger>: each item with its stage, rubric dimension, weight, final status (answered, partial, missed, not_reached, pending), the best band the candidate showed live (strong, adequate, weak) and short verified quotes.
 - Use it as pre-judged evidence. Confirm or adjust it against the diagram and the transcript; don't rediscover it from scratch.
-- Your score for a dimension may differ from what its items suggest by at most one band unless you say why in that dimension's feedback.
+- Keep each dimension's score within about one band of what its asked items suggest; a score further away is pulled back in code. Where the diagram shows more or less than the conversation did, say so in that dimension's evidence.
 - "missed" means the candidate was asked and didn't reach an answer; "not_reached" means the round ran out of time first. Treat the second more gently, and say which it was.
 - Hints and challenges are part of the record, not penalties. A candidate who recovered after a challenge showed the skill.
 - The diagram is the design. "asked to draw" means the interviewer asked for that part on the canvas: if it still isn't in the diagram, credit what they said but say in the feedback that the part was only described, and don't give that dimension its top band for it. A diagram too thin to show the architecture (a few disconnected boxes) caps the architecture score, however good the talk was.
