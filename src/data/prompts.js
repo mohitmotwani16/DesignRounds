@@ -141,6 +141,23 @@ export const prompts = [
     track: "software-engineering", access: "paid", category: "Networking", difficulty: "Advanced", minutes: 50, icon: "gateway", color: "violet",
     considerations: ["Control plane vs data plane", "Policy evaluation", "Safe configuration rollout"],
   },
+  {
+    id: "comment-system", title: "Design a comment system for social posts", description: "Let millions of people post and read comments under popular posts and videos.",
+    track: "software-engineering", access: "free", category: "Data systems", difficulty: "Beginner", minutes: 35, icon: "message", color: "green",
+    requirements: ["Users can post a comment on a post and see it appear for others shortly after.", "Anyone can read a post's comments quickly, newest first, page by page.", "A burst of comments on a viral post must not take the service down."],
+    considerations: ["Separate read and write paths", "Queue as a write buffer", "Caching and eventual consistency"],
+    expectedOutcome: "A write path buffered by a queue, a cache-backed read path with pagination, a comment data model, and a clear statement of the consistency users will see.",
+  },
+  {
+    id: "webhook-service", title: "Design a webhook receiver service", description: "Accept event notifications from partners like Stripe or Shopify without losing any.",
+    track: "software-engineering", access: "paid", category: "Messaging", difficulty: "Intermediate", minutes: 40, icon: "events", color: "orange",
+    considerations: ["Acknowledge after durable enqueue", "Signature verification", "Duplicates and ordering"],
+  },
+  {
+    id: "dating-app", title: "Design a swipe-based dating app", description: "Show nearby profiles, record swipes, and match two people who like each other.",
+    track: "software-engineering", access: "paid", category: "Geospatial", difficulty: "Advanced", minutes: 50, icon: "map", color: "rose",
+    considerations: ["Geospatial candidate search", "Swipe write throughput", "Exactly-once matches"],
+  },
 
   {
     id: "scd2-warehouse", title: "Design a customer warehouse with SCD Type 2", description: "Keep a trustworthy history of how customer attributes change over time.",
@@ -153,6 +170,11 @@ export const prompts = [
     id: "realtime-analytics", title: "Design a real-time analytics platform", description: "Turn a large event stream into operational metrics people can act on.",
     track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Advanced", minutes: 50, icon: "analytics", color: "teal", popular: true,
     considerations: ["Event time vs processing time", "Windowing", "Replay and deduplication"],
+  },
+  {
+    id: "food-delivery-analytics", title: "Design analytics for a food delivery platform", description: "Give restaurants live order metrics and executives daily reports from one stream of order events.",
+    track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Intermediate", minutes: 45, icon: "analytics", color: "orange",
+    considerations: ["Two consumers, two SLAs", "Streaming and batch paths", "Layered quality checks"],
   },
   {
     id: "etl-framework", title: "Design a reusable ETL/ELT framework", description: "Give many teams a consistent way to build, run, and operate data pipelines.",
@@ -326,6 +348,7 @@ const prerequisites = {
   "service-platform": ["CI/CD pipelines", "Containers and Kubernetes", "Service templates", "Self-service vs guardrails"],
   "key-value-store": ["Consistent hashing", "Replication and quorums", "CAP and consistency models", "Gossip and failure detection"],
   "offline-first-sync": ["Local databases on mobile", "Change logs and sync cursors", "Conflict resolution", "Reconnect and retry handling"],
+  "comment-system": ["Message queues as buffers", "Cache-aside reads", "Eventual consistency", "Cursor pagination"],
 };
 for (const prompt of prompts) prompt.prerequisites = prerequisites[prompt.id] ?? [];
 

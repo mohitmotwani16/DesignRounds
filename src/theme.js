@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
-// Colour theme: "system" follows the OS light/dark setting; the others are fixed.
+// Colour theme: light by default for everyone. "system" (follow the OS light/dark
+// setting) and the others are opt-in choices.
 // The choice is a per-browser preference. index.html applies it before the app
 // loads so there is no flash of the wrong theme.
 export const THEMES = [
@@ -10,17 +11,18 @@ export const THEMES = [
   ["mono", "Monochrome"],
 ];
 const KEY = "designrounds:theme";
+const DEFAULT_CHOICE = "light";
 // No window during build-time prerendering: everything below degrades to defaults.
 const browser = typeof window !== "undefined";
 const darkQuery = browser ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
 
 function readChoice() {
-  if (!browser) return "system";
+  if (!browser) return DEFAULT_CHOICE;
   try {
     const value = window.localStorage.getItem(KEY);
-    return THEMES.some(([id]) => id === value) ? value : "system";
+    return THEMES.some(([id]) => id === value) ? value : DEFAULT_CHOICE;
   } catch {
-    return "system";
+    return DEFAULT_CHOICE;
   }
 }
 

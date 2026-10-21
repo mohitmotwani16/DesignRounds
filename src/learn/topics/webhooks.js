@@ -61,5 +61,5 @@ queue.publish(event); mark_seen(event_id); return 200
     "Mention event IDs and versioned payloads.",
   ],
   related: ["idempotency", "message-queues", "retries-and-timeouts", "outbox-pattern", "pub-sub", "authentication-authorization"],
-  practice: ["payment-platform", "notification-service"],
+  practice: ["webhook-service", "payment-platform", "notification-service"],
 };

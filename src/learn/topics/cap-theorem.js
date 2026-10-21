@@ -26,6 +26,10 @@ export default {
       "**AP choice**: node 2 answers with x = 1. Everyone gets an answer, but some answers are stale, and if both sides accept writes, the conflicting writes must be reconciled when the partition heals.",
     ] },
 
+    {"type":"h3","text":"Worked example: a leader, a replica and a partition"},
+    {"type":"p","text":"A leader takes writes and a replica copies them with a lag of 2 versions. Writes keep arriving (v1, v2, v3…). Then the network between them is cut while the leader reaches v5 and the replica is stuck at v3. A client next to the replica reads:"},
+    {"type":"table","head":["Mode","Before the partition","During the partition","What the user sees"],"rows":[["**AP** (read the replica, allow stale)","v3 while the leader has v5 (normal lag)","Still v3: the replica keeps answering","A slightly old value, but never an error"],["**CP** (require the leader)","v5","Error or timeout: the cut-off side refuses to answer","Correct data, or no data"]]},
+    {"type":"p","text":"Since partitions **will** happen across machines, P isn't optional; the real choice is CP (stay correct by refusing requests on the cut-off side) or AP (stay up by serving possibly stale data). A \"CA\" system only exists on a single node that never partitions. Most consumer features choose AP (a slightly stale feed beats an error page); money chooses CP (a wrong balance is worse than a spinner)."},
     { type: "h2", text: "CP and AP systems in practice" },
     { type: "table", head: ["Leaning", "Behaviour in a partition", "Examples", "Good for"], rows: [
       ["CP", "Minority side rejects requests; no stale or conflicting data", "etcd, ZooKeeper, Consul, Spanner, HBase, MongoDB with majority writes", "Config, leader election, locks, money, inventory counts"],

@@ -580,5 +580,47 @@ export const plusBriefs = {
       "App store release cycles"
     ],
     "expectedOutcome": "A flag evaluation and delivery design, rollout and kill-switch flow, and a compatibility strategy for old clients."
+  },
+  "webhook-service": {
+    "requirements": [
+      "Partners POST events to one endpoint; about 1 million events a day with 5x peaks.",
+      "Every accepted event is processed at least once, even if a component crashes.",
+      "Events and processing results are kept 30 days for auditing; processing finishes within 200 ms."
+    ],
+    "prerequisites": [
+      "Message queues and consumer acknowledgements",
+      "HMAC request signatures",
+      "Idempotency keys",
+      "Retries with backoff"
+    ],
+    "expectedOutcome": "A receive-enqueue-process design that returns 200 only after a durable enqueue, failure handling per component, signature checks, and idempotent, order-independent processing."
+  },
+  "food-delivery-analytics": {
+    "requirements": [
+      "Restaurant partners see live metrics (active orders, orders delivered today, earnings so far) within 2 minutes.",
+      "Executives and finance get daily business reports; about 5 million orders a day, 500K per hour at the dinner peak.",
+      "Order events are kept 2 years for analytics and 90 days for real-time serving."
+    ],
+    "prerequisites": [
+      "Kafka partitioning and consumer groups",
+      "Streaming aggregations",
+      "Medallion (bronze/silver/gold) layers",
+      "Data quality dimensions"
+    ],
+    "expectedOutcome": "Requirements and volume estimates, one event stream with a streaming path and a batch path, a medallion data model, layered quality checks, and a plan for backfills, idempotency and schema changes."
+  },
+  "dating-app": {
+    "requirements": [
+      "Users see a feed of nearby profiles that match their preferences and that they have not swiped before.",
+      "Users swipe like or pass; about 50 million daily users each swipe around 100 times a day.",
+      "When two users like each other they match exactly once and both are notified."
+    ],
+    "prerequisites": [
+      "Geospatial indexing (geohash or H3 cells)",
+      "Sharding by key and access pattern",
+      "Bloom filters",
+      "Idempotent inserts"
+    ],
+    "expectedOutcome": "A geo-indexed, precomputed candidate feed, a swipe store sharded for write throughput, race-safe match detection with a deterministic match id, and a cheap seen filter."
   }
 };

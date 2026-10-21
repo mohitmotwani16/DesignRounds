@@ -58,7 +58,7 @@ export default {
     "Mention governance: ownership, access control and quality are what prevent a data swamp.",
     "Compare costs in terms of storage, bytes scanned and operational effort.",
   ],
-  related: ["data-engineering-architecture", "open-table-formats", "columnar-file-formats", "medallion-architecture", "etl-vs-elt"],
+  related: ["lakehouse-architecture", "data-engineering-architecture", "open-table-formats", "columnar-file-formats", "medallion-architecture", "etl-vs-elt"],
   practice: ["realtime-analytics", "clickstream", "etl-framework"],
   reading: [
     { title: "Lakehouse: A New Generation of Open Platforms (CIDR 2021)", publisher: "Armbrust et al.", url: "https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf" },

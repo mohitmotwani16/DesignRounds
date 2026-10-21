@@ -29,6 +29,10 @@ export default {
       "**Lost updates**: two concurrent writes to different replicas, and one silently overwrites the other (last-write-wins).",
     ] },
 
+    {"type":"h3","text":"Worked example: who sees what, right after a write"},
+    {"type":"p","text":"The author updates a value from v1 to **v2** at t = 0, and the replica needs 3 ticks to catch up. The levels differ only in what reads return during those 3 ticks:"},
+    {"type":"table","head":["Level","Author reads (t = 1)","Another user reads (t = 1)","After the replica syncs (t ≥ 3)"],"rows":[["**Strong**","v2","v2 (reads go to the leader or wait for replicas)","v2 / v2"],["**Read-your-writes**","v2 (the author's reads are routed to fresh data)","v1 (may be stale)","v2 / v2"],["**Eventual**","v1 (even the author may see stale data)","v1","v2 / v2"]]},
+    {"type":"p","text":"Stronger levels send reads to the leader or wait for replicas to confirm, which costs latency and availability; weaker levels read the nearest replica and may be stale. Pick the **weakest model the feature tolerates**: read-your-writes is often the sweet spot for profile edits and posts."},
     { type: "h2", text: "Practical techniques" },
     { type: "ul", items: [
       "**Read your own writes**: after a user writes, route their reads to the primary for a short window, or return a version (an LSN or timestamp) with the write and have replicas wait until they've caught up to it.",

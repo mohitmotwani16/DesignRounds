@@ -68,6 +68,6 @@ export default {
     "Name the data quality checks, dataset owners, and freshness alerts.",
     "Separate analytical storage from latency-sensitive application serving.",
   ],
-  related: ["batch-vs-stream-processing", "event-streaming-kafka", "object-storage", "database-indexing", "delivery-semantics"],
+  related: ["data-engineering-system-design-interview", "batch-vs-stream-processing", "event-streaming-kafka", "object-storage", "database-indexing", "delivery-semantics"],
   practice: ["etl-framework", "realtime-analytics", "clickstream", "fraud-data-platform"],
 };

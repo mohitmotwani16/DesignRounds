@@ -293,3 +293,57 @@ Data plane querying a database per request for config; global config pushes with
 What happens to traffic if the control plane is down? How do you roll out a bad route change safely? How do you stop one tenant from starving others? Where do you validate tokens?
 ## What strong looks like
 Clear control/data plane split, cached config with last-known-good fallback, validated staged rollouts, per-tenant isolation and limits, local auth validation, horizontal scaling and observability.
+
+# guide: comment-system
+## Scope and scale
+Comments under posts or videos (Instagram/YouTube style). Viral posts get bursts of thousands of comments per second; reads outnumber writes by orders of magnitude. A few seconds of delay before a new comment is visible to others is acceptable.
+## Core components
+Write API that validates and enqueues the comment and returns immediately; a durable queue (Kafka) partitioned by post_id; consumers that persist to a comment store (document or wide-column, keyed by post_id + time) and then update a cache; read API serving pages of comments from the cache (e.g. a sorted set per post) with fallback to the store on a miss; optional moderation and counters as additional consumers.
+## Key decisions and trade-offs
+- Queue as a buffer: absorbs bursts the database cannot write at once, at the cost of eventual consistency.
+- Separate read and write paths so heavy reads never touch the write store directly.
+- Cache shape: bounded recent comments per post with TTL vs caching everything; cursor pagination over a time-ordered key.
+- Idempotent consumers (client comment IDs, upserts) because the queue delivers at least once.
+- Partition by post_id to keep per-post order; hot posts may need extra caching.
+## Common mistakes
+Writing synchronously to the database on every request; reading comments straight from the primary store; returning all comments with no pagination; ignoring duplicate deliveries from the queue; not mentioning that a user's own comment should appear immediately (read-your-writes in the client).
+## Deep-dive questions
+What happens when a celebrity post gets 50,000 comments in a minute? How does the cache get rebuilt after a restart or a miss? How do you avoid duplicate comments when a consumer retries? How would you add moderation or comment counts?
+## What strong looks like
+Queue-buffered writes with acknowledgement after enqueue, idempotent consumers, a time-ordered store keyed by post, a bounded cache with pagination and miss handling, an explicit eventual-consistency statement with read-your-writes for the author, and partitioning by post_id.
+
+# guide: webhook-service
+## Scope and scale
+Receive webhook events from external providers (Stripe, Shopify, GitHub): about 1M events/day (~12/s, ~60/s at 5x peak), end-to-end processing under 200 ms, 30-day retention at ~5 KB/event (~150 GB). At-least-once processing for every accepted event.
+## Core components
+Public request handler behind a load balancer that verifies the signature and enqueues the raw event; durable, replicated message queue; consumer workers that process the event (business logic), persist the event and result, then acknowledge; database with replication; dead-letter queue; monitoring of queue depth and consumer lag.
+## Key decisions and trade-offs
+- Return 200 only after a durable enqueue; failures before that make the provider retry.
+- Ack the queue message only after processing and persistence, so a crashed consumer's message is redelivered.
+- HMAC signature over timestamp + raw body with a replay window; optional IP allowlisting and rate limiting.
+- Idempotency by provider event ID (processed-events table in the same transaction) instead of relying on exactly-once delivery.
+- Out-of-order events: never assume order; fetch current state from the provider API and use timestamps to skip stale events.
+## Common mistakes
+Processing synchronously inside the HTTP request; acknowledging before the event is durable; acking the queue before persisting; no signature verification; assuming events arrive once and in order; no plan for retries, backoff or poison messages.
+## Deep-dive questions
+What happens if the handler crashes after receiving but before enqueuing? How do you stop forged requests? What if the same event arrives twice? What if invoice.paid arrives before invoice.created? How does the system behave when the database is down?
+## What strong looks like
+Clear handler/queue/consumer split with correct ack points, failure analysis per component, HMAC verification with replay protection, idempotent and order-independent consumers, DLQ and retries with backoff, and monitoring on lag and errors.
+
+# guide: dating-app
+## Scope and scale
+Tinder-style app: ~50M DAU, ~100 swipes each per day = 5B swipes/day (~58K writes/s, ~174K at peak); ~20 feed fetches per user per day (~11.6K reads/s), so the system is write-heavy. Swipe rows ~32 bytes (~160 GB/day). Chat after a match is out of scope.
+## Core components
+Profile store with a geo index (geohash/H3 cell -> user IDs); candidate service that builds a precomputed per-user candidate queue (geo cell + neighbours, then preferences, then seen filter, then ranking); swipe service writing to a swipe store sharded by swiper_id; match detection by a point read of the reverse swipe; matches table keyed by a deterministic match_id with insert-if-absent; per-user Bloom filter of swiped IDs in Redis; push notifications.
+## Key decisions and trade-offs
+- Shard swipes by swiper_id: writes spread evenly and a user's exclusions stay local; reverse lookups then hit the swipee's shard.
+- Deterministic match_id = hash(min(a,b), max(a,b)) plus insert-if-absent makes simultaneous likes produce exactly one match.
+- Bloom filter seen set (~9.6 bits/entry at 1% FP): no false negatives, so swiped profiles never return; a false positive only hides an unseen profile.
+- Precompute candidate queues offline; order filters cheap to expensive; degrade to distance-sorted results if ranking is down.
+- Hot profiles: cache a Bloom filter of each user's outgoing likes to absorb reverse-lookup reads.
+## Common mistakes
+Treating it as a read-heavy nearby-search problem and ignoring swipe volume; scanning tables for mutual likes; creating duplicate matches under races; storing full seen lists per user in memory; running live geo queries on every feed request.
+## Deep-dive questions
+What if two users like each other in the same millisecond? How do you guarantee a swiped profile never reappears? What happens to the shard of a very popular profile? How would you scale 10x or go multi-region?
+## What strong looks like
+Write-path-first sizing, swiper-sharded swipes, reverse-key match detection with idempotent match creation, Bloom-filter seen set with the right error direction, geo-indexed precomputed feeds, and graceful degradation.

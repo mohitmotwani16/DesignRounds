@@ -2,6 +2,7 @@ export default {
   blocks: [
     { type: "p", text: "**Consistent hashing** is a way to spread keys across a changing set of servers so that adding or removing a server moves only a small fraction of the keys. It is the reason a distributed cache or database can grow from 10 to 11 nodes without reshuffling almost all of its data." },
 
+    { type: "p", text: "The idea comes from David Karger and colleagues' 1997 paper on distributed caching (\"Consistent Hashing and Random Trees\"), written to relieve hot spots on the web. Note that **\"consistent\" here has nothing to do with replica consistency or the C in ACID**: it means the key-to-server mapping stays mostly the same when servers change. That property makes it a staple of caches and distributed databases." },
     { type: "h2", text: "The problem with hash mod N" },
     { type: "p", text: "The obvious way to pick a server for a key is `server = hash(key) % N`. It spreads keys evenly, but it breaks badly when **N changes**. Go from 4 servers to 5 and a key stays on the same server only if `hash % 4 == hash % 5`, which is true for about 1 key in 5. Roughly **80% of keys move**." },
     { type: "p", text: "For a cache that means most lookups suddenly miss and fall through to the database at the worst possible moment, when you were adding capacity. For a database it means copying most of the data across the network." },
@@ -25,7 +26,9 @@ export default {
     ] },
     { type: "p", text: "On average, adding or removing one of N servers moves **about 1/N of the keys**, the minimum possible, since the new server has to get its share from somewhere." },
 
+    { type: "p", text: "Two equivalent ways to picture the ring (positions 0 to 2^32 − 1 with a 32-bit hash): **split the ring into arcs**, one per server, and a key belongs to whichever arc its hash falls in; or, closer to real implementations, **place servers as points** on the ring and give each key to the **first server clockwise** from it. With servers A, B and C, item `id:12345` might hash to a point whose next server clockwise is B, and `id:67890` to one whose next server is C, so `id:12345 → B` and `id:67890 → C`. Server positions come from hashing their ID or IP address, or are set by hand when there are few servers, taking capacity into account." },
     { type: "h2", text: "Virtual nodes fix uneven load" },
+    { type: "p", text: "With one point per server, failure is lopsided: if C goes down, **all** of C's keys move to the next server clockwise (A), which suddenly carries double load. Mapping each physical server to several points on the ring (A-B-C-A-B-C, two points each) means a failed server's keys split between the other two. Food for thought: does the order A-B-C-A-B-C behave differently from A-B-A-C-B-C? Both split C's load over A and B only if C's points are followed by different servers; random vnode placement with many points per server makes that true on average." },
     { type: "p", text: "With only a few points on the ring, the gaps between servers are random, so one server can easily own twice another's share. And when a server fails, its whole range lands on **one** neighbour, doubling that neighbour's load." },
     { type: "p", text: "The fix is **virtual nodes (vnodes)**: hash each physical server onto the ring many times, for example `hash(\"A#1\")`, `hash(\"A#2\")` … `hash(\"A#200\")`. Each server now owns many small arcs spread around the ring:" },
     { type: "ul", items: [
@@ -76,4 +79,7 @@ def server_for(key):
   ],
   related: ["sharding", "replication", "load-balancing", "caching", "nosql-database-types"],
   practice: ["distributed-cache", "key-value-store", "url-shortener"],
+  reading: [
+    { title: "Consistent Hashing and Random Trees (Karger et al., 1997)", publisher: "ACM Digital Library", url: "https://dl.acm.org/doi/10.1145/258533.258660" },
+  ],
 };
