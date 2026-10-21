@@ -2,32 +2,70 @@ export default {
   blocks: [
     { type: "p", text: "**REST**, **gRPC** and **GraphQL** are the three common ways to design APIs. REST models resources over plain HTTP, gRPC calls remote procedures with strongly typed binary messages, and GraphQL lets clients ask for exactly the data they need in one query. Each fits a different kind of boundary." },
 
+    { type: "p", text: "When two services talk [synchronously](/learn/sync-vs-async-communication), REST and gRPC dominate; GraphQL is mostly used at the edge, between clients and backends." },
+
     { type: "h2", text: "REST" },
-    { type: "p", text: "REST exposes **resources** at URLs and uses HTTP methods on them: `GET /orders/42`, `POST /orders`, `PATCH /orders/42`. Payloads are usually JSON." },
+    { type: "p", text: "REST (Representational State Transfer) is the default for most web APIs. It exposes **resources** at URLs and operates on them with HTTP methods: GET, POST, PUT, PATCH and DELETE. Data usually travels as JSON, though XML and other formats work too. A client asks for a user:" },
+    { type: "code", code: `GET /users/123 HTTP/1.1
+Host: example.com
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{ "id": 123, "name": "John Doe" }` },
     { type: "ul", items: [
-      "**Strengths**: universally understood, works with every tool and language, and **HTTP caching** works naturally (CDNs and browsers can cache GETs).",
-      "**Weaknesses**: **over-fetching** (a response has fields you don't need) and **under-fetching** (you need several round trips to assemble a screen), plus no enforced schema unless you add OpenAPI.",
+      "**Works everywhere.** It's built on HTTP, which every platform speaks: browsers, mobile apps, IoT devices. Every language has libraries, and you can test with curl or Postman with no setup.",
+      "**Human-readable.** You can read a JSON response and understand it, browser developer tools show REST calls clearly, and tools like Swagger/OpenAPI generate interactive documentation automatically.",
+      "**Stateless.** Each request carries everything needed to handle it; the server doesn't remember previous requests, so any instance can answer.",
+      "**Cacheable.** HTTP caching works naturally: CDNs and browsers can cache GET responses.",
+      "**Weaknesses**: **over-fetching** (a response has fields you don't need) and **under-fetching** (several round trips to assemble one screen), and no enforced schema unless you add OpenAPI.",
     ] },
-    { type: "code", code: `
-GET /users/42/orders?status=shipped&limit=20
+    { type: "p", text: "REST is the best fit for **public-facing APIs and third-party integrations**: outside developers can use it without learning a new protocol. See [API design](/learn/api-design) for conventions." },
+    { type: "code", code: `GET /users/42/orders?status=shipped&limit=20
 200 OK
 { "data": [ { "id": "o_981", "total": 1499, "status": "shipped" } ],
-  "next_cursor": "eyJpZCI6Im9fOTgxIn0" }
-` },
+  "next_cursor": "eyJpZCI6Im9fOTgxIn0" }` },
 
     { type: "h2", text: "gRPC" },
-    { type: "p", text: "gRPC defines services and messages in **Protocol Buffers** and generates client and server code in many languages. Messages are compact binary and travel over [HTTP/2](/learn/http)." },
-    { type: "code", code: `
-service OrderService {
+    { type: "p", text: "gRPC (gRPC Remote Procedure Call) puts **performance ahead of simplicity**. It runs over [HTTP/2](/learn/http) and serializes data with **Protocol Buffers** (Protobuf), a compact binary format. You define the service and its messages in a `.proto` file, and code is generated for clients and servers in many languages:" },
+    { type: "code", code: `service UserService {
+  rpc GetUser (UserRequest) returns (UserResponse);
+}
+
+message UserRequest {
+  int32 id = 1;
+}
+
+message UserResponse {
+  int32 id = 1;
+  string name = 2;
+}` },
+    { type: "p", text: "Calling it looks like calling a local function:" },
+    { type: "code", code: `response = stub.GetUser(UserRequest(id=123))
+print(response.name)   # "John Doe"` },
+    { type: "ul", items: [
+      "**Smaller and faster.** Binary Protobuf is far more compact than JSON: a JSON object with nested arrays of about 1 KB might be around 200 bytes as Protobuf. That matters when services exchange lots of data or make thousands of calls a second.",
+      "**Streaming in both directions.** HTTP/2 multiplexes many calls over one connection, and gRPC supports server streaming, client streaming and bidirectional streaming: a server can push updates without the client polling, and a client can stream data without waiting for each chunk to be acknowledged. Good for real-time features.",
+      "**Strong typing.** Change a field's type in the `.proto` file and any code still using the old type fails **at compile time**. JSON APIs only discover type errors at runtime, when a real request fails.",
+      "**Built-in deadlines** propagate timeouts across call chains.",
+      "**Weaknesses**: a steeper learning curve and more tooling; not natively usable from browsers (needs gRPC-Web or a proxy); binary payloads are harder to debug with curl; HTTP caching doesn't apply.",
+    ] },
+    { type: "p", text: "gRPC is the best fit for **internal service-to-service calls** where performance matters and one organization controls both ends. The learning curve and tooling make it a poor choice for public APIs." },
+    { type: "code", code: `service OrderService {
   rpc GetOrder (GetOrderRequest) returns (Order);
   rpc WatchOrders (WatchRequest) returns (stream OrderEvent);   // server streaming
 }
-message GetOrderRequest { string order_id = 1; }
-` },
-    { type: "ul", items: [
-      "**Strengths**: fast and small (binary, no JSON parsing), a **strict contract** with generated clients, built-in deadlines, and **streaming** in either or both directions.",
-      "**Weaknesses**: not natively usable from browsers (needs gRPC-Web or a proxy), binary payloads are harder to debug with curl, and HTTP caching doesn't apply.",
+message GetOrderRequest { string order_id = 1; }` },
+
+    { type: "h2", text: "Choosing between REST and gRPC" },
+    { type: "table", head: ["", "REST / HTTP", "gRPC"], rows: [
+      ["Transport", "HTTP/1.1 (often one request at a time per connection)", "HTTP/2: multiplexing and streaming"],
+      ["Data format", "JSON, human-readable, ~1 KB typical payload", "Protobuf, binary, ~200 bytes (about 5× smaller)"],
+      ["Best for", "Public APIs, third-party integrations, browser clients, easy debugging", "Internal microservices, high-throughput systems, real-time streaming, low latency"],
+      ["Tooling", "curl, Postman, Swagger/OpenAPI, browser DevTools", "Generated clients, grpcurl, reflection"],
+      ["Trade-offs", "Larger payloads, no enforced contract", "Steeper learning curve, weaker browser support, harder to debug"],
     ] },
+    { type: "p", text: "Use **REST** for external APIs: third-party developers expect it, have the tools for it, read JSON easily, and the documentation is straightforward. Use **gRPC** inside the system where performance is critical: lots of data, thousands of calls per second, or native streaming. Many systems use **both**: REST faces external clients, gRPC connects internal services, and the [API gateway](/learn/api-gateway) translates between them." },
 
     { type: "h2", text: "GraphQL" },
     { type: "p", text: "GraphQL exposes **one endpoint** and a typed schema. The client sends a query describing exactly the shape it wants, and the server resolves each field, possibly from many backends." },
@@ -91,6 +129,6 @@ query {
     "Mention pagination, idempotency keys and versioning without being asked.",
     "If you choose GraphQL, address N+1 resolver calls and query cost limits.",
   ],
-  related: ["http", "pagination", "idempotency", "api-gateway", "real-time-communication", "webhooks"],
+  related: ["sync-vs-async-communication", "api-design", "http", "pagination", "idempotency", "api-gateway", "real-time-communication"],
   practice: ["api-gateway", "payment-platform", "url-shortener"],
 };

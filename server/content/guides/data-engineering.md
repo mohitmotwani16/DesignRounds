@@ -121,3 +121,21 @@ Checks that only run after data is already consumed; no ownership; noisy anomaly
 Which checks should block a publish and which only warn? How does a consumer learn a source changed its schema? How do you find all dashboards affected by a bad table?
 ## What strong looks like
 Declarative expectations/contracts, integration with pipeline runs (circuit-breaking where needed), metric history with anomaly detection, lineage-based impact analysis, ownership and incident workflow.
+
+# guide: food-delivery-analytics
+## Scope and scale
+Food delivery platform (Uber Eats/Swiggy/Zomato style). Two consumers: restaurant partners need live metrics under 2 minutes; executives need daily reports. ~5M orders/day with 6 lifecycle events each (~30M events/day, ~350/s average, ~830/s at a 500K orders/hour dinner peak); ~1 KB per event (~30 GB/day, ~22 TB raw over 2 years). Retention: 2 years analytics, 90 days real-time.
+## Core components
+Order/delivery services publish events to Kafka keyed by restaurant_id; a streaming job (Spark Structured Streaming or Flink) maintains per-restaurant running metrics in Redis/DynamoDB for the live dashboard; the same topic lands raw in object storage (e.g. Firehose to S3) as bronze; scheduled Spark jobs (Airflow) build silver facts/dimensions and gold daily aggregates for reports; schema registry with data contracts; quality checks and monitoring at each layer.
+## Key decisions and trade-offs
+- One event stream as source of truth with two shaped views (Lambda-style) vs a single streaming path (Kappa): two paths keep heavy historical aggregation cheap and let batch correct the live view.
+- Partition the topic by restaurant_id for per-restaurant ordering; 6-12 partitions is ample at this rate.
+- Medallion model: raw bronze, silver fact_orders/dim_restaurants/dim_drivers, gold daily_restaurant_metrics; date partitioning or clustering on facts.
+- At-least-once delivery with idempotent sinks (MERGE on order_id) vs exactly-once complexity.
+- Late and out-of-order events: watermarks for the live metrics, batch path as the correction.
+## Common mistakes
+Jumping to tools without separating the two audiences and SLAs; skipping volume math and over-building (huge Kafka clusters, sharded serving stores for ~50 MB of state); building separate pipelines from separate sources instead of one stream; no quality checks beyond null checks; ignoring backfills, idempotency and schema evolution.
+## Deep-dive questions
+How are the live per-restaurant metrics computed and kept correct when events arrive late or twice? How would you reprocess three months after a metric definition changes? What checks catch a restaurant that was never onboarded, or impossible delivery times? What happens when the streaming job is down for a deploy?
+## What strong looks like
+Clarified consumers and SLAs, explicit estimates that justify a modest design, one stream feeding streaming and batch paths, a clear medallion model, quality checks mapped to dimensions at each layer, and a concrete operations plan: idempotent writes, partition-overwrite backfills, schema-on-read in bronze with strict silver/gold.

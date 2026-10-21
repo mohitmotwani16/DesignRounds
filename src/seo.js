@@ -3,6 +3,7 @@ import { LEARN_PATH, LEARN_UPDATED, TOPICS, categoryById, topicMeta, topicPath }
 import { communityArticle, communityArticles } from "./learn/community.js";
 import { ROADMAPS, roadmapSlugs } from "./learn/roadmaps.js";
 import { FAQS } from "./data/faqs.js";
+import { searchIntent } from "./learn/search-intent.js";
 
 // Search and sharing metadata for every route: title, description, canonical URL,
 // robots, Open Graph and JSON-LD. Used by the build-time prerenderer (baked into the
@@ -258,6 +259,7 @@ export function routeMeta(path) {
     const category = categoryById(learnTopic.category);
     const guide = category.id === "interview" || category.id === "roadmaps";
     const roadmap = Object.values(ROADMAPS).find((entry) => entry.page === learnTopic.slug);
+    const intent = searchIntent(learnTopic.slug);
     return {
       ...base,
       title: fitTitle(`${learnTopic.title} | DesignRounds`, learnTopic.title, `${learnTopic.short} Explained | DesignRounds`, `${learnTopic.short} Explained`),
@@ -272,8 +274,9 @@ export function routeMeta(path) {
           url: absolute(path),
           mainEntityOfPage: absolute(path),
           datePublished: learnTopic.published ?? LEARN_UPDATED,
-          dateModified: LEARN_UPDATED,
+          dateModified: learnTopic.updated ?? LEARN_UPDATED,
           ...(guide ? {} : { about: learnTopic.short, proficiencyLevel: learnTopic.level === "Advanced" ? "Expert" : "Beginner" }),
+          ...(intent?.keywords?.length ? { keywords: intent.keywords.join(", ") } : {}),
           author: organization,
           publisher: organization,
           image: SITE.image,
@@ -281,6 +284,12 @@ export function routeMeta(path) {
           isAccessibleForFree: true,
         },
         breadcrumbs([["Home", "/"], ["Learn", LEARN_PATH], [category.title, `${LEARN_PATH}#${category.id}`], [learnTopic.short, path]]),
+        // Matches the visible "Frequently asked questions" section on the page.
+        ...(intent?.faq?.length ? [{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: intent.faq.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })),
+        }] : []),
         ...(roadmap ? [{
           "@context": "https://schema.org",
           "@type": "ItemList",

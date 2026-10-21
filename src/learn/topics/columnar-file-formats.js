@@ -55,7 +55,7 @@ export default {
     "Explain predicate pushdown via row-group statistics.",
     "Raise the small files problem and compaction for streaming writes.",
   ],
-  related: ["open-table-formats", "data-warehouse-vs-data-lake", "apache-spark-architecture", "object-storage", "data-contracts-schema-evolution"],
+  related: ["data-layout-optimization", "open-table-formats", "data-warehouse-vs-data-lake", "apache-spark-architecture", "object-storage", "data-contracts-schema-evolution"],
   practice: ["clickstream", "realtime-analytics"],
   reading: [
     { title: "Apache Parquet documentation", publisher: "Apache Software Foundation", url: "https://parquet.apache.org/docs/" },

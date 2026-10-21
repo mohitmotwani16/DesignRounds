@@ -5,6 +5,11 @@
 //             edges { from, to, label?, dashed?, both?, bend?, tone? }   zones { label, from: [c, r], to: [c, r], tone? }
 //   sequence: actors [names], steps { from, to, label, dashed? } | { note, over: [i, j?] }
 //   ring:     nodes { label, angle, tone? } (degrees clockwise from the top), keys { label, angle }
+//   timeline: ticks [labels], spans { from, to, label, lane?, tone? } (positions in tick units),
+//             events { at, tone?, label? }, marks { at, label, tone? }, gaps { from, to, label }
+//   tree:     root { label, sub?, tone?, edge?, children? } (edge labels the link from its parent)
+//   bars:     values { label, value, display?, tone? }, log? (log scale), unit?
+//   segments: lanes { label?, parts { label, size, sub?, tone? } }, total? (shared scale), width?
 //
 // tone: accent | store | cache | queue | ok | danger | muted
 
@@ -17,7 +22,8 @@ const NODE_H = 48;
 const textWidth = (text, size = 12) => text.length * size * 0.56 + 12;
 
 export function Diagram({ spec }) {
-  const content = spec.kind === "sequence" ? <Sequence spec={spec} /> : spec.kind === "ring" ? <Ring spec={spec} /> : <Flow spec={spec} />;
+  const Kind = KINDS[spec.kind] ?? Flow;
+  const content = <Kind spec={spec} />;
   return (
     <figure className="dg">
       <div className="dg-scroll">{content}</div>
@@ -76,15 +82,19 @@ function Flow({ spec }) {
     if (dc === 0 || Math.abs(b.row - a.row) > 0.35) continue;
     colW = Math.max(colW, ((a.w + b.w) / 2 + textWidth(edge.label, 11.5) + 22) / dc);
   }
-  const nodes = new Map([...sized.values()].map((node) => [node.id, { ...node, x: PAD + node.col * colW + colW / 2, y: PAD + zoneSpace + node.row * ROW + ROW / 2 }]));
+  // Wide boxes in the first column (and the zones around them) can reach past the left
+  // edge, so shift everything right until the leftmost box clears the padding.
+  const leftmost = Math.min(...[...sized.values()].map((node) => PAD + node.col * colW + colW / 2 - node.w / 2));
+  const shift = Math.max(0, PAD + (spec.zones?.length ? 18 : 0) - leftmost);
+  const nodes = new Map([...sized.values()].map((node) => [node.id, { ...node, x: shift + PAD + node.col * colW + colW / 2, y: PAD + zoneSpace + node.row * ROW + ROW / 2 }]));
   const cols = Math.max(...spec.nodes.map((node) => node.col)) + 1;
   const rows = Math.max(...spec.nodes.map((node) => node.row)) + 1;
   const rightmost = Math.max(...[...nodes.values()].map((node) => node.x + node.w / 2));
-  const width = spec.width ?? Math.max(PAD * 2 + cols * colW, rightmost + PAD + 18);
+  const width = spec.width ?? Math.max(PAD * 2 + shift + cols * colW, rightmost + PAD + 18);
   const height = spec.height ?? PAD * 2 + zoneSpace + rows * ROW;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560) }} role="img" aria-label={spec.alt ?? spec.caption}>
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
       <Markers id={id} />
       {spec.zones?.map((zone) => <Zone key={zone.label} zone={zone} zoneSpace={zoneSpace} nodes={[...nodes.values()]} />)}
       {spec.edges?.map((edge, index) => <FlowEdge key={index} edge={edge} from={nodes.get(edge.from)} to={nodes.get(edge.to)} id={id} />)}
@@ -196,7 +206,7 @@ function Sequence({ spec }) {
   const height = top + 24 + spec.steps.length * SEQ_STEP + 16;
   const xOf = (index) => PAD + index * SEQ_COL + SEQ_COL / 2;
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560) }} role="img" aria-label={spec.alt ?? spec.caption}>
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
       <Markers id={id} />
       {spec.actors.map((actor, index) => (
         <g key={actor} className="dg-node dg-tone-accent">
@@ -258,7 +268,7 @@ function Ring({ spec }) {
   const nodes = [...spec.nodes].sort((a, b) => a.angle - b.angle);
   const owner = (angle) => nodes.find((node) => node.angle >= angle) ?? nodes[0];
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: 420 }} role="img" aria-label={spec.alt ?? spec.caption}>
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: 420, maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
       <Markers id={id} />
       <circle className="dg-ring" cx={cx} cy={cy} r={r} />
       {spec.keys?.map((key) => {
@@ -299,3 +309,197 @@ function Ring({ spec }) {
     </svg>
   );
 }
+
+// ---------------------------------------------------------------- timeline
+
+const TICK = 150;
+
+function Timeline({ spec }) {
+  const id = markerId(spec);
+  const ticks = spec.ticks ?? [];
+  const spans = spec.spans ?? [];
+  const events = spec.events ?? [];
+  const lanes = Math.max(0, ...spans.map((span) => (span.lane ?? 0) + 1));
+  const left = PAD + 20;
+  const xOf = (at) => left + at * TICK;
+  const top = PAD + (spec.marks?.length ? 26 : 0);
+  const axisY = top + lanes * 46 + 22;
+  const below = events.some((event) => event.label) ? 20 : 0;
+  const gapsY = axisY + 44 + below;
+  const height = (spec.gaps?.length ? gapsY + 24 : axisY + 34 + below) + PAD / 2;
+  const last = Math.max(ticks.length - 1, ...spans.map((span) => span.to), ...events.map((event) => event.at));
+  const width = Math.max(xOf(last) + left + 10, 520);
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
+      <Markers id={id} />
+      {spans.map((span, index) => {
+        const y = top + (span.lane ?? 0) * 46;
+        return (
+          <g key={`s${index}`} className={`dg-node dg-tone-${span.tone ?? "accent"}`}>
+            <rect x={xOf(span.from) + 2} y={y} width={Math.max(8, (span.to - span.from) * TICK - 4)} height={36} rx={8} />
+            {span.label && <text x={(xOf(span.from) + xOf(span.to)) / 2} y={y + 22} textAnchor="middle" className="dg-label">{span.label}</text>}
+          </g>
+        );
+      })}
+      <g className="dg-edge">
+        <path d={`M${left - 14},${axisY} L${width - 12},${axisY}`} fill="none" markerEnd={`url(#${id}-arrow-default)`} />
+      </g>
+      {ticks.map((tick, index) => (
+        <g key={`t${index}`} className="dg-tick">
+          <line x1={xOf(index)} y1={axisY - 5} x2={xOf(index)} y2={axisY + 5} />
+          <text x={xOf(index)} y={axisY + 22 + below} textAnchor="middle">{tick}</text>
+        </g>
+      ))}
+      {events.map((event, index) => (
+        <g key={`e${index}`} className={`dg-node dg-tone-${event.tone ?? "store"}`}>
+          <circle cx={xOf(event.at)} cy={axisY} r={6} />
+          {event.label && <text x={xOf(event.at)} y={axisY + 21} textAnchor="middle" className="dg-sub">{event.label}</text>}
+        </g>
+      ))}
+      {(spec.marks ?? []).map((mark, index) => (
+        <g key={`m${index}`} className={`dg-mark dg-mark-${mark.tone ?? "accent"}`}>
+          <line x1={xOf(mark.at)} y1={PAD + 12} x2={xOf(mark.at)} y2={axisY + 12} />
+          <text x={xOf(mark.at)} y={PAD + 4} textAnchor="middle">{mark.label}</text>
+        </g>
+      ))}
+      {(spec.gaps ?? []).map((gap, index) => (
+        <g key={`g${index}`} className="dg-gap">
+          <path d={`M${xOf(gap.from)},${gapsY - 8} v8 H${xOf(gap.to)} v-8`} fill="none" />
+          <text x={(xOf(gap.from) + xOf(gap.to)) / 2} y={gapsY + 15} textAnchor="middle">{gap.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------- tree
+
+const TREE_ROW = 96;
+const TREE_GAP = 18;
+
+function Tree({ spec }) {
+  const id = markerId(spec);
+  const placed = [];
+  const links = [];
+  let cursor = PAD;
+  // Leaves sit side by side; each parent is centred over its children.
+  const layout = (node, depth) => {
+    const w = Math.max(54, textWidth(node.label, 13) + 18, node.sub ? textWidth(node.sub, 11) + 18 : 0);
+    const h = node.sub ? 46 : 36;
+    const kids = (node.children ?? []).map((child) => layout(child, depth + 1));
+    let x;
+    if (kids.length) x = (kids[0].x + kids[kids.length - 1].x) / 2;
+    else { x = cursor + w / 2; cursor += w + TREE_GAP; }
+    const entry = { node, x, y: PAD + depth * TREE_ROW + 23, w, h };
+    placed.push(entry);
+    for (const kid of kids) links.push({ from: entry, to: kid });
+    return entry;
+  };
+  layout(spec.root, 0);
+  const width = Math.max(cursor - TREE_GAP + PAD, 320);
+  const height = Math.max(...placed.map((entry) => entry.y + entry.h / 2)) + PAD;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
+      <Markers id={id} />
+      {links.map(({ from, to }, index) => {
+        const tone = to.node.path ? "accent" : "default";
+        const y1 = from.y + from.h / 2 + 2;
+        const y2 = to.y - to.h / 2 - 4;
+        return (
+          <g key={index} className={`dg-edge dg-edge-${tone}`}>
+            <path d={`M${from.x},${y1} L${to.x},${y2}`} fill="none" markerEnd={`url(#${id}-arrow-${tone})`} />
+            {to.node.edge && <EdgeLabel x={(from.x + to.x) / 2} y={(y1 + y2) / 2} text={to.node.edge} />}
+          </g>
+        );
+      })}
+      {placed.map(({ node, x, y, w, h }, index) => (
+        <g key={index} className={`dg-node dg-tone-${node.tone ?? "default"}`}>
+          <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={8} />
+          {node.sub ? (
+            <>
+              <text x={x} y={y - 3} textAnchor="middle" className="dg-label">{node.label}</text>
+              <text x={x} y={y + 13} textAnchor="middle" className="dg-sub">{node.sub}</text>
+            </>
+          ) : <text x={x} y={y + 4.5} textAnchor="middle" className="dg-label">{node.label}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------- bars
+
+function Bars({ spec }) {
+  const shown = (item) => item.display ?? `${item.value}${spec.unit ?? ""}`;
+  const labelW = Math.max(...spec.values.map((item) => textWidth(item.label, 12.5))) + 8;
+  const barW = 380;
+  const valueW = Math.max(...spec.values.map((item) => textWidth(shown(item), 12))) + 8;
+  const rowH = 30;
+  const width = PAD * 2 + labelW + barW + valueW;
+  const height = PAD * 2 + spec.values.length * rowH;
+  const values = spec.values.map((item) => item.value);
+  const max = Math.max(...values);
+  const min = Math.min(...values.filter((value) => value > 0));
+  const span = Math.log10(max) - Math.log10(min) + 0.3;
+  const scale = (value) => (spec.log ? (Math.log10(value) - Math.log10(min) + 0.3) / span : value / max);
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
+      {spec.values.map((item, index) => {
+        const y = PAD + index * rowH;
+        const w = Math.max(3, scale(item.value) * barW);
+        return (
+          <g key={index}>
+            <text x={PAD + labelW - 8} y={y + 19} textAnchor="end" className="dg-bar-label">{item.label}</text>
+            <g className={`dg-node dg-tone-${item.tone ?? "accent"}`}><rect x={PAD + labelW} y={y + 5} width={w} height={rowH - 10} rx={4} /></g>
+            <text x={PAD + labelW + w + 8} y={y + 19} className="dg-bar-value">{shown(item)}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------- segments
+
+function Segments({ spec }) {
+  const labelW = Math.max(0, ...spec.lanes.map((row) => (row.label ? textWidth(row.label, 12.5) + 10 : 0)));
+  const barW = spec.width ?? 640;
+  const rowH = 62;
+  const width = PAD * 2 + labelW + barW;
+  const height = PAD * 2 + spec.lanes.length * rowH - 14 + 10;
+  const top = PAD + 10;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
+      {spec.lanes.map((row, rowIndex) => {
+        const total = spec.total ?? row.parts.reduce((sum, part) => sum + part.size, 0);
+        const y = top + rowIndex * rowH;
+        let x = PAD + labelW;
+        return (
+          <g key={rowIndex}>
+            {row.label && <text x={PAD + labelW - 10} y={y + 27} textAnchor="end" className="dg-bar-label">{row.label}</text>}
+            {row.parts.map((part, index) => {
+              const w = (part.size / total) * barW;
+              const cx = x + w / 2;
+              x += w;
+              return (
+                <g key={index} className={`dg-node dg-tone-${part.tone ?? "muted"}`}>
+                  <rect x={cx - w / 2 + 1} y={y} width={Math.max(2, w - 2)} height={44} rx={6} />
+                  {w < textWidth(part.label, 13) + 4 ? (
+                    <text x={cx} y={y - 6} textAnchor="middle" className="dg-sub">{part.label}</text>
+                  ) : part.sub && w >= textWidth(part.sub, 11) ? (
+                    <>
+                      <text x={cx} y={y + 19} textAnchor="middle" className="dg-label">{part.label}</text>
+                      <text x={cx} y={y + 35} textAnchor="middle" className="dg-sub">{part.sub}</text>
+                    </>
+                  ) : <text x={cx} y={y + 27} textAnchor="middle" className="dg-label">{part.label}</text>}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+const KINDS = { flow: Flow, sequence: Sequence, ring: Ring, timeline: Timeline, tree: Tree, bars: Bars, segments: Segments };

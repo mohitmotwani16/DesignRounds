@@ -2,6 +2,25 @@ export default {
   blocks: [
     { type: "p", text: "**Scalability** is a system's ability to handle more load (more users, requests, or data) by adding resources, without being redesigned. A scalable system's cost and latency grow smoothly with load instead of hitting a wall. There are two basic ways to add resources: make a machine bigger, or add more machines." },
 
+    { type: "h2", text: "A story: from one server to many" },
+    { type: "p", text: "Say you build an online pet-supplies store for your uncle. It starts like everyone's first web app: a server written in PHP or Node.js, with MySQL or MongoDB behind it, probably on the same machine. The server takes a request, asks the database for data and returns it to the user's device. You rent a $5-a-month VPS (1 GB of memory, a 25 GB SSD) from a provider like DigitalOcean, buy a domain, point its DNS record at the VPS's IP address, and the store is live. Life is simple." },
+    { type: "diagram", kind: "flow", caption: "Stage 1: one small server runs both the web app and the database.", zones: [{ label: "One VPS · 1 GB RAM", from: [1, 0], to: [2, 0], tone: "accent" }], nodes: [
+      { id: "u", label: "Users", col: 0, row: 0, shape: "pill" },
+      { id: "w", label: "Web server", sub: "PHP / Node.js", col: 1, row: 0 },
+      { id: "d", label: "Database", sub: "MySQL", col: 2, row: 0, shape: "db", tone: "store" },
+    ], edges: [{ from: "u", to: "w", label: "DNS → VPS IP" }, { from: "w", to: "d" }] },
+    { type: "p", text: "The store gets popular and the little VPS can't keep up. The obvious fix is a bigger server, say $10 a month for 4 GB of memory and an 80 GB SSD. That is **vertical scaling**." },
+    { type: "diagram", kind: "flow", caption: "Stage 2: vertical scaling, the same setup on a bigger machine.", nodes: [
+      { id: "s", label: "Small VPS", sub: "$5/mo · 1 GB · 25 GB SSD", col: 0, row: 0 },
+      { id: "b", label: "Bigger VPS", sub: "$10/mo · 4 GB · 80 GB SSD", col: 1.6, row: 0, tone: "accent" },
+    ], edges: [{ from: "s", to: "b", label: "scale up" }] },
+    { type: "p", text: "Business keeps booming: from friends to the whole state, to all 50 states, then to international customers. You keep moving to the next size up, until that stops working:" },
+    { type: "ul", items: [
+      "**One server is a single point of failure.** If it goes down, the whole store goes down (and your uncle calls, frantically).",
+      "**There's a ceiling, and the price climbs steeply near it.** Even very large instances, such as an x1.16xlarge with 64 vCPUs and 976 GiB of memory, or high-memory machines with tens of TiB of RAM, eventually hit limits, and cost grows disproportionately with size.",
+    ] },
+    { type: "p", text: "So you switch to **horizontal scaling**: instead of one ever-bigger server, run a team of smaller ones, with a [load balancer](/learn/load-balancing) in front acting as foreman: it forwards each request to one of the servers and passes the response back. To make that work, the servers must be [stateless](/learn/stateless-vs-stateful): any of them must be able to handle any user's request." },
+
     { type: "h2", text: "Vertical scaling (scale up)" },
     { type: "p", text: "Vertical scaling means moving to a bigger machine: more CPU cores, more memory, faster disks. It needs no code changes, which makes it the right first move surprisingly often. A single modern server with 64+ cores and hundreds of GB of RAM can serve tens of thousands of requests per second, and a well-tuned PostgreSQL instance on one machine runs many successful businesses." },
     { type: "ul", items: [

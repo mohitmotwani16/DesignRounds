@@ -39,6 +39,19 @@ export default {
       ["Local disk and memory", "Limited, ephemeral", "No big local caches; use Redis or similar"],
     ] },
 
+    {"type":"h2","text":"Serverless data pipelines"},
+    {"type":"p","text":"Pipelines can be built entirely from event-triggered functions, orchestrated by a managed workflow service (AWS Step Functions, Google Workflows, Azure Durable Functions). A file landing in S3 triggers a function that validates it, another transforms it, and a workflow coordinates retries and branching. You pay only while functions run."},
+    {"type":"diagram","kind":"flow","caption":"A serverless vending-machine purchase: the payment gateway calls an API endpoint that triggers a function holding all transaction logic; mobile purchases also get a push notification to confirm the payment.","nodes":[{"id":"m","label":"Vending machine","col":0,"row":0.6},{"id":"pg","label":"Payment gateway","col":1.3,"row":0.6},{"id":"api","label":"API Gateway","col":2.6,"row":0.6,"tone":"accent"},{"id":"fn","label":"Function","sub":"transaction logic + data","col":3.9,"row":0.6,"tone":"ok"},{"id":"push","label":"Push notification","sub":"mobile purchases","col":3.9,"row":1.8,"tone":"cache"}],"edges":[{"from":"m","to":"pg"},{"from":"pg","to":"api","label":"REST"},{"from":"api","to":"fn","label":"trigger"},{"from":"fn","to":"push","dashed":true}]},
+    {"type":"ul","items":["**Good fits**: spiky or infrequent events (file drops, webhooks, IoT messages), small transformations, glue between managed services. Coca-Cola's connected vending machines are a well-known example of this API Gateway + function shape.","**Limits**: a maximum run time per invocation (15 minutes on AWS Lambda), so large batch transformations belong in Spark or a warehouse; per-invocation and state-transition costs grow quickly at sustained high volume.","**A cautionary tale**: Amazon's Prime Video team moved a video-quality monitoring service from a Step Functions-based serverless design to a single process and reported about a 90% infrastructure cost reduction. Choose serverless for its fit, not because it's newer."]},
+    {"type":"p","text":"See [data engineering design patterns](/learn/data-engineering-design-patterns) for how serverless pipelines compare with the other architectures."},
+    { type: "h2", text: "Pros and cons at a glance" },
+    { type: "table", head: ["Pros", "Cons"], rows: [
+      ["**Cost-effective**: you pay only for actual processing time, which saves money for sporadic or event-driven work", "**Cold starts**: a function that has been idle takes longer to respond the first time"],
+      ["**Automatic scaling**: capacity follows demand, ideal for unpredictable traffic", "**Less control** over the infrastructure and the runtime environment"],
+      ["**No servers to manage**: developers focus on code while the provider handles infrastructure", "**Platform limits**: execution time, concurrency, payload size and vendor lock-in"],
+    ] },
+    { type: "p", text: "Serverless is the last step in the evolution from physical servers to VMs to containers; see [containers vs virtual machines](/learn/containers-vs-virtual-machines) for how the four compare." },
+
     { type: "h2", text: "When serverless fits" },
     { type: "ul", items: [
       "**Spiky or unpredictable traffic**, and workloads that are idle much of the time: scale to zero saves money and effort.",

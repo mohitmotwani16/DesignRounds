@@ -55,5 +55,5 @@ export default {
     "Choose cell size from the search radius, and widen the search if too few results come back.",
   ],
   related: ["database-indexing", "sharding", "caching", "time-series-databases", "nosql-database-types"],
-  practice: ["ride-hailing"],
+  practice: ["dating-app", "ride-hailing"],
 };

@@ -9,6 +9,7 @@ import { ROADMAPS, roadmapsFor } from "../learn/roadmaps.js";
 import { useTopic } from "../learn/topics.js";
 import { communityArticle, communityInCategory, loadCommunityArticle, loadedCommunityArticle, useCommunityArticles } from "../learn/community.js";
 import { markdownToBlocks } from "../learn/markdown.js";
+import { searchIntent, searchKeywords } from "../learn/search-intent.js";
 import { Rich, plainText } from "../components/rich.jsx";
 import { AccessBadge, LevelMeter, SiteFooter } from "../components/site.jsx";
 import { useAuth } from "../auth.jsx";
@@ -49,44 +50,73 @@ export function LearnSidebar({ currentSlug }) {
   useSearchShortcut(searchRef);
   const [open, setOpen] = useState(() => new Set(currentCategory ? [currentCategory] : []));
   const [drawer, setDrawer] = useState(false);
+  const listRef = useRef(null);
+  const centredFor = useRef(null);
 
   useEffect(() => {
     setDrawer(false);
     if (currentCategory) setOpen((previous) => new Set([...previous, currentCategory]));
   }, [currentSlug, currentCategory]);
 
+  // Keep the article being read visible in the sidebar's own scroll area (never scrolls
+  // the page itself), once per navigation and when the mobile drawer opens. Expanding or
+  // collapsing sections by hand must not move the list, so each slug/drawer state is
+  // centred only once. `open` stays a dependency because, after navigating, the active
+  // link only appears once its category has been opened.
+  useEffect(() => {
+    const key = `${currentSlug}|${drawer}`;
+    if (centredFor.current === key) return;
+    const list = listRef.current;
+    const active = list?.querySelector('a[aria-current="page"]');
+    if (!list || !active || !list.clientHeight) return;
+    centredFor.current = key;
+    const listBox = list.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    if (box.top < listBox.top + 96 || box.bottom > listBox.bottom - 24) {
+      list.scrollTop += box.top - listBox.top - list.clientHeight / 2 + box.height / 2;
+    }
+  }, [currentSlug, drawer, open]);
+
   const needle = query.trim().toLowerCase();
-  const matches = (topic) => !needle || `${topic.title} ${topic.short} ${topic.description}`.toLowerCase().includes(needle);
+  const matches = (topic) => !needle || `${topic.title} ${topic.short} ${topic.description} ${searchKeywords(topic.slug).join(" ")}`.toLowerCase().includes(needle);
   const toggle = (id) => setOpen((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const families = GROUPS.map((group) => ({
     group,
     visible: group.categories.map(categoryById).filter(Boolean).map((category) => [category, categoryEntries(category).filter(matches)]).filter(([, list]) => list.length),
   })).filter(({ visible }) => visible.length);
 
+  const currentTitle = currentCategory ? categoryById(currentCategory)?.title : null;
+
   return (
     <aside className={`learn-sidebar ${drawer ? "open" : ""}`} aria-label="Handbook contents">
-      <button className="learn-drawer-toggle" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>
-        {drawer ? <X size={16} /> : <Menu size={16} />} {drawer ? "Close contents" : "Handbook contents"}
+      <button className="learn-drawer-toggle" aria-expanded={drawer} aria-controls="learn-sidebar-panel" onClick={() => { if (!drawer) centredFor.current = null; setDrawer(!drawer); }}>
+        {drawer ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
+        <span>{drawer ? "Close contents" : "Handbook contents"}</span>
+        {!drawer && currentTitle && <span className="learn-drawer-where">{currentTitle}</span>}
       </button>
-      <div className="learn-sidebar-inner">
-        <Link className="learn-home-link" to={LEARN_PATH}><BookOpen size={15} /> System design handbook</Link>
-        <label className="learn-search">
-          <Search size={14} />
-          <input ref={searchRef} type="search" name="q" autoComplete="off" placeholder="Search guides…" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search guides" />
-          {!query && <ShortcutHint />}
-        </label>
-        <nav>
+      <div className="learn-sidebar-inner" id="learn-sidebar-panel">
+        <div className="learn-sidebar-top">
+          <Link className="learn-home-link" to={LEARN_PATH}><BookOpen size={15} aria-hidden="true" /> System design handbook</Link>
+          <label className="learn-search">
+            <Search size={14} aria-hidden="true" />
+            <input ref={searchRef} type="search" name="q" autoComplete="off" spellCheck={false} placeholder="Search guides…" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search guides" />
+            {!query && <ShortcutHint />}
+          </label>
+        </div>
+        <nav className="learn-sidebar-list" ref={listRef}>
           {families.map(({ group, visible }) => (
             <div key={group.id} className="learn-nav-family">
               <p className="learn-nav-family-title">{group.title}</p>
               {visible.map(([category, list]) => {
                 const expanded = Boolean(needle) || open.has(category.id);
+                const listId = `learn-nav-${category.id}`;
                 return (
-                  <div key={category.id} className="learn-nav-group">
-                    <button className="learn-nav-heading" aria-expanded={expanded} onClick={() => toggle(category.id)}>
-                      <ChevronDown size={14} className={expanded ? "" : "collapsed"} /> {category.title}
+                  <div key={category.id} className={`learn-nav-group ${category.id === currentCategory ? "current" : ""}`}>
+                    <button className="learn-nav-heading" aria-expanded={expanded} aria-controls={listId} onClick={() => toggle(category.id)}>
+                      <ChevronDown size={14} aria-hidden="true" className={expanded ? "" : "collapsed"} /> {category.title}
+                      <span aria-label={`${list.length} guides`}>{list.length}</span>
                     </button>
-                    <ul hidden={!expanded}>
+                    <ul id={listId} hidden={!expanded}>
                       {list.map((topic) => (
                         <li key={topic.slug}>
                           <Link to={topicPath(topic.slug)} aria-current={topic.slug === currentSlug ? "page" : undefined}>{topic.short}{topic.community && <Users size={11} className="learn-community-mark" aria-label="Community article" />}</Link>
@@ -98,9 +128,9 @@ export function LearnSidebar({ currentSlug }) {
               })}
             </div>
           ))}
-          {!families.length && <p className="learn-search-empty">No guides match “{query.trim()}”.</p>}
+          {!families.length && <p className="learn-search-empty">No guides match “{query.trim()}”. Try a shorter word, like “cache” or “queue”.</p>}
+          <Link className="learn-write-link" to="/learn/write"><PenLine size={14} aria-hidden="true" /> Write an article</Link>
         </nav>
-        <Link className="learn-write-link" to="/learn/write"><PenLine size={14} /> Write an article</Link>
       </div>
     </aside>
   );
@@ -221,9 +251,10 @@ export function LearnTopicPage({ slug }) {
     if (body.generated === "questions") list.push(...tracks.map((track) => ({ id: headingId(TRACK_SEO[track.id].h1), text: TRACK_SEO[track.id].h1 })));
     if (body.uses?.length) list.push({ id: "where-its-used", text: "Where it’s used" });
     if (body.interview?.length) list.push({ id: "in-an-interview", text: "In an interview" });
+    if (searchIntent(slug)?.faq?.length) list.push({ id: "faq", text: "Frequently asked questions" });
     if (body.reading?.length) list.push({ id: "further-reading", text: "Further reading" });
     return list;
-  }, [body]);
+  }, [body, slug]);
 
   return (
     <main className="learn-page">
@@ -241,7 +272,7 @@ export function LearnTopicPage({ slug }) {
             <p className="learn-lede">{meta.description}</p>
             <p className="guide-meta">
               <LevelTag level={meta.level} />
-              {body && <><Clock3 size={14} /> {Math.max(3, Math.round(wordCount(body) / 220))} min read ·</>} Updated <time dateTime={LEARN_UPDATED}>{formatDate(LEARN_UPDATED)}</time>
+              {body && <><Clock3 size={14} /> {Math.max(3, Math.round(wordCount(body) / 220))} min read ·</>} Updated <time dateTime={meta.updated ?? LEARN_UPDATED}>{formatDate(meta.updated ?? LEARN_UPDATED)}</time>
             </p>
           </header>
 
@@ -275,6 +306,18 @@ export function LearnTopicPage({ slug }) {
                 <section>
                   <h2 id="in-an-interview">In an interview</h2>
                   <ul>{body.interview.map((tip) => <li key={tip}><Rich text={tip} /></li>)}</ul>
+                </section>
+              )}
+
+              {searchIntent(slug)?.faq?.length > 0 && (
+                <section className="learn-faq">
+                  <h2 id="faq">Frequently asked questions</h2>
+                  {searchIntent(slug).faq.map((item) => (
+                    <div key={item.q} className="learn-faq-item">
+                      <h3>{item.q}</h3>
+                      <p>{item.a}</p>
+                    </div>
+                  ))}
                 </section>
               )}
 
@@ -321,8 +364,13 @@ export function LearnTopicPage({ slug }) {
               )}
 
               <nav className="learn-pager" aria-label="Previous and next topic">
-                {previous ? <Link to={topicPath(previous.slug)}><span><ArrowLeft size={13} /> Previous</span>{previous.short}</Link> : <span />}
-                {next ? <Link className="next" to={topicPath(next.slug)}><span>Next <ArrowRight size={13} /></span>{next.short}</Link> : <span />}
+                {previous ? <Link className="prev" to={topicPath(previous.slug)}><span><ArrowLeft size={13} /> Previous</span>{previous.title}</Link> : <span />}
+                {next ? (
+                  <Link className="next" to={topicPath(next.slug)}>
+                    <span>{next.categoryTitle ? `Read next · ${next.categoryTitle}` : "Read next"} <ArrowRight size={13} /></span>
+                    <strong>{next.title}</strong>
+                  </Link>
+                ) : <span />}
               </nav>
 
               <aside className="learn-write-cta compact">

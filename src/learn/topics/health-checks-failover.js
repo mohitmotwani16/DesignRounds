@@ -10,6 +10,12 @@ export default {
       ["**Deep / dependency check**", "Can it reach its database, cache, downstream services?", "Usually: report, alert; rarely: take out of rotation"],
     ] },
     { type: "p", text: "Keep **liveness** checks trivial (the process can answer HTTP), or a slow dependency will trigger restarts that make things worse. Use **readiness** to stop traffic to an instance that's warming up, draining for a deploy, or temporarily overloaded." },
+    { type: "p", text: "Typical settings and examples:" },
+    { type: "ul", items: [
+      "**Basic check**: a [service registry](/learn/service-discovery) or load balancer calls `GET /health` every 10 seconds. `200 OK` means healthy; a timeout or error counts as a failure, and three failures in a row remove the instance.",
+      "**Deep check**: the inventory service also tests its database connection and returns `503 Service Unavailable` when the database is unreachable, so it is taken out of rotation even though the process is running. Use this with care (see the trap below).",
+      "**Passive check**: the load balancer watches real responses and marks an instance unhealthy when, say, 10% of its requests fail, catching problems that periodic probes miss.",
+    ] },
 
     { type: "h2", text: "The shared-dependency trap" },
     { type: "p", text: "If every instance's health check queries the database, a brief database slowdown makes **all** instances fail their checks at once. The load balancer removes them all, and a partial degradation becomes a total outage. Health checks should mostly reflect the instance itself; failures of shared dependencies are better handled with [circuit breakers](/learn/circuit-breaker), fallbacks and alerts." },

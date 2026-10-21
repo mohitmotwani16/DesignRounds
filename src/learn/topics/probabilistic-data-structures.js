@@ -61,5 +61,5 @@ export default {
     "State the error type and that exact verification follows a positive answer where correctness matters.",
   ],
   related: ["database-indexing", "cache-eviction", "batch-vs-stream-processing", "rate-limiting", "back-of-the-envelope-estimation"],
-  practice: ["web-crawler", "autocomplete", "clickstream", "realtime-analytics"],
+  practice: ["dating-app", "web-crawler", "autocomplete", "clickstream", "realtime-analytics"],
 };

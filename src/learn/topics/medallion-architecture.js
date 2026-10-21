@@ -58,7 +58,7 @@ export default {
     "Name the quality gate between each layer.",
     "Build gold only for named consumers, with owners.",
   ],
-  related: ["data-warehouse-vs-data-lake", "etl-vs-elt", "open-table-formats", "data-quality", "dimensional-modeling"],
+  related: ["lakehouse-architecture", "data-warehouse-vs-data-lake", "etl-vs-elt", "open-table-formats", "data-quality", "dimensional-modeling"],
   practice: ["etl-framework", "clickstream", "data-quality"],
   reading: [
     { title: "What is a medallion architecture?", publisher: "Databricks", url: "https://www.databricks.com/blog/what-is-medallion-architecture" },

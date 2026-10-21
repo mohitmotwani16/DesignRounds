@@ -1,0 +1,273 @@
+// The four recurring challenges of web-scale systems and the standard moves that solve them:
+// decomposition, vertical and horizontal scaling, partitioning, caching, queues, read/write split.
+export default {
+  blocks: [
+    { type: "p", text: "Before learning the individual building blocks, it helps to know what problems they exist to solve. Almost every hard part of system design comes from **serving a very large number of users by adding more machines**. Take away the scale and most design questions shrink back into coding questions. The good news is that the challenges repeat. There are four of them, and once you can name them, the jargon-heavy solutions (sharding, replicas, queues, eventual consistency) make much more sense." },
+    { type: "p", text: "These challenges are also why the [non-functional requirements](/learn/non-functional-requirements), above all scalability and availability, are the heart of a design interview. Scalability is not a feature you bolt on later: it shapes the whole architecture, which is why systems meant to grow are designed for growing load from the start." },
+    { type: "table", head: ["Challenge", "What breaks", "Standard fix"], rows: [
+      ["1. Too many concurrent users", "One server or database hits its requests-per-second limit", "Repeat the same parts: load-balanced servers, read replicas"],
+      ["2. Too much data", "The data no longer fits on one machine", "Split the data: sharding by a key such as `user_id`"],
+      ["3. Must be fast", "Slow writes push response times past ~1 second", "Make slow work asynchronous with a queue; serve reads from memory"],
+      ["4. Inconsistent (outdated) state", "Replicas and async updates serve old data", "Design the product to tolerate brief staleness (eventual consistency)"],
+    ] },
+
+    { type: "h2", text: "Challenge 1: too many concurrent users" },
+    { type: "p", text: "A large user base brings many problems, but the most common and intuitive one is that **a single machine or database can only handle so many requests per second (RPS/QPS)**. Every single-server demo app from a web tutorial works fine until traffic passes that limit; then performance falls off a cliff." },
+    { type: "p", text: "The fix is equally intuitive: **repetition**. Run several identical copies of the bottlenecked part and spread users across them. When the copies are servers running application logic, this is **load balancing**. When the copies are data, they are **database replicas**." },
+    { type: "diagram", kind: "flow", caption: "One server has a hard RPS ceiling. Putting identical servers behind a load balancer spreads the same users across many machines.", zones: [
+      { label: "Before: one server", from: [0, 0], to: [2, 0], tone: "danger" },
+      { label: "After: load balanced", from: [0, 1.3], to: [2, 2.9], tone: "accent" },
+    ], nodes: [
+      { id: "u1", label: "Users", col: 0, row: 0, shape: "pill" },
+      { id: "s1", label: "Single server", col: 1, row: 0 },
+      { id: "x", label: "RPS limit exceeded", col: 2, row: 0, tone: "danger" },
+      { id: "u2", label: "Users", col: 0, row: 2.1, shape: "pill" },
+      { id: "lb", label: "Load balancer", col: 1, row: 2.1, tone: "accent" },
+      { id: "a", label: "Server 1", col: 2, row: 1.3 },
+      { id: "b", label: "Server 2", col: 2, row: 2.1 },
+      { id: "c", label: "Server N", col: 2, row: 2.9 },
+    ], edges: [
+      { from: "u1", to: "s1" }, { from: "s1", to: "x", tone: "danger" },
+      { from: "u2", to: "lb" }, { from: "lb", to: "a" }, { from: "lb", to: "b" }, { from: "lb", to: "c" },
+    ] },
+    { type: "diagram", kind: "flow", caption: "The same idea for data: one primary database stays the source of truth, and its changes are copied to replicas that serve reads.", nodes: [
+      { id: "m", label: "Primary database", sub: "source of truth", col: 2, row: 1, shape: "db", tone: "cache" },
+      { id: "r1", label: "Replica 1", col: 1, row: 0, shape: "db", tone: "store" },
+      { id: "r2", label: "Replica 2", col: 1, row: 1, shape: "db", tone: "store" },
+      { id: "r3", label: "Replica M", col: 1, row: 2, shape: "db", tone: "store" },
+      { id: "p1", label: "Reader 1", col: 0, row: 0 },
+      { id: "p2", label: "Reader 2", col: 0, row: 1 },
+      { id: "p3", label: "Reader N", col: 0, row: 2 },
+    ], edges: [
+      { from: "m", to: "r1", label: "copy changes" }, { from: "m", to: "r2" }, { from: "m", to: "r3" },
+      { from: "r1", to: "p1", label: "query" }, { from: "r2", to: "p2" }, { from: "r2", to: "p3" }, { from: "r3", to: "p3" },
+    ] },
+    { type: "p", text: "Deeper reading: [load balancing](/learn/load-balancing) and [replication](/learn/replication)." },
+
+    { type: "h2", text: "Challenge 2: too much data to move around" },
+    { type: "p", text: "The twin of too many users is too much data. Data becomes \"big\" when **one machine can no longer hold all of it**: Google's search index, every tweet ever posted, Netflix's whole film library." },
+    { type: "p", text: "The fix is **sharding**: split the data into pieces by some logical key so each machine holds only part of it. The key decides which data lives together. If Twitter shards tweets by `user_id`, all of one user's tweets sit on the same machine, so loading a profile touches one shard." },
+    { type: "diagram", kind: "flow", caption: "Sharding by user_id: the router sends each write to the shard that owns that range of users.", nodes: [
+      { id: "w", label: "Writes", col: 0, row: 1, shape: "pill" },
+      { id: "r", label: "Shard by user_id", col: 1, row: 1, tone: "accent" },
+      { id: "s1", label: "Shard A–H", col: 2, row: 0, shape: "db", tone: "store" },
+      { id: "s2", label: "Shard I–P", col: 2, row: 1, shape: "db", tone: "store" },
+      { id: "s3", label: "Shard Q–Z", col: 2, row: 2, shape: "db", tone: "store" },
+    ], edges: [{ from: "w", to: "r" }, { from: "r", to: "s1" }, { from: "r", to: "s2" }, { from: "r", to: "s3" }] },
+    { type: "p", text: "Deeper reading: [sharding](/learn/sharding) and [scaling databases](/learn/scaling-databases)." },
+
+    { type: "h2", text: "Challenge 3: the system must be fast and responsive" },
+    { type: "p", text: "User-facing apps must feel quick. Aim to respond in **under 500 ms**; past about 1 second the experience feels broken." },
+    { type: "p", text: "**Reads** are usually fast once data is replicated and cached: a typical read is a lookup in an in-memory key-value store behind an HTTP endpoint, so for many simple apps the latency is mostly the network round trip." },
+    { type: "p", text: "**Writes** are where it gets hard. A real write often triggers many queries and updates (save the post, update counters, notify followers, index for search) and can easily take longer than a second. The fix is **asynchrony**: the server accepts the write, puts it on a queue and responds immediately, and workers do the actual processing in the background. Meanwhile the client has room to keep the experience snappy, for example by showing the new post in the UI straight away and only then loading fresh results. That gap is usually 1–2 seconds, which is enough time for the backend to finish. In practice this is built with a message queue or log such as Kafka." },
+    { type: "diagram", kind: "flow", caption: "The write returns as soon as the job is queued; a worker does the slow part afterwards.", nodes: [
+      { id: "c", label: "Client", col: 0, row: 0, shape: "pill" },
+      { id: "a", label: "App server", col: 1, row: 0 },
+      { id: "q", label: "Queue", col: 2, row: 0, shape: "queue", tone: "queue" },
+      { id: "w", label: "Worker", col: 3, row: 0 },
+      { id: "d", label: "Database", col: 4, row: 0, shape: "db", tone: "store" },
+    ], edges: [{ from: "c", to: "a", label: "write" }, { from: "a", to: "c", label: "202 at once", bend: 40, dashed: true }, { from: "a", to: "q", label: "enqueue" }, { from: "q", to: "w" }, { from: "w", to: "d" }] },
+    { type: "p", text: "Deeper reading: [message queues](/learn/message-queues) and [latency vs throughput](/learn/latency-vs-throughput)." },
+
+    { type: "h2", text: "Challenge 4: inconsistent (outdated) state" },
+    { type: "p", text: "This challenge is created by the fixes for challenges 1 and 2. Once data is replicated and updated asynchronously, a read can easily hit a copy that hasn't caught up. Inconsistency here almost always means **outdated**, not random: a user sees an older version, or data that has since been deleted, never garbage." },
+    { type: "diagram", kind: "flow", caption: "Replication lag: a read that lands on the replica before the change arrives sees the old value.", nodes: [
+      { id: "w", label: "Write", col: 0, row: 0, shape: "pill" },
+      { id: "p", label: "Primary", col: 1, row: 0, shape: "db", tone: "ok" },
+      { id: "r", label: "Replica", col: 2.3, row: 0.8, shape: "db", tone: "ok" },
+      { id: "rd", label: "Read", col: 1, row: 1.6, shape: "pill" },
+    ], edges: [{ from: "w", to: "p" }, { from: "p", to: "r", label: "replication lag", dashed: true }, { from: "rd", to: "r", label: "stale until caught up" }] },
+    { type: "p", text: "The solution is mostly at the **application** level rather than the infrastructure level. Stale reads disappear on their own once replicas and background jobs catch up, so design the product so that briefly seeing old data is acceptable. This is **eventual consistency**. Most apps live with it happily, especially compared with the alternatives: losing data, or being very slow." },
+    { type: "p", text: "The exceptions are banking and payments, where any inconsistency is unacceptable. Those apps must wait for every step to finish before answering the user, which is why a bank transfer feels much slower than a Google search. See [consistency models](/learn/consistency-models) and the [CAP theorem](/learn/cap-theorem)." },
+
+    { type: "h2", text: "The scaling toolkit" },
+    { type: "p", text: "Scalability is usually the top non-functional requirement, and a handful of moves cover most designs. Each one targets a different pressure." },
+
+    { type: "h3", text: "Estimate the load first" },
+    { type: "p", text: "Before choosing a technique, put numbers on the problem. Estimation shows which quantity actually shapes the design: reads, writes, storage, or the peak burst. Derive the numbers from usage instead of guessing them. The recipe never changes: **daily actions ÷ 86,400 seconds** gives the average rate; multiply by a **peak factor** for the burst you must survive. Reads usually dwarf writes, which is why caches and replicas go on the read path." },
+    { type: "table", head: ["Assumption", "Value", "Result"], rows: [
+      ["Daily active users", "10 million", ""],
+      ["Write actions per user per day", "20", "200M writes/day ÷ 86,400 ≈ **2.3K writes/s** on average"],
+      ["Reads per write", "100 : 1", "≈ **231K reads/s** on average"],
+      ["Peak-to-average factor", "3×", "≈ **694K reads/s** at peak"],
+      ["Bytes stored per write", "2 KB", "≈ 410 GB of new data per day"],
+      ["Retention", "3 years", "≈ **450 TB** of storage"],
+    ] },
+    { type: "p", text: "Round aggressively: these are order-of-magnitude numbers. Here they say the read path needs heavy caching and replicas, writes are modest but need durable storage, and 450 TB means sharding is unavoidable. See [back-of-the-envelope estimation](/learn/back-of-the-envelope-estimation) and [QPS and load](/learn/measuring-load-qps)." },
+
+    { type: "h3", text: "Decomposition" },
+    { type: "p", text: "Break the requirements into **services**, each owning one business capability (users, orders, payments). Each service has a single responsibility, so it can be scaled, deployed and maintained on its own: the order service can run 20 copies during a sale while the user service stays at 3." },
+    { type: "diagram", kind: "flow", caption: "A monolith deploys everything as one unit against one database. Decomposed, an API gateway routes to independent services, each with its own database.", zones: [
+      { label: "Monolith · one deploy", from: [0, 0], to: [1.5, 2] },
+      { label: "Microservices · deploy independently", from: [2.5, 0], to: [4.5, 2], tone: "accent" },
+    ], nodes: [
+      { id: "mono", label: "Inventory + Order + Payment", col: 0, row: 1 },
+      { id: "db", label: "DB", col: 1.5, row: 1, shape: "db", tone: "store" },
+      { id: "gw", label: "API gateway", col: 2.5, row: 1, tone: "accent" },
+      { id: "inv", label: "Inventory service", col: 3.5, row: 0 },
+      { id: "ord", label: "Order service", col: 3.5, row: 1 },
+      { id: "pay", label: "Payment service", col: 3.5, row: 2 },
+      { id: "idb", label: "Inventory DB", col: 4.5, row: 0, shape: "db", tone: "store" },
+      { id: "odb", label: "Order DB", col: 4.5, row: 1, shape: "db", tone: "store" },
+      { id: "pdb", label: "Payment DB", col: 4.5, row: 2, shape: "db", tone: "store" },
+    ], edges: [
+      { from: "mono", to: "db" }, { from: "gw", to: "inv" }, { from: "gw", to: "ord" }, { from: "gw", to: "pay" },
+      { from: "inv", to: "idb" }, { from: "ord", to: "odb" }, { from: "pay", to: "pdb" },
+    ] },
+    { type: "p", text: "See [monolith vs microservices](/learn/monolith-vs-microservices) and [database per service](/learn/database-per-service)." },
+
+    { type: "h3", text: "Vertical scaling" },
+    { type: "p", text: "Vertical scaling (**scaling up**) is the brute-force option: move to a bigger machine. Cloud computing made it far more practical. Organizations used to wait weeks for new hardware to be built and shipped; now a larger instance starts in seconds. The ceiling is high, too: AWS offers Amazon EC2 High Memory instances with up to 24 TB of RAM, and Google Cloud has Tau T2D machines tuned for compute-heavy work." },
+    { type: "diagram", kind: "flow", caption: "Scaling up: the same software on a much bigger machine. Simple, but there is always a largest machine, and it remains a single point of failure.", nodes: [
+      { id: "s", label: "Small server", sub: "2 vCPU · 8 GB", col: 0, row: 0 },
+      { id: "b", label: "Big server", sub: "64 vCPU · 512 GB", col: 1.4, row: 0, tone: "accent" },
+    ], edges: [{ from: "s", to: "b", label: "scale up" }] },
+
+    { type: "h3", text: "Horizontal scaling" },
+    { type: "p", text: "Horizontal scaling (**scaling out**) runs **many identical instances** of a service. It works best for **stateless** services, which keep no user data in memory between requests, because then a load balancer can send any request to any instance. See [stateless vs stateful](/learn/stateless-vs-stateful)." },
+    { type: "diagram", kind: "flow", caption: "Scaling out: a load balancer spreads requests across identical stateless instances; add instances to add capacity.", nodes: [
+      { id: "lb", label: "Load balancer", col: 0, row: 1.5, tone: "accent" },
+      { id: "i1", label: "Instance", col: 1.3, row: 0 },
+      { id: "i2", label: "Instance", col: 1.3, row: 1 },
+      { id: "i3", label: "Instance", col: 1.3, row: 2 },
+      { id: "i4", label: "Instance", col: 1.3, row: 3 },
+    ], edges: [{ from: "lb", to: "i1" }, { from: "lb", to: "i2" }, { from: "lb", to: "i3" }, { from: "lb", to: "i4" }] },
+
+    { type: "h3", text: "Partitioning" },
+    { type: "p", text: "Partitioning **splits requests and data into shards** and spreads them over services or databases, using a logical key such as user ID or region. Requests for users a–h go to instance 1 and its database, i–o to instance 2, and so on." },
+    { type: "diagram", kind: "flow", caption: "Partitioned by user ID: each instance and its database own one slice of users.", nodes: [
+      { id: "r", label: "Request", col: 0, row: 1, shape: "pill" },
+      { id: "lb", label: "Load balancer", col: 1, row: 1, tone: "accent" },
+      { id: "i1", label: "Instance 1", col: 2.2, row: 0 },
+      { id: "i2", label: "Instance 2", col: 2.2, row: 1 },
+      { id: "i3", label: "Instance 3", col: 2.2, row: 2 },
+      { id: "d1", label: "Users a–h", col: 3.3, row: 0, shape: "db", tone: "store" },
+      { id: "d2", label: "Users i–o", col: 3.3, row: 1, shape: "db", tone: "store" },
+      { id: "d3", label: "Users q–z", col: 3.3, row: 2, shape: "db", tone: "store" },
+    ], edges: [
+      { from: "r", to: "lb" }, { from: "lb", to: "i1", label: "a–h" }, { from: "lb", to: "i2", label: "i–o" }, { from: "lb", to: "i3", label: "q–z" },
+      { from: "i1", to: "d1" }, { from: "i2", to: "d2" }, { from: "i3", to: "d3" },
+    ] },
+    { type: "p", text: "A simple way to choose the shard is `hash(key) mod N`. It has a painful failure mode: change the number of shards N and almost every key moves to a different shard. **Consistent hashing** fixes this by placing both nodes and keys on a ring; each key belongs to the next node clockwise. Add or remove a node and only the keys in one arc move, about 1/N of them." },
+    { type: "diagram", kind: "ring", caption: "Consistent hashing: each key is owned by the next node clockwise. Adding a node between two others only takes over the keys in that arc.", nodes: [
+      { label: "Node A", angle: 20 }, { label: "Node B", angle: 140 }, { label: "Node C", angle: 250 },
+    ], keys: [{ label: "k1", angle: 70 }, { label: "k2", angle: 200 }, { label: "k3", angle: 320 }] },
+    { type: "p", text: "Deeper reading: [sharding](/learn/sharding) and [consistent hashing](/learn/consistent-hashing)." },
+
+    { type: "h3", text: "Caching" },
+    { type: "p", text: "Caching speeds up reads by keeping frequently used data in fast memory, typically Redis or Memcached, so most reads never reach the database. The cache is fast but temporary; the database is slow but permanent." },
+    { type: "diagram", kind: "flow", caption: "Check the cache first; only misses go to the database.", nodes: [
+      { id: "app", label: "App", col: 0, row: 0 },
+      { id: "c", label: "Cache", sub: "fast, temporary", col: 1.2, row: 0, tone: "cache" },
+      { id: "db", label: "Database", sub: "slow, permanent", col: 2.4, row: 0, shape: "db", tone: "store" },
+    ], edges: [{ from: "app", to: "c", label: "check first", both: true }, { from: "c", to: "db", label: "miss", dashed: true }] },
+    { type: "p", text: "**The hit rate is everything.** Database load equals total read load × miss rate, so the last few percent matter most. With 50,000 reads per second:" },
+    { type: "table", head: ["Cache hit rate", "Reads reaching the database", "Effective read capacity"], rows: [
+      ["0% (no cache)", "50,000/s", "1×"],
+      ["50%", "25,000/s", "2×"],
+      ["90%", "5,000/s", "10×"],
+      ["99%", "500/s", "100×"],
+      ["99.9%", "50/s", "1,000×"],
+    ] },
+    { type: "p", text: "Going from 90% to 99% cuts database traffic by another 10×. See [caching](/learn/caching)." },
+
+    { type: "h3", text: "Buffering writes with a message queue" },
+    { type: "p", text: "Busy systems often have bursts of writes, and the database's disk I/O can't keep up with every write arriving at once. A message queue **buffers the writes**: the request path only enqueues, and workers drain the queue at a rate the database can sustain. A synchronous operation becomes asynchronous, and the database stays at a safe load instead of crashing." },
+    { type: "diagram", kind: "flow", caption: "Bursty writes go into the queue; the worker drains them at the database's steady rate.", nodes: [
+      { id: "ws", label: "Write service", col: 0, row: 0 },
+      { id: "q", label: "Queue", col: 1.2, row: 0, shape: "queue", tone: "queue" },
+      { id: "w", label: "Worker", col: 2.4, row: 0 },
+      { id: "db", label: "Database", col: 3.4, row: 0, shape: "db", tone: "store" },
+    ], edges: [{ from: "ws", to: "q", label: "bursty writes" }, { from: "q", to: "w", label: "steady drain" }, { from: "w", to: "db" }] },
+    { type: "p", text: "A worked example: traffic arrives at 220 writes/s but the database handles 100/s." },
+    { type: "table", head: ["", "Direct to the database", "Buffered by a queue"], rows: [
+      ["Writes processed", "100/s", "100/s"],
+      ["Writes dropped or failed", "120/s", "0"],
+      ["During a 60-second burst", "7,200 requests lost", "7,200 requests wait in the queue"],
+      ["After the burst", "Nothing to recover", "Backlog drains in about 72 s if traffic falls to zero (more slowly if it only drops below 100/s)"],
+    ] },
+    { type: "p", text: "The queue trades some latency for zero dropped requests. It is not magic, though: if overload is sustained, the backlog grows until even the buffer fills. Watch queue depth and add workers or shed load before that happens. See [message queues](/learn/message-queues) and [backpressure](/learn/backpressure)." },
+
+    { type: "h3", text: "Separating reads and writes" },
+    { type: "p", text: "Whether a system is read-heavy or write-heavy comes from the business. Social media is read-heavy: people scroll far more than they post. IoT systems are write-heavy: devices report constantly and people rarely look. Because the two sides have such different needs, it pays to handle them separately. There are two levels of separation." },
+    { type: "p", text: "**1. Leader–follower replication.** All writes go to the leader; followers hold copies and serve reads." },
+    { type: "diagram", kind: "flow", caption: "Writes go to the leader; reads can be served by any follower.", nodes: [
+      { id: "w", label: "Writes", col: 0, row: 0, shape: "pill" },
+      { id: "r", label: "Reads", col: 0, row: 2, shape: "pill" },
+      { id: "l", label: "Leader", col: 1.2, row: 0, shape: "db", tone: "store" },
+      { id: "f1", label: "Follower", col: 2.4, row: 0.5, shape: "db", tone: "cache" },
+      { id: "f2", label: "Follower", col: 2.4, row: 1.6, shape: "db", tone: "cache" },
+    ], edges: [{ from: "w", to: "l" }, { from: "l", to: "f1", label: "replicate" }, { from: "l", to: "f2" }, { from: "r", to: "f1" }, { from: "r", to: "f2" }] },
+    { type: "p", text: "**2. CQRS (Command Query Responsibility Segregation).** CQRS goes further and uses entirely different data models for the two sides:" },
+    { type: "ul", items: [
+      "The **command (write) side** handles creates, updates and deletes, using a model optimized for writes.",
+      "The **query (read) side** handles reads, using a denormalized model optimized for the queries users run.",
+    ] },
+    { type: "p", text: "Changes flow **asynchronously** from the command side to the query side, usually as events." },
+    { type: "diagram", kind: "flow", caption: "CQRS: commands update the write store; events asynchronously update a separate read store shaped for queries.", nodes: [
+      { id: "cmd", label: "Commands", sub: "create, update, delete", col: 0, row: 0, shape: "pill" },
+      { id: "wm", label: "Write service", col: 1.2, row: 0 },
+      { id: "ws", label: "Write DB", col: 2.4, row: 0, shape: "db", tone: "store" },
+      { id: "ev", label: "Events", col: 3.4, row: 0.9, shape: "queue", tone: "queue" },
+      { id: "qry", label: "Queries", sub: "reads", col: 0, row: 1.8, shape: "pill" },
+      { id: "rm", label: "Read service", col: 1.2, row: 1.8 },
+      { id: "rs", label: "Read DB", col: 2.4, row: 1.8, shape: "db", tone: "cache" },
+    ], edges: [
+      { from: "cmd", to: "wm" }, { from: "wm", to: "ws" }, { from: "ws", to: "ev", label: "async", dashed: true }, { from: "ev", to: "rs", dashed: true },
+      { from: "qry", to: "rm" }, { from: "rm", to: "rs" },
+    ] },
+    { type: "p", text: "A common real example: MySQL is the source of truth, Elasticsearch serves full-text search and analytical queries, and changes are synced from MySQL to Elasticsearch asynchronously by reading MySQL's binlog with [change data capture (CDC)](/learn/change-data-capture). See [CQRS and event sourcing](/learn/event-sourcing-cqrs)." },
+
+    { type: "h3", text: "Combining the techniques" },
+    { type: "p", text: "Real systems use several of these at once, each against a different pressure. Decompose the monolith so parts scale independently. Partition and cache to spread load and speed up reads. Separate reads from writes so reads are fast and writes are safe. Then adjust the business logic so bottlenecks are avoided without hurting the user experience." },
+    { type: "diagram", kind: "flow", caption: "A combined architecture: the load balancer spreads traffic, the cache absorbs reads, the queue buffers writes, and sharded primary–replica databases scale storage and reads.", nodes: [
+      { id: "c", label: "Client", col: 0, row: 1.5, shape: "pill" },
+      { id: "lb", label: "Load balancer", col: 1, row: 1.5, tone: "accent" },
+      { id: "sa", label: "Service A", col: 2, row: 1 },
+      { id: "sb", label: "Service B", col: 2, row: 2.2 },
+      { id: "ca", label: "Cache", col: 3, row: 0, tone: "cache" },
+      { id: "q", label: "Queue", col: 3, row: 1, shape: "queue", tone: "queue" },
+      { id: "w", label: "Worker", col: 4, row: 1 },
+      { id: "p1", label: "Primary · shard 1", col: 5, row: 0.5, shape: "db", tone: "store" },
+      { id: "p2", label: "Primary · shard 2", col: 5, row: 1.7, shape: "db", tone: "store" },
+      { id: "rep", label: "Replicas", col: 5, row: 2.9, shape: "db", tone: "store" },
+    ], edges: [
+      { from: "c", to: "lb" }, { from: "lb", to: "sa" }, { from: "lb", to: "sb" },
+      { from: "sa", to: "ca", label: "read" }, { from: "sa", to: "q", label: "write" }, { from: "q", to: "w" },
+      { from: "w", to: "p1" }, { from: "w", to: "p2" }, { from: "p2", to: "rep", dashed: true }, { from: "sb", to: "rep", label: "read" },
+    ] },
+
+    { type: "h3", text: "Changing the business requirements" },
+    { type: "p", text: "Sometimes the best scaling move is a product change. It isn't strictly technical, but raising it in an interview shows practical experience and good judgment." },
+    { type: "ul", items: [
+      "**Spread the peak.** Instead of one weekly sale for every product and every user at once, give each category its own day per region: baby products on day 1, electronics on day 2. Traffic becomes predictable, so you can pre-load the cache for tomorrow's category and add read replicas only in the regions that need them.",
+      "**Hide the consistency gap.** During a busy auction (think eBay's final seconds), show the bidder an immediate \"bid placed\" message while the backend settles the true order of bids asynchronously. Users see the correct final status once the auction closes.",
+      "**Other examples:** queue users into a virtual waiting room for concert tickets, cap how often a counter refreshes on screen, or show \"1M+\" instead of an exact like count.",
+    ] },
+
+    { type: "h2", text: "Where these challenges show up" },
+    { type: "p", text: "Every classic design problem is some mix of the four:" },
+    { type: "table", head: ["Problem", "Dominant challenge", "Key move"], rows: [
+      ["[Twitter / news feed](/learn/design-twitter)", "Too many users reading", "Precomputed timelines in a cache, fan-out"],
+      ["[URL shortener](/learn/design-url-shortener)", "Many reads, unique IDs", "Cache redirects, distributed ID generation"],
+      ["[Pastebin](/learn/design-pastebin)", "Large blobs and global reads", "Object storage plus CDN"],
+      ["[Tinder](/learn/design-tinder)", "Write firehose of swipes", "Shard by swiper, queue, Bloom filter"],
+      ["Payments", "Consistency", "Transactions, idempotency, sagas"],
+      ["Analytics dashboards", "Too much data", "Stream processing and pre-aggregation"],
+    ] },
+  ],
+  uses: [
+    { name: "Social networks", text: "Read-heavy feeds are served from caches and replicas, while posts are written through queues and fanned out asynchronously." },
+    { name: "E-commerce flash sales", text: "Queues buffer orders, caches absorb product-page reads, and sales are staggered by category or region to flatten the peak." },
+    { name: "IoT and metrics platforms", text: "Write-heavy ingestion is partitioned by device or metric and buffered through a log such as Kafka before reaching storage." },
+    { name: "Banking", text: "Consistency wins over speed: requests wait until every step commits, accepting higher latency." },
+  ],
+  interview: [
+    "Name the challenge before the solution: \"reads outnumber writes 100 to 1, so the bottleneck is read QPS\" leads naturally to caches and replicas.",
+    "Use estimates to decide which challenge matters; don't add sharding to a system that fits on one machine.",
+    "When you add replicas or queues, say out loud that reads may now be stale and explain why the product can tolerate it.",
+    "Offer a business-level fix (staggered sales, optimistic UI) alongside the technical one; it signals real-world experience.",
+  ],
+  related: ["scalability", "non-functional-requirements", "load-balancing", "replication", "sharding", "caching", "message-queues", "consistency-models"],
+  practice: ["news-feed", "url-shortener", "ticket-booking", "distributed-cache"],
+};

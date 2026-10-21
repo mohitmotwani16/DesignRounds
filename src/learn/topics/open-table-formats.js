@@ -65,7 +65,7 @@ export default {
     "Choose copy-on-write or merge-on-read from the update pattern.",
     "Include compaction and snapshot expiry in the operating plan.",
   ],
-  related: ["data-warehouse-vs-data-lake", "columnar-file-formats", "medallion-architecture", "optimistic-vs-pessimistic-locking", "outbox-pattern"],
+  related: ["lakehouse-architecture", "data-warehouse-vs-data-lake", "columnar-file-formats", "medallion-architecture", "optimistic-vs-pessimistic-locking", "outbox-pattern"],
   practice: ["etl-framework", "fraud-data-platform"],
   reading: [
     { title: "Apache Iceberg specification", publisher: "Apache Software Foundation", url: "https://iceberg.apache.org/spec/" },

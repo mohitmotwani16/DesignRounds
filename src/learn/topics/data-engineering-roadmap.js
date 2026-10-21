@@ -6,14 +6,16 @@ export default {
     { type: "roadmap", id: "data-engineering" },
 
     { type: "h2", text: "What a data engineering design round looks like" },
-    { type: "p", text: "You'll be asked to design something like a warehouse for customer history, a clickstream pipeline, a real-time metrics platform or a reusable ETL framework. Strong answers follow the same arc:" },
+    { type: "p", text: "You'll be asked something like \"design a pipeline that tracks user activity on an e-commerce site\", a warehouse for customer history, or real-time analytics for a delivery platform. It isn't a backend round: load balancers and caches matter little, while ingestion, modeling, formats, quality and reruns matter a lot. Strong answers walk six steps (the [full framework](/learn/data-engineering-system-design-interview)):" },
     { type: "ol", items: [
-      "**Clarify the consumers and freshness.** Who reads this data, how fresh must it be, and what does a wrong number cost? Freshness decides batch vs streaming more than volume does.",
-      "**Land raw data first.** Capture source data unchanged into durable, replayable storage, the bronze layer in a [medallion architecture](/learn/medallion-architecture).",
-      "**Model for the questions asked.** Choose the grain, facts and dimensions ([dimensional modeling](/learn/dimensional-modeling)) and how history is kept ([slowly changing dimensions](/learn/slowly-changing-dimensions)).",
-      "**Make every job rerunnable.** Idempotent writes, partition-level overwrites and [backfills](/learn/data-pipeline-orchestration) are what separate a demo from a platform.",
-      "**Prove the data is right.** [Data quality checks](/learn/data-quality), [data contracts](/learn/data-contracts-schema-evolution) and freshness alerts close the design.",
+      "**Requirements.** Who consumes the data, what they need (aggregates, raw events, snapshots), how they access it, and the latency SLA, volume, availability and retention. Then do the arithmetic: it picks your compute engine and rules out whole categories of tools.",
+      "**Pipeline design.** Batch, streaming, or both ([Lambda or Kappa](/learn/lambda-vs-kappa-architecture), or a [lakehouse](/learn/lakehouse-architecture)), plus the orchestrator.",
+      "**Data modeling.** [Medallion layers](/learn/medallion-architecture), [star schema vs one big table](/learn/dimensional-modeling), and [slowly changing dimensions](/learn/slowly-changing-dimensions).",
+      "**Storage and formats.** [Parquet vs Avro](/learn/columnar-file-formats), [Delta or Iceberg](/learn/open-table-formats), and [partitioning or clustering](/learn/data-layout-optimization).",
+      "**Quality and observability.** Checks per [quality dimension](/learn/data-quality), [data contracts](/learn/data-contracts-schema-evolution), and pipeline monitoring.",
+      "**Scale, backfills and DataOps.** [Idempotent](/learn/idempotency) jobs, safe [backfills](/learn/backfill-and-reprocessing), and schema evolution.",
     ] },
+    { type: "p", text: "Interviewers go wide, then zoom into two or three steps. See the [food delivery analytics walkthrough](/learn/design-food-delivery-analytics) for a full answer, and [data engineering design patterns](/learn/data-engineering-design-patterns) for the architectures you'll name along the way." },
 
     { type: "h2", text: "Core tools by category" },
     { type: "table", head: ["Category", "Common examples", "Guide"], rows: [
@@ -27,13 +29,13 @@ export default {
     { type: "p", text: "Interviewers rarely care which product you pick. They care that you know what the category is for, what it costs, and when you'd choose something simpler." },
 
     { type: "h2", text: "A six-week plan" },
-    { type: "table", head: ["Week", "Steps", "Practise"], rows: [
-      ["1", "1-2", "Draw the end-to-end platform for an e-commerce company and justify each layer."],
-      ["2", "3", "Model orders and customers as a star schema; load a customer dimension as SCD Type 2. Then try the [SCD2 warehouse round](/system-design/scd2-warehouse)."],
-      ["3", "4", "Explain a Spark job's stages and shuffles, and fix a skewed join."],
-      ["4", "5", "Design the [clickstream pipeline](/system-design/clickstream) with late events and deduplication."],
-      ["5", "6", "Design the [ETL framework](/system-design/etl-framework) round, including backfills and schema changes."],
-      ["6", "7", "Add quality checks and alerting to every design you've done; then the [data quality round](/system-design/data-quality)."],
+    { type: "table", head: ["Week", "Stages", "Practise"], rows: [
+      ["1", "1-2", "Learn the six-step framework, then draw the end-to-end platform for an e-commerce company and justify each layer, with volume estimates."],
+      ["2", "3-4", "Explain a Spark job's stages and shuffles and fix a skewed join; then design the [clickstream pipeline](/system-design/clickstream) with late events and deduplication."],
+      ["3", "5-6", "Compare Lambda and Kappa for one problem; model orders and customers as a star schema and as one big table, and load a customer dimension as SCD Type 2. Then try the [SCD2 warehouse round](/system-design/scd2-warehouse)."],
+      ["4", "7-8", "Choose formats and a layout (partitioning or clustering) for a 75 TB event table; add quality checks per dimension and a data contract. Then the [data quality round](/system-design/data-quality)."],
+      ["5", "9-10", "Design the [ETL framework](/system-design/etl-framework) with backfills, idempotent writes and schema changes; add a serving layer for a live dashboard."],
+      ["6", "11", "Do full mock rounds: the [food delivery analytics round](/system-design/food-delivery-analytics) and the [real-time analytics round](/system-design/realtime-analytics), narrating every trade-off."],
     ] },
 
     { type: "h2", text: "Frequently asked questions" },
@@ -44,8 +46,8 @@ export default {
     { type: "h3", text: "Batch or streaming: which should I learn first?" },
     { type: "p", text: "Batch. Most pipelines are batch, the concepts (idempotency, partitioning, backfills) carry over, and streaming adds time semantics on top. See [batch vs stream processing](/learn/batch-vs-stream-processing)." },
   ],
-  related: ["data-engineering-architecture", "etl-vs-elt", "data-warehouse-vs-data-lake", "dimensional-modeling", "batch-vs-stream-processing"],
-  practice: ["scd2-warehouse", "clickstream", "etl-framework", "realtime-analytics"],
+  related: ["data-engineering-system-design-interview", "data-engineering-design-patterns", "data-engineering-architecture", "lakehouse-architecture", "dimensional-modeling", "batch-vs-stream-processing"],
+  practice: ["food-delivery-analytics", "scd2-warehouse", "clickstream", "etl-framework", "realtime-analytics"],
   reading: [
     { title: "Dimensional Modeling Techniques", publisher: "Kimball Group", url: "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/" },
     { title: "Apache Spark documentation", publisher: "Apache Software Foundation", url: "https://spark.apache.org/docs/latest/" },

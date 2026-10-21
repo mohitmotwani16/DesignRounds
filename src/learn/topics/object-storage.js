@@ -2,6 +2,62 @@ export default {
   blocks: [
     { type: "p", text: "**Object storage** stores files as **objects** (data plus metadata) in flat **buckets**, addressed by a key and accessed over HTTP. Amazon S3, Google Cloud Storage and Azure Blob Storage are the best-known services. It is the default home for anything big and unstructured: images, videos, backups, logs, ML datasets and static websites." },
 
+    { type: "h2", text: "The problem with files and databases" },
+    { type: "p", text: "A video service stores millions of videos, each megabytes to gigabytes; Netflix-scale catalogs hold on the order of 100 million video files, and YouTube hosts billions of thumbnails. Where should these bytes live?" },
+    { type: "ul", items: [
+      "**File systems don't scale out.** Directories like `/videos/2024/01/video1.mp4` must be traversed, and \"list all January uploads\" scans thousands of subdirectories; file systems weren't built for billions of files. One server holds limited storage, adding servers needs manual partitioning, replication is complex, and clients must know which server holds a file.",
+      "**Databases aren't built for big binaries.** You can store BLOBs, but a 1 GB video in PostgreSQL strains memory, makes backups enormous and slows replication. Databases are optimized for structured queries.",
+      "**Global users need nearby copies.** A user in Tokyo requesting a video stored in a US data center sees high latency, and file systems have no built-in global distribution.",
+    ] },
+
+    { type: "h2", text: "How object storage works" },
+    { type: "p", text: "Each file becomes an independent **object** in a **flat namespace**: no directories, no hierarchy. An object has three parts: the **data** (the bytes), **metadata** (content type, size, upload date, custom tags) and a **unique key** such as `videos/paris.mp4`." },
+    { type: "code", code: `{
+  "ObjectKey": "videos/paris.mp4",
+  "Metadata": { "ContentType": "video/mp4", "UploadDate": "2024-01-15", "Duration": "120s" },
+  "Data": "<binary video data>"
+}` },
+    { type: "diagram", kind: "flow", caption: "PUT an object: the client sends key + bytes + metadata to a bucket over HTTP; the service replicates it across servers and zones before acknowledging.", nodes: [
+      { id: "c", label: "Client", col: 0, row: 1, shape: "pill" },
+      { id: "b", label: "Bucket: my-videos", sub: "flat key → object map", col: 1.6, row: 1, tone: "accent" },
+      { id: "z1", label: "Zone A copy", col: 3.1, row: 0, shape: "db", tone: "store" },
+      { id: "z2", label: "Zone B copy", col: 3.1, row: 1, shape: "db", tone: "store" },
+      { id: "z3", label: "Zone C copy", col: 3.1, row: 2, shape: "db", tone: "store" },
+    ], edges: [{ from: "c", to: "b", label: "PUT key + bytes + metadata" }, { from: "b", to: "z1", dashed: true }, { from: "b", to: "z2", dashed: true }, { from: "b", to: "z3", dashed: true }] },
+    { type: "ul", items: [
+      "**Buckets** are top-level containers: create `my-videos` and store millions of objects in it, each with a key unique within the bucket.",
+      "**No real folders**: `images/2024/cat.jpg` looks like a path but is just a string; no `/images/` directory exists. Lookups by key use hash-table-like indexes, so performance stays flat from 1,000 objects to a billion.",
+      "**RESTful HTTP API**: upload with PUT, download with GET, delete with DELETE, e.g. `https://storage.example.com/my-videos/paris.mp4`. The API hides the distributed storage behind it, and [CDNs](/learn/cdn) can cache objects at edge locations for low latency worldwide.",
+      "**Built-in durability**: an upload is automatically copied to several servers (often 3+) across availability zones; if one fails, another copy serves the file. Services such as S3 are designed for 99.999999999% (11 nines) annual durability.",
+      "**Versioning**: overwrite `report.pdf` or delete it and the old version is kept, protecting against application bugs and user mistakes.",
+      "**Lifecycle policies**: move objects to cheaper tiers automatically (say after 90 days) or delete them (say after a year).",
+      "**Consistency**: S3 now offers strong read-after-write consistency (upload, then read immediately); some systems are eventually consistent, which is cheaper but may briefly return stale data.",
+    ] },
+
+    { type: "h2", text: "When to use object storage" },
+    { type: "ul", items: [
+      "**Multimedia**: YouTube stores billions of videos and Netflix serves petabytes of streaming content; each file is an object with an HTTP URL browsers can fetch directly, no application server in the path.",
+      "**Backups and disaster recovery**: terabyte-scale database backups stored cheaply, with geographic replication against data-center loss. See [disaster recovery](/learn/disaster-recovery).",
+      "**Static website hosting**: upload HTML, CSS, JavaScript and images and let the bucket serve them; cheaper than running web servers.",
+      "**Data lakes**: IoT sensors produce millions of events a day; store raw JSON or CSV as objects and let Spark or a query engine read them in place, separating storage from compute.",
+    ] },
+    { type: "p", text: "Don't use it for frequently updated files, appends or low-latency small reads and writes; use a database or block storage for those." },
+    { type: "table", head: ["Service", "Highlights"], rows: [
+      ["**Amazon S3**", "The industry standard: virtually unlimited storage, versioning, lifecycle policies, cross-region replication; most AWS services integrate (Lambda can trigger on uploads, analytics tools read S3 directly)"],
+      ["**Google Cloud Storage**", "Multi-regional storage with strong consistency; BigQuery can query data in it directly, no ETL"],
+      ["**Azure Blob Storage**", "Hot, cool and archive tiers with different prices and access speeds; fits Azure and hybrid-cloud setups"],
+    ] },
+    { type: "code", code: `import boto3
+
+s3 = boto3.client("s3")
+s3.upload_file("video.mp4", "my-bucket", "videos/video.mp4")              # upload
+s3.download_file("my-bucket", "videos/video.mp4", "local-video.mp4")      # download
+
+# Share it for 1 hour without making the bucket public
+url = s3.generate_presigned_url("get_object", Params={"Bucket": "my-bucket", "Key": "videos/video.mp4"}, ExpiresIn=3600)
+
+s3.delete_object(Bucket="my-bucket", Key="videos/video.mp4")              # delete` },
+
     { type: "h2", text: "Object vs block vs file storage" },
     { type: "table", head: ["", "Object storage", "Block storage", "File storage"], rows: [
       ["Abstraction", "Objects in buckets, by key", "Raw disk volumes", "Files in a directory tree"],

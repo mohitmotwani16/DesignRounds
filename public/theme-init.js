@@ -4,7 +4,7 @@
 // can also reveal it (without JS, crawlers and readers see everything).
 document.documentElement.classList.add("js");
 try {
-  var choice = localStorage.getItem("designrounds:theme") || "system";
+  var choice = localStorage.getItem("designrounds:theme") || "light";
   var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
   document.documentElement.dataset.theme = choice === "system" ? (dark ? "dark" : "light") : choice;
 } catch (error) {}

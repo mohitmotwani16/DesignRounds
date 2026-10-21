@@ -1,265 +1,235 @@
-// Moved from src/content/guides.js (originally published 2026-10-14).
+// Interview guide: what a system design interview is, the six-step template, how the format
+// changes for staff and startup roles, level expectations, mistakes and a practice plan.
 export default {
-  "blocks": [
-    {
-      "type": "p",
-      "text": "A system design interview asks you to design a real system, such as a URL shortener, a chat service or a news feed, in about 45 minutes, while explaining your reasoning out loud. There is no single correct answer. The interviewer is judging **how you think**: whether you clarify the problem, make sensible choices for the stated scale, and can defend the trade-offs behind them."
-    },
-    {"type":"diagram","kind":"flow","caption":"A 45-minute system design interview in four stages. Most of the score is earned in the deep dive, so keep requirements and the first sketch brisk.","nodes":[{"id":"req","label":"Requirements","sub":"about 7 min","col":0,"row":0},{"id":"hld","label":"High-level design","sub":"about 13 min","col":1,"row":0},{"id":"deep","label":"Deep dive","sub":"about 18 min","col":2,"row":0,"tone":"accent"},{"id":"wrap","label":"Wrap-up","sub":"about 7 min","col":3,"row":0}],"edges":[{"from":"req","to":"hld"},{"from":"hld","to":"deep"},{"from":"deep","to":"wrap"}]},
-    {
-      "type": "p",
-      "text": "Most preparation advice tells you what to read. This guide focuses on what actually moves the needle: practicing complete designs, under realistic constraints, and getting honest feedback on your reasoning."
-    },
-    {
-      "type": "h2",
-      "text": "What interviewers are actually assessing"
-    },
-    {
-      "type": "p",
-      "text": "Interviewers at most companies score some version of the same dimensions. Knowing them tells you where to spend your 45 minutes."
-    },
-    {
-      "type": "ul",
-      "items": [
-        "**Requirements and scope.** Do you find out who uses the system, what it must do, and at what scale before drawing anything? Do you set sensible limits on scope?",
-        "**High-level architecture.** Is there a coherent end-to-end design where each component has a clear job?",
-        "**Data model and storage.** Do your storage choices match the access patterns, consistency needs and data volume?",
-        "**Scale and performance.** Can you find the bottleneck and explain how the design handles it, with rough numbers?",
-        "**Reliability and security.** What happens when a component fails, a region goes down, or traffic spikes? How is abuse handled?",
-        "**Trade-offs and reasoning.** Can you say why you chose something, when it would be the wrong choice, and what you rejected? This is the dimension candidates most often underplay."
-      ]
-    },
-    {
-      "type": "callout",
-      "text": "Naming a technology is not a reason. \"We use Kafka\" earns little; \"we put a queue between ingestion and processing so a slow consumer can't block writes, and we accept that downstream data is a few seconds stale\" earns a lot."
-    },
-    {
-      "type": "h2",
-      "text": "A step-by-step framework for a 45-minute round"
-    },
-    {
-      "type": "p",
-      "text": "Time pressure is where most designs fall apart. A simple budget keeps you from spending 30 minutes on requirements or diving into one component before the whole system exists."
-    },
-    {
-      "type": "table",
-      "head": [
-        "Phase",
-        "Time",
-        "What to do"
-      ],
-      "rows": [
-        [
-          "1. Clarify requirements",
-          "5 min",
-          "Functional requirements, users, the core operations, and what is out of scope."
-        ],
-        [
-          "2. Estimate scale",
-          "3–5 min",
-          "Requests per second, read/write ratio, data size and growth. Rough orders of magnitude are enough."
-        ],
-        [
-          "3. Define the API",
-          "3–5 min",
-          "The handful of endpoints or events that matter. It forces precision about inputs and outputs."
-        ],
-        [
-          "4. High-level design",
-          "10 min",
-          "Draw the end-to-end flow for the core operations: clients, services, storage, caches, queues."
-        ],
-        [
-          "5. Deep dives",
-          "15 min",
-          "Go deep on the hardest parts: the bottleneck, the data model, consistency, failure handling."
-        ],
-        [
-          "6. Trade-offs and wrap-up",
-          "3–5 min",
-          "Summarize key decisions, their costs, and what you would do next with more time."
-        ]
-      ]
-    },
-    {
-      "type": "h3",
-      "text": "1. Clarify requirements"
-    },
-    {
-      "type": "p",
-      "text": "Ask about users, core use cases and scale before designing. For a [URL shortener](/system-design/url-shortener) that means: do links expire, are custom aliases needed, and how many redirects per second? Write the answers down; they are your yardstick for every later decision."
-    },
-    {
-      "type": "h3",
-      "text": "2. Estimate scale"
-    },
-    {
-      "type": "p",
-      "text": "Back-of-the-envelope numbers tell you which problems are real. A system with 100 writes per second and 10,000 reads per second is a read-scaling problem, so caching and replicas matter far more than write throughput. Keep the math simple and state your assumptions."
-    },
-    {
-      "type": "h3",
-      "text": "3. Define the API"
-    },
-    {
-      "type": "p",
-      "text": "List the few operations that matter, such as `POST /links` and `GET /{code}`. A clear API stops the design from drifting and gives the interviewer something concrete to probe."
-    },
-    {
-      "type": "h3",
-      "text": "4. Sketch the high-level design"
-    },
-    {
-      "type": "p",
-      "text": "Draw the whole path for the core operations before optimizing any part of it. Label the connections: what is sent, whether the call is synchronous or asynchronous, and which direction data flows. An unlabeled box-and-arrow diagram hides your thinking."
-    },
-    {
-      "type": "h3",
-      "text": "5. Go deep where it matters"
-    },
-    {
-      "type": "p",
-      "text": "Pick the two or three hardest parts and design them properly. For a [chat system](/system-design/chat-system) that is usually connection management, message ordering and offline delivery. For a [news feed](/system-design/news-feed) it is fan-out on write versus fan-out on read, and what happens when a celebrity posts."
-    },
-    {
-      "type": "h3",
-      "text": "6. Close with trade-offs"
-    },
-    {
-      "type": "p",
-      "text": "Summarize the two or three decisions that shaped the design, what each one costs, and when you would revisit it. This is often what separates a solid answer from a strong one."
-    },
-    {
-      "type": "h2",
-      "text": "The most common system design interview mistakes"
-    },
-    {
-      "type": "ul",
-      "items": [
-        "**Designing before clarifying.** Jumping to components before agreeing on requirements and scale.",
-        "**Buzzword architecture.** Adding Kafka, Redis and microservices because they sound senior, not because the problem needs them.",
-        "**No numbers.** Claiming a design scales without any estimate of load or data size.",
-        "**One-sided choices.** Presenting decisions without their cost, such as eventual consistency or operational overhead.",
-        "**Ignoring failure.** Never discussing what happens when a dependency is slow or down.",
-        "**Going silent.** The interviewer can only score reasoning you say out loud."
-      ]
-    },
-    {
-      "type": "h2",
-      "text": "How to practice: the loop that actually works"
-    },
-    {
-      "type": "p",
-      "text": "Reading solutions builds recognition. Interviews test production: building a design from a blank page and defending it. That only improves with practice that looks like the real thing."
-    },
-    {
-      "type": "ol",
-      "items": [
-        "**Pick a realistic prompt** with stated requirements and a time limit.",
-        "**Design it end to end** without looking at a solution, on a canvas or whiteboard rather than in your head.",
-        "**Write down why** for every significant component and connection, as if the interviewer had asked.",
-        "**Get feedback against a rubric**, from a peer, a mentor or an AI reviewer, so you see which dimension is weakest.",
-        "**Redo the same prompt** a few days later and compare. Improvement on a repeat attempt is the clearest sign you're learning."
-      ]
-    },
-    {
-      "type": "p",
-      "text": "That loop is what [DesignRounds](/) is built around: realistic briefs, an architecture canvas, an AI interviewer that asks why, and a [rubric-based review](/#how) of six dimensions. You can [start with a free round](/system-design/url-shortener)."
-    },
-    {
-      "type": "h2",
-      "text": "A 4-week system design practice plan"
-    },
-    {
-      "type": "table",
-      "head": [
-        "Week",
-        "Focus",
-        "Practice"
-      ],
-      "rows": [
-        [
-          "1",
-          "Fundamentals and the framework",
-          "Two beginner rounds, e.g. a [URL shortener](/system-design/url-shortener) and a [unique ID generator](/system-design/unique-id-generator). Focus on requirements, estimates and a clean high-level design."
-        ],
-        [
-          "2",
-          "Classic product systems",
-          "A [chat system](/system-design/chat-system), a [notification service](/system-design/notification-service) and [search autocomplete](/system-design/autocomplete). Practice deep dives."
-        ],
-        [
-          "3",
-          "Scale and data",
-          "A [news feed](/system-design/news-feed), [cloud file storage](/system-design/file-storage) and a [distributed cache](/system-design/distributed-cache). Focus on bottlenecks and storage choices."
-        ],
-        [
-          "4",
-          "Your target role",
-          "Rounds from your discipline: [data engineering](/library/data-engineering), [ML](/library/machine-learning), [platform](/library/platform-infrastructure), [distributed systems](/library/distributed-systems) or [frontend](/library/frontend-mobile). Redo your weakest round from week 1."
-        ]
-      ]
-    },
-    {
-      "type": "h2",
-      "text": "Start with these system design interview questions"
-    },
-    {
-      "type": "rounds",
-      "ids": [
-        "url-shortener",
-        "chat-system",
-        "news-feed",
-        "notification-service",
-        "autocomplete",
-        "unique-id-generator"
-      ]
-    },
-    {
-      "type": "p",
-      "text": "Browse every question by role and level in the [practice library](/library), or read the [full list of system design interview questions](/learn/system-design-interview-questions)."
-    },
-    {
-      "type": "h2",
-      "text": "Frequently asked questions"
-    },
-    {
-      "type": "h3",
-      "text": "How long does it take to prepare for a system design interview?"
-    },
-    {
-      "type": "p",
-      "text": "It depends on your experience. Many engineers find that four to eight weeks of regular practice, with two or three complete designs a week, is enough to become comfortable with the format. Practicing full rounds matters more than total hours of reading."
-    },
-    {
-      "type": "h3",
-      "text": "Do junior engineers get system design interviews?"
-    },
-    {
-      "type": "p",
-      "text": "Often a lighter version, more common from mid-level roles up. Juniors are usually expected to produce a reasonable high-level design and explain basic trade-offs. Seniors are expected to drive the conversation, go deep and reason about failure."
-    },
-    {
-      "type": "h3",
-      "text": "Do I need to know specific cloud services?"
-    },
-    {
-      "type": "p",
-      "text": "No. Generic building blocks, such as load balancers, caches, queues, relational and key-value stores, are fine. Naming a specific technology helps only if you can explain why it fits."
-    },
-    {
-      "type": "h3",
-      "text": "Is there a single right answer?"
-    },
-    {
-      "type": "p",
-      "text": "No. Two very different designs can both score well if they meet the requirements and the trade-offs are explained. That is why practicing your reasoning matters more than memorizing reference architectures."
-    }
+  blocks: [
+    { type: "p", text: "A system design interview asks you to design a real system, such as a URL shortener, a chat app or a ride-hailing service, in about 45 minutes while you explain your reasoning out loud. There is no single correct answer. The interviewer is watching **how you think**: whether you pin down the problem, pick sensible parts for the stated scale, and can defend the trade-offs behind each choice." },
+
+    { type: "h2", text: "What system design actually is" },
+    { type: "p", text: "System design is the work of planning an application, usually a data-heavy one, by choosing the right data systems and wiring them together. You start from what the application must do, decide which tools handle which job (a database for records, a cache for hot reads, a queue for background work, a search index for text queries), and then write application code that stitches those tools together so they behave as one." },
+    { type: "p", text: "Once several tools sit behind one API, clients no longer see the pieces. They see a single service. In effect you have built a **new, purpose-made data system out of general-purpose parts**, and that composite system can promise things none of the parts promise alone. For example, if your code always invalidates the cache when the database changes, clients get consistent answers even though the cache by itself guarantees nothing." },
+    { type: "p", text: "A more formal definition: system design is defining the architecture, components, modules, interfaces and data of a system so that it meets a set of **requirements**. It is a blueprint that keeps a complex system efficient, reliable and scalable. In practice it is the craft of making technical trade-offs that turn a vague problem into a solution that scales. Drawing boxes is the easy part; the skill is explaining why each box and arrow is there, given the **constraints** you were handed." },
+    { type: "p", text: "Knowing system design pays off twice. Companies test it, especially for senior roles. And it is what separates competent engineers from exceptional ones: writing code is expected of everyone, while designing systems that stay fast and correct under load takes deeper expertise." },
+
+    { type: "h3", text: "System design vs object-oriented design" },
+    { type: "p", text: "Two different interviews are often confused. Object-oriented (low-level) design is about the code inside one program. System (high-level) design is about many machines working together. See [HLD vs LLD](/learn/hld-vs-lld) for more." },
+    { type: "table", head: ["", "Object-oriented design", "System design"], rows: [
+      ["Typical problems", "Parking lot, elevator controller, chess game, vending machine", "WhatsApp, Twitter, YouTube, Uber, Netflix"],
+      ["Scale", "One machine, one process", "Millions of users, petabytes of data, several data centers"],
+      ["Focus", "Code structure, class relationships, design patterns", "Architecture, data flow, distributed systems, scalability"],
+      ["Skills tested", "Class design, inheritance, interfaces, SOLID principles", "Choosing components, partitioning, replication, trade-offs"],
+      ["What you produce", "UML class diagrams, interfaces, class hierarchies, working code", "Architecture diagrams, storage design, capacity estimates, API and schema design, deep dives"],
+      ["Where it runs", "A single process", "Services spread over many servers and regions"],
+    ] },
+    { type: "p", text: "The two overlap, but the emphasis differs. Object-oriented design rewards clean, maintainable code. System design rewards performance, reliability and sensible cost at scale." },
+
+    { type: "h2", text: "Who gets system design interviews" },
+    { type: "p", text: "These interviews matter more the further you go in your career, because senior engineers spend less time writing individual features and more time shaping whole systems. They usually appear from mid-level roles and become central at senior levels, where engineers make architecture choices that affect entire products. You are likely to meet one if you are applying as:" },
+    { type: "ul", items: [
+      "**An experienced software engineer (SDE/SWE).** Senior engineers are expected to break problems down, choose technologies and design systems that scale. At this level the loop usually mixes coding (LeetCode-style) rounds with one or more design rounds.",
+      "**An engineering manager (EM/SDM).** Managers guide the technical direction of their team, so they need enough design depth to make and review architecture decisions. The interview checks both technical judgment and how they lead a technical discussion.",
+      "**A technical program manager (TPM).** TPMs plan and deliver technical projects across teams. Understanding how the system fits together lets them coordinate work and spot project risks early.",
+    ] },
+    { type: "p", text: "Real systems take thousands of engineering hours and years of experience to get right. Showing that you could build one, in 45 minutes, is the unusual challenge these interviews pose." },
+
+    { type: "h2", text: "What you are designing" },
+    { type: "p", text: "Every design, whatever the product, is made of the same three kinds of decisions:" },
+    { type: "ul", items: [
+      "**Services**: the components, applications and APIs that each provide one capability. They can live in one deployable [monolith or be split into microservices](/learn/monolith-vs-microservices); interview answers for large systems usually lean towards services that scale and deploy independently.",
+      "**Dataflow**: how data moves within and between services, including formats, protocols and patterns such as request/response, queues and streams. See [dataflow patterns](/learn/dataflow-patterns) and [synchronous vs asynchronous communication](/learn/sync-vs-async-communication).",
+      "**Storage**: the databases, caches and file or object stores that hold data, how the data is modeled, and how it is kept consistent and durable.",
+    ] },
+
+    { type: "h3", text: "Functional requirements" },
+    { type: "p", text: "Functional requirements are the features: what the system must do for its users. They come from user needs and business goals, and in a company they are usually written down in a product requirements document (PRD) so engineers and stakeholders agree on what is being built. Typical examples:" },
+    { type: "ol", items: [
+      "**User actions**: what a user can do, such as sign up, log in, post a photo or submit a form.",
+      "**Data input and processing**: how the system should transform data it receives, such as resizing an uploaded image or computing a feed from the accounts a user follows.",
+    ] },
+    { type: "h3", text: "Non-functional requirements" },
+    { type: "p", text: "Non-functional requirements describe how well the system must work rather than what it does. The big three are:" },
+    { type: "ul", items: [
+      "**Scalability**: handle growing traffic and data without slowing down, by scaling vertically or horizontally and planning for growth. See [scalability](/learn/scalability).",
+      "**Availability**: keep working through hardware and network failures, using redundancy, failover and health monitoring. See [availability](/learn/availability).",
+      "**Performance**: **latency** is how long one request takes; **throughput** is how much work the system completes per unit of time. See [latency vs throughput](/learn/latency-vs-throughput).",
+    ] },
+    { type: "p", text: "Three more come up often: **reliability** (the system returns correct results), **consistency** (different services and replicas agree on the data) and **efficiency** (no wasted or duplicated work). The [non-functional requirements guide](/learn/non-functional-requirements) covers each one with the patterns that deliver it." },
+
+    { type: "h2", text: "What the interview tests" },
+    { type: "p", text: "System design rounds test judgment and communication more than memorized facts. The interviewer wants to see whether you can:" },
+    { type: "ul", items: [
+      "**Break a vague, open-ended problem into parts** you can solve one at a time.",
+      "**Show real technical knowledge** of databases, caches, queues, stream and batch processing, and how they interact.",
+      "**Recognize patterns**: reusable architectures and design patterns that fit the problem.",
+      "**Reason about trade-offs**: every choice has a cost, so explain why you picked one option over another and when you would switch.",
+      "**Communicate clearly**: talk through your thinking, collaborate with the interviewer, and adjust when they add a constraint or push back. Real design work rarely goes in a straight line, and neither do these interviews.",
+    ] },
+    { type: "callout", text: "Naming a technology is not a reason. \"We use Kafka\" earns little; \"we put a queue between ingestion and processing so a slow consumer can't block writes, and we accept that downstream data is a few seconds stale\" earns a lot." },
+
+    { type: "h2", text: "The six-step interview template" },
+    { type: "p", text: "Below staff level, at most medium and large companies, a design round follows the same shape. Owning this template keeps you from spending 20 minutes on requirements or diving into one component before the whole system exists." },
+    { type: "diagram", kind: "flow", caption: "The standard system design interview, step by step. Estimation is often optional; most of the score is earned in the high-level design and the deep dive.", nodes: [
+      { id: "fr", label: "1. Functional requirements", sub: "what to build · ~4 min", col: 0, row: 0 },
+      { id: "nfr", label: "2. Non-functional requirements", sub: "scale, latency, consistency · ~3 min", col: 1, row: 0 },
+      { id: "est", label: "3. Resource estimation", sub: "optional · ~4 min", col: 2, row: 0, tone: "muted" },
+      { id: "api", label: "4. Core entities and APIs", sub: "nouns and verbs · ~5 min", col: 0, row: 1.3 },
+      { id: "hld", label: "5. High-level design", sub: "components and data flow · ~12 min", col: 1, row: 1.3 },
+      { id: "deep", label: "6. Deep dive", sub: "bottlenecks and trade-offs · ~15 min", col: 2, row: 1.3, tone: "accent" },
+    ], edges: [
+      { from: "fr", to: "nfr" }, { from: "nfr", to: "est" }, { from: "est", to: "api", dashed: true }, { from: "api", to: "hld" }, { from: "hld", to: "deep" },
+    ] },
+    { type: "h3", text: "1. Clarify the functional requirements" },
+    { type: "p", text: "Agree on what is in scope before drawing anything. Two questions do most of the work:" },
+    { type: "ul", items: [
+      "Which features are already handled by existing services or APIs (authentication, payments, a user directory)?",
+      "Which features do we actually need to build in this design?",
+    ] },
+    { type: "p", text: "For a [URL shortener](/learn/design-url-shortener) that means: can users choose custom aliases, do links expire, and do we need click analytics? Write the answers down; they are the yardstick for every later decision." },
+    { type: "h3", text: "2. Go through the non-functional requirements" },
+    { type: "p", text: "Walk through the qualities that matter for this problem and state targets where you can. A useful checklist is the **core six**:" },
+    { type: "ul", items: [
+      "**Scalability**: how many users or requests the system must handle.",
+      "**Availability**: how much downtime is acceptable, and therefore how much redundancy (for example [replication](/learn/replication)) is needed.",
+      "**Latency**: how fast responses must be. This depends on the product: a collaborative editor like Google Docs needs near-instant updates, while a file sync tool like Dropbox can take seconds.",
+      "**Reliability**: the service must consistently return correct, expected results.",
+      "**Consistency**: whether reads from different places must agree immediately, and which store is the source of truth.",
+      "**Efficiency**: avoiding redundant work and wasted resources.",
+    ] },
+    { type: "p", text: "Then check the special cases. **Privacy** is the common one: if you store emails, locations or other personal data, mention retention, deletion and regulations such as GDPR. Always tie each requirement to the problem in front of you rather than reciting the list." },
+    { type: "h3", text: "3. Estimate resources (optional)" },
+    { type: "p", text: "Many interviewers skip this and simply say \"lots of users\", especially for product questions like a social network or ride-sharing app. Estimates matter more for infrastructure questions such as a [rate limiter](/learn/rate-limiting) or a [distributed cache](/learn/distributed-caching), where the numbers decide the design. When you do estimate, ask:" },
+    { type: "ul", items: [
+      "How many **daily active users (DAU)** must the system support?",
+      "How long must data be kept (**retention**)?",
+    ] },
+    { type: "p", text: "Then estimate:" },
+    { type: "ul", items: [
+      "**QPS** (queries per second), split into reads and writes. See [QPS and load](/learn/measuring-load-qps).",
+      "**Concurrent connections**, if clients stay connected (for example WebSockets in a chat app like WhatsApp).",
+      "**Bandwidth** in GB/s, for video streaming or image hosting.",
+      "**Storage**, from retention × object size × number of objects.",
+      "**Likely bottlenecks**, such as a database that can't take the write QPS.",
+    ] },
+    { type: "p", text: "See [back-of-the-envelope estimation](/learn/back-of-the-envelope-estimation) for worked numbers." },
+    { type: "h3", text: "4. Define core entities and API endpoints" },
+    { type: "p", text: "**Core entities** are the domain objects needed to meet the functional requirements. For a social network they are users, posts, comments and likes. They usually become database tables, and they are easy to spot: they are the **nouns** in the requirements." },
+    { type: "p", text: "**APIs** are the contract between the service and its clients. Specify the REST endpoints with their request and response shapes, but only for the functional requirements; extra endpoints just burn time. The endpoints are the **verbs** in the requirements (post a tweet, follow a user, fetch a timeline). Some interviewers prefer this step after the high-level design if they find it too detailed." },
+    { type: "p", text: "If the server must push data to the client, say how: [WebSockets](/learn/real-time-communication) for two-way traffic such as chat, or Server-Sent Events for one-way updates such as live scores. The [problem decomposition framework](/learn/problem-decomposition-framework) turns verbs, nouns and adjectives into use cases, entities and constraints systematically." },
+    { type: "h3", text: "5. Draw the high-level design" },
+    { type: "p", text: "Sketch the system end to end. The diagram should show:" },
+    { type: "ul", items: [
+      "The **main components** and how they talk to each other.",
+      "The **data flow**: how a request and its data move through the system.",
+      "The **traffic pattern** where it matters, for example push vs pull for a [Twitter timeline](/learn/fan-out).",
+      "The **data model or schema**, and which fields need indexes.",
+    ] },
+    { type: "p", text: "Check that every functional requirement is covered, but don't go deep yet. Keep the diagram to the parts that are specific to this problem: common pieces like authentication exist in almost every system and are usually left out. Also avoid naming specific products too early. Stacking trendy technologies is a well-known red flag; interviewers read it as covering for weak fundamentals. The [system design template](/learn/system-design-template) gives a starting shape that fits most problems." },
+    { type: "h3", text: "6. Deep dive into the hard parts" },
+    { type: "p", text: "Now find the components that will break first, usually under scale, and change the design to handle them. This part is open-ended and driven by the conversation with your interviewer, and the non-functional requirements decide which problems matter." },
+    { type: "p", text: "For each problem, propose **more than one solution** and compare them. The trade-offs nearly always come down to balancing [scalability, latency and consistency](/learn/core-design-challenges). For a [chat system](/system-design/chat-system) the deep dives are usually connection management, message ordering and offline delivery; for a [news feed](/system-design/news-feed), fan-out on write vs on read and the celebrity problem." },
+    { type: "callout", text: "Practice rounds on this site state the core requirements in the brief so your time goes on estimation, APIs, the design and the deep dives. Still confirm scope out loud and ask about anything the brief leaves open, exactly as you would in a real interview." },
+
+    { type: "h3", text: "A time budget for 45 minutes" },
+    { type: "table", head: ["Phase", "Time", "What to do"], rows: [
+      ["Requirements (steps 1–2)", "5–7 min", "Features, users, scale targets and what is out of scope."],
+      ["Estimation (step 3)", "0–5 min", "QPS, read/write ratio, storage and bandwidth. Orders of magnitude are enough."],
+      ["Entities and API (step 4)", "3–5 min", "The handful of endpoints that matter. It forces precision about inputs and outputs."],
+      ["High-level design (step 5)", "10–12 min", "The whole path for the core operations: clients, services, storage, caches, queues."],
+      ["Deep dives (step 6)", "15 min", "The bottleneck, the data model, consistency and failure handling."],
+      ["Wrap-up", "3 min", "Summarize the key decisions, their costs, and what you would do next."],
+    ] },
+
+    { type: "h2", text: "Staff-level interviews" },
+    { type: "p", text: "For staff and above (Google L6+, Amazon Principal and equivalents) the template changes. Rote steps like back-of-the-envelope math or listing every API matter much less; they are tedious and crowd out the interesting parts. Quick arithmetic is still a useful skill, but at this level it is a bonus, not a deciding factor, so skip it unless asked." },
+    { type: "p", text: "Instead, expect hypotheticals that stretch the design: make it effectively infinitely scalable, or keep it correct through failures that would be rare in practice. The flow usually looks like this:" },
+    { type: "ol", items: [
+      "**Clarify the problem** with detailed questions until you understand it fully.",
+      "**Identify the core challenges**: name the few things that make this problem genuinely hard.",
+      "**Design a solution from simple components.** The idea may take experience to reach, but once stated it should be easy enough for a junior engineer to start building.",
+      "**Go deep with the interviewer** on the parts they choose.",
+    ] },
+    { type: "p", text: "Collaboration counts heavily at this level. Interviewers want to know you are easy to work with, so stay curious, invite pushback and build on their ideas." },
+
+    { type: "h2", text: "Startup interviews" },
+    { type: "p", text: "Early-stage startups hire differently. With little time and money, they need people who ship working products quickly and contribute from week one. So their design rounds focus on practical systems that can be built and deployed soon, not on extreme scale or rare edge cases." },
+    { type: "p", text: "Unlike big companies, where naming specific products is often discouraged, startups like it when you know their stack and use it in your design: it shows you would need little onboarding. To prepare:" },
+    { type: "ul", items: [
+      "**Learn their tech stack** from job posts, engineering blogs and the product itself.",
+      "**Design simple, practical solutions** that a small team could build in weeks.",
+      "**Show immediate value**: explain how you would deliver the first version and iterate.",
+    ] },
+
+    { type: "h2", text: "What each level is expected to show" },
+    { type: "p", text: "The biggest difference between levels is how much **ambiguity** you can handle. Mid-level candidates get well-defined problems with clear requirements. Senior candidates get deliberately vague prompts they must clarify and break down. Staff candidates work with extreme ambiguity and often have to define the problem itself." },
+    { type: "p", text: "Problem size grows with level too. L4 problems have a simple contract: given input A, return output B. L5 problems combine two or three concepts and leave room for choices. L6 problems either combine four or five subsystems or start from abstract goals that need real clarification before any design begins." },
+    { type: "table", head: ["", "L4 · mid-level", "L5 · senior", "L6 · staff"], rows: [
+      ["Problem scope", "Well-defined, with guidance", "Vague; you clarify and decompose", "Open-ended; you define the problem"],
+      ["Depth expected", "Surface-level understanding of each component", "Mechanisms and trade-offs behind each choice", "Failure modes, edge cases and why alternatives lose"],
+      ["Common topics", "Cache, database, load balancer, API design", "Replication, partitioning, queues, consistency", "Multi-region, consensus, cross-system correctness"],
+      ["Interview focus", "Running the template cleanly, knowing components, basic trade-offs", "Driving the design and choosing the right deep dives", "Finding the core challenges and leading the discussion"],
+    ] },
+    { type: "p", text: "**L4 in detail.** Problems like TinyURL (long URL in, short URL out) or a YouTube view counter (video ID in, count out) are solved problems with well-known answers. The interview is fairly mechanical: requirements, APIs, architecture, then a light deep dive. Because the answer is known, interviewers have little patience for a messy structure, so you must own the template. Know the basic building blocks (load balancer, cache, database, message queue), when to pick SQL or NoSQL, and vertical vs horizontal scaling. Deep dives stay shallow: \"LRU evicts the least recently used item\" is enough. Most L4 candidates fail on time management, not knowledge: they run out of time or present a disorganized design." },
+    { type: "p", text: "**How depth grows.** Take \"strong consistency\" as an example of the depth ladder:" },
+    { type: "ul", items: [
+      "**L4**: what it means (every read sees the latest write). Concept awareness.",
+      "**L5**: how you get it, for example by reading from the leader or using quorum reads and writes, and what it costs in latency and availability.",
+      "**L6**: when to give it up, which operations truly need it, and how replication, consensus and partitions interact. See [consistency models](/learn/consistency-models) and the [CAP theorem](/learn/cap-theorem).",
+    ] },
+
+    { type: "h2", text: "Why preparing is hard, and how to do it well" },
+    { type: "p", text: "System design is awkward to study for several reasons:" },
+    { type: "ul", items: [
+      "**Little formal teaching.** University courses cover theory, and there is rarely a course on designing real systems.",
+      "**Little exposure to scale.** Many engineers mostly wire APIs together or work on smaller projects, so they never see a large system's internals.",
+      "**Uneven free content.** Blog posts vary a lot in accuracy, and it is hard to tell which are right.",
+      "**Hard-to-read engineering blogs.** Company blogs describe real systems but assume a lot of background.",
+      "**Disorganized material.** Many books and courses jump between topics, leaving you unsure how to design something from scratch.",
+      "**Memorizing buzzwords.** Without a clear path, candidates memorize solutions, which collapses when the problem is new.",
+    ] },
+    { type: "p", text: "The fix is structured learning from first principles, hands-on projects where you can get them, and lots of practice designing from a blank page. [How to practice system design](/learn/how-to-practice-system-design) explains why memorizing answers fails and lays out a better study plan." },
+
+    { type: "h2", text: "The most common system design interview mistakes" },
+    { type: "ul", items: [
+      "**Designing before clarifying.** Jumping to components before agreeing on requirements and scale.",
+      "**Buzzword architecture.** Adding Kafka, Redis and microservices because they sound senior, not because the problem needs them.",
+      "**No numbers.** Claiming a design scales without any estimate of load or data size.",
+      "**One-sided choices.** Presenting decisions without their cost, such as eventual consistency or operational overhead.",
+      "**Ignoring failure.** Never discussing what happens when a dependency is slow or down.",
+      "**Poor time management.** Spending so long on one part that the design is never finished.",
+      "**Going silent.** The interviewer can only score reasoning you say out loud.",
+    ] },
+
+    { type: "h2", text: "How to practice: the loop that actually works" },
+    { type: "p", text: "Reading solutions builds recognition. Interviews test production: building a design from a blank page and defending it. That only improves with practice that looks like the real thing." },
+    { type: "ol", items: [
+      "**Pick a realistic prompt** with stated requirements and a time limit.",
+      "**Design it end to end** without looking at a solution, on a canvas or whiteboard rather than in your head.",
+      "**Write down why** for every significant component and connection, as if the interviewer had asked.",
+      "**Get feedback against a rubric**, from a peer, a mentor or an AI reviewer, so you see which dimension is weakest.",
+      "**Redo the same prompt** a few days later and compare. Improvement on a repeat attempt is the clearest sign you're learning.",
+    ] },
+    { type: "p", text: "That loop is what [DesignRounds](/) is built around: realistic briefs, an architecture canvas, an AI interviewer that asks why, and a [rubric-based review](/#how) of six dimensions. You can [start with a free round](/system-design/url-shortener). When you want to check your reasoning against a complete answer, read a worked problem such as [Design Twitter](/learn/design-twitter) or [Design Tinder](/learn/design-tinder)." },
+
+    { type: "h2", text: "A 4-week system design practice plan" },
+    { type: "table", head: ["Week", "Focus", "Practice"], rows: [
+      ["1", "Fundamentals and the framework", "Two beginner rounds, e.g. a [URL shortener](/system-design/url-shortener) and a [unique ID generator](/system-design/unique-id-generator). Focus on requirements, estimates and a clean high-level design."],
+      ["2", "Classic product systems", "A [chat system](/system-design/chat-system), a [notification service](/system-design/notification-service) and [search autocomplete](/system-design/autocomplete). Practice deep dives."],
+      ["3", "Scale and data", "A [news feed](/system-design/news-feed), [cloud file storage](/system-design/file-storage) and a [distributed cache](/system-design/distributed-cache). Focus on bottlenecks and storage choices."],
+      ["4", "Your target role", "Rounds from your discipline: [data engineering](/library/data-engineering), [ML](/library/machine-learning), [platform](/library/platform-infrastructure), [distributed systems](/library/distributed-systems) or [frontend](/library/frontend-mobile). Redo your weakest round from week 1."],
+    ] },
+
+    { type: "h2", text: "Start with these system design interview questions" },
+    { type: "rounds", ids: ["url-shortener", "chat-system", "news-feed", "notification-service", "autocomplete", "unique-id-generator"] },
+    { type: "p", text: "Browse every question by role and level in the [practice library](/library), or read the [full list of system design interview questions](/learn/system-design-interview-questions)." },
+
+    { type: "h2", text: "Frequently asked questions" },
+    { type: "h3", text: "How long does it take to prepare for a system design interview?" },
+    { type: "p", text: "It depends on your experience. Many engineers find that four to eight weeks of regular practice, with two or three complete designs a week, is enough to become comfortable with the format. Practicing full rounds matters more than total hours of reading." },
+    { type: "h3", text: "Do junior engineers get system design interviews?" },
+    { type: "p", text: "Often a lighter version, more common from mid-level roles up. Juniors are usually expected to produce a reasonable high-level design and explain basic trade-offs. Seniors are expected to drive the conversation, go deep and reason about failure." },
+    { type: "h3", text: "Do I need to know specific cloud services?" },
+    { type: "p", text: "Not for most big-company interviews: generic building blocks such as load balancers, caches, queues, relational and key-value stores are fine, and naming a product helps only if you can explain why it fits. Startups are the exception; there, knowing and using their stack is a plus." },
+    { type: "h3", text: "Is there a single right answer?" },
+    { type: "p", text: "No. Two very different designs can both score well if they meet the requirements and the trade-offs are explained. That is why practicing your reasoning matters more than memorizing reference architectures." },
   ],
-  "related": [
-    "back-of-the-envelope-estimation",
-    "scalability",
-    "cap-theorem",
-    "system-design-interview-questions"
-  ]
+  related: ["data-engineering-system-design-interview", "system-design-template", "problem-decomposition-framework", "core-design-challenges", "non-functional-requirements", "back-of-the-envelope-estimation", "how-to-practice-system-design", "system-design-interview-questions", "design-twitter"],
 };

@@ -87,7 +87,7 @@ const day = (value) => String(value).slice(0, 10);
 const lastmod = (url) => {
   const slug = url.startsWith(`${ssr.LEARN_PATH}/`) ? url.slice(ssr.LEARN_PATH.length + 1) : null;
   const topic = slug && ssr.topicMeta(slug);
-  if (topic) return topic.published ?? ssr.LEARN_UPDATED;
+  if (topic) return topic.updated ?? topic.published ?? ssr.LEARN_UPDATED;
   const article = slug && community.find((entry) => entry.slug === slug);
   if (article) return day(article.updatedAt ?? article.publishedAt);
   return url === ssr.LEARN_PATH ? ssr.LEARN_UPDATED : ssr.SITE_UPDATED;
@@ -102,7 +102,7 @@ ${paths.map((url) => `  <url><loc>${ssr.SITE.url}${url === "/" ? "/" : url}</loc
 // discover new guides as they're published.
 const xml = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const feed = [
-  ...ssr.TOPICS.map((topic) => ({ slug: topic.slug, title: topic.title, summary: topic.description, updated: topic.published ?? ssr.LEARN_UPDATED })),
+  ...ssr.TOPICS.map((topic) => ({ slug: topic.slug, title: topic.title, summary: topic.description, updated: topic.updated ?? topic.published ?? ssr.LEARN_UPDATED })),
   ...community.map((article) => ({ slug: article.slug, title: article.title, summary: article.description, updated: day(article.updatedAt ?? article.publishedAt) })),
 ].sort((a, b) => b.updated.localeCompare(a.updated));
 const learnUrl = `${ssr.SITE.url}${ssr.LEARN_PATH}`;
