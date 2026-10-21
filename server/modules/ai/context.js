@@ -48,7 +48,9 @@ export function describeDiagram(diagram) {
   lines.push("", `Connections (${edges.length}):`);
   const edgeLines = edges.map((edge) => {
     const arrow = edge.data?.bidirectional ? "<->" : "->";
-    let line = `- ${edge.source} ${arrow} ${edge.target}`;
+    // A free arrow end (pointNode) is an arrow drawn to or from nothing.
+    const end = (id) => (byId.get(id)?.type === "pointNode" ? "(nothing)" : id);
+    let line = `- ${end(edge.source)} ${arrow} ${end(edge.target)}`;
     if (edge.data?.style === "async") line += " [async]";
     if (edge.label) line += ` ${quoted(edge.label, 80)}`;
     const source = byId.get(edge.source);

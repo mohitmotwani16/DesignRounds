@@ -122,6 +122,18 @@ textarea.inline-edit { font-weight: 400; line-height: 1.5; resize: none; }
 .react-flow__handle.connectingto { background: var(--bg-5964d8) !important; }
 @media (hover: none) { .node-handle { opacity: 1; } }
 
+/* Free arrow end: invisible until hovered or selected so the arrowhead reads as pointing at nothing. */
+.point-node { position: relative; width: 14px; height: 14px; border: 1.5px dashed transparent; border-radius: 50%; cursor: move; }
+.react-flow__node-pointNode:hover .point-node, .point-node.node-selected { border-color: var(--bd-8992df); box-shadow: none !important; }
+.react-flow__node.point-snap .node-handle { opacity: 1; }
+.react-flow__node.point-snap > div { outline: 2px solid var(--bd-8992df); outline-offset: 3px; }
+/* Arrow ends show a grab dot on hover or selection; dragging one moves that end. */
+.react-flow__edge:not(.updating) .react-flow__edge-interaction { cursor: move; }
+body.dragging-edge, body.dragging-edge * { cursor: move !important; user-select: none; }
+.react-flow__edge:hover .react-flow__edgeupdater, .react-flow__edge.selected .react-flow__edgeupdater { fill: rgba(99, 111, 218, .16); stroke: rgba(99, 111, 218, .5); stroke-width: 1; }
+.react-flow__edge .react-flow__edgeupdater:hover { fill: rgba(99, 111, 218, .3); }
+.point-handle { top: 50% !important; left: 50% !important; right: auto !important; bottom: auto !important; width: 1px !important; height: 1px !important; min-width: 0 !important; min-height: 0 !important; border: 0 !important; background: transparent !important; transform: translate(-50%, -50%) !important; pointer-events: none !important; }
+
 .group-node { position: relative; width: 100%; height: 100%; border: 1.5px dashed var(--bd-b8c1cf); border-radius: 14px; background: rgba(238, 241, 246, .55); }
 .group-node.node-color-blue { border-color: var(--bd-a9c0ea); background: rgba(234, 241, 252, .6); }
 .group-node.node-color-violet { border-color: var(--bd-c1b9ec); background: rgba(240, 238, 252, .6); }

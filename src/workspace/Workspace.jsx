@@ -13,9 +13,9 @@ import { Brand, FullPageMessage, UserMenu } from "../components/ui.jsx";
 import { openReportProblem } from "../components/ReportProblem.jsx";
 import { navigate } from "../router.js";
 import { getItem } from "./catalog.jsx";
-import { createNode, decorateEdge, hydrateDiagram, newId, serializeDiagram } from "./diagram.js";
+import { createNode, createPoint, POINT_SIZE, decorateEdge, entrySide, hydrateDiagram, newId, nodeCenter, routeCenter, serializeDiagram, snapTarget, strayPoints } from "./diagram.js";
 import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
-import { CanvasActions, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
+import { CanvasActions, edgeTypes, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
 import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from "./CanvasTour.jsx";
 import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
@@ -319,7 +319,28 @@ function Workspace({ session, prompt }) {
     });
     if (children.length) groupDrag.current = { start: node.position, children: new Map(children.map((entry) => [entry.id, entry.position])) };
   }, [record]);
-  const onNodeDrag = useCallback((_event, node) => {
+  // Dragging a free arrow end onto a box attaches the arrow there; the box lights up first.
+  const snapHighlight = useRef(null);
+  const pointSnap = (node) => {
+    const center = { x: node.position.x + POINT_SIZE / 2, y: node.position.y + POINT_SIZE / 2 };
+    const ends = new Set([node.id]);
+    for (const edge of edgesRef.current) {
+      if (edge.target === node.id) ends.add(edge.source);
+      if (edge.source === node.id) ends.add(edge.target);
+    }
+    const other = nodesRef.current.find((entry) => entry.id !== node.id && ends.has(entry.id));
+    return snapTarget(nodesRef.current, center, ends, other && nodeCenter(other));
+  };
+  const highlightSnap = (id) => {
+    if (snapHighlight.current === id) return;
+    const find = (nodeId) => canvasRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(nodeId)}"]`);
+    if (snapHighlight.current) find(snapHighlight.current)?.classList.remove("point-snap");
+    if (id) find(id)?.classList.add("point-snap");
+    snapHighlight.current = id;
+  };
+
+  const onNodeDrag = useCallback((_event, node, dragged) => {
+    if (node.type === "pointNode" && dragged.length === 1) highlightSnap(pointSnap(node)?.id ?? null);
     const drag = groupDrag.current;
     if (!drag) return;
     const dx = node.position.x - drag.start.x;
@@ -329,13 +350,199 @@ function Workspace({ session, prompt }) {
       return origin ? { ...entry, position: { x: origin.x + dx, y: origin.y + dy } } : entry;
     }));
   }, [setNodes]);
-  const onNodeDragStop = useCallback(() => { groupDrag.current = null; }, []);
+  const onNodeDragStop = useCallback((_event, node, dragged) => {
+    groupDrag.current = null;
+    highlightSnap(null);
+    if (readOnlyRef.current || node.type !== "pointNode" || dragged.length !== 1) return;
+    const target = pointSnap(node);
+    if (!target) return;
+    // The drag already recorded an undo step; the orphaned end is pruned below.
+    setEdges((current) => current.map((edge) => {
+      if (edge.target === node.id) return { ...edge, target: target.id, targetHandle: target.side };
+      if (edge.source === node.id) return { ...edge, source: target.id, sourceHandle: target.side };
+      return edge;
+    }));
+  }, [setEdges]);
 
+  // React Flow attaches to any dot within connectionRadius of the pointer, so a drop in
+  // the middle of a short box lands on its top or bottom dot. After a drop, the end is
+  // moved to the side facing the arrow's other end unless the pointer was right on a dot.
+  const faceDrop = useCallback((event, edgeId, nodeId, fromId) => {
+    const fromNode = nodesRef.current.find((node) => node.id === fromId);
+    if (!fromNode) return;
+    const pointer = "changedTouches" in event ? event.changedTouches[0] : event;
+    const at = reactFlow.screenToFlowPosition({ x: pointer.clientX, y: pointer.clientY });
+    const target = snapTarget(nodesRef.current, at, new Set([fromId]), nodeCenter(fromNode));
+    if (target?.id !== nodeId) return;
+    setEdges((current) => current.map((edge) => {
+      if (edge.id !== edgeId) return edge;
+      if (edge.target === nodeId) return { ...edge, targetHandle: target.side };
+      if (edge.source === nodeId) return { ...edge, sourceHandle: target.side };
+      return edge;
+    }));
+  }, [reactFlow, setEdges]);
+
+  const lastConnected = useRef(null);
   const onConnect = useCallback((connection) => {
     if (readOnlyRef.current) return;
     record();
-    setEdges((current) => addEdge(decorateEdge({ ...connection, id: newId("edge"), data: {} }), current));
+    const id = newId("edge");
+    lastConnected.current = id;
+    setEdges((current) => addEdge(decorateEdge({ ...connection, id, data: {} }), current));
   }, [record, setEdges]);
+
+  // An arrow released on empty canvas stays there, ending at a free point (issue #84).
+  const onConnectEnd = useCallback((event, connection) => {
+    // Moving an existing arrow's end also lands here; onReconnectEnd handles that.
+    if (reconnecting.current) return;
+    const connected = lastConnected.current;
+    lastConnected.current = null;
+    if (connected && connection.isValid && connection.fromNode && connection.toNode) {
+      faceDrop(event, connected, connection.toNode.id, connection.fromNode.id);
+      return;
+    }
+    if (readOnlyRef.current || connection.isValid || connection.toHandle || !connection.fromNode || !connection.fromHandle) return;
+    const pointer = "changedTouches" in event ? event.changedTouches[0] : event;
+    // Only on bare canvas: releasing over a box (but off its handles) still cancels.
+    if (!document.elementFromPoint(pointer.clientX, pointer.clientY)?.closest(".react-flow__pane")) return;
+    const from = connection.from;
+    const at = alignTo(from, reactFlow.screenToFlowPosition({ x: pointer.clientX, y: pointer.clientY }));
+    // A press on the handle without a real drag isn't an arrow.
+    if (from && Math.hypot(at.x - from.x, at.y - from.y) < 24) return;
+    const point = createPoint(at);
+    record();
+    setNodes((current) => [...current, point]);
+    setEdges((current) => addEdge(decorateEdge({
+      id: newId("edge"), source: connection.fromNode.id, sourceHandle: connection.fromHandle.id,
+      target: point.id, targetHandle: entrySide(from ?? at, at), data: {},
+    }), current));
+  }, [reactFlow, record, faceDrop, setNodes, setEdges]);
+
+  // Either end of any arrow can be dragged somewhere else: onto a box's dot or body
+  // (attaches there) or onto bare canvas (becomes a free end there).
+  const reconnecting = useRef(null);
+  const onReconnectStart = useCallback((event, edge, fixedType) => {
+    reconnecting.current = { moved: fixedType === "source" ? "target" : "source", x: event.clientX, y: event.clientY };
+  }, []);
+  // Points the dragged end of `edge` at a node and handle.
+  const moveEnd = (edge, moved, node, handle) => (moved === "target"
+    ? { ...edge, target: node, targetHandle: handle }
+    : { ...edge, source: node, sourceHandle: handle });
+  const onReconnect = useCallback((oldEdge, connection) => {
+    const drag = reconnecting.current;
+    if (readOnlyRef.current || !drag) return;
+    // In loose mode the connection may come back in either direction; the new end is
+    // whichever side isn't the arrow's fixed end.
+    const fixed = drag.moved === "target" ? { node: oldEdge.source, handle: oldEdge.sourceHandle } : { node: oldEdge.target, handle: oldEdge.targetHandle };
+    const keptAsSource = connection.source === fixed.node && (connection.sourceHandle ?? null) === (fixed.handle ?? null);
+    const node = keptAsSource ? connection.target : connection.source;
+    const handle = keptAsSource ? connection.targetHandle : connection.sourceHandle;
+    drag.done = { node };
+    record();
+    setEdges((current) => current.map((edge) => (edge.id === oldEdge.id ? moveEnd(edge, drag.moved, node, handle) : edge)));
+  }, [record, setEdges]);
+  const onReconnectEnd = useCallback((event, oldEdge) => {
+    const drag = reconnecting.current;
+    reconnecting.current = null;
+    if (readOnlyRef.current || !drag) return;
+    if (drag.done) {
+      faceDrop(event, oldEdge.id, drag.done.node, drag.moved === "target" ? oldEdge.source : oldEdge.target);
+      return;
+    }
+    const pointer = "changedTouches" in event ? event.changedTouches[0] : event;
+    if (Math.hypot(pointer.clientX - drag.x, pointer.clientY - drag.y) < 4) return;
+    const under = document.elementFromPoint(pointer.clientX, pointer.clientY);
+    if (!under?.closest(".react-flow__pane, .react-flow__node")) return;
+    const at = reactFlow.screenToFlowPosition({ x: pointer.clientX, y: pointer.clientY });
+    const fixedId = drag.moved === "target" ? oldEdge.source : oldEdge.target;
+    const fixedNode = nodesRef.current.find((node) => node.id === fixedId);
+    const from = fixedNode ? nodeCenter(fixedNode) : at;
+    const target = snapTarget(nodesRef.current, at, new Set([fixedId]), from);
+    record();
+    if (target) {
+      setEdges((current) => current.map((edge) => (edge.id === oldEdge.id ? moveEnd(edge, drag.moved, target.id, target.side) : edge)));
+      return;
+    }
+    if (under.closest(".react-flow__node")) return;
+    const point = createPoint(alignTo(from, at));
+    setNodes((current) => [...current, point]);
+    setEdges((current) => current.map((edge) => (edge.id === oldEdge.id ? moveEnd(edge, drag.moved, point.id, entrySide(from, at)) : edge)));
+  }, [reactFlow, record, faceDrop, setNodes, setEdges]);
+
+  // Dragging an arrow by its line bends it, draw.io style: the grabbed segment slides
+  // perpendicular to itself (a horizontal one up/down, a vertical one left/right), the
+  // ends stay attached and the route keeps right angles (see routeEdge).
+  const edgeDrag = useRef(null);
+  const onEdgePointerDown = (event) => {
+    if (readOnlyRef.current || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
+    const element = event.target instanceof Element ? event.target : null;
+    if (!element || element.closest(".react-flow__edgeupdater") || !element.closest(".react-flow__edge-path, .react-flow__edge-interaction")) return;
+    const wrapper = element.closest(".react-flow__edge");
+    const id = wrapper?.getAttribute("data-id");
+    const edge = id && edgesRef.current.find((entry) => entry.id === id);
+    const line = wrapper?.querySelector(".react-flow__edge-path");
+    if (!edge || !line) return;
+    const length = line.getTotalLength();
+    if (!length) return;
+    // Which way the line runs where it was grabbed: the nearest sample's direction.
+    const at = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    let nearest = 0;
+    let best = Infinity;
+    const step = Math.max(2, length / 200);
+    for (let offset = 0; offset <= length; offset += step) {
+      const point = line.getPointAtLength(offset);
+      const distance = Math.hypot(point.x - at.x, point.y - at.y);
+      if (distance < best) { best = distance; nearest = offset; }
+    }
+    const before = line.getPointAtLength(Math.max(0, nearest - 3));
+    const after = line.getPointAtLength(Math.min(length, nearest + 3));
+    const axis = Math.abs(after.x - before.x) >= Math.abs(after.y - before.y) ? "y" : "x";
+    const start = line.getPointAtLength(0);
+    const end = line.getPointAtLength(length);
+    const center = routeCenter({
+      sourceX: start.x, sourceY: start.y, sourcePosition: edge.sourceHandle || "bottom",
+      targetX: end.x, targetY: end.y, targetPosition: edge.targetHandle || "top",
+    });
+    // The new run starts where the grabbed segment is, so it stays under the pointer.
+    edgeDrag.current = { id, axis, x: event.clientX, y: event.clientY, run: at[axis], center: center[axis], started: false };
+  };
+  useEffect(() => {
+    const onMove = (event) => {
+      const drag = edgeDrag.current;
+      if (!drag) return;
+      if (!drag.started) {
+        if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
+        drag.started = true;
+        record();
+        document.body.classList.add("dragging-edge");
+      }
+      const moved = (drag.axis === "x" ? event.clientX - drag.x : event.clientY - drag.y) / reactFlow.getZoom();
+      // Never exactly zero, which would mean "unbent".
+      const offset = Math.round(drag.run + moved - drag.center) || 1;
+      const bend = drag.axis === "x" ? { x: offset, y: 0 } : { x: 0, y: offset };
+      setEdges((current) => current.map((edge) => (edge.id === drag.id ? { ...edge, data: { ...edge.data, bend } } : edge)));
+    };
+    const onUp = () => {
+      if (edgeDrag.current?.started) document.body.classList.remove("dragging-edge");
+      edgeDrag.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [reactFlow, record, setEdges]);
+
+  // A free arrow end goes with its last arrow (deleting the arrow or the box it came from).
+  useEffect(() => {
+    const strays = strayPoints(nodes, edges);
+    if (!strays.length) return;
+    const ids = new Set(strays.map((node) => node.id));
+    setNodes((current) => current.filter((node) => !ids.has(node.id)));
+  }, [nodes, edges, setNodes]);
 
   const onBeforeDelete = useCallback(async () => {
     if (readOnlyRef.current) return false;
@@ -534,11 +741,14 @@ function Workspace({ session, prompt }) {
   // ---- Derived view state --------------------------------------------------
 
   const outlineKey = nodes.map((node) => `${node.id}\u0001${node.data.kind}\u0001${node.data.label}`).join("\u0002");
-  const outline = useMemo(() => nodesRef.current.map((node) => ({ id: node.id, kind: node.data.kind, label: node.data.label })), [outlineKey]);
+  const outline = useMemo(() => nodesRef.current.filter((node) => node.type !== "pointNode").map((node) => ({ id: node.id, kind: node.data.kind, label: node.data.label })), [outlineKey]);
   const selectedKey = selectedNodes.map((node) => node.id).join(",");
   const selectedIds = useMemo(() => new Set(selectedKey ? selectedKey.split(",") : []), [selectedKey]);
   const canvasActions = useMemo(() => ({ commitNodeData, readOnly }), [commitNodeData, readOnly]);
-  const labelFor = (id) => nodes.find((node) => node.id === id)?.data.label || "Component";
+  const labelFor = (id) => {
+    const node = nodes.find((entry) => entry.id === id);
+    return node?.type === "pointNode" ? "Open end" : node?.data.label || "Component";
+  };
 
   const saveLabel = readOnly ? "Read-only" : { saved: "Saved", saving: "Saving…", error: "Offline, retrying", conflict: "Not saved", "signed-out": "Signed out" }[saveState];
 
@@ -633,15 +843,22 @@ function Workspace({ session, prompt }) {
               {!panelOpen && <button className="topbar-action button-chat-reopen" onClick={togglePanel}><MessageSquare size={13} /> {panelTab === "review" ? "Review" : "Interviewer"}{unread > 0 && <span className="tab-badge">{unread}</span>}</button>}
             </div>
           </div>
-          <div className="canvas-content" data-tour="canvas" ref={canvasRef} onPointerDownCapture={() => { pointerDown.current = true; }}>
+          <div className="canvas-content" data-tour="canvas" ref={canvasRef} onPointerDownCapture={(event) => { pointerDown.current = true; onEdgePointerDown(event); }}>
             <CanvasActions.Provider value={canvasActions}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onConnectEnd={onConnectEnd}
+                onReconnect={onReconnect}
+                onReconnectStart={onReconnectStart}
+                onReconnectEnd={onReconnectEnd}
+                edgesReconnectable={!readOnly}
+                reconnectRadius={12}
                 onBeforeDelete={onBeforeDelete}
                 onNodeClick={onNodeClick}
                 onNodeDragStart={onNodeDragStart}
@@ -676,7 +893,7 @@ function Workspace({ session, prompt }) {
               >
                 <Background variant={BackgroundVariant.Dots} color={isDark ? "#363c49" : "#cfd6e0"} gap={18} size={1.3} />
                 <Controls showInteractive={false} position="bottom-left" />
-                {showMinimap && <MiniMap position="bottom-right" zoomable pannable nodeStrokeWidth={0} nodeColor={(node) => minimapColors[node.data.color || getItem(node.data.kind)?.color] || minimapColors.slate} maskColor={isDark ? "rgba(20,23,29,0.72)" : "rgba(248,249,251,0.72)"} />}
+                {showMinimap && <MiniMap position="bottom-right" zoomable pannable nodeStrokeWidth={0} nodeColor={(node) => node.type === "pointNode" ? "transparent" : minimapColors[node.data.color || getItem(node.data.kind)?.color] || minimapColors.slate} maskColor={isDark ? "rgba(20,23,29,0.72)" : "rgba(248,249,251,0.72)"} />}
               </ReactFlow>
             </CanvasActions.Provider>
 
@@ -689,7 +906,7 @@ function Workspace({ session, prompt }) {
               </div>
             )}
 
-            {singleNode && inspectedId === singleNode.id && (
+            {singleNode && inspectedId === singleNode.id && singleNode.type !== "pointNode" && (
               <NodeInspector id={singleNode.id} type={singleNode.type} data={singleNode.data} readOnly={readOnly}
                 onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection}
                 ask={interview.access !== "full" ? "plus" : status !== "in_progress" ? "finished" : "available"} onAsk={askAboutSelection} />
@@ -722,10 +939,17 @@ function Workspace({ session, prompt }) {
   );
 }
 
+// A free arrow end dropped almost in line with where the arrow starts snaps into line,
+// so the arrow is straight instead of taking a tiny step.
+function alignTo(from, at, slack = 12) {
+  if (!from) return at;
+  return { x: Math.abs(at.x - from.x) < slack ? from.x : at.x, y: Math.abs(at.y - from.y) < slack ? from.y : at.y };
+}
+
 // Nearest grid slot (spiralling out from the preferred point) that doesn't overlap a component.
 function findFreeSpot(nodes, preferred, size = { width: 178, height: 64 }) {
   const gap = 24;
-  const solid = nodes.filter((node) => node.type !== "groupNode");
+  const solid = nodes.filter((node) => node.type !== "groupNode" && node.type !== "pointNode");
   const overlaps = (x, y) => solid.some((node) => {
     const width = node.measured?.width ?? node.width ?? size.width;
     const height = node.measured?.height ?? node.height ?? size.height;

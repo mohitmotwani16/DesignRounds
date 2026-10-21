@@ -1,7 +1,8 @@
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
-import { Handle, NodeResizer, Position } from "@xyflow/react";
+import { BaseEdge, Handle, NodeResizer, Position } from "@xyflow/react";
 import { Server, StickyNote } from "lucide-react";
 import { getItem } from "./catalog.jsx";
+import { routeEdge } from "./diagram.js";
 
 // Lets nodes commit inline edits through the workspace (so they join undo history).
 export const CanvasActions = createContext({ commitNodeData: () => {}, readOnly: false });
@@ -111,4 +112,30 @@ export const NoteNode = memo(function NoteNode({ id, data, selected }) {
   );
 });
 
-export const nodeTypes = { systemNode: SystemNode, groupNode: GroupNode, textNode: TextNode, noteNode: NoteNode };
+// The free end of an arrow dropped on empty canvas. All four handles sit on the dot;
+// the arrow picks the side it approaches from. Arrows can end here but not start here,
+// so a drag on the dot always moves it.
+export const PointNode = memo(function PointNode({ selected }) {
+  return (
+    <div className={`point-node ${selected ? "node-selected" : ""}`} title="Free arrow end: drag to move">
+      {sides.map(([id, position]) => <Handle key={id} id={id} type="source" position={position} isConnectableStart={false} className="point-handle" />)}
+    </div>
+  );
+});
+
+// A right-angled arrow whose segments can be dragged aside (see routeEdge).
+export const BendableEdge = memo(function BendableEdge({
+  id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, data, style, markerStart, markerEnd, interactionWidth,
+  label, labelStyle, labelShowBg, labelBgStyle, labelBgPadding, labelBgBorderRadius,
+}) {
+  const { path, labelX, labelY } = routeEdge({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }, data?.bend);
+  return (
+    <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={interactionWidth}
+      label={label} labelX={labelX} labelY={labelY} labelStyle={labelStyle} labelShowBg={labelShowBg} labelBgStyle={labelBgStyle}
+      labelBgPadding={labelBgPadding} labelBgBorderRadius={labelBgBorderRadius} />
+  );
+});
+
+export const edgeTypes = { bendable: BendableEdge };
+
+export const nodeTypes = { systemNode: SystemNode, groupNode: GroupNode, textNode: TextNode, noteNode: NoteNode, pointNode: PointNode };

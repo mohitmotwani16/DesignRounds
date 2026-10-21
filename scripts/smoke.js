@@ -415,12 +415,22 @@ try {
     assert.equal(started.status, 201);
     session = started.body.session;
     const node = (id, kind, label) => ({ id, type: "systemNode", position: { x: 0, y: 0 }, data: { kind, label, note: `Why ${label}` } });
+    // Includes an arrow to nothing (a free end, pointNode) and a bent arrow (issue #84).
     const diagram = {
-      nodes: [node("n1", "client", "Web client"), node("n2", "api-gateway", "Gateway"), node("n3", "service", "App service"), node("n4", "postgres", "Database")],
-      edges: [{ id: "e1", source: "n1", target: "n2" }, { id: "e2", source: "n2", target: "n3" }, { id: "e3", source: "n3", target: "n4" }],
+      nodes: [
+        node("n1", "client", "Web client"), node("n2", "api-gateway", "Gateway"), node("n3", "service", "App service"), node("n4", "postgres", "Database"),
+        { id: "p1", type: "pointNode", position: { x: 400, y: 0 }, data: { kind: "point", label: "" } },
+      ],
+      edges: [
+        { id: "e1", source: "n1", target: "n2" }, { id: "e2", source: "n2", target: "n3", data: { bend: { x: 0, y: -40 } } },
+        { id: "e3", source: "n3", target: "n4" }, { id: "e4", source: "n4", target: "p1", sourceHandle: "right", targetHandle: "left", label: "backups" },
+      ],
     };
     const saved = await call("PUT", `/api/v1/sessions/${session.id}/diagram`, { version: session.diagramVersion, diagram });
     assert.equal(saved.status, 200);
+    const reloaded = (await call("GET", `/api/v1/sessions/${session.id}`)).body.session.diagram;
+    assert.equal(reloaded.nodes.find((entry) => entry.id === "p1")?.type, "pointNode", "a free arrow end is kept");
+    assert.deepEqual(reloaded.edges.find((entry) => entry.id === "e2")?.data?.bend, { x: 0, y: -40 }, "an arrow's bend is kept");
     const stale = await call("PUT", `/api/v1/sessions/${session.id}/diagram`, { version: session.diagramVersion, diagram });
     assert.equal(stale.status, 409, "a stale version must not overwrite newer work");
     assert.equal((await call("PATCH", `/api/v1/sessions/${session.id}`, { status: "completed" })).status, 200);

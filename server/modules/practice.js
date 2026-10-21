@@ -18,7 +18,7 @@ const finite = z.number().finite().min(-1e6).max(1e6);
 const id = z.string().min(1).max(80);
 const nodeSchema = z.object({
   id,
-  type: z.enum(["systemNode", "groupNode", "textNode", "noteNode"]),
+  type: z.enum(["systemNode", "groupNode", "textNode", "noteNode", "pointNode"]),
   position: z.object({ x: finite, y: finite }),
   width: z.number().finite().min(20).max(4000).optional(),
   height: z.number().finite().min(20).max(4000).optional(),
@@ -41,6 +41,7 @@ const edgeSchema = z.object({
   data: z.object({
     style: z.enum(["sync", "async"]).optional(),
     bidirectional: z.boolean().optional(),
+    bend: z.object({ x: finite, y: finite }).optional(),
   }).optional(),
 });
 const diagramSchema = z.object({
