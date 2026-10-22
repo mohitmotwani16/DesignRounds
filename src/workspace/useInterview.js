@@ -7,11 +7,11 @@ import { playChime, primeChime } from "./chime.js";
 const QUIET_MS = 20_000;
 const MIN_CHECK_GAP_MS = 45_000;
 // How often a visible v3 round ticks (the server rate-limits ticks on its own).
-const VISIBLE_TICK_MS = 60_000;
+const VISIBLE_TICK_MS = 15_000;
 
 // Interview state for a round. Lives in the workspace (not the panel) so the
 // conversation survives hiding the panel or switching to the Review tab.
-export function useInterview({ sessionId, plan, roundActive, structureKey, settleSave, selectedIdRef, onProactiveTurn }) {
+export function useInterview({ sessionId, plan, roundActive, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose }) {
   const [data, setData] = useState({ status: "loading" });
   const [pending, setPending] = useState(false);
   const [sendError, setSendError] = useState(null);
@@ -149,8 +149,12 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     if (pendingRef.current || tickingRef.current) return;
     tickingRef.current = true;
     try {
-      if (reason === "canvas_quiet") await settleSave();
+      await settleSave();
       const result = await api.interviewTick(sessionId, { reason, typing: typingRef.current, selectedNodeId: selectedIdRef.current });
+      if (result.action === "closed") {
+        onIdleClose?.();
+        return;
+      }
       if ((result.action === "ask" || result.action === "say") && result.turn) {
         appendTurns([result.turn], { state: result.state, allowance: result.allowance });
         playChime();
@@ -161,7 +165,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
     } finally {
       tickingRef.current = false;
     }
-  }, [sessionId, settleSave, selectedIdRef, onProactiveTurn]);
+  }, [sessionId, settleSave, selectedIdRef, onProactiveTurn, onIdleClose]);
 
   // Look at the canvas after it has been quiet for a while.
   const firstKey = useRef(structureKey);

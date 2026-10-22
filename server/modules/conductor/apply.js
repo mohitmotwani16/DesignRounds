@@ -8,6 +8,11 @@ import { CLOSED, OPENING_MOVES, STAGES, bandAtLeast, betterBand } from "./moves.
 const stageIndex = (stage) => STAGES.indexOf(stage);
 const MAX_EVIDENCE = 6;
 
+export function nextPoorResponseState({ assessment, focusItemId, streak, itemId }) {
+  if (!assessment || assessment.itemId !== focusItemId || assessment.band !== "weak") return { streak: 0, itemId: null };
+  return { streak: itemId === focusItemId ? streak + 1 : 1, itemId: focusItemId };
+}
+
 function closeAs(item, band, move) {
   if (move === "acknowledge_advance" || move === "move_on" || move === "wrap_up") {
     if (bandAtLeast(band, "adequate")) return "answered";

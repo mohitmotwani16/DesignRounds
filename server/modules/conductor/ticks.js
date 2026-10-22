@@ -27,18 +27,27 @@ export const WRAP_UP_TEXT = "We're about at time, so let's wrap up. Give me a sh
 // At time with a canvas too thin to review: the design has to be drawn before it can be reviewed.
 export const WRAP_UP_DRAW_TEXT = "We're about at time, so let's wrap up. First, get your design onto the canvas: the main components and how requests flow between them, since the review is of what you draw. Then give me a short summary, the biggest risk you see, and what you'd improve with more time.";
 export const IDLE_NUDGE_TEXT = "Take your time. Want to talk me through what you're thinking so far, or would a hint help?";
+export const IDLE_HINT_TEXT = "Start with the main request path: which component receives it first, and where does it go next?";
 export const DRAWING_NUDGE_TEXT = "Talk me through what you've drawn so far. What's the flow for the main request?";
 
 const since = (at, now) => (at ? now - new Date(at).getTime() : Infinity);
 
 // `context` is everything the decision needs, gathered by the caller:
 //   typing, pending, now, mode, conventions, clock, timeWarnings, stage
-//   lastTurn { role, kind, at }, lastLearnerAt, lastProactiveAt, lastNudgeAt,
+//   lastTurn { role, kind, at }, idleSinceAt, lastIdleHintAt, lastLearnerAt,
+//   lastProactiveAt, lastNudgeAt,
 //   proactiveLeft, focusExhausted, canvas { itemId, unexplained, major, changedSinceLearner }
 export function decideTick(context) {
-  const { typing, pending, now, mode, conventions, clock, timeWarnings, stage, lastTurn, lastLearnerAt, lastProactiveAt, lastNudgeAt, proactiveLeft, focusExhausted, canvas, canvasThin = false } = context;
+  const { typing, pending, now, mode, conventions, clock, timeWarnings, stage, lastTurn, idleSinceAt, lastIdleHintAt, lastLearnerAt, lastProactiveAt, lastNudgeAt, proactiveLeft, focusExhausted, canvas, canvasThin = false } = context;
   if (pending) return { action: "none", why: "busy" };
   if (typing) return { action: "none", why: "typing" };
+
+  const idleMs = idleSinceAt ? since(idleSinceAt, now) : 0;
+  const alreadyNudged = idleSinceAt && lastNudgeAt && new Date(lastNudgeAt) >= new Date(idleSinceAt);
+  const alreadyHinted = idleSinceAt && lastIdleHintAt && new Date(lastIdleHintAt) >= new Date(idleSinceAt);
+  if (idleMs >= 120_000) return { action: "close", why: "idle" };
+  if (idleMs >= 60_000 && !alreadyHinted) return { action: "template", move: "idle_hint", text: IDLE_HINT_TEXT };
+  if (idleMs >= 30_000 && !alreadyNudged) return { action: "template", move: "nudge", text: IDLE_NUDGE_TEXT };
 
   // Time thresholds, each announced once. At 100% the round moves to wrap-up.
   const share = clock.roundElapsedMs / clock.roundBudgetMs;
@@ -61,13 +70,9 @@ export function decideTick(context) {
   if (canvas?.unexplained && canvas.itemId && !cooling && !canvasWait && proactiveLeft > 0) {
     return { action: "model", kind: "canvas", itemId: canvas.itemId };
   }
-  const nudgedRecently = since(lastNudgeAt, now) < conventions.idleNudgeMs;
   // Silent for a while with a question waiting.
-  if (lastTurn?.role === "interviewer" && QUESTION_KINDS.has(lastTurn.kind) && since(lastTurn.at, now) >= conventions.idleNudgeMs && !nudgedRecently) {
-    return { action: "template", move: "nudge", text: IDLE_NUDGE_TEXT };
-  }
   // Drawing for a while without saying anything.
-  if (canvas?.changedSinceLearner && since(lastLearnerAt, now) >= conventions.drawingWithoutTalkingMs && !nudgedRecently && lastTurn?.kind !== "nudge") {
+  if (canvas?.changedSinceLearner && since(lastLearnerAt, now) >= conventions.drawingWithoutTalkingMs && !alreadyNudged && lastTurn?.kind !== "nudge") {
     return { action: "template", move: "nudge", text: DRAWING_NUDGE_TEXT };
   }
   return { action: "none", why: canvas?.major || canvas?.unexplained ? "not_now" : "nothing_to_ask" };

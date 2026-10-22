@@ -14,7 +14,7 @@ import { limitsFor } from "../plans.js";
 import { promptById } from "../rounds.js";
 import { TOPICS } from "../../../src/learn/catalog.js";
 import { candidateSnapshot, conventions as ucsConventions, defaultMode, renderUniversal, ucsVersion } from "../ucs/index.js";
-import { applyTurn } from "./apply.js";
+import { applyTurn, nextPoorResponseState } from "./apply.js";
 import { canvasSignals } from "./canvas.js";
 import { assembleBlocks } from "./assemble.js";
 import { CLOSED, FOCUS_AREAS, KIND_FOR_MOVE, bandAtLeast } from "./moves.js";
@@ -223,9 +223,28 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
     conversation: conversationOf(turns),
   });
   const selected = selectedNodeId && design.labels.has(selectedNodeId) ? { id: selectedNodeId, label: design.labels.get(selectedNodeId) } : null;
-  const { verified, data, flags } = await converse({ ctx, session, user, turns, plan, trigger, learner: reserved.learner, selected, onDelta, onReset });
+  let { verified, data, flags } = await converse({ ctx, session, user, turns, plan, trigger, learner: reserved.learner, selected, onDelta, onReset });
+  const focusAssessment = verified.assessments.find((assessment) => assessment.itemId === plan.focusItemId);
+  const poorResponse = nextPoorResponseState({ assessment: focusAssessment, focusItemId: plan.focusItemId, streak: round.poorResponseStreak, itemId: round.poorResponseItemId });
+  const poorResponseStreak = poorResponse.streak;
+  const poorResponseItemId = poorResponse.itemId;
+  if (poorResponseStreak >= 3) {
+    const move = plan.nextItemId ? "move_on" : "wrap_up";
+    onReset?.();
+    verified = {
+      ...verified,
+      move,
+      focusItemId: move === "move_on" ? plan.nextItemId : null,
+      message: move === "move_on"
+        ? `Let's try a different angle. ${agenda.get(plan.nextItemId)?.opener ?? ""}`.trim()
+        : WRAP_UP_TEXT,
+      nodeIds: [],
+      coveredNodeIds: [],
+    };
+  }
   const result = applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: reserved.learner.seq, interviewerSeq: reserved.learner.seq + 1 } });
   result.events.push(...flags);
+  if (poorResponseStreak >= 3) result.events.push({ type: "poor_response_redirect", payload: { itemId: plan.focusItemId, streak: poorResponseStreak, move: verified.move } });
   return store.saveTurn({
     session,
     before: items,
@@ -238,6 +257,8 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
       covered: [...new Set([...round.covered, ...verified.coveredNodeIds])],
       snapshot: snapshotOf(session.diagram),
       timeWarnings: round.timeWarnings,
+      poorResponseStreak: poorResponseStreak >= 3 ? 0 : poorResponseStreak,
+      poorResponseItemId: poorResponseStreak >= 3 ? null : poorResponseItemId,
     },
     creditId: reserved.creditId,
   });
@@ -306,7 +327,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     const covered = new Set(round.covered);
     const parts = undiscussedParts({ diagram: session.diagram, covered, items, agenda, stage: round.stage, focusItemId: round.focusItemId });
     const mapped = parts[0] ?? null;
-    const { last, lastLearnerAt } = await store.lastTurns(session.id);
+    const { last, lastLearnerAt, idleSinceAt, lastIdleHintAt } = await store.lastTurns(session.id);
     const focus = focusItem(items, round);
     const focusExhausted = Boolean(focus && (focus.followUps >= conventions.maxFollowUpsPerItem || bandAtLeast(focus.band, "adequate")));
     const limits = limitsFor(user, session);
@@ -314,7 +335,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       typing: Boolean(body.typing),
       pending: Boolean(round.pendingSince && now - new Date(round.pendingSince).getTime() < 90_000),
       now, mode: round.mode, conventions, clock, timeWarnings: round.timeWarnings, stage: round.stage,
-      lastTurn: last, lastLearnerAt, lastProactiveAt: round.lastProactiveAt, lastNudgeAt: round.lastNudgeAt,
+      lastTurn: last, idleSinceAt, lastIdleHintAt, lastLearnerAt, lastProactiveAt: round.lastProactiveAt, lastNudgeAt: round.lastNudgeAt,
       proactiveLeft: limits.proactiveChecksPerRound - round.proactiveChecks, focusExhausted,
       canvasThin: design.componentCount < conventions.minCanvasComponents || design.edgeCount < conventions.minCanvasConnections,
       canvas: { unexplained: Boolean(mapped), itemId: mapped?.itemId ?? null, major: diff.added.length + diff.removed.length >= 3 || diff.edgeChanges >= 3, changedSinceLearner: diff.added.length + diff.removed.length + diff.edgeChanges > 0 },
@@ -324,6 +345,16 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       // Minor or already-explained changes are absorbed so they never trigger a question.
       await store.touchState(session.id, { activeMs: round.activeMs, snapshot: parts.length ? undefined : current });
       return { action: "none", reason: decision.why };
+    }
+
+    if (decision.action === "close") {
+      try {
+        const closed = await store.closeIdleSession({ session, idleAt: round.ledgerVersion, activeMs: round.activeMs });
+        return closed ? { action: "closed" } : { action: "none", reason: "already_closed" };
+      } catch (error) {
+        if (error instanceof store.RoundBusy) return { action: "none", reason: "busy" };
+        throw error;
+      }
     }
 
     if (decision.action === "template") {
@@ -338,7 +369,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
         const saved = await store.saveTurn({
           session, before: items, result, learnerTurn: null, notes: null,
           interviewer: { kind: KIND_FOR_MOVE[decision.move], trigger: "tick", content: decision.text, move: decision.move, agendaItemId: null },
-          stateExtras: { activeMs: round.activeMs, covered: round.covered, snapshot: round.snapshot, timeWarnings: warnings, nudged: decision.move === "nudge" },
+          stateExtras: { activeMs: round.activeMs, covered: round.covered, snapshot: round.snapshot, timeWarnings: warnings, nudged: decision.move === "nudge", idleHinted: decision.move === "idle_hint", poorResponseStreak: round.poorResponseStreak, poorResponseItemId: round.poorResponseItemId },
           creditId: null,
           idleAt: round.ledgerVersion,
         });
@@ -371,7 +402,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
         session, before: items, result, learnerTurn: null, notes: null,
         interviewer: { kind: KIND_FOR_MOVE[verified.move] ?? "question", trigger: "tick", content: nameComponents(verified.message, design.labels), move: verified.move, agendaItemId: verified.focusItemId, nodeIds: verified.nodeIds },
         // The part asked about counts as discussed, so it's never asked about twice.
-        stateExtras: { activeMs: round.activeMs, covered: [...new Set([...round.covered, ...verified.coveredNodeIds, ...(decision.kind === "canvas" && mapped ? [mapped.entry.id] : [])])], snapshot: current, timeWarnings: round.timeWarnings, proactive: true, tickKey },
+        stateExtras: { activeMs: round.activeMs, covered: [...new Set([...round.covered, ...verified.coveredNodeIds, ...(decision.kind === "canvas" && mapped ? [mapped.entry.id] : [])])], snapshot: current, timeWarnings: round.timeWarnings, proactive: true, tickKey, poorResponseStreak: round.poorResponseStreak, poorResponseItemId: round.poorResponseItemId },
         creditId,
       });
       return { action: "ask", ...saved };

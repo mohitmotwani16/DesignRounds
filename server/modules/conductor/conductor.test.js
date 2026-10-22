@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyTurn } from "./apply.js";
+import { applyTurn, nextPoorResponseState } from "./apply.js";
 import { candidateItems, clockOf, nextPendingItem, plan, tickPlan } from "./plan.js";
 import { accrueActiveMs, decideTick } from "./ticks.js";
 import { matchQuote, questionCount, validateOutput } from "./validate.js";
@@ -256,6 +256,15 @@ test("apply: a hint raises the hint level and the round's hint count", () => {
   assert.equal(result.state.hintsUsed, 1);
 });
 
+test("apply: weak-response streak stays on one line and resets on other outcomes", () => {
+  const weak = { itemId: "req.scale", band: "weak" };
+  assert.deepEqual(nextPoorResponseState({ assessment: weak, focusItemId: "req.scale", streak: 0, itemId: null }), { streak: 1, itemId: "req.scale" });
+  assert.deepEqual(nextPoorResponseState({ assessment: weak, focusItemId: "req.scale", streak: 2, itemId: "req.scale" }), { streak: 3, itemId: "req.scale" });
+  assert.deepEqual(nextPoorResponseState({ assessment: { itemId: "req.api", band: "weak" }, focusItemId: "req.api", streak: 2, itemId: "req.scale" }), { streak: 1, itemId: "req.api" });
+  assert.deepEqual(nextPoorResponseState({ assessment: { itemId: "req.scale", band: "adequate" }, focusItemId: "req.scale", streak: 2, itemId: "req.scale" }), { streak: 0, itemId: null });
+  assert.deepEqual(nextPoorResponseState({ assessment: null, focusItemId: "req.scale", streak: 2, itemId: "req.scale" }), { streak: 0, itemId: null });
+});
+
 const now = Date.parse("2026-10-18T10:00:00Z");
 const ago = (ms) => new Date(now - ms).toISOString();
 const tick = (overrides = {}) => decideTick({
@@ -291,8 +300,12 @@ test("ticks: an overrun stage with an exhausted focus moves on through the model
 });
 
 test("ticks: nudges for silence after a question, and for drawing without talking", () => {
-  assert.equal(tick({ lastTurn: { role: "interviewer", kind: "question", at: ago(200_000) } }).move, "nudge");
-  assert.equal(tick({ lastTurn: { role: "interviewer", kind: "question", at: ago(200_000) }, lastNudgeAt: ago(60_000) }).action, "none");
+  const idle = (ms, extra = {}) => tick({ idleSinceAt: ago(ms), lastTurn: { role: "interviewer", kind: "question", at: ago(ms) }, ...extra });
+  assert.equal(idle(30_000).move, "nudge");
+  assert.equal(idle(60_000, { lastNudgeAt: ago(30_000) }).move, "idle_hint");
+  assert.deepEqual(idle(120_000, { lastNudgeAt: ago(30_000), lastIdleHintAt: ago(60_000) }), { action: "close", why: "idle" });
+  assert.equal(idle(30_000, { typing: true }).action, "none");
+  assert.equal(idle(30_000, { lastNudgeAt: ago(10_000) }).action, "none");
   assert.match(tick({ canvas: { changedSinceLearner: true }, lastLearnerAt: ago(300_000), lastTurn: { role: "learner", kind: "message", at: ago(300_000) } }).text, /drawn/);
 });
 
