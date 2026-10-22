@@ -8,7 +8,7 @@ export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
 // and lets the candidate keep going, as people do in a real interview.
 export const MODEL_MOVES = ["open", "probe", "challenge", "clarify", "explain", "hint", "acknowledge_advance", "move_on", "redirect", "curveball", "wrap_up", "ask_to_draw", "listen", "stay_silent"];
 // Moves the application writes from templates, never the model.
-export const TEMPLATE_MOVES = ["nudge", "time_check"];
+export const TEMPLATE_MOVES = ["nudge", "idle_hint", "time_check"];
 
 export const CLASSIFICATIONS = ["answer", "partial_answer", "dont_know", "clarifying_question", "concept_question", "asks_for_answer", "pushback", "off_topic", "meta", "thinking_aloud", "none"];
 
@@ -34,6 +34,7 @@ export const KIND_FOR_MOVE = {
   ask_to_draw: "question",
   listen: "acknowledgement",
   nudge: "nudge",
+  idle_hint: "hint",
   time_check: "time_check",
 };
 

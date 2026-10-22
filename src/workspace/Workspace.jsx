@@ -735,7 +735,12 @@ function Workspace({ session, prompt }) {
   const onProactiveTurn = useCallback(() => {
     if (!panelView.current.panelOpen || panelView.current.panelTab !== "interviewer") setUnread((count) => count + 1);
   }, []);
-  const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn });
+  const onIdleClose = useCallback(() => {
+    setStatus("completed");
+    setPanelTab("review");
+    setPanelOpen(true);
+  }, []);
+  const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose });
   useEffect(() => { if (panelOpen && panelTab === "interviewer") setUnread(0); }, [panelOpen, panelTab]);
 
   // ---- Derived view state --------------------------------------------------

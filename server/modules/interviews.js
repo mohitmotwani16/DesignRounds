@@ -351,6 +351,8 @@ async function reserveLearnerTurn({ session, user, kind, content, requestId, hin
   try {
     return await transaction(async (conn) => {
       await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
+      const freshSession = await conn.queryOne("select status from practice_sessions where id = $1", [session.id]);
+      if (freshSession.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", ROUND_FINISHED);
       const state = await ensureState(conn, session);
       if (state.pending_since && Date.now() - new Date(state.pending_since).getTime() < PENDING_MS) {
         throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
@@ -595,6 +597,7 @@ async function v3Tick(req, res, session, state, body) {
   try {
     const result = await handleTick({ session, user: req.user, stateRow: state, body, reserveCredit, releaseCredit: release });
     if (result.action === "none") return none(result.reason);
+    if (result.action === "closed") return res.json({ action: "closed" });
     res.json({ action: result.action, turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session, result.state) });
   } catch (error) {
     console.error("[ai] tick failed:", error.code || error.message);

@@ -45,7 +45,7 @@ One row per agenda item per round, copied from the pinned pack at round start.
 
 ### `interview_state` additions
 
-`mode`, `ucs_version`, `pack_version`, `ai_route`, `candidate_snapshot`, `focus_item_id`, `assumptions` (jsonb `[{ clarificationId | "custom", text, turnSeq }]`), `active_ms`, `last_activity_at`, `time_warnings`, `clarifications_asked`, `ledger_version` (an integer bumped on every ledger change; part of cache keys).
+`mode`, `ucs_version`, `pack_version`, `ai_route`, `candidate_snapshot`, `focus_item_id`, `assumptions` (jsonb `[{ clarificationId | "custom", text, turnSeq }]`), `active_ms`, `last_activity_at`, `time_warnings`, `clarifications_asked`, `ledger_version` (an integer bumped on every ledger change; part of cache keys), idle-hint timestamp, and the consecutive weak-response count scoped to its agenda item.
 
 ### `interview_turns` additions
 
@@ -53,7 +53,7 @@ One row per agenda item per round, copied from the pinned pack at round start.
 
 ### `interview_events`: append-only log
 
-`(session_id, seq, at, type, payload)` for `round_started`, `move_planned`, `move_rejected`, `item_status_changed`, `assumption_pinned`, `stage_changed`, `time_warning`, `tick_absorbed`, `fallback_used`. It's cheap, never read on the hot path, and it makes replaying and debugging a round possible without logging any prompt text. Analytics views read metadata from here.
+`(session_id, seq, at, type, payload)` for `round_started`, `move_planned`, `move_rejected`, `item_status_changed`, `assumption_pinned`, `stage_changed`, `time_warning`, `tick_absorbed`, `fallback_used`, idle close, and poor-response redirect events. It's cheap, never read on the hot path, and it makes replaying and debugging a round possible without logging any prompt text. Analytics views read metadata from here.
 
 ## 4. Moves
 
@@ -71,6 +71,7 @@ Every interviewer turn is exactly one move. The planner decides which moves are 
 | `move_on` | Budget spent, "I don't know", or time pressure | item → `missed`/`partial`, open next |
 | `redirect` | Off-topic, prompt injection, too deep too early | none |
 | `nudge` | Silent, or drawing without talking (templated) | none |
+| `idle_hint` | No response after the nudge (templated) | none |
 | `time_check` | Time threshold crossed (templated) | warning recorded |
 | `curveball` | Deep dive going well, time left | opens the curveball's item |
 | `wrap_up` | Final stage | pending items → `not_reached` |
@@ -208,13 +209,15 @@ The model proposes, and code decides status. The model can't mark an item answer
 | Time threshold crossed and not yet announced | `time_check` (template) | no | no |
 | Stage over budget and focus item exhausted | `move_on` to the next stage | yes | yes |
 | Significant unexplained canvas change (existing logic), mapped to an agenda item through `triggers.componentKinds` | `open` or `probe` | yes | yes, released on skip |
-| Idle ≥ 3 min with an open question | `nudge` (template) | no | no |
+| No activity for 30 s after an unanswered prompt | `nudge` (template) | no | no |
+| No activity for 60 s after an unanswered prompt | Small `idle_hint` (template) | no | no |
+| No activity for 2 min after an unanswered prompt | Complete the session and close the interview | no | no |
 | Drawing ≥ 4 min with no messages | `nudge` (template) | no | no |
 | Otherwise | absorb the snapshot | no | no |
 
 **Tick result cache.** A model-backed tick is keyed by `hash(diagram fingerprint, ledger_version, reason)`. A repeat tick with the same key (a second tab, a retry, a resize) returns the stored decision without a call.
 
-The existing guards stay: at most one open question, 90 s proactive cooldown, per-round proactive cap, never while typing.
+The existing guards stay: at most one open question, 90 s proactive cooldown, per-round proactive cap, never while typing. Saved canvas edits reset the inactivity window. After three consecutive verified `weak` scores for the same agenda item, the interviewer moves to the next item (or wraps up if there is none), and the streak resets.
 
 **Rate limit.** Ticks are cheap when absorbed, but each one still loads state and can reserve a credit, and a buggy or scripted client could send them in a loop. So `POST /interview/tick` gets its own limiter, using the existing `createLimiter` pattern and separate from the message limiter so ticks can never use up a learner's message allowance:
 

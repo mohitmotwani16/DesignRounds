@@ -53,6 +53,9 @@ export function toRound(state) {
     proactiveChecks: state.proactive_checks,
     lastProactiveAt: state.last_proactive_at,
     lastNudgeAt: state.last_nudge_at,
+    lastIdleHintAt: state.last_idle_hint_at,
+    poorResponseStreak: state.poor_response_streak ?? 0,
+    poorResponseItemId: state.poor_response_item_id,
     pendingSince: state.pending_since,
     lastDrawAskSeq: state.last_draw_ask_seq ?? null,
     componentsAtDrawAsk: state.components_at_draw_ask ?? null,
@@ -71,7 +74,23 @@ export async function recentTurns(sessionId, summarizedThrough) {
 export async function lastTurns(sessionId) {
   const last = await queryOne("select role, kind, created_at from interview_turns where session_id = $1 order by seq desc limit 1", [sessionId]);
   const learner = await queryOne("select created_at from interview_turns where session_id = $1 and role = 'learner' order by seq desc limit 1", [sessionId]);
-  return { last: last ? { role: last.role, kind: last.kind, at: last.created_at } : null, lastLearnerAt: learner?.created_at ?? null };
+  const idleQuestion = await queryOne(
+    `select created_at from interview_turns
+      where session_id = $1 and role = 'interviewer' and move not in ('nudge', 'idle_hint', 'time_check')
+      order by seq desc limit 1`,
+    [sessionId]
+  );
+  const idleHint = await queryOne("select last_idle_hint_at from interview_state where session_id = $1", [sessionId]);
+  const sessionActivity = await queryOne("select updated_at from practice_sessions where id = $1", [sessionId]);
+  const idleSinceAt = [idleQuestion?.created_at, sessionActivity?.updated_at]
+    .filter(Boolean)
+    .sort((a, b) => new Date(b) - new Date(a))[0] ?? null;
+  return {
+    last: last ? { role: last.role, kind: last.kind, at: last.created_at } : null,
+    lastLearnerAt: learner?.created_at ?? null,
+    idleSinceAt,
+    lastIdleHintAt: idleHint?.last_idle_hint_at ?? null,
+  };
 }
 
 async function nextSeq(conn, sessionId) {
@@ -164,17 +183,37 @@ export async function saveTurn({ session, before, result, learnerTurn, notes, in
               last_nudge_at = case when $14 then now() else last_nudge_at end,
               last_tick_key = coalesce($15, last_tick_key),
               last_draw_ask_seq = $16, components_at_draw_ask = $17,
+              last_idle_hint_at = case when $18 then now() else last_idle_hint_at end,
+              poor_response_streak = $19, poor_response_item_id = $20,
               pending_since = null, updated_at = now()
         where session_id = $1 returning *`,
       [session.id, result.state.stage, result.state.focusItemId, JSON.stringify(result.state.assumptions), result.state.stageStartedMs, result.state.hintsUsed,
         JSON.stringify(result.state.clarificationsAsked), result.state.ledgerVersion, stateExtras.activeMs,
         JSON.stringify(stateExtras.covered), JSON.stringify(stateExtras.snapshot), JSON.stringify(stateExtras.timeWarnings),
         stateExtras.proactive ? 1 : 0, Boolean(stateExtras.nudged), stateExtras.tickKey ?? null,
-        result.state.lastDrawAskSeq ?? null, result.state.componentsAtDrawAsk ?? null]
+        result.state.lastDrawAskSeq ?? null, result.state.componentsAtDrawAsk ?? null,
+        Boolean(stateExtras.idleHinted), stateExtras.poorResponseStreak ?? 0, stateExtras.poorResponseItemId ?? null]
     );
     await appendEvents(conn, session.id, result.events);
     if (creditId) await conn.query("update ai_credits set status = 'consumed', updated_at = now() where id = $1", [creditId]);
     return { turn, state };
+  });
+}
+
+export async function closeIdleSession({ session, idleAt, activeMs }) {
+  return transaction(async (conn) => {
+    await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
+    const fresh = await conn.queryOne("select pending_since, ledger_version from interview_state where session_id = $1", [session.id]);
+    if ((fresh.pending_since && Date.now() - new Date(fresh.pending_since).getTime() < 90_000) || fresh.ledger_version !== idleAt) throw new RoundBusy();
+    const updated = await conn.queryOne(
+      `update practice_sessions set status = 'completed', completed_at = now(), updated_at = now()
+        where id = $1 and status = 'in_progress' returning id`,
+      [session.id]
+    );
+    if (!updated) return false;
+    await conn.query("update interview_state set active_ms = $2, updated_at = now() where session_id = $1", [session.id, activeMs]);
+    await appendEvents(conn, session.id, [{ type: "session_closed", payload: { reason: "idle" } }]);
+    return true;
   });
 }
 
