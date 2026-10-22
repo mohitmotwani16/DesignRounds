@@ -1,10 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
+import { identifyUser, PRIVATE_ZONE, track } from "./analytics.js";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { findPrompt, prompts, tracks } from "./data/prompts.js";
 import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
 import { BackgroundHumanCheck } from "./components/BackgroundHumanCheck.jsx";
+import { ConsentBanner } from "./components/ConsentBanner.jsx";
 import { HumanCheck } from "./components/HumanCheck.jsx";
 import { ReportProblemHost } from "./components/ReportProblem.jsx";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
@@ -35,10 +37,32 @@ export default function App({ authStatus }) {
   return (
     <AuthProvider initialStatus={authStatus}>
       <BackgroundHumanCheck />
-      <Routes />
+      <AnalyticsIdentity />
+      <RouteArea />
       <ReportProblemHost />
+      <ConsentBanner />
     </AuthProvider>
   );
+}
+
+// Pages that need an account. They hold the learner's own work and details.
+const isAccountPath = (path) => path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/workspace/") || path.startsWith("/start/")
+  || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/");
+
+// Account pages are kept out of analytics recordings (src/analytics.js). The wrapper is
+// always rendered, so moving between public and account pages doesn't remount the page.
+function RouteArea() {
+  const { path } = useRoute();
+  const zone = isAccountPath(path) ? PRIVATE_ZONE : { style: PRIVATE_ZONE.style };
+  return <div {...zone}><Routes /></div>;
+}
+
+function AnalyticsIdentity() {
+  const { status, user } = useAuth();
+  useEffect(() => {
+    if (status !== "loading") identifyUser(status === "signed-in" ? user : null);
+  }, [status, user?.id, user?.plan]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }
 
 function Routes() {
@@ -56,6 +80,7 @@ function Routes() {
     const prompt = findPrompt(promptId);
     if (!prompt) return;
     if (prompt.access === "paid" && auth.user?.plan !== "plus") {
+      track("plus_round_locked", { prompt_id: promptId });
       setLockedPromptId(promptId);
       return;
     }
@@ -75,9 +100,7 @@ function Routes() {
     return <SignInPage next={params.get("next")} error={params.get("error")} email={params.get("email") || ""} />;
   }
 
-  const needsAuth = path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/workspace/") || path.startsWith("/start/")
-    || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/");
-  if (needsAuth) {
+  if (isAccountPath(path)) {
     if (auth.status === "loading") return loadingScreen;
     if (auth.status !== "signed-in") {
       if (auth.error) {
@@ -177,7 +200,11 @@ function StartRound({ promptId }) {
   useEffect(() => {
     let cancelled = false;
     api.startSession(promptId)
-      .then(({ session }) => { if (!cancelled) navigate(`/workspace/${session.id}`, { replace: true }); })
+      .then(({ session }) => {
+        if (cancelled) return;
+        track("round_started", { prompt_id: promptId });
+        navigate(`/workspace/${session.id}`, { replace: true });
+      })
       .catch((startError) => { if (!cancelled) setError(startError); });
     return () => { cancelled = true; };
   }, [promptId]);
