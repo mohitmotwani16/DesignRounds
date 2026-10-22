@@ -244,7 +244,7 @@ export async function communicationInput(sessionId) {
   const rows = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [sessionId]);
   const answers = [];
   let question = "";
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     if (row.role === "interviewer") { question = row.content; continue; }
     if (row.kind !== "message" && row.kind !== "audio") continue;
     if (row.kind === "audio" && !row.content) continue;
@@ -259,6 +259,9 @@ export async function communicationInput(sessionId) {
       durationMs: row.audio_duration_ms,
       delivery: row.delivery,
       note: row.communication,
+      // The interviewer judged this answer weak or mistaken, or its next move pushed back on it.
+      unsound: (row.assessment ?? []).some((entry) => entry.band === "weak" || entry.misconceptionId)
+        || rows.slice(index + 1).find((next) => next.role === "interviewer")?.kind === "challenge",
     });
   }
   if (answers.length < MIN_ANSWERS_FOR_COMMUNICATION) return null;

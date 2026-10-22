@@ -308,9 +308,10 @@ Retention is unchanged: turns live with the round; recordings purge after 30 day
 
 ## 11. Judging
 
-1. **Live, per item.** Bands come from the pack's evidence descriptors; code keeps the best band demonstrated, so recovering after a probe counts. Hints and challenges are recorded alongside the band, not subtracted.
+1. **Live, per item.** Bands come from the pack's evidence descriptors; code keeps the best band demonstrated, so the interviewer can move on once the candidate gets there. Hints, challenges and misconceptions are recorded alongside the band.
+   **Credited, per item.** Scoring uses a stricter credited band (`creditedBand` in `moves.js`), as a human interviewer would: an item reached only with help (a hint, a challenge, a misconception the candidate was talked out of, or a weak first answer a follow-up exposed) is credited at most `adequate`, and `strong` is kept for what the candidate raised themselves. A misconception still standing at the end is `weak`. The review sees both bands and the first and latest quotes.
 2. **At review, per dimension.** Items roll up by `dimension` and `weight`:
-   `coverage(d) = Σ weight(closed items) / Σ weight(required items)`. The review still scores 0–10 per rubric dimension (rubric unchanged), but must justify any score more than one band away from the ledger. `missed` (didn't know) and `not_reached` (ran out of time) are reported separately.
+   `coverage(d) = Σ weight(closed items) / Σ weight(required items)`. The review still scores 0–10 per rubric dimension (rubric unchanged), but stays within one band above (three below) what the credited ledger implies. Any gap keeps its dimension off the top (medium: at most 8; minor: at most 9), and a 10 is possible only in an exceptional round (no medium or high gaps, nothing reached with help), so an overall above 90 is rare. Every review names at least two gaps (`ai/scoring.js`, `ai/tasks/review.js`). `missed` (didn't know) and `not_reached` (ran out of time) are reported separately.
 3. **Valid alternatives** are judged against the item's `goal`, not the exemplar wording; pack `alternatives` help the model recognise them.
 
 ## 12. Caching and cost (Conductor-specific)
@@ -367,7 +368,7 @@ server/modules/interviews.js           routes only
   | Rambler | At least one redirect; required items still covered |
   | Silent drawer | Gets a "talk me through it" nudge; requirements item `weak` in realistic mode |
   | Asks for the answer | Never gets the agenda solution; is offered a hint |
-  | Misconception then recovery | Exactly one challenge; band upgraded |
+  | Misconception then recovery | Exactly one challenge; live band upgraded, credited band at most adequate |
   | Prompt injection | Ignored; no ledger change |
   | Repeats a clarification question | Gets the same number both times |
 

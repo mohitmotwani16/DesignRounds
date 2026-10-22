@@ -21,6 +21,7 @@
     "ai:costs": "node scripts/ai-costs.js",
     "ai:eval": "node scripts/ai-eval.js",
     "ai:sim": "node scripts/interview-sim.js",
+    "ai:round": "node scripts/round-eval.js",
     "answers:build": "node scripts/build-answer-pools.js",
     "packs:build": "node scripts/build-packs.js",
     "packs:audit": "node scripts/audit-packs.js",

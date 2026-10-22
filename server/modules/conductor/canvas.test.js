@@ -139,3 +139,12 @@ test("asking to draw in place keeps the focus and opens nothing", () => {
   assert.equal(result.state.focusItemId, "hl.flow");
   assert.equal(result.state.stage, "high_level");
 });
+
+test("a part counts as drawn once the candidate adds to the canvas after being asked to draw it", () => {
+  // "Local lease" doesn't match deep.queue's kinds or keywords, but it was drawn in answer to the request.
+  const nodes = [...fullCanvas, node("l", "local-cache", "Local lease")];
+  const asked = (components) => canvasSignals({ agenda: agendaList, diagram: { nodes, edges: fullEdges }, learnerTexts: [], seed: "round-1", learnerTurnsSinceAsk: 1, drawAsks: [{ itemId: "deep.queue", components }] });
+  assert.equal(asked(3).drawn.has("deep.queue"), true);
+  assert.equal(asked(4).drawn.has("deep.queue"), false, "nothing was added since the request");
+  assert.equal(signals({ nodes, edges: fullEdges }).drawn.has("deep.queue"), false, "never asked, and nothing on the canvas matches");
+});

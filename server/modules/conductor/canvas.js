@@ -66,10 +66,15 @@ export function seededJitter(seed, itemId) {
 }
 
 // Everything the planner needs about the canvas this turn.
-export function canvasSignals({ agenda, diagram, learnerTexts, seed, learnerTurnsSinceAsk }) {
+// `drawAsks` are the round's draw requests ({ itemId, components }): a candidate who adds
+// to the canvas after being asked to draw a part has drawn it, whatever they named it.
+// The pack's kinds and keywords can't foresee every way to draw a part, and asking again
+// for something already on the board is the one thing a real interviewer wouldn't do.
+export function canvasSignals({ agenda, diagram, learnerTexts, seed, learnerTurnsSinceAsk, drawAsks = [] }) {
   const components = canvasComponents(diagram);
   const needs = new Set(agenda.filter(needsDrawing).map((item) => item.id));
-  const drawn = new Set(agenda.filter((item) => needs.has(item.id) && itemDrawn(item, components)).map((item) => item.id));
+  const drewWhenAsked = (item) => drawAsks.some((ask) => ask.itemId === item.id && Number.isInteger(ask.components) && components.length > ask.components);
+  const drawn = new Set(agenda.filter((item) => needs.has(item.id) && (itemDrawn(item, components) || drewWhenAsked(item))).map((item) => item.id));
   return {
     components: components.length,
     connections: (diagram?.edges ?? []).length,

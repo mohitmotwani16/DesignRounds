@@ -50,6 +50,24 @@ export function questionCount(message) {
   return (unquoted.match(/\?/g) ?? []).length;
 }
 
+// An overall verdict on how the candidate did ("You did very well", "a strong session",
+// "overall a production-grade design"). The interviewer never grades: the review does,
+// after the round, and a glowing verdict followed by a strict score reads as a
+// contradiction. Specific appreciation ("That keeps the write path short") is fine.
+const VERDICTS = [
+  /\byou(?:'ve| have)? (?:did|done|performed|handled (?:it|this|that))\b[^.!?]*\b(?:well|great|good|excellent|brilliant|fantastic|amazing|solid|nicely)\b/i,
+  /\b(?:strong|great|excellent|impressive|solid|good|fantastic|outstanding)\b[^.!?]{0,40}\b(?:session|interview|performance|showing|round|candidate|job)\b/i,
+  /\b(?:overall|all in all|on the whole)\b[^.!?]*\b(?:strong|solid|great|excellent|impressive|production[- ]grade|well done)\b/i,
+  /\b(?:you(?:'d| would) (?:pass|get hired|be hired)|(?:hire|no hire) decision|you passed)\b/i,
+];
+const sentenceParts = (message) => String(message ?? "").split(/(?<=[.!?])\s+/);
+export const hasVerdict = (message) => sentenceParts(message).some((part) => VERDICTS.some((pattern) => pattern.test(part)));
+// The message with verdict sentences removed, for a model that gave one again when asked not to.
+export function withoutVerdict(message) {
+  const kept = sentenceParts(message).filter((part) => !VERDICTS.some((pattern) => pattern.test(part))).join(" ").trim();
+  return kept || "Thanks for walking me through your design. The review after the round goes through how it went.";
+}
+
 const sentences = (value) => String(value ?? "").split(/(?<=[.!?])\s+/).map(normalize).filter((part) => part.length >= 40);
 
 function leakSuspected(message, pack) {
@@ -122,6 +140,7 @@ export function validateOutput({ output, plan, items, pack, sources, designIds, 
     nodeIds: (output.nodeIds ?? []).filter((id) => designIds.has(id)),
     coveredNodeIds: (output.coveredNodeIds ?? []).filter((id) => designIds.has(id)),
     multipleQuestions: questions > 1,
+    verdict: hasVerdict(output.message),
     leakSuspected: mode === "realistic" && leakSuspected(output.message, pack),
     problems,
   };

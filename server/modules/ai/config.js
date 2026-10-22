@@ -83,10 +83,32 @@ function chatFallback() {
   return {
     model: fallbackModel,
     baseUrl: vertexOpenAiUrl({ projectId: vertex.projectId, region: env.AI_CHAT_FALLBACK_REGION || "asia-south1" }),
-    afterMs: number(env.AI_CHAT_FALLBACK_AFTER_MS, 5_000),
+    // A healthy primary starts within about 3 s, so 4 s without a token means it stalled.
+    afterMs: number(env.AI_CHAT_FALLBACK_AFTER_MS, 4_000),
+    // The fallback only runs once the learner has already waited, so it skips the hidden
+    // thinking pass: 3.5 Flash spent 200-600 thinking tokens at "low", which made a
+    // fallback reply take 8-11 s. "minimal" is the lowest level Vertex accepts for it.
+    effort: env.AI_CHAT_FALLBACK_EFFORT || "minimal",
   };
 }
 const fallback = chatFallback();
+
+// The review model is a preview served only from the shared global pool, where a call
+// can stall with no output until it times out (about one in twenty in testing). A
+// learner who finished a round should get a review from a generally available model
+// rather than an error after three minutes, so a review still running after
+// `leashMs` (or failing outright) is answered by the fallback within the time left.
+// AI_REVIEW_FALLBACK_MODEL=off disables it.
+function reviewFallback(leashMs) {
+  if (provider !== "gemini-vertex" || env.AI_REVIEW_FALLBACK_MODEL === "off") return undefined;
+  const fallbackModel = env.AI_REVIEW_FALLBACK_MODEL || "gemini-3.5-flash";
+  if (fallbackModel === model.review) return undefined;
+  return {
+    model: fallbackModel,
+    baseUrl: vertexOpenAiUrl({ projectId: vertex.projectId, region: env.AI_CHAT_FALLBACK_REGION || "asia-south1" }),
+    leashMs,
+  };
+}
 
 // Gemini 3.8 Flash is also served from the "us" multi-region, a separate capacity pool
 // that stayed responsive while the shared global pool stalled for tens of seconds.
@@ -110,6 +132,8 @@ export const aiConfig = {
       effort: env.AI_REVIEW_EFFORT || "medium",
       maxTokens: number(env.AI_REVIEW_MAX_TOKENS, onVertex ? 16_000 : 12_000),
       timeoutMs: number(env.AI_REVIEW_TIMEOUT_MS, onVertex ? 180_000 : 120_000),
+      // Reviews take 30-80 s; one still running at 100 s has usually stalled.
+      fallback: reviewFallback(number(env.AI_REVIEW_FALLBACK_AFTER_MS, 100_000)),
     },
     // Conversational turns skip or shorten the hidden thinking pass so the first word
     // of a streamed reply is not stuck behind it. On OpenAI-style APIs a model that
@@ -126,7 +150,7 @@ export const aiConfig = {
     interview_summary: { model: model.chat, baseUrl: chatBaseUrl, fallback, effort: "low", maxTokens: 3_000, timeoutMs: 45_000 },
     // Part of the final submission and runs alongside the review, so it must finish
     // well within the review's time.
-    communication: { model: model.review, effort: "low", maxTokens: onVertex ? 6_000 : 4_000, timeoutMs: onVertex ? 150_000 : 90_000 },
+    communication: { model: model.review, effort: "low", maxTokens: onVertex ? 6_000 : 4_000, timeoutMs: onVertex ? 150_000 : 90_000, fallback: reviewFallback(number(env.AI_COMMUNICATION_FALLBACK_AFTER_MS, 60_000)) },
     // Offline Problem Pack builds (server/modules/pks): the strong model, never on a
     // learner's request path, so it gets room to think and a long deadline.
     pack_build: { model: model.review, effort: "medium", maxTokens: 32_000, timeoutMs: 280_000 },

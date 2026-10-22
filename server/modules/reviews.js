@@ -9,7 +9,7 @@ import { bandFor, overallScore, rubric } from "./ai/rubric.js";
 import { runTask } from "./ai/run.js";
 import { constrainScores, scoringVersion } from "./ai/scoring.js";
 import { guideFor } from "./ai/guides.js";
-import { communicationTask, communicationTemplateVersion } from "./ai/tasks/communication.js";
+import { communicationTask, communicationTemplateVersion, withoutUnsoundExamples } from "./ai/tasks/communication.js";
 import { reviewTask, reviewTemplateVersion } from "./ai/tasks/review.js";
 import { requireUser } from "./identity.js";
 import { communicationInput, interviewTranscript } from "./interviews.js";
@@ -274,7 +274,7 @@ ${transcript}`);
   const conversation = await communicationInput(session.id);
   const communication = conversation
     ? runTask(communicationTask, { prompt, ...conversation }, { userId: req.user.id, sessionId: session.id })
-      .then(({ data }) => ({ ...data, stats: conversation.stats, version: communicationTemplateVersion }))
+      .then(({ data }) => ({ ...withoutUnsoundExamples(data, conversation.answers), stats: conversation.stats, version: communicationTemplateVersion }))
       .catch((error) => { console.error("[ai] communication feedback failed:", error.code || error.message); return null; })
     : Promise.resolve(null);
   let output;

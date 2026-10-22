@@ -8,7 +8,7 @@ import { dimensionIds } from "./rubric.js";
 // never invent one, and every change is recorded with a reason the learner can read.
 // Bump `version` whenever a rule or threshold changes; it is part of the review's
 // template version, so a cached review is never reused across rule changes.
-export const scoringVersion = "constraints-v1";
+export const scoringVersion = "constraints-v2";
 
 const STORAGE_GROUPS = new Set(["databases", "cache", "storage", "data", "tech-data", "tech-analytics"]);
 // A data store drawn with a generic kind still counts when its label says what it is.
@@ -20,7 +20,9 @@ const JUSTIFICATION = { "well-justified": 1, "partly-justified": 0.5, unexplaine
 // never reached (or never opened) say nothing, so they are left out.
 const LEDGER_VALUE = { strong: 9, adequate: 7, weak: 4 };
 const ASKED = new Set(["answered", "partial", "missed"]);
-const LEDGER_WINDOW = 3;
+// A dimension stays within one band above, and three below, what the notepad verified.
+const LEDGER_ABOVE = 1;
+const LEDGER_BELOW = 3;
 
 const clamp = (value) => Math.max(0, Math.min(10, value));
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -46,7 +48,7 @@ export function signals({ design, decisions = [], risks = [], ledgerItems = null
       const asked = ledgerItems.filter((item) => item.dimension === id && ASKED.has(item.status));
       const weight = asked.reduce((sum, item) => sum + (item.weight || 1), 0);
       const implied = weight ? asked.reduce((sum, item) => sum + ledgerValue(item) * (item.weight || 1), 0) / weight : null;
-      return [id, { asked: asked.length, answered: asked.filter((item) => item.status === "answered").length, implied }];
+      return [id, { asked: asked.length, answered: asked.filter((item) => item.status === "answered").length, helped: asked.filter((item) => item.helped).length, implied }];
     }))
     : null;
   return {
@@ -56,12 +58,18 @@ export function signals({ design, decisions = [], risks = [], ledgerItems = null
     statedReasons: design.explainedCount + design.decisionNoteCount + design.labelledEdgeCount,
     spoke,
     decisions: rated.length,
-    wellJustified: rated.filter((decision) => decision.explanation === "well-justified").length,
+    // A choice the candidate reached only after the interviewer pointed out a problem
+    // (a hint, a challenge, a follow-up exposing a flaw) counts as partly justified.
+    wellJustified: rated.filter((decision) => decision.explanation === "well-justified" && decision.reached !== "corrected").length,
     partlyJustified: rated.filter((decision) => decision.explanation === "partly-justified").length,
-    justification: rated.length ? rated.reduce((sum, decision) => sum + JUSTIFICATION[decision.explanation], 0) / rated.length : null,
+    justification: rated.length ? rated.reduce((sum, decision) => sum + Math.min(JUSTIFICATION[decision.explanation], decision.reached === "corrected" ? 0.5 : 1), 0) / rated.length : null,
     overBuilt: decisions.filter((decision) => decision.sizing === "over-engineered" || decision.necessity === "unnecessary").length,
     underBuilt: decisions.filter((decision) => decision.sizing === "under-engineered").length,
     highRisks: Object.fromEntries(dimensionIds.map((id) => [id, risks.filter((risk) => risk.dimension === id && risk.severity === "high").length])),
+    mediumRisks: Object.fromEntries(dimensionIds.map((id) => [id, risks.filter((risk) => risk.dimension === id && risk.severity === "medium").length])),
+    lowRisks: Object.fromEntries(dimensionIds.map((id) => [id, risks.filter((risk) => risk.dimension === id && risk.severity === "low").length])),
+    // An exceptional round: nothing beyond minor gaps, and nothing the interviewer had to help with.
+    exceptional: !risks.some((risk) => risk.severity !== "low") && !(ledgerItems ?? []).some((item) => ASKED.has(item.status) && item.band !== "strong"),
     ledger,
   };
 }
@@ -109,14 +117,24 @@ export function constraints(facts) {
     if (count >= 2) out.push(cap(id, 5, "high-severity-gaps", `${count} high-severity gaps were found in this area.`));
     else if (count === 1) out.push(cap(id, 7, "high-severity-gaps", "A high-severity gap was found in this area."));
   }
+  // Any gap keeps an area out of the top of the scale: a medium one below 9, a minor one below 10.
+  for (const id of dimensionIds) {
+    if (facts.mediumRisks?.[id]) out.push(cap(id, 8, "gaps-found", `${plural(facts.mediumRisks[id], "medium-severity gap")} ${facts.mediumRisks[id] === 1 ? "was" : "were"} found in this area.`));
+    else if (facts.lowRisks?.[id]) out.push(cap(id, 9, "gaps-found", "A minor gap was found in this area."));
+  }
+  // 10 is for exceptional rounds only.
+  if (facts.exceptional === false) {
+    out.push(...everyDimension((id) => cap(id, 9, "top-band", "A 10 is kept for rounds with no notable gaps where nothing needed the interviewer's help.")));
+  }
 
   // On interviewer rounds the score stays within one band of what the notepad verified.
   for (const [id, entry] of Object.entries(facts.ledger ?? {})) {
     if (!entry.asked) continue;
     const implied = Math.round(entry.implied);
     const covered = `In the interview you answered ${entry.answered} of the ${plural(entry.asked, "question")} asked about this area`;
-    out.push(cap(id, implied + LEDGER_WINDOW, "interview-notepad", `${covered}.`));
-    out.push(floor(id, implied - LEDGER_WINDOW, "interview-notepad", `${covered}, which earns at least this.`));
+    const helped = entry.helped ? `, ${entry.helped} of them only after help from the interviewer` : "";
+    out.push(cap(id, implied + LEDGER_ABOVE, "interview-notepad", `${covered}${helped}.`));
+    out.push(floor(id, implied - LEDGER_BELOW, "interview-notepad", `${covered}, which earns at least this.`));
   }
 
   return out;

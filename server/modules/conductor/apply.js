@@ -48,8 +48,10 @@ export function applyTurn({ items, state, plan, verified, turn }) {
     } else if (bandAtLeast(assessment.band, "adequate")) {
       item.misconceptions = item.misconceptions.map((entry) => ({ ...entry, resolved: true }));
     }
-    // Covered out of order, and well enough: credit it now so it's never re-asked.
-    if (item.itemId !== plan.focusItemId && item.status === "pending" && bandAtLeast(item.band, "adequate")) {
+    // Covered out of order, and fully: credit it now so it's never re-asked. A passing
+    // mention that is only adequate keeps its band but stays on the agenda, so the
+    // interviewer still opens it and can probe the weak spot, as a person would.
+    if (item.itemId !== plan.focusItemId && item.status === "pending" && bandAtLeast(item.band, "strong")) {
       item.openedSeq = turn.learnerSeq;
       setStatus(item, "answered", turn.learnerSeq);
     }

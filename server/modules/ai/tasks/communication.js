@@ -4,12 +4,12 @@ import { clean } from "../context.js";
 import { policy, policyVersion } from "../prompts/policy.js";
 import { list, oneOf, text } from "../schema.js";
 
-export const communicationTemplateVersion = `communication-v2/${policyVersion}`;
+export const communicationTemplateVersion = `communication-v3/${policyVersion}`;
 
 const quote = text(160, "The learner's own words where this showed, under 15 words, quoted exactly from their answer; empty if it can't be pinned to one place.");
 
 const output = z.object({
-  rating: oneOf(["strong", "solid", "developing", "needs_work"], "Overall communication: 'strong' would impress in a real interview; 'solid' clear with minor habits; 'developing' noticeable habits that get in the way; 'needs_work' hard to follow or often unsure."),
+  rating: oneOf(["strong", "solid", "developing", "needs_work"], "Overall communication: 'strong' would impress in a real interview and is uncommon; 'solid' clear with minor habits; 'developing' noticeable habits that get in the way; 'needs_work' hard to follow or often unsure."),
   summary: text(500, "Two or three sentences to the learner ('you') on how they communicated across the interview: what came across well and the main habit to change."),
   strengths: list(z.object({
     point: text(200, "A communication strength, stated specifically."),
@@ -20,7 +20,7 @@ const output = z.object({
     point: text(220, "What to work on, specific to how they actually answered."),
     example: quote,
     tip: text(260, "A concrete technique to practise, e.g. 'Lead with your choice in one sentence, then give one reason and one trade-off.'"),
-  }), { max: 3 }, "The most important communication habits to change, most important first. Empty only if there is genuinely nothing to work on."),
+  }), { min: 1, max: 3 }, "The most important communication habits to change, most important first. At least one: even a strong communicator has something to sharpen, such as leading with the decision, stating trade-offs unprompted, or checking in with the interviewer."),
 });
 
 const instructions = `## Your task: communication feedback
@@ -40,6 +40,7 @@ How to judge:
 - Typed answers have no delivery; judge only clarity, structure and length there.
 - Be honest and specific, and kind. Each point to work on must name a habit you actually saw and give a technique that fixes it. Never comment on accent, grammar of a non-native speaker, or technical correctness.
 - Examples quote the learner's own words exactly, under 15 words. Never quote the interviewer.
+- Never hold up an answer marked "the interviewer judged this answer weak or mistaken" as an example of a strength: stating a wrong choice confidently isn't good communication, and quoting it as a model teaches the wrong thing. Such an answer may illustrate a habit to work on, such as committing before thinking through failure cases.
 
 Reply with a single JSON object that matches the provided schema.`;
 
@@ -57,11 +58,12 @@ function buildUser({ prompt, answers, stats }) {
     const technicalContext = answer.technicalContext
       ? `\n  Extracted technical context (not a communication score): ${clean(answer.technicalContext, 900)}`
       : "";
+    const pushedBack = answer.unsound ? "\n  The interviewer judged this answer weak or mistaken." : "";
     const gaps = answer.communicationGaps?.length
       ? `\n  Previously identified communication gaps: ${answer.communicationGaps.join(", ")}`
       : "";
     return `${index + 1}. Question: ${clean(answer.question, 600) || "(the learner spoke first)"}
-  Learner (${answer.spoken ? "spoken" : "typed"})${delivery} — verbatim: ${clean(answer.content, 2500)}${filtered}${technicalContext}${gaps}${note}`;
+  Learner (${answer.spoken ? "spoken" : "typed"})${delivery} — verbatim: ${clean(answer.content, 2500)}${filtered}${technicalContext}${gaps}${note}${pushedBack}`;
   }).join("\n\n");
   return `<round>
 Design problem: ${clean(prompt.title, 200)}
@@ -86,3 +88,16 @@ function fake({ stats }) {
 }
 
 export const communicationTask = { name: "communication", system, buildUser, output, fake };
+
+const plain = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// The prompt asks the model never to quote an answer the interviewer judged weak or
+// mistaken as a strength; this enforces it. Such a strength is dropped, since its
+// example would hold up the wrong choice as a model to copy.
+export function withoutUnsoundExamples(data, answers) {
+  const unsound = answers.filter((answer) => answer.unsound).map((answer) => plain(answer.content));
+  // Quotes may skip words with an ellipsis: any fragment of four or more words counts.
+  const fromUnsound = (example) => String(example ?? "").split(/\.\.\.|…/).map(plain)
+    .some((fragment) => fragment.split(" ").length >= 4 && unsound.some((content) => content.includes(fragment)));
+  return { ...data, strengths: data.strengths.filter((strength) => !fromUnsound(strength.example)) };
+}

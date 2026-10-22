@@ -115,7 +115,7 @@ test("high-severity gaps rule out the top bands of their dimension", () => {
   const one = [{ severity: "high", dimension: "reliability" }, { severity: "medium", dimension: "data" }];
   const result = constrainScores(scores(9), { design: solid, decisions: justified, risks: one });
   assert.equal(result.scores.reliability, 7);
-  assert.equal(result.scores.data, 9);
+  assert.equal(result.scores.data, 8);
   const two = [{ severity: "high", dimension: "data" }, { severity: "high", dimension: "data" }];
   assert.equal(constrainScores(scores(9), { design: solid, decisions: justified, risks: two }).scores.data, 5);
 });
@@ -128,11 +128,45 @@ test("on interviewer rounds scores stay within a band of the notepad, ignoring u
     { dimension: "reliability", weight: 1, status: "not_reached", band: null },
   ];
   const result = constrainScores({ ...scores(9), scalability: 2 }, { design: solid, decisions: justified, ledgerItems });
-  // data implied = (1*2 + 4*1) / 3 = 2 -> cap 5; scalability implied 9 -> floor 6; reliability untouched
-  assert.equal(result.scores.data, 5);
+  // data implied = (1*2 + 4*1) / 3 = 2 -> cap 3; scalability implied 9 -> floor 6; reliability untouched
+  assert.equal(result.scores.data, 3);
   assert.equal(result.scores.scalability, 6);
   assert.equal(result.scores.reliability, 9);
   assert.match(result.adjustments.find((entry) => entry.dimension === "data").reason, /answered 0 of the 2 questions/);
+});
+
+test("any gap keeps its area off the top of the scale", () => {
+  const risks = [{ severity: "medium", dimension: "data" }, { severity: "low", dimension: "scalability" }];
+  const result = constrainScores(scores(10), { design: solid, decisions: justified, risks });
+  assert.equal(result.scores.data, 8);
+  assert.equal(result.scores.scalability, 9);
+  // A medium gap means the round isn't exceptional, so nothing reaches 10.
+  assert.equal(result.scores.requirements, 9);
+  assert.equal(result.adjustments.find((entry) => entry.dimension === "requirements").rule, "top-band");
+});
+
+test("10 stays possible in an exceptional round with only minor gaps", () => {
+  const risks = [{ severity: "low", dimension: "data" }, { severity: "low", dimension: "data" }];
+  const ledgerItems = [{ dimension: "scalability", weight: 1, status: "answered", band: "strong" }];
+  const result = constrainScores(scores(10), { design: solid, decisions: justified, risks, ledgerItems });
+  assert.equal(result.scores.requirements, 10);
+  assert.equal(result.scores.scalability, 10);
+  assert.equal(result.scores.data, 9);
+});
+
+test("an item the candidate needed help with caps its area a band above adequate and rules out 10s", () => {
+  const ledgerItems = [{ dimension: "reliability", weight: 1, status: "answered", band: "adequate", helped: true }];
+  const result = constrainScores(scores(10), { design: solid, decisions: justified, ledgerItems });
+  assert.equal(result.scores.reliability, 8);
+  assert.equal(result.scores.requirements, 9);
+  assert.match(result.adjustments.find((entry) => entry.dimension === "reliability").reason, /1 of them only after help/);
+});
+
+test("decisions reached only after a correction count as partly justified", () => {
+  const corrected = justified.map((entry) => ({ ...entry, reached: "corrected" }));
+  const result = constrainScores(scores(10), { design: solid, decisions: corrected });
+  // every decision counts 0.5 -> cap 3 + 7 * 0.5 = 6.5, rounded to 7
+  assert.equal(result.scores.tradeoffs, 7);
 });
 
 test("caps win over floors", () => {
@@ -161,4 +195,18 @@ test("the review is normalised with constrained scores and an audit trail", asyn
   assert.equal(review.scoring.modelScore, 90);
   assert.equal(review.scoring.adjustments.length, 1);
   assert.deepEqual(review.risks[0].nodeIds, ["db"]);
+});
+
+test("communication strengths never quote an answer the interviewer judged weak or mistaken", async () => {
+  const { withoutUnsoundExamples } = await import("./tasks/communication.js");
+  const answers = [
+    { content: "If Redis goes down, we should fail closed and reject all incoming requests.", unsound: true },
+    { content: "A single global Redis would add 100+ ms cross-continent, which breaks our budget.", unsound: false },
+  ];
+  const data = { strengths: [
+    { point: "Decisive", example: "If Redis goes down... we should fail closed and reject all" },
+    { point: "Ties choices to numbers", example: "A single global Redis would add 100+ ms cross-continent" },
+    { point: "General", example: "" },
+  ] };
+  assert.deepEqual(withoutUnsoundExamples(data, answers).strengths.map((entry) => entry.point), ["Ties choices to numbers", "General"]);
 });
