@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, LoaderCircle, UserRound } from "lucide-react";
 import { api } from "../api.js";
+import { track } from "../analytics.js";
 import { useAuth } from "../auth.jsx";
 import { INTEREST_OPTIONS, selectedInterests } from "../data/interests.js";
 import { Logo } from "../components/site.jsx";
@@ -66,6 +67,8 @@ export default function OnboardingPage({ next }) {
     setError("");
     try {
       const { user: updated } = await api.updateProfile(values);
+      // Only the picked options: the name and headline are the learner's own words.
+      track("signup_completed", { interests: values.interests, experience: values.experienceLevel || null });
       setUser(updated);
       navigate(safeNext(next), { replace: true });
     } catch (saveError) {

@@ -45,6 +45,7 @@
     "lucide-react": "0.577.0",
     "nodemailer": "10.0.13",
     "pg": "8.23.1",
+    "posthog-js": "1.438.13",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "simple-icons": "13.21.0",

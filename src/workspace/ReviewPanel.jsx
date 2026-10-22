@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, MessageSquareText, RefreshCw, Scale, Sparkles, Target } from "lucide-react";
 import { api } from "../api.js";
+import { track } from "../analytics.js";
 import { useAuth } from "../auth.jsx";
 
 const POLL_MS = 4000;
@@ -63,6 +64,7 @@ export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor })
     try {
       const result = await api.requestReview(sessionId, pendingRequest.current);
       pendingRequest.current = null;
+      track("review_requested", { plan, reviews_this_round: (data?.reviews.length ?? 0) + 1 });
       setSelectedId(result.review.id);
       await load();
     } catch (error) {
