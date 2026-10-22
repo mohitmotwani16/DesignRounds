@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { startAnalytics } from "./analytics.js";
 import "@xyflow/react/dist/style.css";
 import "./theme.js";
 import "./styles/theme.css";
@@ -27,4 +28,5 @@ ready.then(() => {
       <App />
     </React.StrictMode>
   );
+  startAnalytics();
 });

@@ -1,8 +1,9 @@
 import { ChevronRight } from "lucide-react";
+import { resetConsent } from "../analytics.js";
 import { SiteFooter } from "../components/site.jsx";
 import { Link } from "../router.js";
 
-export const PRIVACY_UPDATED = "October 20, 2026";
+export const PRIVACY_UPDATED = "October 22, 2026";
 export const CONTACT_EMAIL = "designrounds.app@gmail.com";
 
 // What we collect, why, who processes it and how to delete it. Keep this in step with
@@ -17,7 +18,7 @@ export default function PrivacyPage() {
             <span className="kicker">Last updated {PRIVACY_UPDATED}</span>
             <h1>Privacy Policy</h1>
           </header>
-          <p>DesignRounds (designrounds.in) is a system design interview practice platform. This policy explains what we collect, why, who helps us process it, and how you can delete it. We don't sell your data, show ads, or use third-party tracking or analytics scripts.</p>
+          <p>DesignRounds (designrounds.in) is a system design interview practice platform. This policy explains what we collect, why, who helps us process it, and how you can delete it. We don't sell your data or show ads. We use two analytics tools to understand how the site is used, and their cookies and recordings only run if you agree.</p>
 
           <h2>What we collect</h2>
           <ul>
@@ -30,6 +31,7 @@ export default function PrivacyPage() {
             <li><strong>Plus early-access list:</strong> if you ask for early access to Plus, we store your email address and when you asked, and send you one confirmation. We use it only to tell you when Plus opens. Ask us to remove it at any time; deleting your account removes it too.</li>
             <li><strong>Problem reports:</strong> if you report a problem, we store your email address, what you wrote, the page you were on and your browser's user agent, so we can investigate and reply. Deleting your account removes your reports.</li>
             <li><strong>Usage counts:</strong> how many AI reviews and interviewer replies you've used, so plan limits can be applied.</li>
+            <li><strong>Site analytics:</strong> which pages are visited and key steps such as signing up, starting a round or requesting a review. See <a href="#analytics">Analytics</a> below.</li>
           </ul>
 
           <h2>How we use it</h2>
@@ -39,10 +41,21 @@ export default function PrivacyPage() {
             <li>To generate AI interviewer replies and reviews of your designs.</li>
             <li>To apply plan limits, prevent abuse and keep the service secure.</li>
             <li>To improve rounds and review quality using aggregate statistics, such as average scores per round.</li>
+            <li>To find where the site is confusing or broken, using the analytics described below.</li>
           </ul>
 
+          <h2 id="analytics">Analytics</h2>
+          <p>We use PostHog and Microsoft Clarity to see how people move through the site, such as which pages lead to sign-ups and where people get stuck.</p>
+          <ul>
+            <li><strong>Without your consent:</strong> PostHog counts page visits and key steps (signing up, starting a round, requesting a review, joining the Plus early-access list) under a random ID that lives only in the open tab. Nothing is stored on your device, and nothing is recorded.</li>
+            <li><strong>If you accept:</strong> PostHog and Clarity set cookies so a return visit is recognised, and record how pages are used (scrolling, clicks and page layout) so we can replay it and build heatmaps.</li>
+            <li><strong>What is never recorded:</strong> your designs, notes, interviewer conversations, articles you write, your profile, and anything you type into a form. Those pages are blocked or masked in recordings, and email addresses are hidden wherever they appear.</li>
+            <li><strong>Signed in:</strong> events are linked to your internal account ID and plan, so we can tell how many people finish a round. Your email address and name are not sent.</li>
+          </ul>
+          <p>Recordings are kept for about 30 days and event data for up to a year. You can change your choice at any time: <button type="button" className="link-button" onClick={resetConsent}>change my analytics choice</button>.</p>
+
           <h2>Cookies and local storage</h2>
-          <p>We use only the cookies needed for the site to work: a session cookie that keeps you signed in (up to 30 days), and a short-lived cookie that protects the Google sign-in step. Your browser's local storage holds preferences such as the color theme and canvas layout. There are no advertising or tracking cookies.</p>
+          <p>We always use the cookies needed for the site to work: a session cookie that keeps you signed in (up to 30 days), and a short-lived cookie that protects the Google sign-in step. Your browser's local storage holds preferences such as the color theme, canvas layout and your analytics choice. If you accept analytics, PostHog and Clarity also set their own cookies (see <a href="#analytics">Analytics</a>). There are no advertising cookies.</p>
 
           <h2>Who processes your data</h2>
           <p>We use a small number of service providers to run DesignRounds. They process data on our behalf:</p>
@@ -53,6 +66,8 @@ export default function PrivacyPage() {
             <li><strong>Groq:</strong> converts voice answers to text. It receives the recording only, not your email address or name.</li>
             <li><strong>Cloudflare:</strong> provides Turnstile, the human check on the sign-in page and the Plus early-access form.</li>
             <li><strong>Google:</strong> provides Google sign-in, if you use it.</li>
+            <li><strong>PostHog:</strong> product analytics: page visits and key steps, and session recordings if you accept analytics.</li>
+            <li><strong>Microsoft Clarity:</strong> heatmaps and session recordings, only if you accept analytics.</li>
             <li><strong>AI provider (currently the Google Gemini API):</strong> receives your design, notes and interview answers, including filler-reduced copies and extracted answer context, to generate replies and reviews. It does not receive your email address. Depending on the provider's terms for the service tier we use, the provider may retain or review this content to improve its services, so don't put personal or confidential information in your designs.</li>
           </ul>
           <p>We may disclose information if required by law, or to protect the security of the service and its users.</p>

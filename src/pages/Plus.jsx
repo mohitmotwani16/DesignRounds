@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, LoaderCircle, MessageCircle, Minus } from "lucide-react";
 import { api } from "../api.js";
+import { track } from "../analytics.js";
 import { COMMUNICATION, PLUS_FEATURES, RUBRIC } from "../data/plans.js";
 import { SiteFooter, useReveal } from "../components/site.jsx";
 import { useAuth } from "../auth.jsx";
@@ -56,7 +57,7 @@ function EarlyAccessForm({ user, waitlist }) {
 
   if (waitlist.joined) {
     return (
-      <p className="plus-status plus-joined" role="status">
+      <p className="plus-status plus-joined ph-mask" role="status" data-clarity-mask="true">
         <Check size={18} /> You're on the list. We'll email {waitlist.joinedEmail || "you"} the day Plus opens.
       </p>
     );
@@ -70,6 +71,7 @@ function EarlyAccessForm({ user, waitlist }) {
     try {
       const address = user ? user.email : email.trim().toLowerCase();
       await api.joinPlusWaitlist(user ? {} : { email: address, ...(token ? { turnstileToken: token } : {}) });
+      track("plus_waitlist_joined", { signed_in: Boolean(user) });
       waitlist.markJoined(address);
     } catch (joinError) {
       setError(joinError.message);
@@ -97,7 +99,7 @@ function EarlyAccessForm({ user, waitlist }) {
         </button>
         <Link className="lp-text-link" to="/library">Practise free rounds first</Link>
       </div>
-      {user && <small className="plus-waitlist-note">We'll use your account email, {user.email}.</small>}
+      {user && <small className="plus-waitlist-note ph-mask" data-clarity-mask="true">We'll use your account email, {user.email}.</small>}
       {error && <p className="plus-waitlist-error" role="alert">{error}</p>}
     </form>
   );

@@ -81,7 +81,7 @@ export function SiteNav() {
           <div className="nav-sheet-actions">
             {signedIn ? (
               <>
-                <span className="nav-sheet-identity"><Avatar user={user} size="md" /><span>{user.email}</span></span>
+                <span className="nav-sheet-identity ph-mask" data-clarity-mask="true"><Avatar user={user} size="md" /><span>{user.email}</span></span>
                 <button className="btn btn-ghost" onClick={async () => { close(); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
               </>
             ) : (
