@@ -139,7 +139,7 @@ function fallbackAllowed(error, remaining) {
 function fallbackRequest(request, error, elapsed) {
   const { fallback } = request;
   console.warn(`[ai] ${request.model} ${error.code} after ${elapsed}ms; answering with ${fallback.model} instead`);
-  return { ...request, model: fallback.model, baseUrl: fallback.baseUrl, timeoutMs: request.timeoutMs - elapsed, fallback: undefined };
+  return { ...request, model: fallback.model, baseUrl: fallback.baseUrl, effort: fallback.effort ?? request.effort, timeoutMs: request.timeoutMs - elapsed, fallback: undefined };
 }
 
 async function completeWithFallback(request) {
@@ -147,8 +147,9 @@ async function completeWithFallback(request) {
   if (!fallback) return openAiCompatible(request);
   const started = Date.now();
   try {
-    // Without streaming there is no first token to watch, so the primary gets a shorter leash.
-    return await openAiCompatible({ ...request, timeoutMs: Math.min(request.timeoutMs, fallback.afterMs * 3) });
+    // Without streaming there is no first token to watch, so the primary gets a shorter
+    // leash: the task's own `leashMs`, or three times its first-token wait.
+    return await openAiCompatible({ ...request, timeoutMs: Math.min(request.timeoutMs, fallback.leashMs ?? fallback.afterMs * 3) });
   } catch (error) {
     const elapsed = Date.now() - started;
     if (!fallbackAllowed(error, request.timeoutMs - elapsed)) throw error;

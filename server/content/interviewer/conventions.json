@@ -13,7 +13,7 @@
     "minCanvasComponents": 3,
     "minCanvasConnections": 2,
     "drawCooldownTurns": 2,
-    "maxDrawRequestsPerItem": 3
+    "maxDrawRequestsPerItem": 2
   },
   "guided": {
     "maxFollowUpsPerItem": 3,

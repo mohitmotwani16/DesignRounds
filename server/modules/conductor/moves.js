@@ -43,3 +43,20 @@ export const FOCUS_AREAS = { requirements: "Requirements", high_level: "High-lev
 
 export const bandAtLeast = (band, floor) => (BAND_RANK[band] ?? 0) >= BAND_RANK[floor];
 export const betterBand = (a, b) => ((BAND_RANK[b] ?? 0) > (BAND_RANK[a] ?? 0) ? b : a ?? b ?? null);
+const lowerBand = (band, ceiling) => ((BAND_RANK[band] ?? 0) > BAND_RANK[ceiling] ? ceiling : band);
+
+// The band an item earns for scoring. Live, the notepad keeps the best band shown so the
+// interviewer can move on once the candidate gets there. Credit is stricter, as with a
+// human interviewer: an answer reached only after help (a hint, a challenge, a
+// misconception they had to be talked out of, or a weak first answer that a follow-up
+// exposed) shows the skill at an adequate level, and strong is for what the candidate
+// raised themselves. A misconception still standing at the end is weak.
+// Accepts a notepad item (camelCase) or an interview_agenda_items row.
+export function creditedBand(item) {
+  if (!item?.band) return null;
+  const misconceptions = item.misconceptions ?? [];
+  if (misconceptions.some((entry) => !entry.resolved)) return lowerBand(item.band, "weak");
+  const firstBand = (item.evidence ?? [])[0]?.band;
+  const helped = (item.hintLevel ?? item.hint_level ?? 0) > 0 || (item.challenges ?? 0) > 0 || misconceptions.length > 0 || firstBand === "weak";
+  return helped ? lowerBand(item.band, "adequate") : item.band;
+}

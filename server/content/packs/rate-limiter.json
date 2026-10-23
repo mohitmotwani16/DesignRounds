@@ -188,6 +188,11 @@
           "id": "algo.log",
           "pattern": "Using sliding window log for high traffic.",
           "challenge": "If a user has a limit of 10,000 requests per minute, how much memory does sliding window log use per user?"
+        },
+        {
+          "id": "algo.fixed_window_burst",
+          "pattern": "Choosing a fixed window counter without addressing bursts at the window boundary.",
+          "challenge": "If a client with a 100-per-minute limit sends 100 requests at 12:00:59 and another 100 at 12:01:01, what does your limiter allow?"
         }
       ],
       "probes": [

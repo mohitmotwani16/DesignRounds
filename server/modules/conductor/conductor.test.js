@@ -224,13 +224,22 @@ test("apply: the best band wins, and later good answers resolve misconceptions",
   assert.deepEqual(item(result, "deep.codegen").misconceptions, [{ id: "md5-unique", resolved: true }]);
 });
 
-test("apply: an item covered out of order is credited and won't be re-asked", () => {
+test("apply: an item covered fully out of order is credited and won't be re-asked", () => {
+  const result = apply(ledger({ "req.scale": { status: "open" } }), baseState(), {
+    move: "probe", focusItemId: "req.scale",
+    assessments: [{ itemId: "deep.cache", band: "strong", quote: "redis cache", missing: "", misconceptionId: null, turnSeq: 10, source: "message" }],
+  });
+  assert.equal(item(result, "deep.cache").status, "answered");
+  assert.equal(item(result, "req.scale").status, "open");
+});
+
+test("apply: a passing, adequate mention out of order keeps its band but stays on the agenda", () => {
   const result = apply(ledger({ "req.scale": { status: "open" } }), baseState(), {
     move: "probe", focusItemId: "req.scale",
     assessments: [{ itemId: "deep.cache", band: "adequate", quote: "redis cache", missing: "", misconceptionId: null, turnSeq: 10, source: "message" }],
   });
-  assert.equal(item(result, "deep.cache").status, "answered");
-  assert.equal(item(result, "req.scale").status, "open");
+  assert.equal(item(result, "deep.cache").status, "pending");
+  assert.equal(item(result, "deep.cache").band, "adequate");
 });
 
 test("apply: facts are pinned once; the stage only moves forward", () => {
@@ -313,4 +322,38 @@ test("clock: active time counts gaps only up to the cap", () => {
   assert.equal(accrueActiveMs({ activeMs: 1000, lastActivityAt: ago(60_000), now, capMs: 300_000 }), 61_000);
   assert.equal(accrueActiveMs({ activeMs: 1000, lastActivityAt: ago(3_600_000), now, capMs: 300_000 }), 301_000);
   assert.equal(accrueActiveMs({ activeMs: 1000, lastActivityAt: null, now, capMs: 300_000 }), 1000);
+});
+
+test("an item reached only with help is credited adequate; strong is for what the candidate raised themselves", async () => {
+  const { creditedBand } = await import("./moves.js");
+  const item = (extra) => ({ band: "strong", hintLevel: 0, challenges: 0, misconceptions: [], evidence: [{ band: "strong" }], ...extra });
+  assert.equal(creditedBand(item({})), "strong");
+  assert.equal(creditedBand(item({ hintLevel: 1 })), "adequate");
+  assert.equal(creditedBand(item({ challenges: 1 })), "adequate");
+  assert.equal(creditedBand(item({ misconceptions: [{ id: "fail-closed", resolved: true }] })), "adequate");
+  assert.equal(creditedBand(item({ evidence: [{ band: "weak" }, { band: "strong" }] })), "adequate", "a weak first answer a follow-up exposed");
+  assert.equal(creditedBand(item({ misconceptions: [{ id: "fail-closed", resolved: false }] })), "weak");
+  assert.equal(creditedBand(item({ band: "weak", hintLevel: 2 })), "weak", "help never raises a band");
+  assert.equal(creditedBand({ band: "strong", hint_level: 1, challenges: 0, misconceptions: [], evidence: [] }), "adequate", "database rows work too");
+  assert.equal(creditedBand(item({ band: null })), null);
+});
+
+test("an overall verdict on the candidate is caught; specific appreciation is not", async () => {
+  const { hasVerdict, withoutVerdict } = await import("./validate.js");
+  for (const verdict of [
+    "You did very well across the board.",
+    "This was a strong, highly collaborative session that progressed naturally.",
+    "Overall, it was a very solid, production-grade design.",
+    "You've handled it really well.",
+    "You would pass this round at most companies.",
+    "That wraps up our design round today; excellent job working through the trade-offs.",
+  ]) assert.equal(hasVerdict(verdict), true, verdict);
+  for (const fine of [
+    "That keeps the write path short, good.",
+    "Atomic INCR with a TTL solves that race cleanly.",
+    "Thanks for walking me through it. Do you have any questions for me?",
+    "Which one would you choose for a strong consistency requirement?",
+  ]) assert.equal(hasVerdict(fine), false, fine);
+  assert.equal(withoutVerdict("You did very well. One thing to look at is clock drift in the refill math."), "One thing to look at is clock drift in the refill math.");
+  assert.match(withoutVerdict("Overall a strong session."), /review after the round/);
 });

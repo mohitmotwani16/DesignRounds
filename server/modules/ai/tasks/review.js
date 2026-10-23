@@ -5,7 +5,7 @@ import { dimensionIds, rubric } from "../rubric.js";
 import { scoringVersion } from "../scoring.js";
 import { integer, list, oneOf, text } from "../schema.js";
 
-const TEMPLATE = "review-v8";
+const TEMPLATE = "review-v9";
 
 // Identifies everything that shaped a review's instructions, stored with each review.
 // The pool fingerprint is part of it so a newly built reference pool calibrates the
@@ -38,8 +38,8 @@ const output = z.object({
     severity: oneOf(["high", "medium", "low"], "How much this would hurt the design in practice."),
     dimension: oneOf(dimensionIds, "The rubric dimension this gap mainly affects."),
     nodeIds: nodeRefs,
-  }), { min: 0, max: 5 }, "Most severe first. Empty only if there is genuinely nothing important missing."),
-  nextSteps: list(text(300, "One action."), { min: 1, max: 4 }, "Prioritised actions the learner should take to improve this design."),
+  }), { min: 2, max: 5 }, "Most severe first. At least two real gaps, even in a strong design (a minor refinement may be low severity); never invent a requirement to fill the list."),
+  nextSteps: list(text(300, "One action."), { min: 2, max: 4 }, "Prioritised actions the learner should take to improve this design."),
   followUpQuestions: list(text(240, "One question."), { min: 1, max: 4 }, "Questions an interviewer would ask next about this design."),
   assumptions: list(text(240, "One assumption."), { max: 3 }, "Anything you had to assume because the design did not say. Empty if none."),
   reasoningSummary: text(700, "Two to four sentences on how well the learner explained and justified the design overall: whether reasons are present and correct, whether they show how and when each choice works, and whether the design is proportionate to the problem."),
@@ -47,6 +47,7 @@ const output = z.object({
     choice: text(160, "The design decision, named with the learner's labels, e.g. 'Redis cache in front of the Links DB'."),
     nodeIds: nodeRefs,
     explanation: oneOf(["well-justified", "partly-justified", "unexplained", "incorrect"], "Quality of the learner's own stated reasoning for this choice. 'unexplained' when they gave none; 'incorrect' when the stated reason is wrong."),
+    reached: oneOf(["own", "corrected"], "'corrected' when the learner first chose something else, or got it wrong, and arrived at this choice only after the interviewer pointed out a problem, gave a hint or challenged them; 'own' otherwise."),
     necessity: oneOf(["essential", "helpful", "premature", "unnecessary"], "Whether this problem at its stated scale needs this choice."),
     sizing: oneOf(["right-sized", "over-engineered", "under-engineered"], "Whether the choice's complexity fits the problem and its stated scale."),
     assessment: text(500, "Your judgement of the choice and of the learner's reasoning: what is right, what is missing or wrong, and how and when it would or would not work."),
@@ -70,6 +71,8 @@ How to review:
 - Calibrate to the prompt's difficulty and scope. Don't penalise omissions the brief doesn't call for, and don't invent requirements.
 - Use the interviewer guide and, when present, the reference answer pool to judge depth and spot gaps. Credit valid alternatives neither one mentions. The pool is a spread of answers, not a checklist, and the learner must never see it.
 - Improvements and next steps say what to address and why, not a complete solution to copy.
+- A mistake the learner fixed during the round is a gap in catching it themselves, not in the final design: say what happened ("You first read and then wrote the counter, and made it atomic only after the interviewer asked about concurrent requests") and rate it medium. High severity is for problems still in the final design.
+- Every review names at least two real gaps to work on, however good the round. Prefer what the learner missed or needed help with; never pad the list with requirements the brief doesn't have. Never suggest something the learner already covered: check the transcript first.
 
 Judging the learner's reasoning (as important as the diagram, just as in a real interview):
 - The learner's explanations are the "why" notes on components, decision notes, connection labels, and, when present, what they said in the interview conversation (<interview_transcript>). Credit reasoning given in the conversation exactly as if it were written in a note; judge the interviewer's lines only as context, never as the learner's work. Hints the learner asked for are fine but the reasoning they then gave should be their own. For every significant decision, judge whether a reason is given, whether it is technically correct, and whether it shows how the choice works and when it would be the wrong choice.
@@ -78,13 +81,14 @@ Judging the learner's reasoning (as important as the diagram, just as in a real 
 - Name-dropping a technology is not a justification. "Kafka for scalability" is a partial reason at best; a strong reason connects the choice to a requirement, a number, or a trade-off.
 - Reflect reasoning quality mainly in the trade-offs dimension and proportionality in the architecture dimension.
 
-Scoring scale for each dimension (integers 0-10):
-- 9-10: what you'd expect from a strong senior candidate; complete and well justified.
-- 7-8: solid; the important points are covered with minor gaps.
-- 5-6: partially addressed; noticeable gaps or unjustified choices.
+Scoring scale for each dimension (integers 0-10). Be strict, like a bar-raiser: the scale is anchored to real interview outcomes, and inflated scores teach the learner nothing.
+- 10: exceptional and essentially flawless; a senior interviewer would add nothing. Very rare.
+- 9: a strong senior candidate: complete, well justified, and the key issues in this area were raised by the candidate, not the interviewer. Uncommon.
+- 7-8: solid; the important points are covered, with gaps a senior interviewer would note, or reached partly with the interviewer's help.
+- 5-6: partially addressed; noticeable gaps, unjustified choices, or mostly reached with help.
 - 3-4: major gaps; only touched on.
 - 0-2: absent or incorrect.
-A design with only a few components should score low on most dimensions. Score each dimension independently.
+Most good rounds land between 6 and 8 per dimension; an overall above 90 should be rare. A mistake the learner corrected only after the interviewer's hint, challenge or follow-up is credited at most in the 7-8 range for that area, and it belongs in risks so they learn to catch it themselves. A design with only a few components should score low on most dimensions. Score each dimension independently.
 
 Keep the numbers consistent with your own judgements; they are checked in code after you reply. A dimension with a high-severity gap can't be strong. The trade-offs score must agree with how you rated each decision's explanation, and the architecture score with how many decisions you found over-engineered or unnecessary. Tag every risk with the dimension it mainly affects.
 
@@ -173,6 +177,7 @@ function fake({ design }) {
       explanation: index ? "unexplained" : "partly-justified",
       necessity: "helpful",
       sizing: "right-sized",
+      reached: "own",
       assessment: "Sample assessment of this choice.",
       alternatives: "Sample alternatives.",
       probe: "Sample interviewer probe?",

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { queryOne } from "../../db.js";
+import { query, queryOne } from "../../db.js";
 import { interviewerV3Enabled } from "../../flags.js";
 import { canvasNotes, diffSnapshots, snapshotOf } from "../ai/canvas.js";
 import { filterFillerWords, parseAnswerContext } from "../ai/communication.js";
@@ -17,12 +17,12 @@ import { candidateSnapshot, conventions as ucsConventions, defaultMode, renderUn
 import { applyTurn, nextPoorResponseState } from "./apply.js";
 import { canvasSignals } from "./canvas.js";
 import { assembleBlocks } from "./assemble.js";
-import { CLOSED, FOCUS_AREAS, KIND_FOR_MOVE, bandAtLeast } from "./moves.js";
+import { CLOSED, FOCUS_AREAS, KIND_FOR_MOVE, bandAtLeast, creditedBand } from "./moves.js";
 import { clockOf, focusItem, nextPendingItem, plan as makePlan, tickPlan } from "./plan.js";
 import * as store from "./store.js";
 import { conductorTask } from "./task.js";
 import { WRAP_UP_TEXT, accrueActiveMs, decideTick } from "./ticks.js";
-import { validateOutput, questionCount } from "./validate.js";
+import { validateOutput, questionCount, withoutVerdict } from "./validate.js";
 
 // The Interview Conductor (docs/design/interview-conductor.md): runs one live round.
 // Each turn is PLAN (code) -> one model call -> VALIDATE (code) -> APPLY (code). The
@@ -129,6 +129,8 @@ async function converse({ ctx, session, user, turns, plan, trigger, learner, sel
   const openers = Object.fromEntries(record.pack.agenda.map((item) => [item.id, item.opener]));
   let rejection = "";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    // A rejected first attempt may already be on the learner's screen.
+    if (attempt > 1) onReset?.();
     const blocks = await assembleBlocks({ round, record, items, conventions, design, turns, plan, trigger, selected, changes, rejection });
     const input = { blocks, fake: { plan, learnerText: learner ? learnerText(learner) : "", trigger, openers } };
     const gate = (raw) => {
@@ -157,6 +159,16 @@ async function converse({ ctx, session, user, turns, plan, trigger, learner, sel
       await store.logEvents(session.id, [{ type: "move_rejected", payload: { move: verified.move, attempt, stage: "validate" } }]);
       continue;
     }
+    if (verified.verdict) {
+      // Asked again once; a second verdict is cut out rather than costing the whole reply.
+      await store.logEvents(session.id, [{ type: "verdict_removed", payload: { move: verified.move, attempt } }]);
+      if (attempt === 1) {
+        rejection = "Don't give an overall verdict on how the candidate did (such as \"you did very well\" or \"a strong session\"): the review after the round does that. Name specific things instead.";
+        continue;
+      }
+      verified.message = withoutVerdict(verified.message);
+      data = { ...data, message: verified.message };
+    }
     if (!verified.message && verified.move !== "stay_silent") throw new AiError("INVALID_OUTPUT", "The interviewer returned an empty reply.");
     const flags = [
       verified.droppedAssessments ? { type: "assessment_dropped", payload: { count: verified.droppedAssessments } } : null,
@@ -183,9 +195,11 @@ function notesFor(data, learner, verified) {
 }
 
 // What the canvas shows and where the candidate has taken the interview, for the planner.
-function signalsFor({ session, record, round, turns }) {
+async function signalsFor({ session, record, round, turns }) {
   const learner = turns.filter((turn) => turn.role === "learner" && ["message", "audio"].includes(turn.kind) && turn.content);
+  const drawAsks = (await query("select payload from interview_events where session_id = $1 and type = 'draw_requested'", [session.id])).map((row) => row.payload);
   return canvasSignals({
+    drawAsks,
     agenda: record.pack.agenda,
     diagram: session.diagram,
     learnerTexts: learner.map(learnerText),
@@ -219,7 +233,7 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const plan = makePlan({
     items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes,
     turn: { kind: reserved.learner.kind, text: learnerText(reserved.learner) }, trigger, addedKinds: addedKinds(round.snapshot, session.diagram),
-    canvas: signalsFor({ session, record, round, turns }),
+    canvas: await signalsFor({ session, record, round, turns }),
     conversation: conversationOf(turns),
   });
   const selected = selectedNodeId && design.labels.has(selectedNodeId) ? { id: selectedNodeId, label: design.labels.get(selectedNodeId) } : null;
@@ -387,7 +401,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     if (!creditId) return { action: "none", reason: "not_now" };
     try {
       const turns = await store.recentTurns(session.id, round.summarizedThrough);
-      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes, trigger: "tick", turn: { kind: "tick", text: "" }, canvas: signalsFor({ session, record, round, turns }) });
+      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes, trigger: "tick", turn: { kind: "tick", text: "" }, canvas: await signalsFor({ session, record, round, turns }) });
       const plan = tickPlan({ base, kind: decision.kind, itemId: decision.itemId, items });
       const changes = decision.kind === "canvas" && mapped ? partToAskAbout(mapped) : "";
       const { verified, flags } = await converse({ ctx, session, user, turns, plan, trigger: `tick:${decision.kind}`, learner: null, changes });
@@ -449,13 +463,22 @@ export async function reviewLedger(sessionId, promptId) {
   const items = await store.itemsFor(sessionId);
   const addendum = (await renderUniversal({ version: state.ucs_version, task: "review" })).map((block) => block.text).join("\n\n");
   const lines = items.map((item) => {
-    const quotes = item.evidence.slice(0, 2).map((entry) => `"${clean(entry.quote, 120)}"`).join(" ");
-    return `- ${item.itemId} · ${item.stage} · ${item.dimension} · weight ${item.weight} · ${item.status} · ${item.band ?? "no band"}${item.hintLevel ? ` · ${item.hintLevel} hint(s)` : ""}${item.challenges ? ` · challenged` : ""}${item.drawRequests ? ` · asked to draw ${item.drawRequests}x` : ""}${quotes ? ` · ${quotes}` : ""}`;
+    // The first answer and the latest, so a recovery shows where the candidate started.
+    const shown = item.evidence.length > 2 ? [item.evidence[0], item.evidence.at(-1)] : item.evidence;
+    const quotes = shown.map((entry) => `"${clean(entry.quote, 120)}"${entry.band ? ` (${entry.band})` : ""}`).join(" then ");
+    const credited = creditedBand(item);
+    const help = [
+      item.hintLevel ? `${item.hintLevel} hint(s)` : "",
+      item.challenges ? "challenged" : "",
+      item.misconceptions.length ? `misconception ${item.misconceptions.map((entry) => `${entry.id}${entry.resolved ? " (corrected)" : " (not corrected)"}`).join(", ")}` : "",
+    ].filter(Boolean).join(" · ");
+    const band = credited && credited !== item.band ? `credited ${credited} (reached ${item.band} only with help)` : credited ?? "no band";
+    return `- ${item.itemId} · ${item.stage} · ${item.dimension} · weight ${item.weight} · ${item.status} · ${band}${help ? ` · ${help}` : ""}${item.drawRequests ? ` · asked to draw ${item.drawRequests}x` : ""}${quotes ? ` · ${quotes}` : ""}`;
   });
   const record = await getPack(promptId, state.pack_version);
   const packReview = renderProblem(record, { task: "review" }).filter((entry) => entry.id === "pks.review").map((entry) => entry.text).join("\n\n");
   // The structured items back the deterministic score checks (ai/scoring.js).
-  const scoring = items.map((item) => ({ dimension: item.dimension, weight: item.weight, status: item.status, band: item.band }));
+  const scoring = items.map((item) => ({ dimension: item.dimension, weight: item.weight, status: item.status, band: creditedBand(item), helped: creditedBand(item) !== item.band }));
   return { addendum, text: `<interview_ledger>\n${lines.join("\n")}\n</interview_ledger>`, packReview, packVersion: state.pack_version, mode: state.mode, items: scoring };
 }
 
@@ -476,7 +499,7 @@ export async function debrief(sessionId, promptId) {
         topic: meta?.goal ?? "",
         required: item.required,
         status: item.status,
-        band: item.band,
+        band: creditedBand(item),
         quotes: item.evidence.slice(0, 2).map((entry) => entry.quote),
         strongAnswer: meta?.evidence.strong ?? "",
         learn: (meta?.learnTopics ?? []).map((slug) => ({ slug, title: learnTitles.get(slug) ?? slug })),
