@@ -16,6 +16,10 @@ const MAX_CODE_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 45;
 const MAX_CODES_PER_EMAIL_PER_HOUR = 6;
 const OAUTH_STATE_TTL_MS = 10 * 60_000;
+// How long a passed human check lasts for a signed-in browser. The browser renews it
+// invisibly before then, so people only see a challenge when Cloudflare asks for one.
+export const HUMAN_PASS_MS = 24 * 60 * 60_000;
+const humanValidUntil = (checkedAt) => (checkedAt ? new Date(new Date(checkedAt).getTime() + HUMAN_PASS_MS).toISOString() : null);
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
@@ -217,7 +221,7 @@ function readHumanGrant(raw) {
 }
 
 // `network` is set when this sign-in already passed Turnstile on the same network.
-// The returned launch id is handed to that page only; a later load has to pass again.
+// The returned launch id identifies this browser's human check for the next 24 hours.
 async function createSession(res, user, userAgent, { network = null } = {}) {
   const token = crypto.randomBytes(32).toString("base64url");
   const launch = network ? crypto.randomBytes(24).toString("base64url") : null;
@@ -269,7 +273,7 @@ export const loadUser = route(async (req, _res, next) => {
   if (token && token.length <= 128) {
     const row = await queryOne(
       `select u.*, s.id as auth_session_id, s.last_seen_at as session_seen_at,
-              s.human_ip, s.human_launch
+              s.human_ip, s.human_launch, s.human_checked_at
          from auth_sessions s join users u on u.id = s.user_id
         where s.token_hash = $1 and s.expires_at > now()`,
       [hashToken(token)]
@@ -303,19 +307,22 @@ const HUMAN_EXEMPT = new Set([
   "GET /v1/auth/google/callback",
 ]);
 
-// A persisted login is not enough. This page load must have passed Turnstile,
-// and the request must still be on the network that passed it.
+// The browser holding this session (not just its cookie) passed Turnstile in the
+// last 24 hours. The launch id lives in that browser's storage, so a copied session
+// cookie alone isn't enough. A new network is not a reason to ask again: mobile
+// carriers and ISPs change public addresses all the time.
+const humanPassCurrent = (req) => {
+  const launch = req.get("x-human-launch") || "";
+  const expected = req.user?.human_launch || "";
+  if (!expected || !launch || !safeEqual(launch, expected)) return false;
+  const checkedAt = req.user.human_checked_at ? new Date(req.user.human_checked_at).getTime() : 0;
+  return Date.now() - checkedAt < HUMAN_PASS_MS;
+};
+
 export function requireCurrentHuman(req, _res, next) {
   if (!req.user || !turnstileRequired()) return next();
   if (HUMAN_EXEMPT.has(`${req.method} ${req.path}`)) return next();
-  const launch = req.get("x-human-launch") || "";
-  const expected = req.user.human_launch || "";
-  if (!expected || !launch || !safeEqual(launch, expected)) {
-    return next(new HttpError(403, "HUMAN_CHECK_REQUIRED", "Confirm you're human to continue."));
-  }
-  if (req.user.human_ip !== networkKey(req.ip)) {
-    return next(new HttpError(403, "NETWORK_CHANGED", "Your network changed. Confirm you're human to continue."));
-  }
+  if (!humanPassCurrent(req)) return next(new HttpError(403, "HUMAN_CHECK_REQUIRED", "Confirm you're human to continue."));
   next();
 }
 
@@ -405,7 +412,7 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
   const launchId = await createSession(res, user, req.get("user-agent"), { network: sameNetwork ? networkKey(req.ip) : null });
   await welcomeFirstLogin(user);
   const body = { user: toPublicUser(user) };
-  if (launchId) body.launchId = launchId;
+  if (launchId) Object.assign(body, { launchId, humanValidUntil: humanValidUntil(new Date()) });
   res.json(body);
 }));
 
@@ -543,12 +550,16 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
 identityRouter.post("/auth/human-check", requireUser, route(async (req, res) => {
   const { turnstileToken: token } = parse(z.object({ turnstileToken: z.string().trim().min(1).max(2048) }), req.body);
   await assertHuman(req, token, "continue");
-  const launchId = crypto.randomBytes(24).toString("base64url");
-  await query(
-    `update auth_sessions set human_ip = $2, human_launch = $3, human_checked_at = now() where id = $1`,
+  // A renewal from the browser that already holds this session's launch id keeps it,
+  // so the browser's other tabs stay valid; anyone else gets a new one.
+  const presented = req.get("x-human-launch") || "";
+  const keep = presented && req.user.human_launch && safeEqual(presented, req.user.human_launch);
+  const launchId = keep ? req.user.human_launch : crypto.randomBytes(24).toString("base64url");
+  const row = await queryOne(
+    `update auth_sessions set human_ip = $2, human_launch = $3, human_checked_at = now() where id = $1 returning human_checked_at`,
     [req.authSessionId, networkKey(req.ip), launchId]
   );
-  res.json({ launchId });
+  res.json({ launchId, humanValidUntil: humanValidUntil(row.human_checked_at) });
 }));
 
 identityRouter.post("/auth/sign-out", route(async (req, res) => {
@@ -571,6 +582,7 @@ identityRouter.get("/session", (req, res) => {
   const launchId = req.user && pendingLaunch && pendingLaunch === req.user.human_launch && req.user.human_ip === networkKey(req.ip)
     ? pendingLaunch
     : undefined;
+  const passCurrent = Boolean(req.user) && humanPassCurrent(req);
   if (pendingLaunch) res.clearCookie(LAUNCH_COOKIE, { ...launchCookieOptions(), maxAge: undefined });
   const body = {
     user: req.user ? toPublicUser(req.user) : null,
@@ -578,7 +590,8 @@ identityRouter.get("/session", (req, res) => {
     turnstileSiteKey: turnstileSiteKey(),
     humanCheckRequired: Boolean(req.user) && turnstileRequired(),
   };
-  if (launchId) body.launchId = launchId;
+  if (launchId) Object.assign(body, { launchId, humanValidUntil: humanValidUntil(req.user.human_checked_at) });
+  else if (passCurrent) body.humanValidUntil = humanValidUntil(req.user.human_checked_at);
   res.json(body);
 });
 

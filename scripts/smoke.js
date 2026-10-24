@@ -200,11 +200,30 @@ try {
       assert.equal(verified.status, 200);
       assert.ok(verified.body.launchId, "this page load is checked because the code was requested on the same network");
       assert.equal((await call("GET", "/api/v1/me")).status, 403, "a saved login is not enough on its own");
-      assert.equal((await call("GET", "/api/v1/me", undefined, { "X-Human-Launch": verified.body.launchId })).status, 200);
+      const launch = { "X-Human-Launch": verified.body.launchId };
+      assert.ok(Date.parse(verified.body.humanValidUntil) - Date.now() > 23 * 3600_000, "a pass lasts about a day");
+      assert.equal((await call("GET", "/api/v1/me", undefined, launch)).status, 200);
+      // A new network (mobile data, a VPN, a changed ISP address) isn't a new visitor.
       await query("update auth_sessions set human_ip = '203.0.113.50' where human_launch = $1", [verified.body.launchId]);
-      const moved = await call("GET", "/api/v1/me", undefined, { "X-Human-Launch": verified.body.launchId });
-      assert.equal(moved.status, 403);
-      assert.equal(moved.body.error.code, "NETWORK_CHANGED");
+      assert.equal((await call("GET", "/api/v1/me", undefined, launch)).status, 200, "a network change keeps the pass");
+      // The session tells the browser when its pass expires, so it can renew in time.
+      assert.ok((await call("GET", "/api/v1/session", undefined, launch)).body.humanValidUntil);
+      assert.equal((await call("GET", "/api/v1/session")).body.humanValidUntil, undefined, "only the browser holding the pass learns its expiry");
+      // After 24 hours the pass expires and the check runs again.
+      await query("update auth_sessions set human_checked_at = now() - interval '25 hours' where human_launch = $1", [verified.body.launchId]);
+      const expired = await call("GET", "/api/v1/me", undefined, launch);
+      assert.equal(expired.status, 403);
+      assert.equal(expired.body.error.code, "HUMAN_CHECK_REQUIRED");
+      // Renewing from the same browser keeps its launch id, so its other tabs stay valid.
+      const renewed = await call("POST", "/api/v1/auth/human-check", { turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" }, launch);
+      assert.equal(renewed.status, 200, JSON.stringify(renewed.body));
+      assert.equal(renewed.body.launchId, verified.body.launchId);
+      assert.ok(Date.parse(renewed.body.humanValidUntil) > Date.now() + 23 * 3600_000);
+      assert.equal((await call("GET", "/api/v1/me", undefined, launch)).status, 200);
+      // A browser without the launch id (a copied session cookie) gets a new one and the old one stops working.
+      const other = await call("POST", "/api/v1/auth/human-check", { turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" });
+      assert.notEqual(other.body.launchId, verified.body.launchId);
+      assert.equal((await call("GET", "/api/v1/me", undefined, launch)).status, 403);
       assert.equal((await call("POST", "/api/v1/auth/sign-out", {})).status, 200);
     } finally {
       process.env.TURNSTILE_SITE_KEY = " ";
