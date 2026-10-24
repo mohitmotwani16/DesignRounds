@@ -1,0 +1,640 @@
+{
+  "opening": "Privacy law lets our users ask us to delete their personal data, and right now each request turns into a scramble across teams. Let's design a system that handles these requests across our whole data platform. Where would you start?",
+  "clarifications": [
+    {
+      "id": "scale.requests",
+      "topics": [
+        "requests",
+        "volume",
+        "how many",
+        "rate"
+      ],
+      "answer": "About 50,000 deletion requests a month, for a service with 100 million users."
+    },
+    {
+      "id": "req.deadline",
+      "topics": [
+        "deadline",
+        "sla",
+        "how fast",
+        "legal",
+        "time limit"
+      ],
+      "answer": "Each request must be completed within 30 days of being verified."
+    },
+    {
+      "id": "data.where",
+      "topics": [
+        "where",
+        "systems",
+        "stores",
+        "inventory",
+        "copies"
+      ],
+      "answer": "Personal data lives in about 30 service databases, Kafka topics, the data lake, the warehouse, ML feature stores and training sets, backups and a few third-party tools."
+    },
+    {
+      "id": "data.lake",
+      "topics": [
+        "lake",
+        "parquet",
+        "iceberg",
+        "files",
+        "size",
+        "petabytes"
+      ],
+      "answer": "The lake is about 3 PB, mostly Parquet in Iceberg tables partitioned by date."
+    },
+    {
+      "id": "data.retention",
+      "topics": [
+        "kafka retention",
+        "backups",
+        "snapshots",
+        "retention"
+      ],
+      "answer": "Kafka keeps 7 days. Database backups are kept 35 days. Iceberg snapshots are kept for time travel."
+    },
+    {
+      "id": "req.keep",
+      "topics": [
+        "invoices",
+        "legal hold",
+        "finance",
+        "keep",
+        "exceptions"
+      ],
+      "answer": "Invoices and payment records must be kept for 7 years for tax law, and some accounts are under legal hold."
+    },
+    {
+      "id": "req.proof",
+      "topics": [
+        "proof",
+        "audit",
+        "evidence",
+        "regulator",
+        "verify"
+      ],
+      "answer": "We must be able to show a regulator that a request was completed, and when, across every system."
+    },
+    {
+      "id": "third.parties",
+      "topics": [
+        "vendors",
+        "third party",
+        "email provider",
+        "analytics tool",
+        "processors"
+      ],
+      "answer": "An email provider and an analytics vendor also hold user data; both have deletion APIs."
+    }
+  ],
+  "clarificationPolicy": "Answer as the privacy engineering lead. Keep it a platform-wide, auditable deletion workflow problem at large data scale; decide unlisted details so finding copies, lake rewrites, backups and proof stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "users",
+          "audit-log"
+        ],
+        "keywords": [
+          "deletion requests",
+          "deadline",
+          "systems",
+          "exceptions",
+          "proof",
+          "legal hold"
+        ]
+      },
+      "goal": "Establish request volume, deadline, where data lives, what must be kept and how completion is proven.",
+      "opener": "What do you need to find out before designing how deletions work?",
+      "evidence": {
+        "strong": "Asks about request volume and deadline, every place personal data lives (including streams, lake, ML data, backups, vendors), legal retention exceptions and holds, identity verification, and what proof regulators need.",
+        "adequate": "Asks about volume and deadline but not exceptions, backups or proof.",
+        "weak": "Starts writing DELETE statements without finding out where the data is."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.one_db",
+          "pattern": "Assumes deleting the user's row in the main database is enough.",
+          "challenge": "The user's events are in the lake and their face is in a training set. Are they deleted?"
+        }
+      ],
+      "probes": [
+        "Which data are we legally required to keep?",
+        "What does a regulator need to see?"
+      ],
+      "hints": [
+        "Personal data spreads far beyond the user table.",
+        "Some records must be kept even after a request."
+      ],
+      "moveOnSummary": "Tens of thousands of requests a month across many stores, a thirty-day deadline, legal retention exceptions and provable completion.",
+      "learnTopics": [
+        "data-engineering-system-design-interview",
+        "non-functional-requirements"
+      ]
+    },
+    {
+      "id": "hl.workflow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "queue",
+          "topic",
+          "worker",
+          "database"
+        ],
+        "keywords": [
+          "deletion service",
+          "workflow",
+          "fan-out",
+          "acknowledge",
+          "state machine",
+          "deletion event"
+        ]
+      },
+      "goal": "Track each request through a durable workflow that fans out to every system and waits for acknowledgements.",
+      "opener": "A verified request arrives. How does it get carried out across all these systems?",
+      "evidence": {
+        "strong": "A deletion service records the request, checks legal holds, and runs a durable workflow per request (Temporal, Step Functions or a state table) that publishes a deletion event and creates a task per system; each system's handler deletes and acknowledges; retries, deadlines and escalation are tracked.",
+        "adequate": "Publishes a deletion event but doesn't track acknowledgements or deadlines.",
+        "weak": "Runs a one-off script per request."
+      },
+      "misconceptions": [
+        {
+          "id": "wf.fire_forget",
+          "pattern": "Thinks publishing a deletion event and moving on is enough.",
+          "challenge": "One team's consumer has been broken for two weeks. How would you know?"
+        }
+      ],
+      "probes": [
+        "How do you know every system has finished?",
+        "What happens if a system never responds?"
+      ],
+      "hints": [
+        "Each system should confirm, not just be told.",
+        "Deadlines need tracking per request."
+      ],
+      "moveOnSummary": "A durable per-request workflow fans out tasks, collects acknowledgements and escalates stragglers before the deadline.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "saga-pattern"
+      ]
+    },
+    {
+      "id": "hl.inventory",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-catalog",
+          "lineage"
+        ],
+        "keywords": [
+          "data inventory",
+          "pii tags",
+          "identity map",
+          "device ids",
+          "where data lives",
+          "catalog"
+        ]
+      },
+      "goal": "Know where every copy of a user's data is and under which identifiers.",
+      "opener": "How do you know every place a given user's data lives, under every id they have?",
+      "evidence": {
+        "strong": "Maintains a catalog that tags personal-data columns and datasets with owners and lineage, so derived copies are found; keeps an identity map from user id to emails, device ids, vendor ids; new datasets with personal data must register before shipping.",
+        "adequate": "Has a list of main tables but no lineage or identity map.",
+        "weak": "Relies on teams remembering where data is."
+      },
+      "misconceptions": [
+        {
+          "id": "inv.user_id_only",
+          "pattern": "Believes searching by user id finds everything.",
+          "challenge": "Logged-out events carry only a device id, and the vendor knows the user by email. How do you find those?"
+        }
+      ],
+      "probes": [
+        "How does a newly created table get into the inventory?"
+      ],
+      "hints": [
+        "Lineage shows where data was copied to.",
+        "Users have more than one identifier."
+      ],
+      "moveOnSummary": "A tagged catalog with lineage plus an identity map of every identifier, with registration required for new datasets.",
+      "learnTopics": [
+        "data-quality",
+        "data-mesh"
+      ]
+    },
+    {
+      "id": "deep.lake",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-lake",
+          "t-spark",
+          "batch-job"
+        ],
+        "keywords": [
+          "batched deletes",
+          "rewrite files",
+          "row-level delete",
+          "merge-on-read",
+          "delete files",
+          "weekly batch"
+        ]
+      },
+      "goal": "Delete from a petabyte lake of immutable files at reasonable cost within the deadline.",
+      "opener": "How do you delete one user from a lake of immutable Parquet files, and how often do you rewrite files?",
+      "evidence": {
+        "strong": "Explains that deleting a row means rewriting files; batches all pending requests (daily or weekly), uses the table format's row-level deletes (merge-on-read delete files, later compaction) and partition pruning via the identity map or an index of which partitions hold each user, completing well within the deadline.",
+        "adequate": "Uses row-level deletes but runs them per request, or doesn't know which partitions to touch.",
+        "weak": "Runs a DELETE per request across the whole lake, or forgets the lake."
+      },
+      "misconceptions": [
+        {
+          "id": "lake.per_request",
+          "pattern": "Thinks running a delete per request is fine.",
+          "challenge": "Thousands of requests a day, each rewriting files across every date partition: how much data do you rewrite?"
+        }
+      ],
+      "probes": [
+        "How do you find which partitions contain a user's rows without scanning everything?",
+        "When does the physical file actually disappear?"
+      ],
+      "hints": [
+        "Requests can wait a few days and be done together.",
+        "Table formats can record deletes before rewriting files."
+      ],
+      "moveOnSummary": "Batch pending requests and use row-level deletes with partition targeting, then compaction, within the deadline.",
+      "learnTopics": [
+        "open-table-formats",
+        "data-layout-optimization"
+      ]
+    },
+    {
+      "id": "deep.snapshots",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "storage",
+          "scheduler"
+        ],
+        "keywords": [
+          "time travel",
+          "snapshot expiry",
+          "orphan files",
+          "old versions",
+          "expire snapshots",
+          "physical deletion"
+        ]
+      },
+      "goal": "Make sure deleted rows don't survive in old snapshots and file versions.",
+      "opener": "The delete committed, but time travel still shows the user's rows. Why, and what do you do?",
+      "evidence": {
+        "strong": "Explains that older snapshots still reference the old files; expires snapshots older than the window after deletes, removes orphan files and object versions, aligns time-travel retention with the deadline, and documents the policy.",
+        "adequate": "Expires snapshots but forgets object-storage versioning or orphan files.",
+        "weak": "Doesn't know old snapshots keep data."
+      },
+      "misconceptions": [
+        {
+          "id": "snap.delete_done",
+          "pattern": "Believes a committed delete removes the data physically.",
+          "challenge": "Which files does last week's snapshot point to?"
+        }
+      ],
+      "probes": [
+        "How long can you keep time travel and still meet the deadline?"
+      ],
+      "hints": [
+        "A snapshot is a pointer to files that still exist.",
+        "Retention policies decide when old files go."
+      ],
+      "moveOnSummary": "Expire snapshots and remove orphan files and object versions after deletes, with retention inside the deadline.",
+      "learnTopics": [
+        "open-table-formats"
+      ]
+    },
+    {
+      "id": "deep.backups",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "db-backup",
+          "archive"
+        ],
+        "keywords": [
+          "backup restore",
+          "replay deletions",
+          "tombstone list",
+          "resurrect",
+          "suppression list",
+          "re-ingest"
+        ]
+      },
+      "goal": "Stop backups, replays and re-ingestion from bringing deleted users back.",
+      "opener": "You restore a database from last week's backup. How do deleted users stay deleted?",
+      "evidence": {
+        "strong": "Lets backups age out within the deadline rather than editing them, keeps a suppression list of deleted ids (hashed) that is re-applied after any restore, replay or backfill, and makes ingestion pipelines drop records for suppressed ids.",
+        "adequate": "Lets backups expire but has no plan for restores or backfills.",
+        "weak": "Doesn't consider backups."
+      },
+      "misconceptions": [
+        {
+          "id": "back.edit",
+          "pattern": "Thinks you must edit every backup to delete the user.",
+          "challenge": "Backups are immutable and kept for weeks. Is rewriting each one practical, and is it needed?"
+        }
+      ],
+      "probes": [
+        "What stops a backfill from the raw zone re-creating the user?"
+      ],
+      "hints": [
+        "Backups can expire; restores must re-apply what happened since.",
+        "Keep a list of who must stay deleted."
+      ],
+      "moveOnSummary": "Let backups expire, keep a hashed suppression list re-applied after restores and backfills, and filter ingestion.",
+      "learnTopics": [
+        "disaster-recovery",
+        "backfill-and-reprocessing"
+      ]
+    },
+    {
+      "id": "deep.shred",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "kms",
+          "secrets"
+        ],
+        "keywords": [
+          "crypto-shredding",
+          "per-user key",
+          "encryption key",
+          "destroy key",
+          "envelope encryption",
+          "pseudonymous id"
+        ]
+      },
+      "goal": "Use encryption or pseudonymisation where rewriting data is impractical.",
+      "opener": "Where would you avoid rewriting data altogether, and how?",
+      "evidence": {
+        "strong": "Encrypts personal fields with per-user keys (envelope encryption, keys in a key store) so destroying the key makes all copies unreadable, including archives and backups; replaces user ids with pseudonymous ids in analytics so deleting one mapping row unlinks the data; notes key-management cost and that aggregates may need no change.",
+        "adequate": "Mentions encryption but not per-user keys or the cost of managing them.",
+        "weak": "Doesn't consider alternatives to rewriting."
+      },
+      "misconceptions": [
+        {
+          "id": "shred.one_key",
+          "pattern": "Thinks encrypting the whole dataset with one key helps per-user deletion.",
+          "challenge": "Destroying that one key deletes whom?"
+        }
+      ],
+      "probes": [
+        "How many keys would you need, and where do they live?"
+      ],
+      "hints": [
+        "Destroying a key can make data unreadable everywhere at once.",
+        "Analytics rarely needs the real identity."
+      ],
+      "moveOnSummary": "Per-user keys for personal fields (crypto-shredding) and pseudonymous ids in analytics avoid most rewrites.",
+      "learnTopics": [
+        "encryption",
+        "secrets-management"
+      ]
+    },
+    {
+      "id": "deep.retain",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ledger",
+          "warehouse"
+        ],
+        "keywords": [
+          "anonymise",
+          "legal retention",
+          "invoices",
+          "strip identity",
+          "legal hold",
+          "keep but unlink"
+        ]
+      },
+      "goal": "Keep legally required records without keeping the person.",
+      "opener": "Finance must keep invoices for years. How do you keep them without keeping the person?",
+      "evidence": {
+        "strong": "Separates what the law requires (amounts, dates, tax ids of the business) from identifying fields, removes or tokenises names, emails and addresses where allowed, restricts access to what must stay, and records the legal basis; legal holds pause deletion until released.",
+        "adequate": "Keeps invoices untouched because they're exempt.",
+        "weak": "Deletes invoices anyway, or ignores holds."
+      },
+      "misconceptions": [
+        {
+          "id": "retain.all_exempt",
+          "pattern": "Believes exempt records can be kept in full.",
+          "challenge": "Does tax law require the customer's browsing history attached to the invoice?"
+        }
+      ],
+      "probes": [
+        "What happens to a request for an account under legal hold?"
+      ],
+      "hints": [
+        "Keep only what the law actually requires.",
+        "A hold delays deletion; it doesn't cancel it."
+      ],
+      "moveOnSummary": "Keep only legally required fields, strip or tokenise the rest, restrict access and honour holds.",
+      "learnTopics": [
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.proof",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "audit-log",
+          "data-quality"
+        ],
+        "keywords": [
+          "proof of deletion",
+          "verification scan",
+          "audit record",
+          "hashed id",
+          "completion report",
+          "regulator"
+        ]
+      },
+      "goal": "Prove completion without keeping the personal data itself.",
+      "opener": "How do you prove to a regulator that a request was completed everywhere, without keeping the person's data?",
+      "evidence": {
+        "strong": "Records per-system completion events with timestamps in an audit log keyed by a request id and a hashed identifier, runs verification scans that look for the hashed ids after completion, and produces a completion report; never stores the email or name in the log.",
+        "adequate": "Keeps an audit log that includes the user's email.",
+        "weak": "Has no proof beyond the workflow finishing."
+      },
+      "misconceptions": [
+        {
+          "id": "proof.store_email",
+          "pattern": "Thinks the audit log should store the email to prove who was deleted.",
+          "challenge": "You deleted the user everywhere except the audit log. Is that a deletion?"
+        }
+      ],
+      "probes": [
+        "How would you check that a system really deleted the data?"
+      ],
+      "hints": [
+        "Prove with ids and timestamps, not with the data.",
+        "Spot checks after completion catch broken handlers."
+      ],
+      "moveOnSummary": "An audit log of per-system completions keyed by hashed ids, plus verification scans and a completion report.",
+      "learnTopics": [
+        "observability"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost",
+          "risk",
+          "limitation",
+          "improve"
+        ]
+      },
+      "goal": "Summarise trade-offs between cost, speed and certainty.",
+      "opener": "What are the main trade-offs and remaining risks in your design?",
+      "evidence": {
+        "strong": "Weighs batching cost against deletion speed, crypto-shredding key costs against rewrite costs, time-travel retention against deletion, and names residual risks such as unregistered datasets and vendor delays.",
+        "adequate": "Names one trade-off without consequence.",
+        "weak": "Says the design deletes everything with no risk."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.complete",
+          "pattern": "Believes the system guarantees complete deletion.",
+          "challenge": "A data scientist exported a CSV to their laptop last year. Does your system know?"
+        }
+      ],
+      "probes": [
+        "What would you improve first?"
+      ],
+      "hints": [
+        "Think about cost, speed and what the inventory misses.",
+        "Which copies are hardest to see?"
+      ],
+      "moveOnSummary": "Batching and crypto-shredding keep cost down; the inventory's completeness is the main risk.",
+      "learnTopics": [
+        "data-engineering-system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.asof",
+      "after": "deep.lake",
+      "prompt": "A week after a deletion completed, an analyst queries the events table as of last month and the user's rows are right there. What happened?",
+      "agendaItemId": "deep.snapshots"
+    },
+    {
+      "id": "cb.archive",
+      "after": "deep.backups",
+      "prompt": "Legal finds that years of raw event archives in cold storage contain emails and were never touched. Rewriting them would cost a fortune. What are your options?",
+      "agendaItemId": "deep.shred"
+    }
+  ],
+  "vocabulary": [
+    "GDPR",
+    "right to be forgotten",
+    "DSAR",
+    "PII",
+    "data catalog",
+    "lineage",
+    "identity map",
+    "Iceberg",
+    "Delta Lake",
+    "row-level delete",
+    "merge-on-read",
+    "compaction",
+    "snapshot expiry",
+    "orphan files",
+    "time travel",
+    "crypto-shredding",
+    "envelope encryption",
+    "KMS",
+    "pseudonymisation",
+    "legal hold",
+    "suppression list",
+    "Temporal",
+    "Step Functions"
+  ],
+  "alternatives": [
+    {
+      "choice": "Crypto-shredding as the main mechanism",
+      "whenBetter": "When most personal data is in immutable archives or many copies and per-user key management is affordable."
+    },
+    {
+      "choice": "Pseudonymous ids everywhere in analytics",
+      "whenBetter": "When analytics never needs the real identity, so deleting the mapping is enough for most datasets."
+    },
+    {
+      "choice": "A commercial privacy platform for intake and vendor fan-out",
+      "whenBetter": "When the main gap is request handling and third-party coordination rather than the data platform itself."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Tracked, batched and provable",
+      "outline": "Clarifies volume, the thirty-day deadline, every store including backups and vendors, legal exceptions and proof needs. A deletion service checks holds and runs a durable workflow per request that fans out tasks and collects acknowledgements. A tagged catalog with lineage and an identity map finds every copy. Lake deletes are batched weekly with Iceberg row-level deletes targeted by partition, then compaction and snapshot expiry. Backups age out and a hashed suppression list is re-applied after restores and backfills. Archives use per-user key crypto-shredding, analytics uses pseudonymous ids, invoices keep only required fields, and proof is a hashed-id audit log with verification scans."
+    },
+    {
+      "band": "adequate",
+      "label": "Workflow without the hard parts",
+      "outline": "Builds a deletion event and per-service handlers with acknowledgements, but deletes from the lake per request, forgets snapshots and backups, and stores emails in the audit log."
+    },
+    {
+      "band": "weak",
+      "label": "Script per request",
+      "outline": "Runs a manual script that deletes the user's row in the main database and a few warehouse tables, with no inventory, tracking, lake handling or proof."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

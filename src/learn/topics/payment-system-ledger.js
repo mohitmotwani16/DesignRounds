@@ -66,7 +66,7 @@ export default {
     "Reconcile daily with PSP and bank reports.",
   ],
   related: ["idempotency", "outbox-pattern", "saga-pattern", "distributed-sql", "webhooks"],
-  practice: ["payment-platform"],
+  practice: ["payments-reconciliation", "payment-platform"],
   reading: [
     { title: "Avoiding Double Payments in a Distributed Payments System", publisher: "Airbnb Engineering", url: "https://medium.com/airbnb-engineering/avoiding-double-payments-in-a-distributed-payments-system-2981f6b070bb" },
     { title: "Designing robust and predictable APIs with idempotency", publisher: "Stripe Blog", url: "https://stripe.com/blog/idempotency" },

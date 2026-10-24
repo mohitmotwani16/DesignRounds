@@ -158,6 +158,7 @@
       "required": true,
       "triggers": {
         "componentKinds": [
+          "table",
           "warehouse",
           "data-lake",
           "batch-job"

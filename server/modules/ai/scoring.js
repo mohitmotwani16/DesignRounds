@@ -8,7 +8,7 @@ import { dimensionIds } from "./rubric.js";
 // never invent one, and every change is recorded with a reason the learner can read.
 // Bump `version` whenever a rule or threshold changes; it is part of the review's
 // template version, so a cached review is never reused across rule changes.
-export const scoringVersion = "constraints-v2";
+export const scoringVersion = "constraints-v3";
 
 const STORAGE_GROUPS = new Set(["databases", "cache", "storage", "data", "tech-data", "tech-analytics"]);
 // A data store drawn with a generic kind still counts when its label says what it is.
@@ -52,7 +52,9 @@ export function signals({ design, decisions = [], risks = [], ledgerItems = null
     }))
     : null;
   return {
-    components: design.componentCount,
+    // A data model table with columns is part of the design, as much as a service is.
+    components: design.componentCount + (design.filledTableCount ?? 0),
+    services: design.componentCount,
     isolated: design.isolatedCount ?? 0,
     storage: hasStorage(design.components ?? []),
     statedReasons: design.explainedCount + design.decisionNoteCount + design.labelledEdgeCount,
@@ -86,8 +88,10 @@ export function constraints(facts) {
   }
 
   // Disconnected boxes mean the request and data flow is incomplete.
-  if (facts.isolated >= 2 && facts.isolated / facts.components > 1 / 3) {
-    out.push(cap("architecture", 5, "disconnected", `${facts.isolated} of ${facts.components} components aren't connected to the rest of the design, so the flow is incomplete.`));
+  // Tables needn't join the request flow, so this compares services with services.
+  const services = facts.services ?? facts.components;
+  if (facts.isolated >= 2 && facts.isolated / services > 1 / 3) {
+    out.push(cap("architecture", 5, "disconnected", `${facts.isolated} of ${services} components aren't connected to the rest of the design, so the flow is incomplete.`));
   }
 
   if (!facts.storage) out.push(cap("data", 4, "no-storage", "No data store appears in the diagram, so storage choices can only be partly credited."));

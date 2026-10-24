@@ -3,7 +3,7 @@ import {
   ArrowRight, ArrowUpRight, Bell, Bug, Check, CircleUser, Clock3, Crown, Database, Fingerprint, Flag, FileText, FlaskConical, Globe2,
   HardDrive, Hash, Image, Layers2, Link2, ListOrdered, LockKeyhole, LogOut, Menu, MessageSquare, MonitorSmartphone,
   Network, RefreshCcw, Search, Server, Settings2, ShieldCheck, Sparkles, SquarePen, Waypoints, Zap, KeyRound, Lock,
-  ChevronDown, X,
+  ChevronDown, X, ShoppingCart, ArrowLeftRight, MousePointerClick, Cpu, Waves, ScrollText, MonitorPlay, Scale, UserX,
 } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
 import { api } from "../api.js";
@@ -117,7 +117,8 @@ export function promptIcon(icon) {
     quality: Check, model: Sparkles, features: Database, training: Server, serve: Zap, search: Search, monitor: Layers2,
     platform: Layers2, regions: Globe2, discovery: Network, security: LockKeyhole, deploy: ArrowUpRight, config: Settings2,
     service: Server, kv: KeyRound, id: Hash, queue: ListOrdered, lock: Lock, crown: Crown, sync: RefreshCcw, image: Image,
-    flag: Flag, identity: Fingerprint,
+    flag: Flag, identity: Fingerprint, cart: ShoppingCart, cdc: ArrowLeftRight, click: MousePointerClick, sensor: Cpu,
+    lake: Waves, logs: ScrollText, play: MonitorPlay, scale: Scale, experiment: FlaskConical, erase: UserX,
   };
   return icons[icon] || Network;
 }

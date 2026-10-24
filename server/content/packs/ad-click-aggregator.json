@@ -1,0 +1,588 @@
+{
+  "opening": "We run an ad network. When someone clicks an ad, we send them to the advertiser and count the click. Let's design the system that collects and aggregates those clicks. Where do you want to start?",
+  "clarifications": [
+    {
+      "id": "scale.clicks",
+      "topics": [
+        "scale",
+        "clicks",
+        "traffic",
+        "volume",
+        "qps",
+        "per second"
+      ],
+      "answer": "About 1 billion clicks a day: around 12,000 a second on average and 50,000 a second at peak."
+    },
+    {
+      "id": "scale.ads",
+      "topics": [
+        "ads",
+        "campaigns",
+        "advertisers",
+        "cardinality"
+      ],
+      "answer": "About 5 million active ads across 200,000 advertisers. Traffic is very skewed: a handful of campaigns can take a large share."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "latency",
+        "real-time",
+        "how fast",
+        "delay"
+      ],
+      "answer": "Advertiser dashboards show clicks per ad by the minute and may be at most a minute behind."
+    },
+    {
+      "id": "req.queries",
+      "topics": [
+        "queries",
+        "dashboard",
+        "granularity",
+        "history",
+        "retention"
+      ],
+      "answer": "Advertisers filter by ad, campaign and time range: minute buckets for the last few days, hourly and daily for up to 2 years."
+    },
+    {
+      "id": "req.billing",
+      "topics": [
+        "billing",
+        "invoice",
+        "accuracy",
+        "exact",
+        "money"
+      ],
+      "answer": "Advertisers pay per click and are invoiced daily. Billed counts must be exact: no duplicates, no invalid clicks."
+    },
+    {
+      "id": "req.invalid",
+      "topics": [
+        "fraud",
+        "bots",
+        "invalid",
+        "duplicate",
+        "double click"
+      ],
+      "answer": "Duplicate clicks from the same impression within a short time count once, and clicks flagged as bots aren't billed."
+    },
+    {
+      "id": "req.redirect",
+      "topics": [
+        "redirect",
+        "user latency",
+        "click latency",
+        "advertiser site"
+      ],
+      "answer": "The redirect to the advertiser must feel instant; it can't wait on the analytics pipeline."
+    }
+  ],
+  "clarificationPolicy": "Answer as the ad platform's product owner. Keep it a high-volume streaming aggregation with billing-grade accuracy; decide unlisted details in a way that keeps hot ads and exact billing in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "dashboard"
+        ],
+        "keywords": [
+          "clicks per second",
+          "freshness",
+          "billing",
+          "accuracy",
+          "granularity",
+          "dashboard"
+        ]
+      },
+      "goal": "Separate the dashboard's freshness needs from billing's accuracy needs and establish scale.",
+      "opener": "What do you want to clarify about who uses these numbers and how accurate and fresh they need to be?",
+      "evidence": {
+        "strong": "Asks about click volume and peak, ad cardinality, dashboard freshness and granularity, retention, and that billing needs exact counts; recognises two consumers with different accuracy and latency needs.",
+        "adequate": "Gets scale and freshness but treats dashboard and billing as one requirement.",
+        "weak": "Starts designing without asking about scale, freshness or billing accuracy."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.one_number",
+          "pattern": "Assumes one approximate number can serve both dashboards and invoices.",
+          "challenge": "An advertiser disputes an invoice by a few thousand clicks. Is 'roughly right' acceptable there?"
+        }
+      ],
+      "probes": [
+        "How exact must the dashboard be compared with the invoice?",
+        "What time ranges and granularity do advertisers query?"
+      ],
+      "hints": [
+        "Money and dashboards usually have different tolerance for error.",
+        "Ask about peak traffic, not just averages."
+      ],
+      "moveOnSummary": "High-volume clicks feed minute-level dashboards that may lag a minute, and exact daily billing that excludes duplicates and invalid clicks.",
+      "learnTopics": [
+        "data-engineering-system-design-interview",
+        "non-functional-requirements"
+      ]
+    },
+    {
+      "id": "hl.capture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "load-balancer",
+          "t-kafka",
+          "topic",
+          "clickstream"
+        ],
+        "keywords": [
+          "redirect",
+          "click service",
+          "302",
+          "click event",
+          "capture",
+          "async"
+        ]
+      },
+      "goal": "Capture clicks durably without slowing the redirect.",
+      "opener": "A user clicks an ad. What happens between that click and the event being safely recorded?",
+      "evidence": {
+        "strong": "A click service records the click (ad id, impression id, user signal, time) to a durable log asynchronously and returns a 302 redirect at once; the log is partitioned for throughput and survives downstream outages.",
+        "adequate": "Logs the click and redirects, but synchronously writes to a database or isn't clear on durability.",
+        "weak": "Makes the redirect wait for counting, or increments a database counter inline."
+      },
+      "misconceptions": [
+        {
+          "id": "capture.sync_db",
+          "pattern": "Thinks writing each click to the main database before redirecting is fine.",
+          "challenge": "At peak traffic, what does a slow database write do to every user who clicks?"
+        }
+      ],
+      "probes": [
+        "What exactly is in a click event?",
+        "What happens to clicks if the stream processor is down for ten minutes?"
+      ],
+      "hints": [
+        "The user shouldn't wait for analytics.",
+        "A durable log can absorb traffic while consumers catch up."
+      ],
+      "moveOnSummary": "A click service writes events asynchronously to a partitioned durable log and redirects immediately.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "sync-vs-async-communication"
+      ]
+    },
+    {
+      "id": "hl.aggregate",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-flink",
+          "aggregator",
+          "t-druid",
+          "t-clickhouse"
+        ],
+        "keywords": [
+          "tumbling window",
+          "per minute",
+          "aggregate",
+          "olap",
+          "rollup",
+          "pre-aggregate"
+        ]
+      },
+      "goal": "Aggregate clicks into minute buckets and serve them from a store built for analytic queries.",
+      "opener": "How do the click events become the per-minute numbers an advertiser sees?",
+      "evidence": {
+        "strong": "A stream processor groups clicks by ad and minute in event-time windows and writes counts to an OLAP store (Pinot, Druid or ClickHouse) keyed by ad and minute, with hourly and daily rollups for long ranges; raw clicks also go to object storage.",
+        "adequate": "Aggregates in a stream but stores counts in a general database or has no plan for long time ranges.",
+        "weak": "Stores every raw click and counts at query time."
+      },
+      "misconceptions": [
+        {
+          "id": "agg.count_at_query",
+          "pattern": "Believes counting raw click rows at query time scales fine.",
+          "challenge": "An advertiser asks for clicks over two years. How many rows does that query read?"
+        }
+      ],
+      "probes": [
+        "Why minute buckets rather than storing each click in the serving store?",
+        "Where do the raw clicks go, and why keep them?"
+      ],
+      "hints": [
+        "Pre-aggregate what the dashboard needs.",
+        "Long ranges can read coarser rollups."
+      ],
+      "moveOnSummary": "Event-time minute windows per ad in a stream processor, written to an OLAP store with rollups; raw clicks archived.",
+      "learnTopics": [
+        "real-time-analytics-architecture",
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "deep.dedupe",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "t-redis",
+          "bloom-filter"
+        ],
+        "keywords": [
+          "dedupe",
+          "click id",
+          "impression id",
+          "double click",
+          "duplicate",
+          "idempotency key"
+        ]
+      },
+      "goal": "Count each logical click once despite double clicks, retries and redelivery.",
+      "opener": "A user double-clicks, or the browser retries the request. How is that counted only once?",
+      "evidence": {
+        "strong": "Issues a unique click id tied to the signed impression, deduplicates on it in keyed stream state with a TTL a little longer than the duplicate window, and relies on the batch job for full-day deduplication.",
+        "adequate": "Deduplicates by user and ad within a time window, which collapses genuinely separate clicks, or keeps unbounded state.",
+        "weak": "Doesn't deduplicate at all."
+      },
+      "misconceptions": [
+        {
+          "id": "dedupe.user_ad",
+          "pattern": "Thinks deduplicating on user and ad is precise enough.",
+          "challenge": "The same person legitimately clicks the same ad twice in one day from two impressions. Should we bill once or twice?"
+        }
+      ],
+      "probes": [
+        "How long must you remember a click id, and how much state is that?",
+        "Where else besides the client can duplicates come from?"
+      ],
+      "hints": [
+        "Each impression can carry an id that its click inherits.",
+        "State with an expiry keeps memory bounded."
+      ],
+      "moveOnSummary": "Deduplicate on an impression-derived click id held in stream state with a TTL; the batch job deduplicates the full day.",
+      "learnTopics": [
+        "idempotency",
+        "probabilistic-data-structures"
+      ]
+    },
+    {
+      "id": "deep.exactly_once",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-flink",
+          "stream-processor"
+        ],
+        "keywords": [
+          "checkpoint",
+          "exactly-once",
+          "restart",
+          "offsets",
+          "transactional sink",
+          "upsert by window"
+        ]
+      },
+      "goal": "Keep counts correct across processor crashes and restarts.",
+      "opener": "The stream job crashes and restarts from its last checkpoint. What stops the counts from doubling?",
+      "evidence": {
+        "strong": "Uses checkpointed state with source offsets so processing resumes consistently, and makes sink writes idempotent (upsert of the full count for ad and minute) or transactional, so replayed events can't double counts.",
+        "adequate": "Mentions checkpoints but sinks increment counters, so replays double them.",
+        "weak": "Assumes the job won't crash, or that Kafka alone guarantees exactly-once results."
+      },
+      "misconceptions": [
+        {
+          "id": "eo.kafka_magic",
+          "pattern": "Believes using Kafka makes counts exactly-once automatically.",
+          "challenge": "The job wrote a minute's count, then crashed before committing offsets. On restart it reads those clicks again. What does an increment-based sink show?"
+        }
+      ],
+      "probes": [
+        "Is the sink write an increment or an overwrite, and why does it matter?"
+      ],
+      "hints": [
+        "Replays are normal after a restart; plan for them.",
+        "Writing the whole count for a window is safe to repeat."
+      ],
+      "moveOnSummary": "Checkpointed state and offsets plus idempotent (overwrite by ad and minute) or transactional sinks.",
+      "learnTopics": [
+        "delivery-semantics",
+        "stream-processing"
+      ]
+    },
+    {
+      "id": "deep.hotkeys",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "topic",
+          "aggregator"
+        ],
+        "keywords": [
+          "hot ad",
+          "skew",
+          "salting",
+          "hot partition",
+          "viral",
+          "two-stage"
+        ]
+      },
+      "goal": "Handle a viral ad whose traffic overwhelms one partition or task.",
+      "opener": "One ad suddenly gets far more clicks than any other. Which part of your pipeline overheats first, and what do you do?",
+      "evidence": {
+        "strong": "Identifies the single partition and task keyed on that ad as the bottleneck, salts the key into several sub-keys (or pre-aggregates locally) and merges the partial counts in a second stage; may detect hot keys dynamically.",
+        "adequate": "Adds more partitions or machines without realising one key still lands on one partition.",
+        "weak": "Doesn't see skew as a problem."
+      },
+      "misconceptions": [
+        {
+          "id": "hot.more_partitions",
+          "pattern": "Thinks adding partitions spreads a single hot key.",
+          "challenge": "All clicks for that ad hash to the same partition. How many partitions does it use after you double them?"
+        }
+      ],
+      "probes": [
+        "How do you merge the salted partial counts back into one number?"
+      ],
+      "hints": [
+        "Keying by ad sends one ad to one place.",
+        "Split the key, count in pieces, then combine."
+      ],
+      "moveOnSummary": "Salt hot ad keys across sub-partitions and merge partial aggregates in a second stage.",
+      "learnTopics": [
+        "hot-partitions",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "deep.reconcile",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "batch-processor",
+          "t-spark",
+          "data-lake",
+          "t-s3"
+        ],
+        "keywords": [
+          "reconciliation",
+          "batch recompute",
+          "lambda",
+          "invoice",
+          "source of truth",
+          "billing job"
+        ]
+      },
+      "goal": "Make billing exact by recomputing from raw clicks and reconciling with the stream.",
+      "opener": "How do the numbers on the dashboard and the numbers on the invoice end up agreeing?",
+      "evidence": {
+        "strong": "Keeps raw clicks in object storage; a daily batch job recomputes billable counts with full deduplication and fraud filtering as the invoice source of truth, compares them with the stream's counts, corrects the serving store and alerts on large gaps.",
+        "adequate": "Recomputes in batch but never reconciles or corrects the dashboard numbers.",
+        "weak": "Bills from the streaming counts directly."
+      },
+      "misconceptions": [
+        {
+          "id": "rec.stream_bills",
+          "pattern": "Believes the stream's real-time counts are good enough to invoice.",
+          "challenge": "Late clicks arrive after a window closed and a fraud model flags some clicks the next day. Where are those reflected?"
+        }
+      ],
+      "probes": [
+        "What would you do if the batch and stream numbers differ by a few percent?"
+      ],
+      "hints": [
+        "Keep the raw data so you can always recount.",
+        "A slower, complete pass is a common source of truth for money."
+      ],
+      "moveOnSummary": "A daily batch over raw clicks is the billing truth; it reconciles and corrects the streaming numbers.",
+      "learnTopics": [
+        "lambda-vs-kappa-architecture",
+        "backfill-and-reprocessing"
+      ]
+    },
+    {
+      "id": "deep.late",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "metrics"
+        ],
+        "keywords": [
+          "watermark",
+          "late clicks",
+          "event time",
+          "allowed lateness",
+          "processing time",
+          "out-of-order"
+        ]
+      },
+      "goal": "Assign clicks to the right minute despite delays and out-of-order arrival.",
+      "opener": "Some clicks reach the pipeline minutes after they happened. Which minute do they count in, and how?",
+      "evidence": {
+        "strong": "Windows on the click's event time, uses watermarks with an allowed lateness so late clicks update their minute, routes very late clicks to the batch path, and monitors the share of late data.",
+        "adequate": "Uses event time but has no rule for when a window closes.",
+        "weak": "Counts clicks in the minute they arrive."
+      },
+      "misconceptions": [
+        {
+          "id": "late.processing_time",
+          "pattern": "Thinks processing-time windows are fine for advertiser reporting.",
+          "challenge": "The job restarts and processes a backlog of an hour's clicks at once. Which minute do they all land in?"
+        }
+      ],
+      "probes": [
+        "How long would you keep a window open, and what does that cost?"
+      ],
+      "hints": [
+        "The click's own timestamp says when it happened.",
+        "Watermarks decide when a window is complete enough."
+      ],
+      "moveOnSummary": "Event-time windows with watermarks and allowed lateness; very late clicks are handled by the batch path.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost",
+          "limitation",
+          "improve",
+          "risk"
+        ]
+      },
+      "goal": "Summarise the design's key trade-offs and remaining risks.",
+      "opener": "What are the biggest trade-offs in your design, and what would you improve next?",
+      "evidence": {
+        "strong": "Names trade-offs such as running both stream and batch paths, state size for deduplication, OLAP cost, and lateness versus freshness, with a concrete next step.",
+        "adequate": "Names a trade-off without its consequence.",
+        "weak": "Claims there are no meaningful trade-offs."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.none",
+          "pattern": "Believes the design has no real trade-offs.",
+          "challenge": "You run two pipelines over the same data. What does that cost you?"
+        }
+      ],
+      "probes": [
+        "What would you drop first if costs had to halve?"
+      ],
+      "hints": [
+        "Think about running two paths, state size and storage cost.",
+        "What happens to freshness if you allow more lateness?"
+      ],
+      "moveOnSummary": "Stream for fresh dashboards, batch for exact billing; the cost is two paths and dedupe state.",
+      "learnTopics": [
+        "lambda-vs-kappa-architecture"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.superbowl",
+      "after": "deep.dedupe",
+      "prompt": "A sports final starts and one advertiser's ad gets clicks from tens of millions of people in a few minutes. What happens in your pipeline?",
+      "agendaItemId": "deep.hotkeys"
+    },
+    {
+      "id": "cb.dispute",
+      "after": "deep.exactly_once",
+      "prompt": "An advertiser says yesterday's dashboard showed fewer clicks than their invoice. How would your design explain the difference?",
+      "agendaItemId": "deep.reconcile"
+    }
+  ],
+  "vocabulary": [
+    "click id",
+    "impression",
+    "302 redirect",
+    "Kafka",
+    "Flink",
+    "tumbling window",
+    "watermark",
+    "allowed lateness",
+    "exactly-once",
+    "checkpoint",
+    "idempotent sink",
+    "Pinot",
+    "Druid",
+    "ClickHouse",
+    "rollup",
+    "salting",
+    "hot key",
+    "reconciliation",
+    "Lambda architecture",
+    "CPC",
+    "bot filtering"
+  ],
+  "alternatives": [
+    {
+      "choice": "Kappa architecture: one streaming path with replay for corrections",
+      "whenBetter": "When the stream processor's exactly-once guarantees and replay from the log are trusted for billing and the team wants one codebase."
+    },
+    {
+      "choice": "Write raw clicks to an OLAP store and aggregate at query time",
+      "whenBetter": "When cardinality is low or flexible slicing on raw attributes matters more than cost."
+    },
+    {
+      "choice": "Counting in Redis with atomic increments",
+      "whenBetter": "For a small network where approximate counts suffice and billing is computed elsewhere."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Fast path, exact path",
+      "outline": "Clarifies volume, skew, dashboard freshness and billing accuracy, and separates the two consumers. The click service writes to Kafka asynchronously and redirects at once. Flink deduplicates on an impression-derived click id with TTL state, filters bots, aggregates per ad per event-time minute with watermarks, and upserts counts into Pinot with hourly and daily rollups; checkpoints plus overwrite-by-window sinks keep restarts from doubling counts. Hot ads are salted and merged in a second stage. Raw clicks land in S3, and a daily Spark job recomputes billable counts, reconciles with the stream and corrects it."
+    },
+    {
+      "band": "adequate",
+      "label": "Streaming counts only",
+      "outline": "Builds Kafka, a stream processor and an OLAP store with minute windows, but deduplicates loosely by user and ad, uses increment-based sinks, and bills from the streaming counts without a batch reconciliation; skew is handled by adding partitions."
+    },
+    {
+      "band": "weak",
+      "label": "Counter per click",
+      "outline": "Increments a counter row per ad in a relational database on every click before redirecting, counts at query time for history, and has no deduplication, late-data or failure handling."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

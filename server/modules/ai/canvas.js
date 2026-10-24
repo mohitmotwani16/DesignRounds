@@ -5,7 +5,8 @@ import { clean } from "./context.js";
 export function snapshotOf(diagram) {
   const components = {};
   for (const node of diagram?.nodes ?? []) {
-    if (node.type === "systemNode" || !node.type) components[node.id] = node.data.kind;
+    // Data model tables count as parts of the design: adding one is a change worth seeing.
+    if (node.type === "systemNode" || node.type === "tableNode" || !node.type) components[node.id] = node.data.kind;
   }
   return { components, edges: (diagram?.edges ?? []).map((edge) => `${edge.source}>${edge.target}`).sort() };
 }
@@ -15,7 +16,8 @@ export function diffSnapshots(previous, current, diagram) {
   const nodes = new Map((diagram?.nodes ?? []).map((node) => [node.id, node]));
   const added = Object.keys(current.components).filter((id) => !(id in before.components)).map((id) => {
     const node = nodes.get(id);
-    return { id, kind: node.data.kind, label: clean(node.data.label, 120) || node.data.kind, hasNote: Boolean(node.data.note?.trim()) };
+    const columns = node.type === "tableNode" ? (node.data.columns ?? []).length : null;
+    return { id, kind: node.data.kind, label: clean(node.data.label, 120) || node.data.kind, hasNote: Boolean(node.data.note?.trim()), ...(columns !== null ? { columns } : {}) };
   });
   const removed = Object.keys(before.components).filter((id) => !(id in current.components));
   const beforeEdges = new Set(before.edges);

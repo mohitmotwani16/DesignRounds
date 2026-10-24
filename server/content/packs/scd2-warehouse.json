@@ -140,6 +140,7 @@
       "required": true,
       "triggers": {
         "componentKinds": [
+          "dimension-table",
           "database",
           "warehouse",
           "storage"

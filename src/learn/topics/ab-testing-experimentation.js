@@ -63,7 +63,7 @@ export default {
     "Recognise network and marketplace effects and suggest cluster or switchback designs.",
   ],
   related: ["ml-evaluation-metrics", "feature-flags", "recommendation-system-design", "ml-model-monitoring", "observability"],
-  practice: ["recommendation-engine", "mobile-release-flags"],
+  practice: ["experimentation-analytics", "recommendation-engine", "mobile-release-flags"],
   reading: [
     { title: "Trustworthy Online Controlled Experiments", publisher: "Kohavi, Tang and Xu, Cambridge University Press", url: "https://experimentguide.com/" },
     { title: "Under the Hood of Uber's Experimentation Platform", publisher: "Uber Engineering Blog", url: "https://www.uber.com/in/en/blog/xp/" },

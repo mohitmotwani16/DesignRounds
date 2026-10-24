@@ -82,5 +82,5 @@ http_requests_total{service="checkout", region="ap-south-1", status="500"}
     "Store min/max alongside averages in rollups so spikes aren't averaged away.",
   ],
   related: ["observability", "nosql-database-types", "batch-vs-stream-processing", "database-indexing", "back-of-the-envelope-estimation"],
-  practice: ["metrics-platform", "realtime-analytics", "clickstream", "data-alerting"],
+  practice: ["iot-telemetry", "metrics-platform", "realtime-analytics", "clickstream", "data-alerting"],
 };

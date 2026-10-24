@@ -329,6 +329,57 @@ try {
     const types = new Set((await query("select type from interview_events where session_id = $1", [round.id])).map((row) => row.type));
     assert.ok(types.has("draw_requested"));
   });
+
+  await step("the data model: a data round asks for tables and says how; a saved table answers it", async () => {
+    const created = await call("POST", "/api/v1/sessions", { promptId: "ecommerce-warehouse", interviewMode: "realistic" });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    round = created.body.session;
+    await call("GET", `/api/v1/sessions/${round.id}/interview`);
+    const pack = (await queryOne("select pack from problem_packs where version = (select pack_version from interview_state where session_id = $1)", [round.id])).pack;
+    const modelItems = new Set(pack.agenda.filter((item) => item.triggers.componentKinds.some((kind) => ["table", "fact-table", "dimension-table", "collection", "event-schema"].includes(kind))).map((item) => item.id));
+    assert.ok(modelItems.has("deep.grain") && modelItems.has("hl.star"), "the pack marks its data model items");
+    // The pipeline is drawn and every part except the data model is discussed.
+    await query("update interview_agenda_items set status = 'answered', band = 'adequate' where session_id = $1 and not (item_id = any($2::text[]))", [round.id, [...modelItems].filter((id) => id.startsWith("deep."))]);
+    await query("update interview_state set stage = 'deep_dive', focus_item_id = null where session_id = $1", [round.id]);
+    const pipeline = [["replica", "Orders replica"], ["etl", "Nightly load"], ["warehouse", "Snowflake"]].map(([kind, label], index) => ({ id: `p${index}`, type: "systemNode", position: { x: index * 200, y: 0 }, data: { kind, label } }));
+    const pipelineEdges = [{ id: "pe0", source: "p0", target: "p1" }, { id: "pe1", source: "p1", target: "p2" }];
+    let version = (await call("GET", `/api/v1/sessions/${round.id}`)).body.session.diagramVersion;
+    const savePipeline = await call("PUT", `/api/v1/sessions/${round.id}/diagram`, { version, diagram: { nodes: pipeline, edges: pipelineEdges } });
+    assert.equal(savePipeline.status, 200, JSON.stringify(savePipeline.body));
+    version = savePipeline.body.version;
+
+    const talked = await sendMessage("The fact table is one row per order line, joined to customer and product dimensions on surrogate keys.");
+    assert.equal(talked.status, 201, JSON.stringify(talked.body));
+    const ask = await queryOne("select move, agenda_item_id, content from interview_turns where id = $1", [talked.body.turns[1].id]);
+    assert.equal(ask.move, "ask_to_draw", "a schema described only in words gets a request to draw it");
+    assert.ok(modelItems.has(ask.agenda_item_id), `the request is for a data model item (${ask.agenda_item_id})`);
+    assert.match(ask.content, /Data model/);
+    assert.match(ask.content, /press D/, "the interviewer says how to add a table");
+
+    // The saved schema is validated: unknown keys are rejected, a real table is kept as drawn.
+    const fact = { id: "t0", type: "tableNode", position: { x: 0, y: 200 }, data: { kind: "fact-table", label: "fact_order_lines", subtitle: "one row per order line", columns: [
+      { name: "order_line_id", type: "bigint", keys: ["pk"] },
+      { name: "customer_key", type: "bigint", keys: ["fk"], ref: "dim_customer.customer_key" },
+      { name: "order_date", type: "date", keys: ["part"] },
+      { name: "shipping_fee_allocated", type: "decimal(12,2)" },
+    ] } };
+    const dim = { id: "t1", type: "tableNode", position: { x: 300, y: 200 }, data: { kind: "dimension-table", label: "dim_customer", columns: [{ name: "customer_key", type: "bigint", keys: ["pk"] }, { name: "region", type: "string" }] } };
+    const bad = await call("PUT", `/api/v1/sessions/${round.id}/diagram`, { version, diagram: { nodes: [...pipeline, { ...fact, data: { ...fact.data, columns: [{ name: "id", keys: ["primary"] }] } }], edges: pipelineEdges } });
+    assert.equal(bad.status, 400, "an unknown column key is rejected");
+    const diagram = { nodes: [...pipeline, fact, dim], edges: [...pipelineEdges, { id: "r0", source: "t1", target: "t0", label: "1:N" }] };
+    const saved = await call("PUT", `/api/v1/sessions/${round.id}/diagram`, { version, diagram });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    const reloaded = (await call("GET", `/api/v1/sessions/${round.id}`)).body.session.diagram;
+    assert.deepEqual(reloaded.nodes.find((node) => node.id === "t0").data.columns, fact.data.columns, "columns, keys and references round-trip");
+
+    const drew = await sendMessage("Done, the fact and dimension tables are on the canvas.");
+    assert.equal(drew.status, 201, JSON.stringify(drew.body));
+    const opened = await queryOne("select move, agenda_item_id from interview_turns where id = $1", [drew.body.turns[1].id]);
+    assert.equal(opened.move, "open", "with a table drawn, the data model deep dive opens");
+    assert.ok(modelItems.has(opened.agenda_item_id));
+    const asks = await query("select draw_requests from interview_agenda_items where session_id = $1 and draw_requests > 0", [round.id]);
+    assert.equal(asks.length, 1, "asked once, for one part");
+  });
 } catch (error) {
   failed = true;
   console.error(`\nconductor smoke FAILED after ${steps.length} step(s):`, error);

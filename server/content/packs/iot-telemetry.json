@@ -1,0 +1,601 @@
+{
+  "opening": "We make connected sensors, things like smart meters and factory equipment monitors. Let's design the platform that collects their readings and lets customers see them. How would you like to begin?",
+  "clarifications": [
+    {
+      "id": "scale.devices",
+      "topics": [
+        "devices",
+        "how many",
+        "fleet",
+        "scale"
+      ],
+      "answer": "About 5 million devices, each sending a reading every 10 seconds."
+    },
+    {
+      "id": "scale.payload",
+      "topics": [
+        "payload",
+        "size",
+        "bytes",
+        "reading",
+        "metrics per reading"
+      ],
+      "answer": "A reading is around 200 bytes: a device id, a timestamp and a dozen sensor values."
+    },
+    {
+      "id": "net.offline",
+      "topics": [
+        "offline",
+        "network",
+        "connectivity",
+        "buffer",
+        "reconnect"
+      ],
+      "answer": "Networks are unreliable. Devices buffer up to 24 hours of readings while offline and upload them in a burst when they reconnect."
+    },
+    {
+      "id": "dev.clock",
+      "topics": [
+        "clock",
+        "time sync",
+        "timestamps",
+        "ntp",
+        "skew"
+      ],
+      "answer": "Device clocks drift; some are minutes off. Devices also send a per-device sequence number."
+    },
+    {
+      "id": "req.live",
+      "topics": [
+        "live",
+        "latest",
+        "real-time",
+        "freshness",
+        "latency"
+      ],
+      "answer": "Operators want each device's latest values within a few seconds of the reading."
+    },
+    {
+      "id": "req.history",
+      "topics": [
+        "history",
+        "charts",
+        "retention",
+        "how long",
+        "range"
+      ],
+      "answer": "Customers chart a device's history up to 2 years back. Full-resolution data is needed only for the last 30 days."
+    },
+    {
+      "id": "req.alerts",
+      "topics": [
+        "alerts",
+        "thresholds",
+        "rules",
+        "notify",
+        "silent"
+      ],
+      "answer": "Customers set threshold rules per device type and want to know within a minute when one fires, or when a device stops reporting."
+    },
+    {
+      "id": "dev.protocol",
+      "topics": [
+        "protocol",
+        "mqtt",
+        "http",
+        "firmware",
+        "security"
+      ],
+      "answer": "Firmware can speak MQTT or HTTPS. Every device has a certificate provisioned at the factory."
+    }
+  ],
+  "clarificationPolicy": "Answer as the IoT platform's product lead. Keep it a high-volume time-series ingestion problem with unreliable devices; decide unlisted details to keep late data, retention and reconnect storms relevant.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "iot",
+          "dashboard"
+        ],
+        "keywords": [
+          "devices",
+          "readings per second",
+          "retention",
+          "offline",
+          "latest value",
+          "history"
+        ]
+      },
+      "goal": "Establish fleet size, reading rate, live and historical needs, retention and device behaviour.",
+      "opener": "What would you like to know about the devices and how customers use the data?",
+      "evidence": {
+        "strong": "Asks about device count, reading frequency and size, live versus historical needs, retention, offline behaviour and clock reliability, then estimates readings per second and daily volume.",
+        "adequate": "Gets the fleet size and frequency but not offline behaviour or retention.",
+        "weak": "Designs without asking about scale, retention or device behaviour."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.reliable_devices",
+          "pattern": "Assumes devices are always online with accurate clocks.",
+          "challenge": "A meter in a basement loses signal for a day. What should happen to its readings?"
+        }
+      ],
+      "probes": [
+        "How many readings per second does that add up to, and how much data a day?",
+        "How long do customers need full-resolution data?"
+      ],
+      "hints": [
+        "Multiply devices by readings per device per second.",
+        "Devices in the field misbehave; ask how."
+      ],
+      "moveOnSummary": "Millions of devices produce hundreds of thousands of readings a second, with live views, long history, and unreliable connectivity and clocks.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "data-engineering-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.ingest",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "iot",
+          "ingestion",
+          "t-kafka",
+          "topic",
+          "load-balancer"
+        ],
+        "keywords": [
+          "mqtt",
+          "gateway",
+          "broker",
+          "device auth",
+          "certificate",
+          "ingest"
+        ]
+      },
+      "goal": "Get readings from devices into a durable, partitioned log securely.",
+      "opener": "How do readings get from a device into your platform?",
+      "evidence": {
+        "strong": "Devices connect over MQTT (or batched HTTPS) to a horizontally scaled gateway that authenticates each device by certificate, validates readings and publishes them to a durable log partitioned by device id.",
+        "adequate": "Has a gateway and a queue but no device authentication or partitioning choice.",
+        "weak": "Has devices write directly into a database."
+      },
+      "misconceptions": [
+        {
+          "id": "ing.direct_db",
+          "pattern": "Thinks devices can write straight into the database.",
+          "challenge": "Five million devices each holding a database connection: what does that do to the database?"
+        }
+      ],
+      "probes": [
+        "Why MQTT rather than plain HTTP, or the other way round?",
+        "How do you know a reading really came from that device?"
+      ],
+      "hints": [
+        "Something should stand between the fleet and your storage.",
+        "Each device already has a certificate from the factory."
+      ],
+      "moveOnSummary": "An authenticated MQTT or HTTPS gateway publishes readings to a log partitioned by device id.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "authentication-authorization"
+      ]
+    },
+    {
+      "id": "hl.storage",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "timeseries-db",
+          "t-timescale",
+          "t-influxdb",
+          "kv-store",
+          "data-lake"
+        ],
+        "keywords": [
+          "time-series",
+          "latest value",
+          "device and time",
+          "rollup",
+          "hot store",
+          "cold archive"
+        ]
+      },
+      "goal": "Choose storage for live values, recent history and long history.",
+      "opener": "Where do readings live so you can serve both the latest value and two-year charts?",
+      "evidence": {
+        "strong": "A latest-value store keyed by device for live views, a time-series store keyed by device and time bucket for recent raw data and rollups, and columnar files in object storage for older raw data; picks resolution by query range.",
+        "adequate": "Picks a time-series database for everything with no tiers or latest-value path.",
+        "weak": "Uses one relational table with a row per reading and a global index."
+      },
+      "misconceptions": [
+        {
+          "id": "store.one_table",
+          "pattern": "Believes one relational table of readings with indexes will do.",
+          "challenge": "How many rows does that table gain per day, and what happens to its indexes?"
+        }
+      ],
+      "probes": [
+        "What's the partition or primary key for readings?",
+        "How does the live view avoid scanning history?"
+      ],
+      "hints": [
+        "Live, recent and old data have different access patterns.",
+        "Keying by device and time keeps one device's data together."
+      ],
+      "moveOnSummary": "Latest-value store for live views, time-series store bucketed by device and time, object-storage archive for old raw data.",
+      "learnTopics": [
+        "time-series-databases",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "deep.late",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-flink"
+        ],
+        "keywords": [
+          "late readings",
+          "out of order",
+          "sequence number",
+          "reconnect upload",
+          "recompute rollup",
+          "event time"
+        ]
+      },
+      "goal": "Place late and out-of-order readings correctly and update derived data.",
+      "opener": "A device is offline for hours, then uploads everything at once. What happens to its charts and rollups?",
+      "evidence": {
+        "strong": "Keys readings by device time and sequence, writes raw points idempotently, recomputes only the affected rollup windows, keeps live views from going backwards, and bounds lateness so stragglers go through a batch correction.",
+        "adequate": "Stores late readings but never updates rollups, or reprocesses everything.",
+        "weak": "Stamps readings with arrival time, so a day of readings lands in one minute."
+      },
+      "misconceptions": [
+        {
+          "id": "late.arrival_time",
+          "pattern": "Thinks using the time a reading arrives is good enough.",
+          "challenge": "A day's buffered readings arrive in one burst. What does the device's chart look like?"
+        }
+      ],
+      "probes": [
+        "How do you avoid storing the same reading twice if the upload is retried?",
+        "Which rollups need recomputing, and how do you find them?"
+      ],
+      "hints": [
+        "The reading's own timestamp and sequence say where it belongs.",
+        "Only windows that received new points need recomputing."
+      ],
+      "moveOnSummary": "Event-time placement with sequence-number dedupe, idempotent raw writes and recomputation of only the affected rollup windows.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "deep.rollups",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "aggregator",
+          "batch-job"
+        ],
+        "keywords": [
+          "downsampling",
+          "one-minute",
+          "hourly rollup",
+          "resolution",
+          "chart query",
+          "compression"
+        ]
+      },
+      "goal": "Serve long-range charts fast with downsampled data and keep storage proportional.",
+      "opener": "How do you serve a one-year chart for one device in under a second?",
+      "evidence": {
+        "strong": "Precomputes rollups (min, max, average, count per minute and per hour) as readings arrive, queries the coarsest resolution that fits the range, and uses columnar compression; raw data expires after its retention period.",
+        "adequate": "Mentions downsampling but computes it at query time or keeps only averages.",
+        "weak": "Reads every raw point for the year at query time."
+      },
+      "misconceptions": [
+        {
+          "id": "roll.avg_only",
+          "pattern": "Believes storing only averages is enough for rollups.",
+          "challenge": "A pressure spike lasts ten seconds. Does an hourly average show it?"
+        }
+      ],
+      "probes": [
+        "Which statistics would you keep per bucket?",
+        "How does the query choose a resolution?"
+      ],
+      "hints": [
+        "A chart only has so many pixels.",
+        "Keep more than the mean so spikes stay visible."
+      ],
+      "moveOnSummary": "Precomputed multi-resolution rollups with min, max, average and count, chosen by query range.",
+      "learnTopics": [
+        "time-series-databases",
+        "precomputation-pattern"
+      ]
+    },
+    {
+      "id": "deep.storm",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "load-balancer",
+          "rate-limiter",
+          "t-kafka"
+        ],
+        "keywords": [
+          "reconnect storm",
+          "thundering herd",
+          "jitter",
+          "backoff",
+          "throttle",
+          "power outage"
+        ]
+      },
+      "goal": "Survive a mass reconnect after a regional outage.",
+      "opener": "A power cut ends and a huge number of devices reconnect within a minute, each uploading a backlog. What protects the pipeline?",
+      "evidence": {
+        "strong": "Devices reconnect with randomised exponential backoff; gateways admit connections at a controlled rate and push back; the log absorbs the burst, consumers catch up with autoscaling, and live data is prioritised over backlog.",
+        "adequate": "Scales the gateways but ignores client backoff or prioritisation.",
+        "weak": "Assumes autoscaling handles it instantly."
+      },
+      "misconceptions": [
+        {
+          "id": "storm.autoscale",
+          "pattern": "Thinks autoscaling alone absorbs a reconnect storm.",
+          "challenge": "New gateway instances take minutes to start. What happens to the devices connecting in the first minute?"
+        }
+      ],
+      "probes": [
+        "Should backlog uploads compete with live readings?"
+      ],
+      "hints": [
+        "Clients can spread their own retries out.",
+        "A durable log lets you accept fast and process later."
+      ],
+      "moveOnSummary": "Jittered backoff on devices, rate-limited admission at gateways, the log as a buffer, and live data before backlog.",
+      "learnTopics": [
+        "backpressure",
+        "retries-and-timeouts",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "deep.clock",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "data-quality",
+          "clock"
+        ],
+        "keywords": [
+          "clock drift",
+          "skew",
+          "receive time",
+          "ntp",
+          "wrong timestamp",
+          "future timestamp"
+        ]
+      },
+      "goal": "Handle device clocks that are wrong.",
+      "opener": "A device's clock is well off. What does that do to your data, and how do you handle it?",
+      "evidence": {
+        "strong": "Stores device time, server receive time and sequence; estimates skew per device from receive time on live readings, corrects or flags readings, rejects impossible timestamps, and keeps raw values for audit.",
+        "adequate": "Replaces device time with server time, losing correct offline timestamps.",
+        "weak": "Trusts device time blindly."
+      },
+      "misconceptions": [
+        {
+          "id": "clock.server_time",
+          "pattern": "Believes overwriting device time with server receive time fixes skew.",
+          "challenge": "A device uploads yesterday's buffered readings now. What timestamps do they get?"
+        }
+      ],
+      "probes": [
+        "How would you even detect that a clock is wrong?"
+      ],
+      "hints": [
+        "Compare the device's time with when you received live readings.",
+        "Keep both timestamps rather than choosing one."
+      ],
+      "moveOnSummary": "Keep device time, receive time and sequence; estimate and correct skew per device and flag bad timestamps.",
+      "learnTopics": [
+        "clocks-and-ordering",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.alerts",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "alerting",
+          "stream-processor"
+        ],
+        "keywords": [
+          "threshold rule",
+          "rules engine",
+          "silence detection",
+          "heartbeat",
+          "stopped reporting",
+          "notify"
+        ]
+      },
+      "goal": "Evaluate threshold rules and detect silent devices within a minute.",
+      "opener": "How do you notice that a device has stopped reporting, and how do threshold alerts fire quickly?",
+      "evidence": {
+        "strong": "Evaluates rules in the stream per device with keyed state, deduplicates and debounces alerts, and detects silence with a per-device timer that fires when no reading arrives within the expected interval; sends to a notification service.",
+        "adequate": "Fires threshold alerts in the stream but detects silence with a periodic database scan.",
+        "weak": "Checks alerts by querying the database every few minutes for every device."
+      },
+      "misconceptions": [
+        {
+          "id": "alert.scan",
+          "pattern": "Thinks scanning all devices periodically is the way to find silent ones.",
+          "challenge": "Scanning millions of devices every minute: what does that cost, and how fast is it?"
+        }
+      ],
+      "probes": [
+        "How do you stop one flapping sensor from sending hundreds of alerts?"
+      ],
+      "hints": [
+        "Absence of data is an event you can schedule a timer for.",
+        "Debounce alerts that flip on and off."
+      ],
+      "moveOnSummary": "Stream-side rule evaluation with keyed state, per-device timers for silence, and debounced notifications.",
+      "learnTopics": [
+        "stream-processing",
+        "observability"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost",
+          "retention",
+          "limitation",
+          "improve"
+        ]
+      },
+      "goal": "Summarise trade-offs in storage tiers, freshness and cost.",
+      "opener": "What are the main trade-offs in your design, and where would cost grow fastest?",
+      "evidence": {
+        "strong": "Names trade-offs such as rollup granularity versus storage, lateness bounds versus correctness, MQTT connection costs, and retention tiers, with numbers where possible.",
+        "adequate": "Names a trade-off without consequence.",
+        "weak": "Says there are no significant trade-offs."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.flat",
+          "pattern": "Believes storage cost doesn't matter at this scale.",
+          "challenge": "Raw readings at this rate for two years: roughly how much is that?"
+        }
+      ],
+      "probes": [
+        "What would you change for a fleet ten times larger?"
+      ],
+      "hints": [
+        "Think about storage growth and lateness.",
+        "Which tier holds most of the bytes?"
+      ],
+      "moveOnSummary": "Tiered storage and rollups keep cost proportional; lateness bounds trade correctness against state and complexity.",
+      "learnTopics": [
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.outage",
+      "after": "deep.late",
+      "prompt": "A regional power outage ends and a large share of the fleet comes back at once, each device uploading hours of readings. Walk me through the next ten minutes.",
+      "agendaItemId": "deep.storm"
+    },
+    {
+      "id": "cb.firmware",
+      "after": "deep.rollups",
+      "prompt": "A firmware bug set some devices' clocks back by a year. Their readings are landing in last year's charts. What do you do?",
+      "agendaItemId": "deep.clock"
+    }
+  ],
+  "vocabulary": [
+    "MQTT",
+    "IoT",
+    "device gateway",
+    "X.509 certificate",
+    "time-series database",
+    "TimescaleDB",
+    "InfluxDB",
+    "Cassandra",
+    "downsampling",
+    "rollup",
+    "retention",
+    "Gorilla compression",
+    "delta-of-delta",
+    "sequence number",
+    "clock skew",
+    "NTP",
+    "thundering herd",
+    "exponential backoff",
+    "jitter",
+    "Kafka",
+    "Flink",
+    "Parquet"
+  ],
+  "alternatives": [
+    {
+      "choice": "Managed IoT ingestion (AWS IoT Core, Azure IoT Hub) feeding the log",
+      "whenBetter": "When the team wants device connectivity, certificates and rules handled by a managed service."
+    },
+    {
+      "choice": "Wide-column store keyed by device and day",
+      "whenBetter": "When write throughput matters most and a team already runs Cassandra or similar at scale."
+    },
+    {
+      "choice": "Computing rollups in a batch job instead of in the stream",
+      "whenBetter": "When charts can tolerate rollups being minutes to an hour behind and stream state should stay small."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Device-keyed, tiered time series",
+      "outline": "Clarifies fleet, rate, offline buffering and clock behaviour, and estimates hundreds of thousands of readings a second and several terabytes a day. Devices use MQTT through certificate-authenticated gateways into Kafka keyed by device. A stream job validates, deduplicates on device and sequence, updates a latest-value store and computes minute and hour rollups with min, max, average and count. Raw data lives in a time-series store bucketed by device and day for thirty days, then Parquet in object storage. Late uploads recompute affected windows; skew is estimated per device. Reconnect storms are handled with jittered backoff and admission control; silence is detected with timers."
+    },
+    {
+      "band": "adequate",
+      "label": "Time-series store, thin on edge cases",
+      "outline": "Uses a gateway, Kafka and a time-series database with some downsampling, but stamps readings with arrival time, has no plan for reconnect storms, and finds silent devices with a periodic scan."
+    },
+    {
+      "band": "weak",
+      "label": "One big readings table",
+      "outline": "Has devices write readings directly into a relational table indexed by device and time, charts years of raw points at query time, and doesn't address offline devices, clocks or retention."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

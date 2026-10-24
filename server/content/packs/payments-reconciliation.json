@@ -1,0 +1,641 @@
+{
+  "opening": "We're a marketplace that takes payments through several payment processors. Finance spends days in spreadsheets checking that the money we think we received actually arrived. Let's design a reconciliation pipeline. How would you start?",
+  "clarifications": [
+    {
+      "id": "scale.payments",
+      "topics": [
+        "scale",
+        "volume",
+        "payments",
+        "transactions",
+        "how many"
+      ],
+      "answer": "About 3 million payments a day, through three processors, in 20 currencies."
+    },
+    {
+      "id": "src.internal",
+      "topics": [
+        "ledger",
+        "internal",
+        "our records",
+        "database",
+        "source of truth"
+      ],
+      "answer": "Our internal records live in a Postgres ledger: payments, refunds and ledger entries, each with the processor's reference id once the processor accepts it."
+    },
+    {
+      "id": "src.processors",
+      "topics": [
+        "processor",
+        "settlement report",
+        "files",
+        "sftp",
+        "api",
+        "stripe"
+      ],
+      "answer": "Each processor sends a daily settlement report by SFTP or API, at different times overnight, in its own format. Fees are deducted and payments are grouped into payouts."
+    },
+    {
+      "id": "src.bank",
+      "topics": [
+        "bank",
+        "statement",
+        "deposit",
+        "payout"
+      ],
+      "answer": "The bank sends a daily statement. Each processor payout shows up as one deposit, net of fees."
+    },
+    {
+      "id": "req.deadline",
+      "topics": [
+        "deadline",
+        "sla",
+        "when",
+        "freshness",
+        "morning"
+      ],
+      "answer": "Finance needs the results by 9am every day."
+    },
+    {
+      "id": "req.audit",
+      "topics": [
+        "audit",
+        "reproduce",
+        "history",
+        "retention",
+        "compliance"
+      ],
+      "answer": "Auditors can ask what the reconciliation showed on any past date, up to 7 years back, and why."
+    },
+    {
+      "id": "src.timing",
+      "topics": [
+        "timing",
+        "settlement lag",
+        "late",
+        "delay",
+        "days"
+      ],
+      "answer": "Processors settle one to three business days after capture, so a payment can legitimately be missing from the first report."
+    },
+    {
+      "id": "src.corrections",
+      "topics": [
+        "corrections",
+        "resend",
+        "duplicate files",
+        "reissued"
+      ],
+      "answer": "Processors sometimes resend a file, either unchanged or corrected."
+    }
+  ],
+  "clarificationPolicy": "Answer as the finance operations lead. Keep it a batch correctness and auditability problem at moderate volume; decide unlisted details so matching rules, timing and idempotency stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "users",
+          "ledger"
+        ],
+        "keywords": [
+          "sources",
+          "settlement report",
+          "deadline",
+          "audit",
+          "currencies",
+          "exceptions"
+        ]
+      },
+      "goal": "Establish the sources, volumes, deadline, exception handling and audit needs.",
+      "opener": "What do you need to understand about the data and the finance team's process?",
+      "evidence": {
+        "strong": "Asks which sides are matched (internal ledger, processor reports, bank statements), volumes, file timing and formats, the morning deadline, how exceptions are worked, settlement lag, currencies and fees, and audit retention.",
+        "adequate": "Asks about sources and volume but not timing, corrections or audit needs.",
+        "weak": "Starts building a join without asking what is being matched or when files arrive."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.one_join",
+          "pattern": "Thinks reconciliation is a single join on amount.",
+          "challenge": "The bank shows one deposit for thousands of payments minus fees. What does a single join on amount match it to?"
+        }
+      ],
+      "probes": [
+        "What exactly counts as matched, and what does finance do with what isn't?",
+        "When does each file arrive relative to the deadline?"
+      ],
+      "hints": [
+        "There are three sides here, not two.",
+        "Ask how long money takes to settle."
+      ],
+      "moveOnSummary": "Match the internal ledger to processor reports and bank deposits daily by the morning deadline, with explained exceptions and multi-year auditability.",
+      "learnTopics": [
+        "payment-system-ledger",
+        "data-engineering-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.ingest",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ingestion",
+          "storage",
+          "t-s3",
+          "partner",
+          "payment-provider"
+        ],
+        "keywords": [
+          "landing",
+          "file registry",
+          "checksum",
+          "immutable",
+          "parsers",
+          "normalise"
+        ]
+      },
+      "goal": "Land every input immutably and normalise it into one schema.",
+      "opener": "How do the processor files, bank statements and internal records get into your pipeline in a usable form?",
+      "evidence": {
+        "strong": "Pulls files by SFTP or API into an immutable raw store with a registry recording source, business date, checksum, version and arrival time; per-source parsers normalise into one transaction schema with amounts in minor units, currency, fees, references and UTC times; the ledger is extracted by snapshot or CDC.",
+        "adequate": "Lands and parses files but doesn't keep originals or track versions.",
+        "weak": "Parses files in place and overwrites tables with each new file."
+      },
+      "misconceptions": [
+        {
+          "id": "ingest.overwrite",
+          "pattern": "Believes keeping only the latest parsed version of each file is enough.",
+          "challenge": "An auditor asks to see the exact file you used last March. Where is it?"
+        }
+      ],
+      "probes": [
+        "How do you know a file is a duplicate, a correction or new?",
+        "What does the common schema look like?"
+      ],
+      "hints": [
+        "Keep exactly what you received.",
+        "Every source has its own format; convert once into yours."
+      ],
+      "moveOnSummary": "Immutable raw files with a registry, per-source parsers, and one normalised transaction schema.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "pipeline-error-handling"
+      ]
+    },
+    {
+      "id": "hl.matching",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "batch-processor",
+          "t-spark",
+          "warehouse",
+          "etl"
+        ],
+        "keywords": [
+          "matching engine",
+          "reference id",
+          "rules",
+          "match levels",
+          "exceptions table",
+          "match results"
+        ]
+      },
+      "goal": "Design staged matching across the three sides and record results and exceptions.",
+      "opener": "How does the pipeline decide that an internal payment, a processor transaction and a bank deposit are the same money?",
+      "evidence": {
+        "strong": "Matches in stages: ledger to processor by processor reference id; processor payouts to bank deposits by payout reference and net amount; remaining items by rules (amount within tolerance, date window, currency); records match results and exceptions with reason codes in versioned tables.",
+        "adequate": "Matches ledger to processor by reference but has no plan for bank deposits or rule-based matches.",
+        "weak": "Joins on amount and date only."
+      },
+      "misconceptions": [
+        {
+          "id": "match.amount_date",
+          "pattern": "Thinks amount and date are enough to match payments.",
+          "challenge": "Thousands of payments a day are for the same price. Which one does a match on amount and date pick?"
+        }
+      ],
+      "probes": [
+        "What happens to items no rule matches?",
+        "How do you match one bank deposit to a whole payout?"
+      ],
+      "hints": [
+        "Use the strongest identifier first.",
+        "Payouts group many payments into one deposit."
+      ],
+      "moveOnSummary": "Staged matching: reference ids first, payouts to deposits next, then tolerance rules, with versioned results and reason-coded exceptions.",
+      "learnTopics": [
+        "payment-system-ledger",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "deep.idempotent",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "t-airflow"
+        ],
+        "keywords": [
+          "rerun",
+          "idempotent",
+          "run id",
+          "file version",
+          "resent file",
+          "same result"
+        ]
+      },
+      "goal": "Make runs reproducible and safe when rerun or when files are resent or corrected.",
+      "opener": "A processor resends yesterday's file, once unchanged and once with corrections. What happens?",
+      "evidence": {
+        "strong": "The registry ignores an identical file by checksum and records a corrected one as a new version; a run is keyed by business date and the exact input versions, so rerunning gives the same output; a new version triggers a rerun whose results are stored alongside the old run.",
+        "adequate": "Reruns overwrite results but there's no record of which inputs were used.",
+        "weak": "Processes the resent file again, duplicating transactions."
+      },
+      "misconceptions": [
+        {
+          "id": "idem.append",
+          "pattern": "Thinks appending each received file's rows is safe.",
+          "challenge": "The same file arrives twice. How many times is each payment counted?"
+        }
+      ],
+      "probes": [
+        "How would you rerun one past day without affecting others?",
+        "What does a run record about its inputs?"
+      ],
+      "hints": [
+        "Know exactly which files a run used.",
+        "A checksum tells you whether a file is identical."
+      ],
+      "moveOnSummary": "Runs keyed by business date and input file versions; duplicates ignored by checksum, corrections versioned and rerun.",
+      "learnTopics": [
+        "idempotency",
+        "backfill-and-reprocessing"
+      ]
+    },
+    {
+      "id": "deep.payouts",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ledger",
+          "aggregator"
+        ],
+        "keywords": [
+          "payout",
+          "many-to-one",
+          "net of fees",
+          "fees",
+          "fx",
+          "batch deposit"
+        ]
+      },
+      "goal": "Match grouped payouts to bank deposits, including fees and currency conversion.",
+      "opener": "A payout of over a thousand payments lands in the bank as one deposit minus fees. How do you match it?",
+      "evidence": {
+        "strong": "Uses the processor's payout report to group transactions by payout id, computes gross minus fees (and FX where currencies differ) to an expected net, matches it to the bank deposit by payout reference and amount, and drills into the payout's lines if the totals differ.",
+        "adequate": "Matches deposits by total amount but ignores fees or FX.",
+        "weak": "Tries to match each payment directly to the bank statement."
+      },
+      "misconceptions": [
+        {
+          "id": "payout.gross",
+          "pattern": "Believes the deposit should equal the sum of the payments.",
+          "challenge": "The processor kept its fee. What does the sum of payments compare against?"
+        }
+      ],
+      "probes": [
+        "What would you check first if the deposit is slightly off?"
+      ],
+      "hints": [
+        "The processor tells you which payments went into each payout.",
+        "Fees and conversions explain most small differences."
+      ],
+      "moveOnSummary": "Group by payout id, compute net of fees and FX, and match to the deposit by reference and amount.",
+      "learnTopics": [
+        "payment-system-ledger"
+      ]
+    },
+    {
+      "id": "deep.timing",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "kv-store"
+        ],
+        "keywords": [
+          "settlement lag",
+          "open items",
+          "timing difference",
+          "carry forward",
+          "ageing",
+          "pending"
+        ]
+      },
+      "goal": "Distinguish settlement timing from real breaks.",
+      "opener": "A payment captured just before midnight settles two days later. Is that a break?",
+      "evidence": {
+        "strong": "Keeps unmatched items open and retries them on later runs within an expected settlement window per processor; only items still unmatched after the window become breaks; tracks age and cut-off times in each source's time zone.",
+        "adequate": "Knows about lag but uses one fixed window for everything or no cut-off rules.",
+        "weak": "Flags every unmatched item as a break on the first day."
+      },
+      "misconceptions": [
+        {
+          "id": "timing.day_one",
+          "pattern": "Thinks any item missing from today's file is a problem.",
+          "challenge": "Processors settle a few business days later. How many false breaks would finance see every morning?"
+        }
+      ],
+      "probes": [
+        "How long would you wait before calling something a break?"
+      ],
+      "hints": [
+        "Money often takes days to move.",
+        "Open items can be carried forward and retried."
+      ],
+      "moveOnSummary": "Carry unmatched items forward within a settlement window per processor; only aged items become breaks.",
+      "learnTopics": [
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.money",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "table",
+          "database",
+          "t-postgres"
+        ],
+        "keywords": [
+          "minor units",
+          "decimal",
+          "float",
+          "rounding",
+          "currency",
+          "tolerance"
+        ]
+      },
+      "goal": "Represent money and tolerances correctly.",
+      "opener": "How do you store and compare amounts in twenty currencies?",
+      "evidence": {
+        "strong": "Stores amounts as integers in minor units (or exact decimals) with currency codes, knows currencies differ in decimal places, applies explicit tolerances only for FX rounding, and records the rate used.",
+        "adequate": "Uses decimals but applies a loose global tolerance.",
+        "weak": "Stores amounts as floating-point numbers."
+      },
+      "misconceptions": [
+        {
+          "id": "money.float",
+          "pattern": "Believes floating-point numbers are fine for money.",
+          "challenge": "Add a tenth of a unit to itself three times in floating point. Does it equal three tenths exactly?"
+        }
+      ],
+      "probes": [
+        "Do all currencies have two decimal places?"
+      ],
+      "hints": [
+        "Exact types avoid tiny differences turning into breaks.",
+        "Some currencies have no minor unit, some have three."
+      ],
+      "moveOnSummary": "Integer minor units or exact decimals with currency codes and explicit FX rounding tolerance.",
+      "learnTopics": [
+        "payment-system-ledger"
+      ]
+    },
+    {
+      "id": "deep.audit",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "audit-log",
+          "archive"
+        ],
+        "keywords": [
+          "audit trail",
+          "reproduce",
+          "resolution",
+          "who changed",
+          "versioned results",
+          "past date"
+        ]
+      },
+      "goal": "Prove what the reconciliation showed on any past date and how exceptions were resolved.",
+      "opener": "How do you prove to an auditor what the reconciliation said on a date three years ago, and why?",
+      "evidence": {
+        "strong": "Keeps raw files, run records (inputs, rule versions, code version) and results per run immutably; human resolutions are append-only events with who, when and why; any past view can be reproduced or read back as stored.",
+        "adequate": "Keeps results but not inputs or rule versions, or lets resolutions overwrite fields.",
+        "weak": "Keeps only the current state."
+      },
+      "misconceptions": [
+        {
+          "id": "audit.current",
+          "pattern": "Thinks today's tables are enough for audits.",
+          "challenge": "A matching rule changed last year. How do you show what the old rule decided?"
+        }
+      ],
+      "probes": [
+        "Where do finance users' manual resolutions live?"
+      ],
+      "hints": [
+        "Record what went in, which rules ran and what came out.",
+        "Human decisions are events too."
+      ],
+      "moveOnSummary": "Immutable inputs, run records with rule and code versions, per-run results and append-only resolution events.",
+      "learnTopics": [
+        "event-sourcing-cqrs"
+      ]
+    },
+    {
+      "id": "deep.alerting",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "alerting",
+          "on-call"
+        ],
+        "keywords": [
+          "missing file",
+          "deadline alert",
+          "break threshold",
+          "page",
+          "late file",
+          "escalate"
+        ]
+      },
+      "goal": "Alert on missing inputs and serious breaks before the morning deadline.",
+      "opener": "Which problems should page someone immediately, and how do you catch a file that never arrived?",
+      "evidence": {
+        "strong": "Tracks an expected arrival time per source and alerts when a file is late, well before the deadline; pages on large or unusual breaks (for example a whole payout missing or total mismatch over a threshold), and routes routine exceptions to finance's queue.",
+        "adequate": "Alerts on job failures only.",
+        "weak": "Has no alerting; finance finds out at nine."
+      },
+      "misconceptions": [
+        {
+          "id": "alert.job_only",
+          "pattern": "Believes alerting on job failures covers it.",
+          "challenge": "The processor never sent its file. Did any job fail?"
+        }
+      ],
+      "probes": [
+        "What's the difference between something to page on and something for finance's queue?"
+      ],
+      "hints": [
+        "Absence of a file is a signal you can schedule.",
+        "Not every break is urgent."
+      ],
+      "moveOnSummary": "Expected-arrival alerts per source, paging on large breaks, and routine exceptions to a work queue.",
+      "learnTopics": [
+        "observability"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "limitation",
+          "manual work",
+          "improve",
+          "scale"
+        ]
+      },
+      "goal": "Summarise trade-offs between automation, correctness and timeliness.",
+      "opener": "What are the main trade-offs in your design, and where will finance still need to do manual work?",
+      "evidence": {
+        "strong": "Discusses strict rules versus false matches, waiting for settlement versus timely alerts, and keeping all history versus storage, and names residual manual work such as partial refunds and chargebacks.",
+        "adequate": "Names one trade-off without consequence.",
+        "weak": "Claims everything will match automatically."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.auto",
+          "pattern": "Believes reconciliation can be fully automated.",
+          "challenge": "A customer's payment was partially refunded and then charged back. Which rule handles that?"
+        }
+      ],
+      "probes": [
+        "What would you automate next?"
+      ],
+      "hints": [
+        "Looser rules match more but risk wrong matches.",
+        "Some cases are genuinely ambiguous."
+      ],
+      "moveOnSummary": "Strict staged rules plus a human exceptions queue; timing windows trade alert speed for fewer false breaks.",
+      "learnTopics": [
+        "data-engineering-system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.missing",
+      "after": "deep.idempotent",
+      "prompt": "It's 7am and one processor's file hasn't arrived. Finance needs results at nine. What does your system do?",
+      "agendaItemId": "deep.alerting"
+    },
+    {
+      "id": "cb.lag",
+      "after": "deep.payouts",
+      "prompt": "Finance complains that every morning thousands of payments show as breaks, and most clear up by themselves two days later. What's wrong?",
+      "agendaItemId": "deep.timing"
+    }
+  ],
+  "vocabulary": [
+    "reconciliation",
+    "settlement report",
+    "payout",
+    "bank statement",
+    "ledger",
+    "double-entry",
+    "processor reference",
+    "minor units",
+    "FX",
+    "chargeback",
+    "partial refund",
+    "break",
+    "exception",
+    "tolerance",
+    "SFTP",
+    "checksum",
+    "idempotent",
+    "Airflow",
+    "Spark",
+    "audit trail",
+    "Stripe",
+    "Adyen",
+    "PayPal"
+  ],
+  "alternatives": [
+    {
+      "choice": "A dedicated reconciliation product",
+      "whenBetter": "When finance wants a vendor tool and the data team only needs to deliver normalised inputs."
+    },
+    {
+      "choice": "SQL in the warehouse instead of Spark",
+      "whenBetter": "At this volume, when the team prefers dbt models and warehouse compute; most matching is joins and aggregates."
+    },
+    {
+      "choice": "Streaming reconciliation per payment",
+      "whenBetter": "When processors offer event webhooks and finance wants intraday exceptions, with the daily batch kept for settlement."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Versioned, staged and auditable",
+      "outline": "Clarifies the three sides, file timing, settlement lag, currencies, deadline and audit retention. Lands every file immutably with a registry of checksums and versions, normalises to integer minor units with fees and FX, and extracts the ledger by CDC. Matches by processor reference, then payout id to bank deposit net of fees, then tolerance rules, keeping unmatched items open within each processor's settlement window. Runs are keyed by business date and input versions, results stored per run, resolutions as append-only events, with missing-file alerts before the deadline and paging on large breaks."
+    },
+    {
+      "band": "adequate",
+      "label": "Joins without history",
+      "outline": "Parses files into tables and joins on reference ids and amounts, but flags every unmatched item on day one, overwrites results on rerun and handles fees only at the payout total."
+    },
+    {
+      "band": "weak",
+      "label": "Spreadsheet in SQL",
+      "outline": "Joins internal payments to processor rows on amount and date using floats, processes resent files again, and keeps only the latest results with no audit trail."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

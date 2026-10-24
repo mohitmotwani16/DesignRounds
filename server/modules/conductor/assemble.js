@@ -1,4 +1,5 @@
 import { clean } from "../ai/context.js";
+import { DATA_MODEL_HOW_TO } from "../ai/data-model.js";
 import { formatTurns } from "../ai/tasks/interviewer.js";
 import { renderProblem } from "../pks/index.js";
 import { estimateTokens, renderUniversal } from "../ucs/index.js";
@@ -50,8 +51,9 @@ export function renderPlan({ plan, trigger, items, selected, changes, rejection 
     `Allowed moves: ${plan.allowedMoves.join(", ")}.`,
     plan.candidates.length ? `Other items this turn may touch (credit them if the candidate covered them): ${plan.candidates.join(", ")}.` : "",
     plan.curveball ? `Curveball available: ${plan.curveball.id}, opens ${plan.curveball.agendaItemId}.` : "",
-    plan.canvas ? `Canvas: ${plan.canvas.components} components, ${plan.canvas.connections} connections. Parts already drawn: ${plan.canvas.drawn.join(", ") || "none"}. Parts not drawn yet: ${plan.canvas.undrawn.join(", ") || "none"}.` : "",
+    plan.canvas ? `Canvas: ${plan.canvas.components} components${plan.canvas.tables ? ` (${plan.canvas.tables} of them data model tables)` : ""}, ${plan.canvas.connections} connections. Parts already drawn: ${plan.canvas.drawn.join(", ") || "none"}. Parts not drawn yet: ${plan.canvas.undrawn.join(", ") || "none"}.` : "",
     plan.drawTarget ? `Before ${plan.drawTarget} can start, its part must be on the canvas: if you move on, ask the candidate to draw it (move ask_to_draw, focusItemId ${plan.drawTarget}); the deep dive starts once it is drawn.` : "",
+    plan.dataModelItemId ? `${plan.dataModelItemId} is about the data model, and there is no table on the canvas yet. Whenever you ask the candidate to draw or show their tables or schema, in any move, ask for the main tables with their key columns, and in the same message say in one or two sentences how to add them: ${DATA_MODEL_HOW_TO}` : "",
     plan.questionStreak >= 3 && !plan.allowedMoves.includes("hint") ? `Your last ${plan.questionStreak} messages all asked something. Unless you need an answer right now, don't ask this time: say back how you understand their design, say what's working, or invite them to keep building${plan.allowedMoves.includes("listen") ? " (move listen)" : ""}.` : "",
     plan.allowedMoves.length === 3 && plan.allowedMoves[0] === "ask_to_draw" ? "The candidate has been talking without drawing: ask them to put what they described on the canvas before going further." : "",
     selected ? `The candidate has this component selected: [${selected.id}] "${clean(selected.label, 120)}".` : "",

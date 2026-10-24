@@ -101,7 +101,7 @@ How each part is used:
 | `opening` | Conductor at round start | A realistic, deliberately vague first line |
 | `clarifications` | Conductor every turn | Consistent hidden facts; the same question always gets the same answer |
 | `agenda` | Conductor's ledger and planner | Topics, judging descriptors, follow-up and hint material, move-on bridges |
-| `triggers` | Conductor's planner | Cheap, code-side candidate matching (component kinds on the canvas, keywords) |
+| `triggers` | Conductor's planner | Cheap, code-side candidate matching (component kinds on the canvas, keywords). A data model kind (`table`, `fact-table`, `dimension-table`, `collection`, `event-schema`) marks the item as being about the data model: it then needs a table drawn ([conductor doc](interview-conductor.md#the-data-model)) |
 | `curveballs` | Conductor in deep dive | Raise the bar when the learner is doing well |
 | `vocabulary` | Speech-to-text and judging | Fewer mis-transcribed terms in voice answers |
 | `alternatives`, `exemplars` | Final review | Calibration; credit valid alternatives |

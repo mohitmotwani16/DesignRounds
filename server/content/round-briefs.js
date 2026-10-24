@@ -622,5 +622,117 @@ export const plusBriefs = {
       "Idempotent inserts"
     ],
     "expectedOutcome": "A geo-indexed, precomputed candidate feed, a swipe store sharded for write throughput, race-safe match detection with a deterministic match id, and a cheap seen filter."
+  },
+  "ad-click-aggregator": {
+    "requirements": [
+      "A click redirects the user to the advertiser's site with no noticeable delay; about 1 billion clicks a day, 50,000 a second at peak.",
+      "Advertisers see click counts per ad and campaign by the minute, at most a minute behind.",
+      "Billing counts are exact: duplicate and invalid clicks are excluded and no click is counted twice."
+    ],
+    "prerequisites": [
+      "Kafka partitions and consumer groups",
+      "Tumbling windows and watermarks",
+      "Idempotent writes",
+      "OLAP stores (Druid, Pinot, ClickHouse)"
+    ],
+    "expectedOutcome": "A click capture path that never blocks the redirect, a partitioned log, windowed stream aggregation with deduplication, an OLAP serving store, hot-ad handling, and a batch reconciliation that produces the billing numbers."
+  },
+  "iot-telemetry": {
+    "requirements": [
+      "About 5 million devices each send a reading every 10 seconds over unreliable networks.",
+      "Operators see each device's latest values within seconds and charts of its history for the past 2 years.",
+      "Readings that arrive late or out of order after a device reconnects still land in the right place."
+    ],
+    "prerequisites": [
+      "MQTT or batched HTTP device ingestion",
+      "Time-series databases",
+      "Downsampling and rollups",
+      "Event time vs processing time"
+    ],
+    "expectedOutcome": "A device gateway and durable log, a time-series store partitioned by device and time, rollups for long ranges, a latest-value store, retention tiers, and explicit handling of late, duplicate and clock-skewed readings."
+  },
+  "lakehouse-platform": {
+    "requirements": [
+      "About 20 TB of new data a day from batch extracts, database change streams and event streams lands in object storage.",
+      "Analysts query curated tables from BI tools interactively; data scientists read the same tables from Spark and can rebuild a training set exactly as it was on a past date.",
+      "Tables support updates and deletes, and access to sensitive columns is controlled in one place."
+    ],
+    "prerequisites": [
+      "Parquet and columnar formats",
+      "Open table formats (Iceberg, Delta Lake, Hudi)",
+      "Medallion (bronze/silver/gold) layers",
+      "Query engines (Spark, Trino)"
+    ],
+    "expectedOutcome": "Medallion layers on object storage in an open table format, a shared catalog, compaction and layout maintenance, separate compute for BI and ML, time travel for reproducibility, and central governance."
+  },
+  "log-analytics": {
+    "requirements": [
+      "About 5,000 hosts and their containers send around 500,000 log lines a second, with bursts of 5x during incidents.",
+      "Engineers can search and filter the last 7 days of logs within 30 seconds of a line being written.",
+      "Logs are kept for a year for audits at low cost, and security logs are never dropped."
+    ],
+    "prerequisites": [
+      "Log shipping agents (Fluent Bit, Vector)",
+      "Kafka as a buffer",
+      "Inverted indexes (Elasticsearch, OpenSearch)",
+      "Object storage lifecycle tiers"
+    ],
+    "expectedOutcome": "Agents that buffer and batch, a durable log as a shock absorber, parsing, enrichment and redaction, a hot search tier sized for 7 days, a cheap archive tier for a year, and a policy for bursts and sampling."
+  },
+  "playback-sessionization": {
+    "requirements": [
+      "Players send a heartbeat every 30 seconds plus events such as start, rebuffer, bitrate change and stop; up to 10 million streams play at once at peak.",
+      "Operations sees rebuffering, startup time and error rates by CDN, region and device within a minute.",
+      "Viewing hours per title per day are accurate enough for content licensing reports, even when events arrive late or twice."
+    ],
+    "prerequisites": [
+      "Session windows",
+      "Watermarks and allowed lateness",
+      "Keyed state in stream processors",
+      "Approximate distinct counts (HyperLogLog)"
+    ],
+    "expectedOutcome": "Player event ingestion into a partitioned log, stateful sessionization keyed by playback session with gap-based closing, quality aggregates in a real-time store, and a batch path that recomputes exact viewing hours with late and duplicate events handled."
+  },
+  "payments-reconciliation": {
+    "requirements": [
+      "About 3 million payments a day flow through three payment processors in 20 currencies; each processor sends a daily settlement report and the bank sends daily statements.",
+      "By 9am each morning finance sees every payment matched to the processor and the bank, or listed as an exception with a reason.",
+      "Reruns, late files and corrected files never produce duplicated or different results, and any past result can be reproduced for auditors."
+    ],
+    "prerequisites": [
+      "Double-entry ledgers",
+      "Idempotent batch processing",
+      "Joins and rule-based matching",
+      "Immutable raw storage"
+    ],
+    "expectedOutcome": "Immutable landing of internal and external files, normalisation to one schema, staged matching (exact keys, then rules with tolerances, then many-to-one payouts), an exceptions workflow, idempotent versioned runs and an audit trail."
+  },
+  "experimentation-analytics": {
+    "requirements": [
+      "About 300 experiments run at once on 40 million daily users, and products log about 5 billion events a day into the warehouse.",
+      "Each experiment gets a daily scorecard: its metrics per variant with confidence intervals, plus guardrail metrics that can stop a harmful test early.",
+      "Results are trustworthy: users are counted in the variant they actually saw, and broken experiments are flagged automatically."
+    ],
+    "prerequisites": [
+      "A/B testing and statistical significance",
+      "Assignment vs exposure",
+      "Incremental aggregation",
+      "Metric definitions as code"
+    ],
+    "expectedOutcome": "Exposure logging where the variant is shown, a metric catalog defined as code, an incremental pipeline from events to per-user and then per-variant aggregates, confidence interval computation, and automatic health checks such as sample ratio mismatch."
+  },
+  "gdpr-deletion": {
+    "requirements": [
+      "About 50,000 deletion requests a month arrive for a service with 100 million users; each must be completed within 30 days.",
+      "A user's data lives in service databases, event streams, a multi-petabyte data lake, the warehouse, ML datasets, backups and third-party tools.",
+      "Records the law requires us to keep, such as invoices, are kept but no longer identify the person, and every deletion can be proven to an auditor."
+    ],
+    "prerequisites": [
+      "Data catalogs and lineage",
+      "Row-level deletes in open table formats",
+      "Encryption keys and crypto-shredding",
+      "Durable workflows and retries"
+    ],
+    "expectedOutcome": "A deletion request service with a durable workflow, an inventory of where personal data lives, per-system deletion handlers including batched rewrites of lake files, crypto-shredding where rewriting is impractical, handling of backups and streams, verification and an audit trail."
   }
 };

@@ -48,6 +48,7 @@ export const shortcutGroups = [
       [["G"], "Zone / boundary"],
       [["T"], "Text label"],
       [["N"], "Decision note"],
+      [["D"], "Data model table"],
     ],
   },
   {

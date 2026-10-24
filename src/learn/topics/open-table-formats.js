@@ -66,7 +66,7 @@ export default {
     "Include compaction and snapshot expiry in the operating plan.",
   ],
   related: ["lakehouse-architecture", "data-warehouse-vs-data-lake", "columnar-file-formats", "medallion-architecture", "optimistic-vs-pessimistic-locking", "outbox-pattern"],
-  practice: ["etl-framework", "fraud-data-platform"],
+  practice: ["lakehouse-platform", "gdpr-deletion", "etl-framework", "fraud-data-platform"],
   reading: [
     { title: "Apache Iceberg specification", publisher: "Apache Software Foundation", url: "https://iceberg.apache.org/spec/" },
     { title: "Delta Lake documentation", publisher: "Delta Lake (Linux Foundation)", url: "https://docs.delta.io/index.html" },

@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { GAP_SIGNALS, SIGNAL_IDS, describeDelivery, describeSignals, filterFillerWords, parseAnswerContext } from "../communication.js";
 import { clean } from "../context.js";
+import { DATA_MODEL_HOW_TO } from "../data-model.js";
 import { policy, policyVersion } from "../prompts/policy.js";
 import { list, oneOf, text } from "../schema.js";
 
 export const STAGES = ["requirements", "high_level", "deep_dive", "wrap_up"];
-export const interviewerTemplateVersion = `interviewer-v3/${policyVersion}`;
+export const interviewerTemplateVersion = `interviewer-v4/${policyVersion}`;
 
 // Private notes on the learner's latest answer, shared with the v3 Conductor's schema.
 export const communicationNotes = z.object({
@@ -49,6 +50,11 @@ Triggers:
 - hint: the learner asked for a hint. Use action "respond" and intent "hint". Point at the area that needs attention and ask a guiding question; never give the answer. Later hints in a round may be more specific than earlier ones.
 - proactive: nobody spoke; you are looking at changes on the canvas. Choose "ask" only if a listed change is significant and the learner hasn't explained it (in its note or in the conversation), and ask about the single most important one, the way an interviewer would ("I see you added a cache in front of the database. What will you cache, and how do you keep it fresh?"). Otherwise choose "skip" with an empty message. Skipping is the right call whenever the learner explained the choice already.
 
+Data model:
+- The design lists any data model tables under "Data model", with their columns and keys. Read them like a schema on a whiteboard: grain, keys, partitioning.
+- Ask the learner to add a data model only when <data_model> says this question needs one and none is drawn, and only once they have reached the high-level design or later and described tables, keys or a schema in words. Ask once for the main tables and their key columns, and say how in one or two sentences: ${DATA_MODEL_HOW_TO} Never ask for a data model when <data_model> says it isn't needed, and don't ask again if they ignored it.
+- If they ask how to add a table or a schema, tell them the same way.
+
 Update coveredNodeIds with every component the learner has now explained well enough.
 
 Private communication notes (trigger "reply" only; otherwise leave signals and note empty):
@@ -83,7 +89,7 @@ export function formatTurns(turns) {
   }).join("\n");
 }
 
-function buildUser({ prompt, guide, design, state, turns, trigger, selected, changes, hints }) {
+function buildUser({ prompt, guide, design, state, turns, trigger, selected, changes, hints, dataModel = { needed: false } }) {
   return `<brief>
 Title: ${clean(prompt.title, 200)}. Difficulty: ${clean(prompt.difficulty, 40)}.
 Description: ${clean(prompt.description, 400)}
@@ -100,6 +106,10 @@ Stage: ${state.stage}
 Components already covered: ${state.covered.length ? state.covered.join(", ") : "none"}
 Hints used this round: ${hints.used} of ${hints.limit}
 </interview_state>
+
+<data_model>
+${dataModel.needed ? `This question's data model is part of a good answer. Data model tables on the canvas: ${design.tableCount ?? 0}.` : "This question doesn't need a data model on the canvas."}
+</data_model>
 ${state.summary ? `\n<earlier_conversation_summary>\n${clean(state.summary, 4000)}\n</earlier_conversation_summary>\n` : ""}
 <conversation>
 ${formatTurns(turns)}

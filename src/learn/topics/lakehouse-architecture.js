@@ -28,5 +28,5 @@ export default {
     "Mention format/engine interoperability when proposing more than one query engine.",
   ],
   related: ["data-warehouse-vs-data-lake","open-table-formats","medallion-architecture","columnar-file-formats","data-layout-optimization","data-mesh"],
-  practice: ["etl-framework","clickstream","scd2-warehouse"],
+  practice: ["lakehouse-platform", "etl-framework", "clickstream", "scd2-warehouse"],
 };

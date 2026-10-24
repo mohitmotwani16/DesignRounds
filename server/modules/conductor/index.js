@@ -6,6 +6,7 @@ import { filterFillerWords, parseAnswerContext } from "../ai/communication.js";
 import { isAnonymousKind, isSignificantKind } from "../ai/components.js";
 import { aiConfig } from "../ai/config.js";
 import { clean, describeDiagram, nameComponents } from "../ai/context.js";
+import { DATA_MODEL_HOW_TO, isDataModelKind } from "../ai/data-model.js";
 import { AiError } from "../ai/errors.js";
 import { leadingFields, runTask, runTaskStream } from "../ai/run.js";
 import { formatTurns, summaryOutput } from "../ai/tasks/interviewer.js";
@@ -113,6 +114,9 @@ function templatedFallback({ plan, pack, items }) {
     const focus = items.find((item) => item.itemId === plan.focusItemId);
     const hints = agenda.get(plan.focusItemId)?.hints ?? [];
     return { ...base, move: "hint", focusItemId: plan.focusItemId, message: hints[Math.min(focus?.hintLevel ?? 0, hints.length - 1)] ?? "Think about which part of your design carries the most load, and what happens when one machine isn't enough." };
+  }
+  if (plan.dataModelItemId && plan.allowedMoves.includes("ask_to_draw")) {
+    return { ...base, move: "ask_to_draw", focusItemId: plan.dataModelItemId, message: `Before we go deeper, let's get the data model on the canvas: the main tables and their key columns. ${DATA_MODEL_HOW_TO}` };
   }
   if (plan.nextItemId) {
     const focusOpen = items.some((item) => item.itemId === plan.focusItemId && item.status === "open");
@@ -306,6 +310,12 @@ function undiscussedParts({ diagram, covered, items, agenda, stage, focusItemId 
 
 // What the model is told about the part it should ask about.
 function partToAskAbout(part) {
+  if (isDataModelKind(part.entry.kind)) {
+    return [
+      `Not discussed yet: data model table [${part.entry.id}] ${part.entry.kind} "${part.entry.label}" (${part.entry.columns ? `${part.entry.columns} columns` : "no columns yet"}), with no "Why this choice?" note${part.onAgenda ? "" : " (not on your agenda, so tie it to the current focus)"}.`,
+      "Ask one short question about this table, the way an interviewer would when a schema appears on the whiteboard: what one row represents, which key the main queries use, or how it is partitioned. If it has no columns yet, ask what its key columns are. Name the table.",
+    ].join("\n");
+  }
   return [
     `Not discussed yet: [${part.entry.id}] ${part.entry.kind} "${part.entry.label}", with no "Why this choice?" note${part.onAgenda ? "" : " (not on your agenda, so tie it to the current focus)"}.`,
     "Ask one short question about this component, the way an interviewer would when they notice it on the whiteboard: why they added it, what it does for this system's main use case, or what they'd use instead and what that trades off. Name the component.",

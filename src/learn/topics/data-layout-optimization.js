@@ -30,5 +30,5 @@ export default {
     "Mention liquid clustering or Z-ordering when filters vary, and compaction whenever streams write the table.",
   ],
   related: ["columnar-file-formats","open-table-formats","lakehouse-architecture","apache-spark-architecture","hot-partitions","data-engineering-system-design-interview"],
-  practice: ["clickstream","etl-framework"],
+  practice: ["lakehouse-platform", "clickstream", "etl-framework"],
 };

@@ -88,7 +88,7 @@ export default {
     "Explain checkpoints plus an idempotent sink when claiming exactly-once.",
   ],
   related: ["batch-vs-stream-processing", "event-streaming-kafka", "delivery-semantics", "backpressure", "clocks-and-ordering"],
-  practice: ["realtime-analytics", "clickstream", "fraud-data-platform"],
+  practice: ["ad-click-aggregator", "playback-sessionization", "realtime-analytics", "clickstream", "fraud-data-platform"],
   reading: [
     { title: "Streaming 101: The world beyond batch", publisher: "Tyler Akidau, O'Reilly Radar", url: "https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/" },
     { title: "Apache Flink: Timely Stream Processing", publisher: "Apache Software Foundation", url: "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/" },

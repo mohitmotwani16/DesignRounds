@@ -1,4 +1,8 @@
 import crypto from "node:crypto";
+import { describeColumn } from "./data-model.js";
+
+const MAX_TABLES = 30;
+const MAX_TABLE_COLUMNS = 40;
 
 // Learner-written text goes into prompts as data. Angle brackets are swapped so it
 // can't close or open the tags that fence it, and whitespace is collapsed.
@@ -32,6 +36,7 @@ export function describeDiagram(diagram) {
   const zones = nodes.filter((node) => node.type === "groupNode");
   const texts = nodes.filter((node) => node.type === "textNode");
   const notes = nodes.filter((node) => node.type === "noteNode");
+  const tables = nodes.filter((node) => node.type === "tableNode");
   const byId = new Map(nodes.map((node) => [node.id, node]));
 
   const lines = [`Components (${components.length}):`];
@@ -66,6 +71,18 @@ export function describeDiagram(diagram) {
     for (const note of notes) lines.push(`- ${quoted(note.data.label, 120)}${note.data.note ? `: ${quoted(note.data.note, 800)}` : ""}`);
   }
   if (texts.length) lines.push("", `Text labels: ${texts.map((node) => quoted(node.data.label, 120)).sort().join(", ")}`);
+  // Data model tables are the candidate's schema, not services: listed with their columns.
+  if (tables.length) {
+    lines.push("", `Data model (${tables.length} ${tables.length === 1 ? "table" : "tables"}):`);
+    for (const node of [...tables].sort((a, b) => a.id.localeCompare(b.id)).slice(0, MAX_TABLES)) {
+      const columns = node.data.columns ?? [];
+      let line = `- [${node.id}] ${clean(node.data.kind, 64)} ${quoted(node.data.label, 120)}`;
+      if (node.data.subtitle) line += ` (grain: ${clean(node.data.subtitle, 120)})`;
+      lines.push(line, `  columns: ${columns.length ? columns.slice(0, MAX_TABLE_COLUMNS).map(describeColumn).join("; ") : "(none yet)"}${columns.length > MAX_TABLE_COLUMNS ? `; +${columns.length - MAX_TABLE_COLUMNS} more` : ""}`);
+      if (node.data.note) lines.push(`  why: ${quoted(node.data.note, 600)}`);
+    }
+    if (tables.length > MAX_TABLES) lines.push(`- +${tables.length - MAX_TABLES} more tables`);
+  }
 
   // A component is connected if an edge touches it or the zone it sits in.
   const endpoints = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
@@ -75,11 +92,15 @@ export function describeDiagram(diagram) {
     text: lines.join("\n"),
     componentCount: components.length,
     edgeCount: edges.length,
-    componentIds: new Set(components.map((node) => node.id)),
+    // Ids the model may point at (components and tables); componentCount stays services only.
+    componentIds: new Set([...components, ...tables].map((node) => node.id)),
     explainedCount: components.filter((node) => node.data.note?.trim()).length,
     decisionNoteCount: notes.length,
     labelledEdgeCount: edges.filter((edge) => edge.label?.trim()).length,
-    labels: new Map(components.map((node) => [node.id, clean(node.data.label, 120) || clean(node.data.kind, 64)])),
+    labels: new Map([...components, ...tables].map((node) => [node.id, clean(node.data.label, 120) || clean(node.data.kind, 64)])),
+    tableCount: tables.length,
+    filledTableCount: tables.filter((node) => node.data.columns?.length).length,
+    columnCount: tables.reduce((sum, node) => sum + (node.data.columns?.length ?? 0), 0),
     // For the deterministic score checks (ai/scoring.js); not part of the text above.
     components: components.map((node) => ({ id: node.id, kind: clean(node.data.kind, 64), label: clean(node.data.label, 120), note: clean(node.data.note, 600) })),
     isolatedCount,

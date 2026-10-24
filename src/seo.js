@@ -34,9 +34,9 @@ export const TRACK_SEO = {
   "data-engineering": {
     h1: "Data engineering system design interview questions",
     title: "Data Engineering System Design Interview Questions",
-    description: "Practice data engineering system design: data warehouses, streaming analytics, ETL/ELT pipelines, data quality and event ingestion, with a rubric-based review.",
+    description: "Practice data engineering system design: data warehouses, CDC, streaming analytics, lakehouses, ETL/ELT pipelines and data quality, with a rubric-based review.",
     intro: [
-      "Data engineering interviews test whether you can move, model and trust data at scale. These rounds cover warehouse design with slowly changing dimensions, real-time analytics, reusable ETL and ELT frameworks, clickstream ingestion and data quality monitoring.",
+      "Data engineering interviews test whether you can move, model and trust data at scale. These rounds cover star-schema and slowly changing dimension warehouses, change data capture, real-time analytics and ad click aggregation, sessionization, IoT telemetry, log pipelines, lakehouses, reusable ETL and ELT frameworks, payments reconciliation, A/B test analytics, data quality and user data deletion.",
       "You design the pipeline end to end, from sources and ingestion through storage, transformation and serving, and explain the guarantees you chose: batch or streaming, exactly-once or at-least-once, freshness versus cost.",
     ],
   },
@@ -195,7 +195,7 @@ export function routeMeta(path) {
     const track = getTrack(prompt.track);
     const description = clamp(prompt.access === "free"
       ? `${prompt.description} Practice this ${prompt.difficulty.toLowerCase()} ${track.shortLabel} system design interview question: requirements, scale, interview questions and common mistakes.`
-      : `${prompt.description} A ${prompt.difficulty.toLowerCase()} ${track.shortLabel} system design interview question, part of DesignRounds Plus. Covers ${prompt.considerations.join(", ").toLowerCase()}.`);
+      : `${prompt.description} ${/^[aeiou]/i.test(prompt.difficulty) ? "An" : "A"} ${prompt.difficulty.toLowerCase()} ${track.shortLabel} system design interview question, part of DesignRounds Plus. Covers ${prompt.considerations.join(", ").toLowerCase()}.`);
     return {
       ...base,
       title: fitTitle(`${prompt.title} — System Design Interview Question`, `${prompt.title} | System Design Interview`, `${prompt.title} | System Design`, prompt.title),

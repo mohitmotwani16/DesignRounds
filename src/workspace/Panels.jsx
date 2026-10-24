@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ArrowRight, Check, ClipboardCheck, Clock3, Crown, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, ClipboardCheck, Clock3, Crown, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Sparkles, Table2, X } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
+import { DATA_MODEL_TRACKS } from "./catalog.jsx";
 import { shortcutGroups } from "./shortcuts.js";
 import { useEscape } from "../components/ui.jsx";
 import { InterviewerPanel } from "./InterviewerPanel.jsx";
@@ -83,6 +84,9 @@ export function PromptModal({ prompt, onClose, fresh = false }) {
               <p>{prompt.expectedOutcome}</p>
             </div>
             <div className="modal-nudge"><Sparkles size={18} /><p><strong>Tip:</strong> start by clarifying what matters most. Who uses the system, and what does “working well” mean to them?</p></div>
+            {DATA_MODEL_TRACKS.has(prompt.track) && (
+              <div className="modal-nudge"><Table2 size={18} /><p><strong>Data model:</strong> when your tables matter, sketch them on the canvas. Open <strong>Data model</strong> in the component library (or press <kbd>D</kbd>), then add columns and mark keys in the panel on the right.</p></div>
+            )}
           </div>
         ) : (
           <div className="modal-content approach-content">

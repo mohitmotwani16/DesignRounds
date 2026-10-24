@@ -1,0 +1,598 @@
+{
+  "opening": "Our engineers currently SSH into machines to read logs, which doesn't scale anymore. Let's design a central pipeline that collects logs from all our servers and makes them searchable. Where would you start?",
+  "clarifications": [
+    {
+      "id": "scale.hosts",
+      "topics": [
+        "hosts",
+        "servers",
+        "containers",
+        "fleet",
+        "how many"
+      ],
+      "answer": "About 5,000 hosts across 3 regions, most running containers on Kubernetes."
+    },
+    {
+      "id": "scale.rate",
+      "topics": [
+        "volume",
+        "lines per second",
+        "throughput",
+        "traffic",
+        "size"
+      ],
+      "answer": "Around 500,000 log lines a second in total, about 400 bytes each on average."
+    },
+    {
+      "id": "scale.bursts",
+      "topics": [
+        "bursts",
+        "peak",
+        "incident",
+        "spike"
+      ],
+      "answer": "During incidents volume can jump to about 5 times normal for an hour or more."
+    },
+    {
+      "id": "req.search",
+      "topics": [
+        "search",
+        "query",
+        "latency",
+        "freshness",
+        "how fast"
+      ],
+      "answer": "Engineers want to search and filter the last 7 days, and see a line within 30 seconds of it being written."
+    },
+    {
+      "id": "req.retention",
+      "topics": [
+        "retention",
+        "audit",
+        "compliance",
+        "how long",
+        "archive"
+      ],
+      "answer": "Everything is kept for 1 year for audits. Older than 7 days is rarely queried and can be slow to search."
+    },
+    {
+      "id": "req.classes",
+      "topics": [
+        "security logs",
+        "debug",
+        "priority",
+        "sampling",
+        "drop"
+      ],
+      "answer": "Security and audit logs must never be dropped. Debug logs may be sampled when needed."
+    },
+    {
+      "id": "req.format",
+      "topics": [
+        "format",
+        "structured",
+        "json",
+        "parsing",
+        "fields"
+      ],
+      "answer": "Most services log JSON, but some legacy apps write plain text lines."
+    },
+    {
+      "id": "req.pii",
+      "topics": [
+        "pii",
+        "passwords",
+        "secrets",
+        "privacy",
+        "redaction"
+      ],
+      "answer": "Logs sometimes accidentally contain tokens, emails or card numbers; those must not be stored."
+    }
+  ],
+  "clarificationPolicy": "Answer as the observability team lead. Keep it a high-volume log ingestion and search problem; decide unlisted details so buffering, tiering and burst behaviour stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "logging",
+          "users"
+        ],
+        "keywords": [
+          "lines per second",
+          "retention",
+          "search latency",
+          "bursts",
+          "security logs",
+          "hosts"
+        ]
+      },
+      "goal": "Establish volume, burst behaviour, search freshness, retention and which logs are critical.",
+      "opener": "What do you need to know about the logs and how engineers use them?",
+      "evidence": {
+        "strong": "Asks about host count, lines per second and line size, burst behaviour during incidents, search freshness and range, retention and audits, which classes can't be lost, formats and sensitive data; estimates daily volume.",
+        "adequate": "Gets volume and retention but not bursts or which logs are critical.",
+        "weak": "Starts with a tool name without asking about volume or retention."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.steady",
+          "pattern": "Assumes log volume is steady.",
+          "challenge": "When does log volume peak, and is that when engineers most need search?"
+        }
+      ],
+      "probes": [
+        "How much data a day does that add up to?",
+        "Are all logs equally important?"
+      ],
+      "hints": [
+        "Incidents change log volume dramatically.",
+        "Ask whether some logs are legally required."
+      ],
+      "moveOnSummary": "Hundreds of thousands of lines a second with incident bursts, seven-day fast search, a year of cheap retention, and security logs that must never drop.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "non-functional-requirements"
+      ]
+    },
+    {
+      "id": "hl.collect",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-fluentd",
+          "logging",
+          "t-kafka",
+          "topic",
+          "ingestion"
+        ],
+        "keywords": [
+          "agent",
+          "fluent bit",
+          "vector",
+          "disk buffer",
+          "collector",
+          "shipping"
+        ]
+      },
+      "goal": "Collect logs from every host reliably into a durable buffer.",
+      "opener": "How do logs get off each host and into the pipeline?",
+      "evidence": {
+        "strong": "A lightweight agent on each host (Fluent Bit or Vector, as a DaemonSet on Kubernetes) tails files and container output, batches, compresses and buffers to disk, and ships to regional collectors that write to Kafka topics per log class.",
+        "adequate": "Uses agents but sends directly to the search cluster, or has no buffering on the host.",
+        "weak": "Has applications write logs straight to a database or the search cluster over the network."
+      },
+      "misconceptions": [
+        {
+          "id": "collect.direct",
+          "pattern": "Thinks agents can send straight to the search cluster.",
+          "challenge": "The search cluster slows down during an incident. Where do logs go while it can't keep up?"
+        }
+      ],
+      "probes": [
+        "What does the agent do if the network to the collectors is down?",
+        "Why put a log broker in the middle?"
+      ],
+      "hints": [
+        "The host should be able to hold logs for a while.",
+        "Decouple producers from the indexing tier."
+      ],
+      "moveOnSummary": "Per-host agents with disk buffers and batching ship to collectors that write to Kafka topics per log class.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "backpressure"
+      ]
+    },
+    {
+      "id": "hl.tiers",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "search-index",
+          "t-elasticsearch",
+          "archive",
+          "t-s3",
+          "storage"
+        ],
+        "keywords": [
+          "hot tier",
+          "archive tier",
+          "index",
+          "lifecycle",
+          "seven days",
+          "cold storage"
+        ]
+      },
+      "goal": "Store recent logs for fast search and older logs cheaply.",
+      "opener": "Where do logs live so engineers search recent ones quickly but a year of history stays affordable?",
+      "evidence": {
+        "strong": "A hot search tier (OpenSearch, Elasticsearch, Loki or ClickHouse) holds recent logs in time-based indices with lifecycle rollover; an archive of compressed files in object storage, partitioned by date and service, holds a year and is queried with Athena or Trino or rehydrated on demand.",
+        "adequate": "Has two tiers but no lifecycle policy or way to query the archive.",
+        "weak": "Keeps a full year in the search cluster."
+      },
+      "misconceptions": [
+        {
+          "id": "tiers.one_cluster",
+          "pattern": "Believes keeping all logs in one search cluster is simplest.",
+          "challenge": "Roughly how many terabytes is a year of logs, and what does indexing all of it cost?"
+        }
+      ],
+      "probes": [
+        "How would an engineer search logs from months ago?",
+        "How do logs move from hot to archive?"
+      ],
+      "hints": [
+        "Recent logs are searched constantly, old ones rarely.",
+        "Object storage is far cheaper than a search cluster."
+      ],
+      "moveOnSummary": "Hot, time-indexed search for recent logs plus a compressed, partitioned object-storage archive for a year.",
+      "learnTopics": [
+        "search-and-inverted-index",
+        "object-storage"
+      ]
+    },
+    {
+      "id": "deep.bursts",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-kafka",
+          "metrics"
+        ],
+        "keywords": [
+          "indexer lag",
+          "shock absorber",
+          "consumer lag",
+          "catch up",
+          "incident burst",
+          "falls behind"
+        ]
+      },
+      "goal": "Keep logs flowing and searchable during incident bursts.",
+      "opener": "An outage makes every service log far more errors than usual. Which part falls behind first, and what do engineers see?",
+      "evidence": {
+        "strong": "Identifies indexing as the bottleneck; the log broker absorbs the burst so nothing is lost and indexers fall behind; scales indexers, prioritises error and security topics, monitors and shows ingest lag so engineers know how fresh search is.",
+        "adequate": "Says the broker absorbs bursts but has no plan for indexer lag or priorities.",
+        "weak": "Assumes autoscaling the search cluster handles it, or accepts losing logs."
+      },
+      "misconceptions": [
+        {
+          "id": "burst.autoscale",
+          "pattern": "Thinks autoscaling the search cluster keeps up instantly.",
+          "challenge": "Adding search nodes means moving shards between them. How quickly does that help during the incident?"
+        }
+      ],
+      "probes": [
+        "How do engineers know how far behind the search is?",
+        "What would you prioritise when you can't index everything at once?"
+      ],
+      "hints": [
+        "A durable broker lets indexing lag without losing data.",
+        "Not all topics need to catch up at the same speed."
+      ],
+      "moveOnSummary": "Kafka absorbs bursts, indexers lag but nothing is lost, critical topics are prioritised and lag is visible.",
+      "learnTopics": [
+        "backpressure",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "deep.priority",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "dlq"
+        ],
+        "keywords": [
+          "sampling",
+          "log levels",
+          "never drop",
+          "debug sampling",
+          "priority class",
+          "quota per service"
+        ]
+      },
+      "goal": "Decide what to shed under pressure without losing critical logs.",
+      "opener": "If you truly can't keep everything during a spike, what gets dropped and what never does?",
+      "evidence": {
+        "strong": "Separates classes by topic: security and audit never dropped and replicated; debug sampled first; per-service quotas so one noisy service can't starve others; drops are counted and reported.",
+        "adequate": "Samples everything uniformly, including security logs.",
+        "weak": "Drops whatever arrives when queues are full."
+      },
+      "misconceptions": [
+        {
+          "id": "prio.uniform",
+          "pattern": "Believes uniform random sampling is fair to all logs.",
+          "challenge": "An attacker's login attempts are in the security log. Is sampling those acceptable?"
+        }
+      ],
+      "probes": [
+        "How do you stop one noisy service from crowding out everyone else?"
+      ],
+      "hints": [
+        "Classes of logs have different value.",
+        "Quotas per producer keep one service from dominating."
+      ],
+      "moveOnSummary": "Security and audit never dropped, debug sampled first, per-service quotas, and drops reported.",
+      "learnTopics": [
+        "load-shedding",
+        "rate-limiting"
+      ]
+    },
+    {
+      "id": "deep.parse",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "data-quality"
+        ],
+        "keywords": [
+          "parsing",
+          "enrichment",
+          "grok",
+          "trace id",
+          "unparsable",
+          "normalise fields"
+        ]
+      },
+      "goal": "Turn raw lines into structured, enriched records with a path for bad ones.",
+      "opener": "How do you make plain-text and JSON logs from many services searchable in the same way?",
+      "evidence": {
+        "strong": "A processing stage parses JSON and known text patterns into a common schema (timestamp, level, service, host, trace id, message), enriches with metadata such as pod and region, and routes unparsable lines to a dead-letter topic rather than dropping them.",
+        "adequate": "Parses JSON but drops or ignores text logs.",
+        "weak": "Indexes raw lines as one text blob with no structure."
+      },
+      "misconceptions": [
+        {
+          "id": "parse.drop_bad",
+          "pattern": "Thinks unparsable lines can just be dropped.",
+          "challenge": "A legacy payment service only writes plain text. What do you lose by dropping its lines?"
+        }
+      ],
+      "probes": [
+        "How would you search for one request across all services?"
+      ],
+      "hints": [
+        "A shared set of fields makes cross-service search possible.",
+        "Bad lines can be kept aside rather than lost."
+      ],
+      "moveOnSummary": "Parse to a common schema, enrich with metadata and trace ids, and dead-letter unparsable lines.",
+      "learnTopics": [
+        "pipeline-error-handling",
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "deep.mapping",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "search-index",
+          "t-elasticsearch"
+        ],
+        "keywords": [
+          "mapping explosion",
+          "field limit",
+          "shards",
+          "dynamic mapping",
+          "index per service",
+          "rollover"
+        ]
+      },
+      "goal": "Keep the search index healthy as teams log arbitrary fields.",
+      "opener": "A team starts logging a JSON field with a random key on every line. What happens to your index?",
+      "evidence": {
+        "strong": "Explains that dynamic mappings create a new field per key until the cluster's metadata explodes; enforces field limits and a logging convention, maps unknown fields into a catch-all text or flattened field, and sizes shards with time-based rollover per service.",
+        "adequate": "Knows mappings can grow but has no limit or fallback.",
+        "weak": "Doesn't foresee any problem."
+      },
+      "misconceptions": [
+        {
+          "id": "map.no_limit",
+          "pattern": "Believes the search engine handles any number of fields automatically.",
+          "challenge": "Each unique key becomes a field in the cluster's mapping. What happens after millions of unique keys?"
+        }
+      ],
+      "probes": [
+        "How big would you make each shard, and why does it matter?"
+      ],
+      "hints": [
+        "Every distinct field costs the cluster something.",
+        "Conventions and limits protect a shared index."
+      ],
+      "moveOnSummary": "Field limits, logging conventions and a catch-all field prevent mapping explosion; time-based rollover keeps shards healthy.",
+      "learnTopics": [
+        "search-and-inverted-index"
+      ]
+    },
+    {
+      "id": "deep.redact",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "secrets",
+          "iam",
+          "audit-log"
+        ],
+        "keywords": [
+          "redaction",
+          "mask",
+          "card number",
+          "tokens",
+          "access control",
+          "tenant isolation"
+        ]
+      },
+      "goal": "Keep secrets and personal data out of stored logs and control who reads what.",
+      "opener": "How do you keep passwords, tokens and card numbers out of the logs, and who can read which logs?",
+      "evidence": {
+        "strong": "Redacts at the agent or the processing stage, before indexing or archiving, using pattern rules for tokens, emails and card numbers and allow-lists of fields; restricts access per team and per log class, with security logs readable only by a few, and audits searches.",
+        "adequate": "Plans to redact after indexing, or has redaction but no access control.",
+        "weak": "Doesn't consider sensitive data."
+      },
+      "misconceptions": [
+        {
+          "id": "redact.later",
+          "pattern": "Thinks redacting after the logs are stored is fine.",
+          "challenge": "A card number reached the archive and its replicas. How do you remove it from every copy?"
+        }
+      ],
+      "probes": [
+        "Where in the pipeline is the earliest point you can redact?"
+      ],
+      "hints": [
+        "The earlier you redact, the fewer copies you have to clean.",
+        "Different teams shouldn't see every team's logs."
+      ],
+      "moveOnSummary": "Redact at ingest with pattern and allow-list rules, and enforce per-team and per-class access with audit.",
+      "learnTopics": [
+        "encryption",
+        "authorization-rbac-abac-oauth"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost",
+          "limitation",
+          "improve",
+          "index choice"
+        ]
+      },
+      "goal": "Summarise trade-offs between search capability and cost.",
+      "opener": "What are the main trade-offs in your design, especially between search power and cost?",
+      "evidence": {
+        "strong": "Weighs full-text indexing against label-only or columnar stores, hot retention length against cost, replicas, sampling versus completeness, and states what would change at larger scale.",
+        "adequate": "Names a trade-off without consequences.",
+        "weak": "Says the design has no meaningful trade-offs."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.free",
+          "pattern": "Believes indexing everything for a year is just an infrastructure detail.",
+          "challenge": "What dominates the monthly bill in your design?"
+        }
+      ],
+      "probes": [
+        "Which cost would grow fastest as the company doubles?"
+      ],
+      "hints": [
+        "Think about indexing cost and retention length.",
+        "Would every team need full-text search?"
+      ],
+      "moveOnSummary": "Search power costs money: tier aggressively, buffer bursts, and choose indexing depth per log class.",
+      "learnTopics": [
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.noisy",
+      "after": "deep.bursts",
+      "prompt": "One service ships a bug that logs the same stack trace thousands of times a second, and everyone else's logs start lagging. What do you do?",
+      "agendaItemId": "deep.priority"
+    },
+    {
+      "id": "cb.keys",
+      "after": "deep.redact",
+      "prompt": "A team starts logging request headers as JSON keys, so every line brings new field names. The search cluster's heap climbs. Why, and how do you fix it?",
+      "agendaItemId": "deep.mapping"
+    }
+  ],
+  "vocabulary": [
+    "Fluent Bit",
+    "Fluentd",
+    "Vector",
+    "DaemonSet",
+    "Kafka",
+    "OpenSearch",
+    "Elasticsearch",
+    "Loki",
+    "ClickHouse",
+    "index lifecycle",
+    "rollover",
+    "shard",
+    "mapping explosion",
+    "grok",
+    "trace id",
+    "dead-letter queue",
+    "Athena",
+    "Trino",
+    "S3 Glacier",
+    "redaction",
+    "sampling",
+    "backpressure"
+  ],
+  "alternatives": [
+    {
+      "choice": "Label-indexed log store such as Loki",
+      "whenBetter": "When logs are well structured, queries filter by service and labels, and full-text indexing cost is unjustified."
+    },
+    {
+      "choice": "Columnar store such as ClickHouse for logs",
+      "whenBetter": "When most queries are aggregations and filters on structured fields at high volume."
+    },
+    {
+      "choice": "Managed logging service",
+      "whenBetter": "When the team is small and the cost per gigabyte is acceptable."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Buffered, tiered and safe",
+      "outline": "Clarifies volume, bursts, search freshness, retention and critical classes, and estimates a couple of hundred megabytes a second. Runs Fluent Bit agents with disk buffers to regional collectors and Kafka topics per class. A processing stage parses to a common schema, enriches with trace ids, redacts secrets and dead-letters bad lines. A seven-day hot tier in OpenSearch with per-service daily indices, field limits and rollover; a year archived as compressed Parquet in S3 queried with Athena. Bursts are absorbed by Kafka with security topics prioritised, debug sampled, per-service quotas and visible lag."
+    },
+    {
+      "band": "adequate",
+      "label": "Classic stack without guardrails",
+      "outline": "Uses agents, Kafka and Elasticsearch with an S3 archive, but samples all logs equally under pressure, allows dynamic mappings and redacts only in the search UI."
+    },
+    {
+      "band": "weak",
+      "label": "Straight into the cluster",
+      "outline": "Sends logs from apps directly to one large Elasticsearch cluster kept for a year, with no buffer, no tiers, no priorities and no redaction."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

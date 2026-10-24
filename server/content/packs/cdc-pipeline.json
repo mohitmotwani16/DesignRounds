@@ -1,0 +1,647 @@
+{
+  "opening": "Our analytics team wants production data in the warehouse much faster than the nightly dump gives them today. Let's design a pipeline that keeps the warehouse in sync with the production database. How would you approach it?",
+  "clarifications": [
+    {
+      "id": "src.db",
+      "topics": [
+        "database",
+        "source",
+        "postgres",
+        "mysql",
+        "engine",
+        "version"
+      ],
+      "answer": "The source is a Postgres primary with logical replication available. There's also a streaming read replica."
+    },
+    {
+      "id": "scale.tables",
+      "topics": [
+        "tables",
+        "how many tables",
+        "schema",
+        "size"
+      ],
+      "answer": "About 200 tables; the 20 busiest matter most. The largest, orders, has about 500 million rows."
+    },
+    {
+      "id": "scale.writes",
+      "topics": [
+        "writes",
+        "throughput",
+        "traffic",
+        "changes per second",
+        "load"
+      ],
+      "answer": "Around 1,500 writes a second on average and about 5,000 at peak."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "latency",
+        "how fast",
+        "sla",
+        "delay"
+      ],
+      "answer": "Changes must be queryable in the warehouse within 5 minutes."
+    },
+    {
+      "id": "req.target",
+      "topics": [
+        "warehouse",
+        "target",
+        "destination",
+        "snowflake",
+        "bigquery",
+        "lake"
+      ],
+      "answer": "The target is a cloud warehouse such as Snowflake; analysts query current-state tables, and some audits want the full change history."
+    },
+    {
+      "id": "src.constraints",
+      "topics": [
+        "primary",
+        "production impact",
+        "dba",
+        "queries",
+        "replication slot"
+      ],
+      "answer": "No heavy analytical queries may run against the primary. A new replication slot is fine as long as it's monitored."
+    },
+    {
+      "id": "src.deletes",
+      "topics": [
+        "deletes",
+        "hard delete",
+        "soft delete",
+        "updated_at",
+        "timestamps"
+      ],
+      "answer": "Rows are hard-deleted, and several tables have no updated_at column."
+    },
+    {
+      "id": "src.migrations",
+      "topics": [
+        "schema change",
+        "migrations",
+        "columns",
+        "ddl",
+        "rename"
+      ],
+      "answer": "Developers ship schema migrations weekly: mostly new columns, occasionally a rename or a type change."
+    }
+  ],
+  "clarificationPolicy": "Answer as the platform team's lead. Keep it a single-database CDC problem into a warehouse; decide unlisted details so a Debezium-and-Kafka-style design is reasonable but not required.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "warehouse"
+        ],
+        "keywords": [
+          "freshness",
+          "tables",
+          "deletes",
+          "production impact",
+          "history",
+          "throughput"
+        ]
+      },
+      "goal": "Pin down freshness, which tables, change rate, delete behaviour and the limits on touching production.",
+      "opener": "What do you need to know before choosing how to move these changes?",
+      "evidence": {
+        "strong": "Asks about freshness, table count and sizes, write rate, whether deletes and updates must be reflected, constraints on the primary, and whether consumers want current state or full history.",
+        "adequate": "Asks about freshness and volume but not deletes, production constraints or what consumers need.",
+        "weak": "Picks a tool immediately without asking what must be captured or how fresh it must be."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.inserts_only",
+          "pattern": "Assumes only new rows matter.",
+          "challenge": "If a customer changes their address or an order is deleted, should the warehouse know?"
+        }
+      ],
+      "probes": [
+        "Do consumers want the latest state of each row, or every change?",
+        "What are we allowed to run against the primary?"
+      ],
+      "hints": [
+        "Updates and deletes are often what makes this hard; ask about them.",
+        "Ask what the database team will and won't allow."
+      ],
+      "moveOnSummary": "Changes from the busiest tables, including updates and hard deletes, must reach the warehouse within minutes without loading the primary.",
+      "learnTopics": [
+        "change-data-capture",
+        "non-functional-requirements"
+      ]
+    },
+    {
+      "id": "req.method",
+      "stage": "requirements",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "database"
+        ],
+        "keywords": [
+          "polling",
+          "log-based",
+          "updated_at",
+          "binlog",
+          "write-ahead log",
+          "query-based"
+        ]
+      },
+      "goal": "Compare query-based and log-based capture and justify the choice.",
+      "opener": "What are the options for detecting changes in the source database, and which would you pick here?",
+      "evidence": {
+        "strong": "Contrasts polling on updated_at (misses deletes and intermediate updates, needs the column, loads the primary) with reading the write-ahead log (every change in commit order, low overhead) and picks log-based capture; mentions the outbox pattern for domain events.",
+        "adequate": "Picks log-based capture but can't say why polling falls short.",
+        "weak": "Plans to poll the primary on updated_at every few minutes."
+      },
+      "misconceptions": [
+        {
+          "id": "method.polling_ok",
+          "pattern": "Believes polling on updated_at captures every change.",
+          "challenge": "A row is updated twice and then deleted between two polls. What does your poll see?"
+        }
+      ],
+      "probes": [
+        "Why not just query for rows changed since the last run?"
+      ],
+      "hints": [
+        "Databases already record every change for replication.",
+        "Think about tables with no timestamp column and about deletes."
+      ],
+      "moveOnSummary": "Log-based CDC from the write-ahead log beats polling: it sees deletes and every change without loading the primary.",
+      "learnTopics": [
+        "change-data-capture",
+        "write-ahead-log"
+      ]
+    },
+    {
+      "id": "hl.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-kafka",
+          "topic",
+          "stream",
+          "ingestion",
+          "warehouse",
+          "t-postgres"
+        ],
+        "keywords": [
+          "debezium",
+          "connector",
+          "kafka",
+          "replication slot",
+          "topic per table",
+          "pipeline"
+        ]
+      },
+      "goal": "Lay out capture, transport and apply stages end to end.",
+      "opener": "Walk me through the components from the database to the warehouse table an analyst queries.",
+      "evidence": {
+        "strong": "Connector (such as Debezium) reads the WAL through a logical replication slot, publishes change events to durable Kafka topics per table with a schema registry, and a sink lands raw changes in the warehouse and applies them to current-state tables on a schedule.",
+        "adequate": "Describes a connector and a destination but no durable buffer, or no separation of raw changes from current state.",
+        "weak": "Copies tables directly into the warehouse or writes changes straight from the database to the target with nothing in between."
+      },
+      "misconceptions": [
+        {
+          "id": "flow.direct",
+          "pattern": "Thinks the connector should write straight into warehouse tables.",
+          "challenge": "The warehouse is down for maintenance for an hour. Where do the changes wait?"
+        }
+      ],
+      "probes": [
+        "Why put a log between capture and the warehouse?",
+        "What does one change event contain?"
+      ],
+      "hints": [
+        "A durable log lets capture and apply run at different speeds.",
+        "Think about keeping every change as well as the latest state."
+      ],
+      "moveOnSummary": "WAL connector into Kafka topics with a schema registry, raw change landing in the warehouse, then a scheduled apply into current-state tables.",
+      "learnTopics": [
+        "change-data-capture",
+        "event-streaming-kafka"
+      ]
+    },
+    {
+      "id": "hl.apply",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "warehouse",
+          "t-snowflake",
+          "batch-job"
+        ],
+        "keywords": [
+          "merge",
+          "upsert",
+          "current state",
+          "raw changes",
+          "change table",
+          "micro-batch"
+        ]
+      },
+      "goal": "Explain how change events become correct current-state tables, and how history is kept.",
+      "opener": "Change events are landing in the warehouse. How do they turn into tables that show each row's current values?",
+      "evidence": {
+        "strong": "Lands every change append-only in a raw change table, then every few minutes deduplicates to the latest change per primary key and MERGEs into the current-state table (insert, update or delete), keeping the raw table for history and replay.",
+        "adequate": "Uses MERGE but not deduplication within a batch, or drops the raw change history.",
+        "weak": "Inserts every event into the target table, so rows are duplicated."
+      },
+      "misconceptions": [
+        {
+          "id": "apply.insert_all",
+          "pattern": "Believes inserting each change event into the target is enough.",
+          "challenge": "A row is updated ten times today. How many rows does an analyst see for it?"
+        }
+      ],
+      "probes": [
+        "How often would you run the merge, and what does that trade off?",
+        "How do you keep the full change history for audits?"
+      ],
+      "hints": [
+        "Separate the log of changes from the latest state.",
+        "Upserts keyed by primary key turn changes into state."
+      ],
+      "moveOnSummary": "Append raw changes, then micro-batch MERGE the latest change per key into current-state tables, keeping raw history.",
+      "learnTopics": [
+        "change-data-capture",
+        "materialized-views"
+      ]
+    },
+    {
+      "id": "deep.bootstrap",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "db-backup",
+          "replica",
+          "batch-job"
+        ],
+        "keywords": [
+          "snapshot",
+          "initial load",
+          "backfill",
+          "lsn",
+          "handover",
+          "bootstrap"
+        ]
+      },
+      "goal": "Load existing rows and start streaming with no gap and no double-applied change.",
+      "opener": "How do you get the existing rows into the warehouse and then switch to streaming without missing or duplicating anything?",
+      "evidence": {
+        "strong": "Takes a consistent snapshot tied to a log position (Debezium's incremental snapshot, or an export from a replica at a recorded LSN), streams from that position, and relies on LSN-ordered idempotent merges so overlap is harmless.",
+        "adequate": "Does a snapshot and starts streaming but can't say how the two line up.",
+        "weak": "Runs a bulk copy, then starts CDC from now, losing changes made during the copy."
+      },
+      "misconceptions": [
+        {
+          "id": "boot.gap",
+          "pattern": "Thinks starting CDC after the bulk copy finishes is fine.",
+          "challenge": "The copy of the largest table takes hours. What happens to rows changed while it ran?"
+        }
+      ],
+      "probes": [
+        "How does the stream know where the snapshot ended?",
+        "How would you re-snapshot one table later without stopping the others?"
+      ],
+      "hints": [
+        "The snapshot and the stream need a shared point in the log.",
+        "If applying changes is idempotent, a little overlap is safe."
+      ],
+      "moveOnSummary": "A consistent snapshot tied to a log position, streaming from that position, and idempotent merges so overlap can't duplicate.",
+      "learnTopics": [
+        "change-data-capture",
+        "backfill-and-reprocessing"
+      ]
+    },
+    {
+      "id": "deep.ordering",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "topic",
+          "t-kafka"
+        ],
+        "keywords": [
+          "ordering",
+          "partition key",
+          "primary key",
+          "out of order",
+          "sequence",
+          "commit order"
+        ]
+      },
+      "goal": "Keep changes to the same row in order and make applies idempotent under replays.",
+      "opener": "Two updates to the same row arrive in the same batch, or a replay sends them again. Which one wins, and how do you know?",
+      "evidence": {
+        "strong": "Partitions topics by primary key so a row's changes stay ordered, carries the source log position on every event, applies only events newer than what the target holds, and picks the latest per key within a batch; replays become no-ops.",
+        "adequate": "Knows to order by timestamp but uses wall-clock time or doesn't partition by key.",
+        "weak": "Processes events in arrival order with parallel consumers and no ordering guarantee."
+      },
+      "misconceptions": [
+        {
+          "id": "order.timestamp",
+          "pattern": "Believes the event's wall-clock timestamp orders changes reliably.",
+          "challenge": "Two transactions commit in the same millisecond on the same row. Which is newer?"
+        }
+      ],
+      "probes": [
+        "What field would you use to decide which change is newer?",
+        "What happens if the consumer restarts and reads the last ten minutes again?"
+      ],
+      "hints": [
+        "Changes to one row must land in one partition.",
+        "The database log position increases with every commit."
+      ],
+      "moveOnSummary": "Partition by primary key, apply by log position (LSN), latest per key per batch; replays are idempotent.",
+      "learnTopics": [
+        "delivery-semantics",
+        "idempotency",
+        "clocks-and-ordering"
+      ]
+    },
+    {
+      "id": "deep.schema",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "data-quality",
+          "data-catalog"
+        ],
+        "keywords": [
+          "schema registry",
+          "rename",
+          "new column",
+          "compatibility",
+          "ddl",
+          "type change"
+        ]
+      },
+      "goal": "Survive schema changes in the source without corrupting downstream tables.",
+      "opener": "A developer renames a column in production. What does your pipeline do?",
+      "evidence": {
+        "strong": "Uses a schema registry with compatibility rules: additive changes propagate automatically, breaking ones (rename, type change) pause that table's apply and alert an owner, with a migration plan agreed with developers through a data contract.",
+        "adequate": "Mentions a schema registry but no policy for breaking changes.",
+        "weak": "Assumes the schema never changes, or lets the rename create a new empty column silently."
+      },
+      "misconceptions": [
+        {
+          "id": "schema.auto_everything",
+          "pattern": "Thinks every schema change can be applied automatically.",
+          "challenge": "A column changes from text to integer. What happens to the rows already in the warehouse?"
+        }
+      ],
+      "probes": [
+        "Which changes can flow through safely, and which need a human?"
+      ],
+      "hints": [
+        "Some changes are backward compatible and some aren't.",
+        "Producers and consumers can agree on rules for changes."
+      ],
+      "moveOnSummary": "Schema registry with compatibility rules: additive changes flow, breaking ones pause and alert, backed by data contracts.",
+      "learnTopics": [
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "deep.slot",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "metrics",
+          "alerting"
+        ],
+        "keywords": [
+          "replication lag",
+          "wal growth",
+          "disk",
+          "slot lag",
+          "connector down",
+          "monitoring"
+        ]
+      },
+      "goal": "Protect the primary and recover when the connector stops.",
+      "opener": "The connector is down for a few hours. What happens to the production database, and to the warehouse when it comes back?",
+      "evidence": {
+        "strong": "Explains that the replication slot makes the primary retain WAL until the connector catches up, so disk can fill; caps retained WAL, alerts on slot lag, resumes from the slot position afterwards, and has a re-snapshot runbook if the slot is lost; the warehouse catches up through the log.",
+        "adequate": "Says the connector resumes from its offset but misses the WAL build-up risk.",
+        "weak": "Assumes nothing happens to the source when the consumer stops."
+      },
+      "misconceptions": [
+        {
+          "id": "slot.no_impact",
+          "pattern": "Believes a stopped CDC consumer can't affect the source database.",
+          "challenge": "The primary must keep every log segment the slot hasn't confirmed. Where does that data live while the connector is down?"
+        }
+      ],
+      "probes": [
+        "What would you alert on, and at what point?"
+      ],
+      "hints": [
+        "Logical replication keeps log segments until they are confirmed.",
+        "Monitoring lag at each stage tells you where the delay is."
+      ],
+      "moveOnSummary": "A stalled slot retains WAL on the primary; cap it, alert on lag, resume from the slot, or re-snapshot if it is lost.",
+      "learnTopics": [
+        "change-data-capture",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.deletes",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "warehouse",
+          "audit-log"
+        ],
+        "keywords": [
+          "tombstone",
+          "hard delete",
+          "soft delete",
+          "deleted_at",
+          "delete event",
+          "op type"
+        ]
+      },
+      "goal": "Reflect source deletes correctly in current-state tables while keeping auditability.",
+      "opener": "A row is hard-deleted in the source. How is that reflected in the warehouse?",
+      "evidence": {
+        "strong": "Delete events (op = delete, plus tombstones for compaction) remove the row in the merge, or set a soft-delete flag and deleted_at when audits need it; the raw change table keeps the delete event.",
+        "adequate": "Handles deletes in the merge but loses the record that it happened, or keeps deleted rows visible.",
+        "weak": "Never removes rows, so deleted records stay in the warehouse forever."
+      },
+      "misconceptions": [
+        {
+          "id": "del.ignore",
+          "pattern": "Thinks deletes can be ignored because analytics only adds data.",
+          "challenge": "A fraudulent account is deleted in production. Should it still count in active customers?"
+        }
+      ],
+      "probes": [
+        "Would you physically delete or keep a flag, and why?"
+      ],
+      "hints": [
+        "Log-based capture emits an event for deletes too.",
+        "Audits may want to know a row existed."
+      ],
+      "moveOnSummary": "Delete events remove the row or set a soft-delete flag in the merge; the raw change log keeps the record.",
+      "learnTopics": [
+        "change-data-capture"
+      ]
+    },
+    {
+      "id": "wrap.ops",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "metrics"
+        ],
+        "keywords": [
+          "trade-off",
+          "freshness",
+          "cost",
+          "monitor",
+          "limitation"
+        ]
+      },
+      "goal": "Summarise guarantees, trade-offs and how the pipeline is operated.",
+      "opener": "What guarantees does your pipeline give end to end, and what would you watch in production?",
+      "evidence": {
+        "strong": "States at-least-once delivery with idempotent, ordered applies (effectively exactly-once results), names trade-offs like merge frequency versus warehouse cost and operational load of Kafka, and lists freshness, lag and error metrics with alerts.",
+        "adequate": "States a guarantee but can't connect it to the design, or lists vague monitoring.",
+        "weak": "Claims exactly-once with no mechanism, or no monitoring at all."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.exactly_once",
+          "pattern": "Believes the pipeline is exactly-once because Kafka is used.",
+          "challenge": "If the sink crashes after writing but before committing its offset, what stops the batch being applied twice?"
+        }
+      ],
+      "probes": [
+        "What would you change if the target freshness became seconds?"
+      ],
+      "hints": [
+        "Think about what happens on retries at each stage.",
+        "Freshness is measured from the source commit to the warehouse."
+      ],
+      "moveOnSummary": "At-least-once with idempotent ordered applies; merge cadence trades freshness for cost; monitor end-to-end freshness and lag.",
+      "learnTopics": [
+        "delivery-semantics",
+        "observability"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.disk",
+      "after": "deep.bootstrap",
+      "prompt": "It's the weekend: the connector crashed on Friday night and the database team just paged you because the primary's disk is almost full. What's happening and what do you do?",
+      "agendaItemId": "deep.slot"
+    },
+    {
+      "id": "cb.rename",
+      "after": "deep.ordering",
+      "prompt": "Monday's release renames customer_email to email on the customers table. Dashboards break. How should the pipeline have handled it?",
+      "agendaItemId": "deep.schema"
+    }
+  ],
+  "vocabulary": [
+    "CDC",
+    "Debezium",
+    "Kafka Connect",
+    "WAL",
+    "write-ahead log",
+    "binlog",
+    "LSN",
+    "logical replication",
+    "replication slot",
+    "pgoutput",
+    "tombstone",
+    "schema registry",
+    "Avro",
+    "MERGE",
+    "upsert",
+    "Snowflake",
+    "outbox pattern",
+    "incremental snapshot",
+    "soft delete",
+    "idempotent"
+  ],
+  "alternatives": [
+    {
+      "choice": "Managed CDC service (for example AWS DMS, Fivetran or Datastream)",
+      "whenBetter": "When the team doesn't want to run Kafka and connectors and the latency and cost fit."
+    },
+    {
+      "choice": "Transactional outbox in the application",
+      "whenBetter": "When consumers want domain events with business meaning rather than raw row changes."
+    },
+    {
+      "choice": "Hourly incremental extracts on updated_at from the replica",
+      "whenBetter": "When minutes of freshness aren't needed, tables have reliable timestamps and deletes are soft."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Log-based CDC with safe bootstrap",
+      "outline": "Clarifies freshness, tables, write rate, deletes and limits on the primary. Rejects polling because it misses deletes and loads the primary, and chooses Debezium reading the WAL through a monitored slot into Kafka topics keyed by primary key with a schema registry. Bootstraps with an incremental snapshot tied to the stream position. Lands raw changes and runs a micro-batch MERGE every few minutes that keeps the latest change per key by LSN, so replays are idempotent. Deletes become removals or soft-delete flags. Breaking schema changes pause a table and alert. Monitors slot lag, WAL size and end-to-end freshness, with a re-snapshot runbook."
+    },
+    {
+      "band": "adequate",
+      "label": "CDC without the hard edges",
+      "outline": "Picks Debezium and Kafka and merges into the warehouse, but bootstraps with a bulk copy without aligning the stream position, orders by event timestamp, and doesn't consider the replication slot's effect on the primary."
+    },
+    {
+      "band": "weak",
+      "label": "Polling the primary",
+      "outline": "Runs a query on updated_at against the primary every few minutes and appends results to warehouse tables, missing deletes and tables without timestamps, with duplicates after retries and no plan for schema changes."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

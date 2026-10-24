@@ -66,7 +66,7 @@ export default {
     "Detect hot keys with per-partition metrics and top-k sampling.",
   ],
   related: ["sharding", "consistent-hashing", "caching", "fan-out", "cache-invalidation"],
-  practice: ["news-feed", "ticket-booking", "distributed-cache"],
+  practice: ["ad-click-aggregator", "news-feed", "ticket-booking", "distributed-cache"],
   reading: [
     { title: "Designing partition keys to distribute your workload in DynamoDB", publisher: "AWS documentation", url: "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-uniform-load.html" },
     { title: "Designing Data-Intensive Applications, chapter 6", publisher: "Martin Kleppmann, O'Reilly", url: "https://dataintensive.net/" },

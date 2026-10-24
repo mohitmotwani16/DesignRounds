@@ -311,6 +311,7 @@
       "required": true,
       "triggers": {
         "componentKinds": [
+          "event-schema",
           "registry",
           "database"
         ],
