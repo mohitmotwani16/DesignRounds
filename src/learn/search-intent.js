@@ -6,6 +6,73 @@
 // Keep answers short, plain and self-contained: they are read out of context.
 
 export const SEARCH_INTENT = {
+  "dimensional-modeling-interview-guide": {
+    keywords: ["data modeling interview questions", "dimensional modeling interview questions", "data warehouse modeling interview", "kimball interview questions", "fact and dimension table interview questions", "data engineer data modeling round"],
+    faq: [
+      { q: "How do I answer a data modeling interview question?", a: "Clarify the business questions first, name the business process, declare the grain of the fact table in one sentence, list dimensions and facts true to that grain, decide history for each attribute, add snapshot tables if the questions need them, and finish by answering two of the original questions in SQL against your model." },
+      { q: "What do interviewers look for in a dimensional modeling round?", a: "A clear grain, numbers that can't be double counted, honest handling of history with slowly changing dimensions, correct aggregation of semi-additive and non-additive measures, and practical choices about partitioning, incremental loads and late data." },
+      { q: "What are the most common data modeling interview traps?", a: "Putting order-level amounts on line-level rows, overwriting attributes that reports need history for, joining two fact tables directly, summing balances across days, averaging ratios, and leaving foreign keys null." },
+    ],
+  },
+  "four-step-dimensional-design": {
+    keywords: ["four step dimensional design process", "kimball four step process", "declare the grain", "how to design a fact table", "dimensional design process"],
+    faq: [
+      { q: "What are the four steps of dimensional design?", a: "Choose the business process, declare the grain, identify the dimensions, and identify the facts, in that order. Each step constrains the next." },
+      { q: "Why should the grain be as atomic as possible?", a: "Atomic data can always be summarised to answer new questions, but summarised data can never be broken back down. Starting atomic also means you rarely have to rebuild a fact table when requirements change." },
+    ],
+  },
+  "fact-table-types": {
+    keywords: ["fact table types", "transaction fact table", "periodic snapshot fact table", "accumulating snapshot fact table", "factless fact table", "additive semi additive non additive facts"],
+    faq: [
+      { q: "What are the types of fact tables?", a: "Transaction fact tables record individual events, periodic snapshots record the state of something at regular intervals, accumulating snapshots follow one process instance through its milestones, and factless fact tables record events or coverage without numeric measures." },
+      { q: "What is a semi-additive fact?", a: "A measure that can be summed across some dimensions but not across time, such as an account balance or stock on hand. Across time you take the period-end value or an average instead of a sum." },
+      { q: "When should I use an accumulating snapshot?", a: "When a process has well-defined milestones and people ask how long stages take or where items get stuck, such as order to delivery or application to approval. One row per instance is updated as each milestone happens." },
+    ],
+  },
+  "dimension-table-techniques": {
+    keywords: ["surrogate key vs natural key", "role playing dimension", "junk dimension", "degenerate dimension", "mini dimension", "date dimension", "late arriving dimension"],
+    faq: [
+      { q: "Why use surrogate keys in a data warehouse?", a: "They let one entity have several history rows, isolate the warehouse from source ids that change, collide or get reused, and keep joins on small integers." },
+      { q: "What is a role-playing dimension?", a: "One physical dimension used several times by the same fact under different roles, such as order date, ship date and delivery date all referencing the date dimension, usually exposed as separate views." },
+      { q: "What is a junk dimension?", a: "A small dimension that combines several low-cardinality flags and codes, such as gift wrap, shipping speed and channel, into one table with a row per combination, so the fact stores one key instead of many columns." },
+    ],
+  },
+  "hierarchies-and-bridge-tables": {
+    keywords: ["bridge table data warehouse", "many to many dimensional modeling", "ragged hierarchy", "multivalued dimension", "weighting factor bridge table"],
+    faq: [
+      { q: "How do you model a many-to-many relationship in a star schema?", a: "Store a group key on the fact table and list each group's members in a bridge table with a weighting factor that sums to one per group. Weighted reports then add up to the true total." },
+      { q: "How do you model a hierarchy with variable depth?", a: "With a hierarchy bridge table that stores every ancestor-descendant pair and the depth between them, so rolling up everything under a node is a single join instead of a recursive query." },
+    ],
+  },
+  "conformed-dimensions-bus-matrix": {
+    keywords: ["conformed dimensions", "data warehouse bus matrix", "enterprise bus architecture", "drill across", "shrunken dimension"],
+    faq: [
+      { q: "What is a conformed dimension?", a: "A dimension, such as customer, product or date, that is defined once and shared with identical keys, attributes and meanings by every fact table that uses it, so results from different processes can be combined." },
+      { q: "What is a bus matrix?", a: "A grid with business processes as rows and conformed dimensions as columns, marking which process uses which dimension. It scopes a warehouse and shows which dimensions to build first." },
+    ],
+  },
+  "dimensional-model-example-ecommerce": {
+    keywords: ["ecommerce data model example", "data warehouse design example", "star schema example ecommerce", "order data model data warehouse", "retail dimensional model"],
+    faq: [
+      { q: "What fact tables does an e-commerce data warehouse need?", a: "Usually an order-line transaction fact, a returns fact, an order fulfilment accumulating snapshot for delivery times, and a daily inventory periodic snapshot, all sharing date, customer, product and warehouse dimensions." },
+      { q: "How do you handle shipping fees charged per order in an order-line fact table?", a: "Either allocate the fee across the order's lines by a stated rule, such as in proportion to line value, or keep order-level amounts in a separate order fact. Repeating the full fee on every line double counts it." },
+    ],
+  },
+  "dimensional-model-example-ride-hailing": {
+    keywords: ["uber data model", "ride sharing data model", "ride hailing data warehouse design", "uber data engineering interview", "trip fact table"],
+    faq: [
+      { q: "How would you model Uber trip data in a data warehouse?", a: "A trip fact at one row per trip request, a trip lifecycle accumulating snapshot for wait times and cancellations, an hourly driver activity snapshot for utilisation, and dimensions for rider, driver, product, zone (used for both pickup and drop-off) and date in local and UTC time." },
+      { q: "How do you store surge pricing in a fact table?", a: "Store the surge amount as an additive fact so surge revenue can be summed, put a surge band in a dimension for grouping, and keep the multiplier only for display, since multipliers can't be summed or averaged meaningfully." },
+    ],
+  },
+  "data-modeling-for-system-design": {
+    keywords: ["data modeling system design interview", "database schema design interview", "how to design a database schema", "partition key design", "data modeling for system design"],
+    faq: [
+      { q: "How should I approach data modeling in a system design interview?", a: "List the core entities and their relationships, write down the access patterns with rough rates, choose a store that serves those patterns, pick primary, partition and sort keys, then add indexes and denormalisation only where a hot access pattern needs them." },
+      { q: "How do I choose a partition key?", a: "Choose a key that matches the main query, so it hits one partition, and that spreads load evenly. Watch for hot keys, such as a celebrity's id or today's date, and spread them with a bucket suffix or a time window." },
+      { q: "When should I denormalize data?", a: "When a hot read path would otherwise need joins or several lookups. Keep a normalised source of truth, copy fields to where they're read, and say how the copies are kept consistent, synchronously or through events." },
+    ],
+  },
   "best-system-design-interview-resources": {
     keywords: ["best system design interview resources", "best website to practice system design", "system design interview practice platform", "free ai system design mock interview", "system design mock interview online", "best system design course", "best system design book", "data engineering system design practice", "ml system design interview practice"],
     faq: [

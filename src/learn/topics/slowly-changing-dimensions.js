@@ -9,7 +9,10 @@ export default {
       ["Type 1", "Overwrite the value in place", "None", "Corrections and attributes where history doesn't matter (a typo in a name)"],
       ["Type 2", "Close the current row and insert a new one", "Full history, one row per version", "Reports must reflect the attribute as it was at the time of the fact"],
       ["Type 3", "Move the old value to a `previous_x` column", "One prior value", "Rare: comparing current vs previous, such as a sales territory realignment"],
+      ["Type 4", "Move fast-changing attributes to a separate mini-dimension referenced by the fact", "The profile at each event, without bloating the main dimension", "Attributes such as age band, income band or loyalty tier that change often"],
+      ["Type 5", "Type 4 mini-dimension plus a Type 1 outrigger on the main dimension pointing at the current profile", "Profile at event time and the current profile", "You need both the historical and the current mini-dimension values"],
       ["Type 6", "Type 2 rows plus a current-value column updated on every version", "Full history and easy current view", "Reports need both \"as it was\" and \"as it is now\" without self-joins"],
+      ["Type 7", "Fact carries two keys: the Type 2 surrogate key and the durable key, joined to a current-row view", "Full history and current view through separate joins", "Users choose per report between \"as it was\" and \"as it is now\""],
     ] },
 
     { type: "h2", text: "How SCD Type 2 works" },
@@ -51,6 +54,20 @@ where d.customer_id is null;
 ` },
     { type: "p", text: "Run the two steps in one transaction, or make the job idempotent so a retry after a failure between them doesn't create duplicate current rows. Assert after every load that each natural key has exactly one current row and that version intervals don't overlap." },
 
+    { type: "h2", text: "Beyond Type 2: types 4, 5, 6 and 7" },
+    { type: "p", text: "Type 2 handles history for attributes that change occasionally. Two problems remain: attributes that change **too often** for a new row each time, and reports that need the **current** value alongside the historical one. The higher-numbered types are combinations that solve these." },
+    { type: "ul", items: [
+      "**Type 4, mini-dimension:** volatile attributes (age band, credit score band, loyalty tier) move into a small dimension of banded combinations. The fact references it directly, so each event records the profile at that moment, while the main customer dimension stays stable. See [dimension table techniques](/learn/dimension-table-techniques).",
+      "**Type 5, mini-dimension plus Type 1 outrigger:** the base dimension also holds a key to the customer's *current* mini-dimension row, overwritten on change. Reports can group by the profile at the time of the fact or by today's profile.",
+      "**Type 6, the hybrid (1 + 2 + 3):** each Type 2 row also carries current-value columns that are overwritten across all versions on every change. A fact joined to its historical row can still show where the customer lives now.",
+      "**Type 7, dual keys:** the fact stores the Type 2 surrogate key *and* the entity's durable key. Joining on the surrogate key gives history; joining on the durable key to a view of current rows gives today's values. It is the most flexible option and avoids rewriting old rows, at the cost of two join paths users must understand.",
+    ] },
+    { type: "table", head: ["customer_key", "customer_id (durable)", "city (historical)", "current_city (Type 6)", "is_current"], rows: [
+      ["101", "C-42", "Pune", "Bengaluru", "false"],
+      ["187", "C-42", "Bengaluru", "Bengaluru", "true"],
+    ] },
+    { type: "p", text: "In interviews, Type 2 is expected; naming Type 4 for fast-changing attributes and Type 6 or 7 for \"as it was versus as it is now\" reporting shows depth." },
+
     { type: "h2", text: "Pitfalls" },
     { type: "ul", items: [
       "**Late-arriving data:** a change dated last week arrives today. The load must insert the version in the right place in the timeline and possibly re-point facts, not just append.",
@@ -71,8 +88,8 @@ where d.customer_id is null;
     "Describe the MERGE logic and how the load stays idempotent on retry.",
     "Raise late-arriving data and deletes before the interviewer does.",
   ],
-  related: ["dimensional-modeling", "data-pipeline-orchestration", "idempotency", "outbox-pattern", "data-quality"],
-  practice: ["scd2-warehouse"],
+  related: ["dimensional-modeling", "dimension-table-techniques", "fact-table-types", "data-pipeline-orchestration", "idempotency", "data-quality"],
+  practice: ["scd2-warehouse", "ecommerce-warehouse"],
   reading: [
     { title: "Slowly Changing Dimension Techniques", publisher: "Kimball Group", url: "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/type-2/" },
     { title: "dbt documentation: Snapshots", publisher: "dbt Labs", url: "https://docs.getdbt.com/docs/build/snapshots" },
