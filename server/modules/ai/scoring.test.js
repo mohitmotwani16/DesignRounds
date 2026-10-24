@@ -210,3 +210,23 @@ test("communication strengths never quote an answer the interviewer judged weak 
   ] };
   assert.deepEqual(withoutUnsoundExamples(data, answers).strengths.map((entry) => entry.point), ["Ties choices to numbers", "General"]);
 });
+
+test("data model tables with columns count toward the size of the design, not toward disconnection", () => {
+  const table = (id, kind, label, columns) => ({ id, type: "tableNode", position: { x: 0, y: 400 }, data: { kind, label, columns } });
+  const pipeline = [["db", "replica", "Orders replica"], ["etl", "etl", "Nightly load"], ["wh", "warehouse", "Snowflake"], ["dash", "dashboard", "BI"]]
+    .map(([id, kind, label], index) => ({ id, type: "systemNode", position: { x: index * 300, y: 0 }, data: { kind, label } }));
+  const edges = [["db", "etl"], ["etl", "wh"], ["wh", "dash"]].map(([source, target], index) => ({ id: `e${index}`, source, target }));
+  const tables = [
+    table("t1", "fact-table", "fact_order_line", [{ name: "order_line_id", keys: ["pk"] }, { name: "customer_key", keys: ["fk"] }]),
+    table("t2", "dimension-table", "dim_customer", [{ name: "customer_key", keys: ["pk"] }]),
+    table("t3", "dimension-table", "dim_product", [{ name: "product_key", keys: ["pk"] }]),
+  ];
+  // Four services and three tables: a real design, not a thin one.
+  const modelled = describeDiagram({ nodes: [...pipeline, ...tables], edges });
+  const result = constrainScores(scores(9), { design: modelled, decisions: justified });
+  assert.ok(!result.adjustments.some((entry) => entry.rule === "thin-design"), JSON.stringify(result.adjustments));
+  assert.ok(!result.adjustments.some((entry) => entry.rule === "disconnected"), "unconnected tables aren't disconnected services");
+  // Empty tables don't pad the count.
+  const empty = describeDiagram({ nodes: [...pipeline, ...tables.map((entry) => ({ ...entry, data: { ...entry.data, columns: [] } }))], edges });
+  assert.ok(constrainScores(scores(9), { design: empty, decisions: justified }).adjustments.some((entry) => entry.rule === "thin-design"));
+});

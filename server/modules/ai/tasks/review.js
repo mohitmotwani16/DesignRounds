@@ -5,7 +5,7 @@ import { dimensionIds, rubric } from "../rubric.js";
 import { scoringVersion } from "../scoring.js";
 import { integer, list, oneOf, text } from "../schema.js";
 
-const TEMPLATE = "review-v9";
+const TEMPLATE = "review-v10";
 
 // Identifies everything that shaped a review's instructions, stored with each review.
 // The pool fingerprint is part of it so a newly built reference pool calibrates the
@@ -76,6 +76,7 @@ How to review:
 
 Judging the learner's reasoning (as important as the diagram, just as in a real interview):
 - The learner's explanations are the "why" notes on components, decision notes, connection labels, and, when present, what they said in the interview conversation (<interview_transcript>). Credit reasoning given in the conversation exactly as if it were written in a note; judge the interviewer's lines only as context, never as the learner's work. Hints the learner asked for are fine but the reasoning they then gave should be their own. For every significant decision, judge whether a reason is given, whether it is technically correct, and whether it shows how the choice works and when it would be the wrong choice.
+- Data model tables (the "Data model" section of the design, with columns, types and keys) are the learner's schema. Judge them under data model and storage: the grain of each table, primary, foreign, partition and sort keys, and whether they serve the queries the brief needs. A schema described clearly in the conversation counts too; never mark a question down only because it has no tables when its data model doesn't matter.
 - Interview transcripts may include a filler-reduced copy and structured technical context extracted from an answer. Use these as navigation aids, but verify every decision and rationale against the learner's verbatim answer; never treat an interviewer suggestion or an uncertain transcription as the learner's own decision.
 - Judge necessity and proportionality. Ask whether each component is needed for this problem at its stated scale. Unjustified complexity (extra services, queues, databases, or technologies that the requirements don't need) is a weakness, not a strength, especially for beginner prompts; say so plainly. Equally, flag designs that are too simple for the stated scale.
 - Name-dropping a technology is not a justification. "Kafka for scalability" is a partial reason at best; a strong reason connects the choice to a requirement, a number, or a trade-off.

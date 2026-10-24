@@ -169,9 +169,19 @@ export function plan({ items, state, conventions, agenda, curveballs = [], pacin
     }
   }
 
+  // The part in play (or about to be) is about the data model and no table is on the
+  // canvas yet: however the interviewer asks for the schema, it says how to add one.
+  // Not after the candidate has ignored the usual number of drawing requests for it.
+  const asking = allowed.some((move) => move !== "hint" && move !== "wrap_up");
+  const stillAskable = (id) => (items.find((item) => item.itemId === id)?.drawRequests ?? 0) < conventions.maxDrawRequestsPerItem;
+  const dataModelItemId = canvas && !canvas.tables && asking
+    ? [drawTarget, focus?.itemId, next?.itemId].find((id) => id && canvas.dataModelItems?.has(id) && !canvas.drawn.has(id) && stillAskable(id)) ?? null
+    : null;
+
   return {
     focusItemId: focus?.itemId ?? null,
     nextItemId: next?.itemId ?? null,
+    dataModelItemId,
     budget,
     clock,
     allowedMoves: allowed,
@@ -180,7 +190,7 @@ export function plan({ items, state, conventions, agenda, curveballs = [], pacin
     curveball,
     drawTarget,
     questionStreak: conversation?.questionStreak ?? 0,
-    canvas: canvas ? { components: canvas.components, connections: canvas.connections, drawn: [...canvas.drawn], undrawn: [...canvas.needs].filter((id) => !canvas.drawn.has(id)) } : null,
+    canvas: canvas ? { components: canvas.components, connections: canvas.connections, tables: canvas.tables ?? 0, drawn: [...canvas.drawn], undrawn: [...canvas.needs].filter((id) => !canvas.drawn.has(id)) } : null,
   };
 }
 

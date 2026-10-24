@@ -131,6 +131,12 @@ Rules that produce `allowedMoves`:
 | Deep dive, focus item `strong`, ≥ 25% of deep-dive time left, a curveball is available | `curveball` added |
 | Default | `probe`, `challenge`, `clarify`, `explain`, `acknowledge_advance`, `move_on`, `redirect` |
 
+#### The data model
+
+Learners can draw data model tables (`tableNode`: table, fact, dimension, document or event schema, each with columns, types and keys). A pack marks an agenda item as being about the data model by listing a data model kind in `triggers.componentKinds` (for example `fact-table` on a "declare the grain" item). Such an item counts as drawn only once a table is on the canvas; a warehouse box isn't a schema. Rounds whose packs mark no item never get asked for a data model.
+
+When `ask_to_draw` is allowed for a data model item and no table is drawn, the plan sets `dataModelItemId`, and the turn's plan text tells the interviewer to ask for the main tables and their key columns and how to add them (the wording lives in `server/modules/ai/data-model.js`). The templated fallback does the same. The usual draw-request cap (`maxDrawRequestsPerItem`) applies, so an ignored request isn't repeated forever. Tables appear in the design text under "Data model" with their columns, which the review judges under data model and storage. The v2 interviewer gets a `<data_model>` line saying whether the question needs one.
+
 ### 5.2 One model call
 
 A single `AiRequest` at tier `standard`, with the blocks laid out as in section 7. Output schema `interviewer-v3`, with **field order mattering** for streaming:

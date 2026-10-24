@@ -1,0 +1,706 @@
+{
+  "opening": "Let's design the analytics warehouse for an online store. The business wants to understand its sales. Where would you like to start?",
+  "clarifications": [
+    {
+      "id": "scale.orders",
+      "topics": [
+        "scale",
+        "volume",
+        "orders",
+        "how many",
+        "traffic"
+      ],
+      "answer": "About 2 million orders a day, with around 5 items per order, so roughly 10 million order lines a day."
+    },
+    {
+      "id": "scale.entities",
+      "topics": [
+        "products",
+        "customers",
+        "catalog",
+        "categories"
+      ],
+      "answer": "About 50,000 products in a category tree and 20 million customers."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "latency",
+        "real-time",
+        "when",
+        "deadline",
+        "sla"
+      ],
+      "answer": "Daily is fine: analysts need yesterday's numbers by 6am. Nobody needs real-time here."
+    },
+    {
+      "id": "req.history",
+      "topics": [
+        "history",
+        "retention",
+        "years",
+        "how far back"
+      ],
+      "answer": "Keep 3 years of history; analysts compare year over year."
+    },
+    {
+      "id": "src.system",
+      "topics": [
+        "source",
+        "database",
+        "oltp",
+        "postgres",
+        "replica"
+      ],
+      "answer": "The store runs on one Postgres database. There's a read replica we can use; the primary must not be loaded with analytics queries."
+    },
+    {
+      "id": "src.changes",
+      "topics": [
+        "updates",
+        "deletes",
+        "refunds",
+        "cancellations",
+        "returns"
+      ],
+      "answer": "Orders change status after purchase: shipped, cancelled, partly or fully refunded, sometimes weeks later. Some test orders are hard-deleted."
+    },
+    {
+      "id": "req.questions",
+      "topics": [
+        "questions",
+        "reports",
+        "metrics",
+        "analysts",
+        "consumers",
+        "users"
+      ],
+      "answer": "Typical questions: revenue and units by day, product, category and region; average order value; repeat-customer rate; refund rate by category."
+    },
+    {
+      "id": "req.timezone",
+      "topics": [
+        "timezone",
+        "time zone",
+        "utc",
+        "dates"
+      ],
+      "answer": "The business reports in India Standard Time; the database stores UTC timestamps."
+    }
+  ],
+  "clarificationPolicy": "Answer as the store's analytics lead. Keep the problem a daily batch warehouse at moderate scale; anything unlisted should be decided so a cloud warehouse with SQL transformations is enough.",
+  "agenda": [
+    {
+      "id": "req.consumers",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "dashboard"
+        ],
+        "keywords": [
+          "analysts",
+          "questions",
+          "reports",
+          "metrics",
+          "freshness",
+          "history"
+        ]
+      },
+      "goal": "Establish who uses the warehouse, which questions they ask, how fresh the data must be and how much history is needed.",
+      "opener": "Before we design anything, what do you want to know about who will use this warehouse and what they need from it?",
+      "evidence": {
+        "strong": "Asks who the consumers are and which questions they answer, pins down freshness (daily by 6am) and history (years), and turns them into explicit requirements before drawing.",
+        "adequate": "Asks about some consumers or freshness but leaves history or the main questions as assumptions.",
+        "weak": "Starts drawing tables or tools without asking who uses the data or how fresh it must be."
+      },
+      "misconceptions": [
+        {
+          "id": "req.realtime_default",
+          "pattern": "Assumes an analytics warehouse must be real-time.",
+          "challenge": "If analysts only need yesterday's numbers each morning, what does a streaming pipeline buy us here?"
+        }
+      ],
+      "probes": [
+        "Which three or four questions should this warehouse answer best?",
+        "How fresh does the data need to be, and how far back do analysts look?"
+      ],
+      "hints": [
+        "Think about who opens the dashboards each morning and what they look for.",
+        "Freshness and history decide most of the architecture; ask about both."
+      ],
+      "moveOnSummary": "Analysts need daily revenue, units and customer reports by product, category and region, ready each morning with multi-year history.",
+      "learnTopics": [
+        "data-engineering-system-design-interview",
+        "non-functional-requirements"
+      ]
+    },
+    {
+      "id": "req.volume",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "warehouse"
+        ],
+        "keywords": [
+          "volume",
+          "rows per day",
+          "estimate",
+          "storage",
+          "size"
+        ]
+      },
+      "goal": "Estimate data volume to size the platform proportionately.",
+      "opener": "Roughly how much data are we talking about, and what does that tell you about the tools we need?",
+      "evidence": {
+        "strong": "Turns orders and items per order into order lines per day and a storage estimate over the retention period, then concludes a single cloud warehouse is enough.",
+        "adequate": "Gives a rough volume but doesn't connect it to a tool or sizing choice.",
+        "weak": "Skips estimation or proposes a large Spark or Hadoop cluster without numbers."
+      },
+      "misconceptions": [
+        {
+          "id": "vol.big_data",
+          "pattern": "Believes any e-commerce analytics needs a distributed processing cluster.",
+          "challenge": "If the whole fact table fits in a few terabytes, what does a cluster framework add over warehouse SQL?"
+        }
+      ],
+      "probes": [
+        "How many fact rows does that produce per day and over the retention period?"
+      ],
+      "hints": [
+        "Multiply orders by items per order, then by days of history.",
+        "A few gigabytes a day is modest for a modern warehouse."
+      ],
+      "moveOnSummary": "About ten million order lines a day, a few terabytes over three years: a cloud warehouse with SQL models fits.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "data-warehouse-vs-data-lake"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "replica",
+          "ingestion",
+          "data-lake",
+          "warehouse",
+          "orchestrator",
+          "etl",
+          "t-airflow",
+          "t-dbt"
+        ],
+        "keywords": [
+          "extract",
+          "landing",
+          "staging",
+          "pipeline",
+          "raw layer",
+          "orchestration"
+        ]
+      },
+      "goal": "Lay out an end-to-end flow from the operational database to the reporting tables without loading the primary.",
+      "opener": "Walk me through how data gets from the store's database to the tables analysts query.",
+      "evidence": {
+        "strong": "Extracts from the read replica (or CDC) into an immutable raw landing area, transforms through staging into the star schema with SQL models, orchestrated with dependencies and checks, BI on the final tables.",
+        "adequate": "Describes extract, transform and load but merges raw and modelled data, or doesn't say where extraction reads from.",
+        "weak": "Points the BI tool at the production database or copies tables straight into reporting with no layers."
+      },
+      "misconceptions": [
+        {
+          "id": "hl.query_prod",
+          "pattern": "Thinks analytics can run directly on the production database.",
+          "challenge": "What happens to checkout latency when an analyst runs a year-long revenue query on the primary at noon?"
+        }
+      ],
+      "probes": [
+        "Where does extraction read from, and why there?",
+        "Why keep a raw copy before transforming?"
+      ],
+      "hints": [
+        "The brief says the primary must not be loaded with analytics.",
+        "Consider landing data untouched first, then modelling it."
+      ],
+      "moveOnSummary": "Replica or CDC extract into a raw landing layer, staging, then a star schema built by orchestrated SQL models.",
+      "learnTopics": [
+        "data-engineering-architecture",
+        "etl-vs-elt",
+        "oltp-vs-olap"
+      ]
+    },
+    {
+      "id": "hl.star",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "fact-table",
+          "dimension-table",
+          "warehouse",
+          "t-snowflake",
+          "t-bigquery",
+          "t-redshift"
+        ],
+        "keywords": [
+          "star schema",
+          "fact table",
+          "dimension",
+          "surrogate key",
+          "dim_product",
+          "fact_order"
+        ]
+      },
+      "goal": "Propose a dimensional model: fact tables, dimensions and keys that answer the stated questions.",
+      "opener": "What tables would analysts query, and how are they related?",
+      "evidence": {
+        "strong": "A fact table of order lines with measures and foreign keys to customer, product, date and region dimensions using surrogate keys; explains why a star suits BI and when a wide mart helps.",
+        "adequate": "Names facts and dimensions but keys or measures are vague, or copies the source tables one to one.",
+        "weak": "Proposes one flat table or the operational schema as is, without separating facts from dimensions."
+      },
+      "misconceptions": [
+        {
+          "id": "star.copy_oltp",
+          "pattern": "Believes copying the normalised operational schema is a good analytics model.",
+          "challenge": "How many joins does an analyst need for revenue by category and region in the source schema?"
+        }
+      ],
+      "probes": [
+        "Which measures live in the fact table, and which attributes in dimensions?",
+        "Why surrogate keys instead of the source ids?"
+      ],
+      "hints": [
+        "Separate the things you count from the things you slice by.",
+        "Dimensions for product, customer, date and region are a good start."
+      ],
+      "moveOnSummary": "A star schema: an order-line fact with measures, joined to product, customer, date and region dimensions by surrogate keys.",
+      "learnTopics": [
+        "dimensional-modeling",
+        "normalization-denormalization"
+      ]
+    },
+    {
+      "id": "deep.grain",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "fact-table",
+          "warehouse",
+          "aggregator"
+        ],
+        "keywords": [
+          "grain",
+          "order line",
+          "shipping fee",
+          "allocate",
+          "double count",
+          "header"
+        ]
+      },
+      "goal": "Declare the fact grain and handle order-level amounts without double counting.",
+      "opener": "What exactly is one row in your fact table, and where does the shipping fee for an order live?",
+      "evidence": {
+        "strong": "Declares one row per order line, keeps order-level amounts (shipping, order discounts) in an order-level fact or allocates them to lines with a stated rule, and shows why repeating them on each line overstates revenue.",
+        "adequate": "Picks the order-line grain but puts the shipping fee on every line or leaves header measures unresolved.",
+        "weak": "Never states a grain, or mixes order-level and line-level rows in one table."
+      },
+      "misconceptions": [
+        {
+          "id": "grain.repeat_header",
+          "pattern": "Thinks repeating the order's shipping fee on each line is harmless.",
+          "challenge": "An order has four items and a fee of one hundred rupees: what does summing the fee over your fact rows give?"
+        }
+      ],
+      "probes": [
+        "What happens to average order value if you compute it from line-level rows?",
+        "How would you allocate an order-wide discount across its items?"
+      ],
+      "hints": [
+        "Count what one row represents before choosing measures.",
+        "Order-level amounts either get their own table or a clear allocation rule."
+      ],
+      "moveOnSummary": "Grain is one row per order line; order-level fees and discounts live in an order fact or are allocated by a stated rule.",
+      "learnTopics": [
+        "dimensional-modeling"
+      ]
+    },
+    {
+      "id": "deep.history",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "dimension-table",
+          "data-catalog",
+          "warehouse"
+        ],
+        "keywords": [
+          "scd",
+          "type 2",
+          "category change",
+          "as of",
+          "valid_from",
+          "slowly changing"
+        ]
+      },
+      "goal": "Choose how dimension changes (product category, customer region) are kept, per reporting need.",
+      "opener": "A product moves from one category to another. What should last year's sales-by-category report show, and how does your model make that happen?",
+      "evidence": {
+        "strong": "Asks which view the business wants, then uses SCD Type 2 with validity dates and a surrogate key per version where history matters and Type 1 overwrites where it doesn't, with facts pointing to the version at sale time.",
+        "adequate": "Knows SCD types but applies one type everywhere without tying it to the reports.",
+        "weak": "Overwrites the category in place without noticing past reports change."
+      },
+      "misconceptions": [
+        {
+          "id": "hist.always_overwrite",
+          "pattern": "Believes updating the dimension row in place is always fine.",
+          "challenge": "Finance closed last year's books by category. What do they see if the category is overwritten today?"
+        }
+      ],
+      "probes": [
+        "Which attributes need history and which don't?",
+        "How does a fact row find the right product version?"
+      ],
+      "hints": [
+        "Ask whether reports should use the category at time of sale or today's.",
+        "Versioned dimension rows with validity dates are one standard tool."
+      ],
+      "moveOnSummary": "SCD Type 2 with surrogate keys where reports need history at time of sale; Type 1 overwrite elsewhere.",
+      "learnTopics": [
+        "slowly-changing-dimensions",
+        "dimensional-modeling"
+      ]
+    },
+    {
+      "id": "deep.incremental",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "etl",
+          "orchestrator",
+          "t-airflow",
+          "batch-job"
+        ],
+        "keywords": [
+          "incremental",
+          "updated_at",
+          "watermark",
+          "rerun",
+          "idempotent",
+          "partition overwrite"
+        ]
+      },
+      "goal": "Make the daily load incremental, aware of late updates and deletes, and safe to rerun.",
+      "opener": "The nightly load fails halfway and someone reruns it. How does your design avoid double-counting or losing sales?",
+      "evidence": {
+        "strong": "Loads incrementally by updated_at with a lookback window (or CDC), catches hard deletes, and makes every step idempotent with MERGE on order_line_id or by overwriting whole date partitions; reruns give identical results.",
+        "adequate": "Uses MERGE or partition overwrite but ignores late updates or deletes, or full-reloads everything nightly without considering cost.",
+        "weak": "Appends each night's extract, so a rerun duplicates rows."
+      },
+      "misconceptions": [
+        {
+          "id": "inc.append_only",
+          "pattern": "Thinks appending each day's extract is enough.",
+          "challenge": "Yesterday's load ran twice after a retry. What does revenue for yesterday show now?"
+        },
+        {
+          "id": "inc.updated_at_complete",
+          "pattern": "Believes filtering on updated_at catches every change.",
+          "challenge": "A test order is hard-deleted from the source. How does an updated_at filter ever see that?"
+        }
+      ],
+      "probes": [
+        "How do you pick up an order whose status changed a week after purchase?",
+        "What makes rerunning the same day produce the same result?"
+      ],
+      "hints": [
+        "Think about what a rerun does to rows that already loaded.",
+        "Upserts on a stable key, or replacing a whole partition, are both rerun-safe."
+      ],
+      "moveOnSummary": "Incremental extract with a lookback or CDC, delete handling, and idempotent MERGE or partition overwrite so reruns are safe.",
+      "learnTopics": [
+        "idempotency",
+        "backfill-and-reprocessing",
+        "change-data-capture"
+      ]
+    },
+    {
+      "id": "deep.refunds",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "fact-table",
+          "ledger",
+          "warehouse"
+        ],
+        "keywords": [
+          "refund",
+          "cancellation",
+          "returns",
+          "negative",
+          "status change",
+          "accumulating"
+        ]
+      },
+      "goal": "Represent refunds and cancellations that arrive later without making past reports irreproducible.",
+      "opener": "An order is refunded two weeks after it was placed. How does that show up in the warehouse?",
+      "evidence": {
+        "strong": "Records refunds and cancellations as their own fact rows (negative amounts with a refund date and reason) or a returns fact, so both gross and net revenue are reportable and closed periods stay reproducible; may add an order-status snapshot.",
+        "adequate": "Updates the original sale row's amount or status, losing when the refund happened.",
+        "weak": "Ignores refunds, or deletes the original order."
+      },
+      "misconceptions": [
+        {
+          "id": "ref.update_in_place",
+          "pattern": "Thinks updating the original sale row is the cleanest way to show a refund.",
+          "challenge": "Finance asks for revenue on the day of the sale as reported then, and refunds by refund date. Can your table answer both?"
+        }
+      ],
+      "probes": [
+        "Should refund revenue count on the sale date or the refund date?"
+      ],
+      "hints": [
+        "Something that happens later is often an event of its own.",
+        "Negative rows keyed to the original line let you net them out."
+      ],
+      "moveOnSummary": "Refunds and cancellations become their own fact rows dated when they happen, so gross, net and historical reports all work.",
+      "learnTopics": [
+        "dimensional-modeling",
+        "backfill-and-reprocessing"
+      ]
+    },
+    {
+      "id": "deep.layout",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "storage",
+          "cache",
+          "t-snowflake"
+        ],
+        "keywords": [
+          "partition",
+          "cluster",
+          "aggregate table",
+          "materialized",
+          "scan",
+          "prune"
+        ]
+      },
+      "goal": "Keep common queries fast and cheap with layout and pre-aggregation.",
+      "opener": "How does an analyst get revenue for one region over the last month without the warehouse scanning everything?",
+      "evidence": {
+        "strong": "Partitions or clusters the fact by order date and clusters by region or product so queries prune, and adds daily aggregate tables or materialised views for the hottest dashboards, with a refresh that follows the load.",
+        "adequate": "Mentions partitioning or indexes but not on the columns queries filter by, or adds aggregates without a refresh plan.",
+        "weak": "Relies on adding a bigger warehouse or more compute."
+      },
+      "misconceptions": [
+        {
+          "id": "layout.index_oltp",
+          "pattern": "Assumes row-store indexes are how warehouse queries get fast.",
+          "challenge": "In a columnar warehouse that scans by micro-partition, what actually lets a query skip data?"
+        }
+      ],
+      "probes": [
+        "Which columns do most queries filter on?",
+        "When would you build a pre-aggregated table?"
+      ],
+      "hints": [
+        "Queries that filter on date should only read those dates.",
+        "Small daily summary tables serve dashboards well."
+      ],
+      "moveOnSummary": "Partition or cluster by date and filter columns, plus daily aggregate tables for frequent dashboards.",
+      "learnTopics": [
+        "data-layout-optimization",
+        "materialized-views"
+      ]
+    },
+    {
+      "id": "deep.quality",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "data-quality",
+          "alerting"
+        ],
+        "keywords": [
+          "checks",
+          "reconcile",
+          "row count",
+          "data quality",
+          "tests",
+          "anomaly"
+        ]
+      },
+      "goal": "Catch wrong or incomplete loads before analysts see them.",
+      "opener": "How would you know this morning's numbers are wrong before the business acts on them?",
+      "evidence": {
+        "strong": "Adds checks after each load: row counts and revenue reconciled against the source, uniqueness of keys, no orphan foreign keys, freshness, and anomaly checks on daily totals; failing critical checks block publishing and alert an owner.",
+        "adequate": "Adds a few null or uniqueness tests but nothing that compares totals with the source.",
+        "weak": "Assumes the data is right if the job succeeded."
+      },
+      "misconceptions": [
+        {
+          "id": "dq.success_means_correct",
+          "pattern": "Thinks a green pipeline run means the data is correct.",
+          "challenge": "The extract silently returned half the rows because the replica lagged. Which check catches that?"
+        }
+      ],
+      "probes": [
+        "Which check would block publishing, and which only warn?"
+      ],
+      "hints": [
+        "Compare what you loaded with what the source has.",
+        "Some failures should stop the dashboards updating."
+      ],
+      "moveOnSummary": "Reconciliation and integrity checks after each load, with blocking checks before publishing.",
+      "learnTopics": [
+        "data-quality"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "limitation",
+          "next",
+          "improve",
+          "risk"
+        ]
+      },
+      "goal": "Summarise the design's main trade-offs and what would change as needs grow.",
+      "opener": "If you stepped back, what are the main trade-offs in this design, and what would you change if the business asked for hourly numbers?",
+      "evidence": {
+        "strong": "Names concrete trade-offs (daily batch versus freshness, SCD complexity, allocation rules, warehouse cost) and explains how hourly needs would move it towards CDC and micro-batches.",
+        "adequate": "Names a trade-off but not its impact, or a vague next step.",
+        "weak": "Says the design has no real weaknesses."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.perfect",
+          "pattern": "Believes the design has no meaningful downsides.",
+          "challenge": "What breaks first if the business wants numbers every hour instead of every morning?"
+        }
+      ],
+      "probes": [
+        "What would you monitor first in production?"
+      ],
+      "hints": [
+        "Think about freshness, cost and the complexity of history tracking.",
+        "What would an hourly requirement change?"
+      ],
+      "moveOnSummary": "A daily, idempotent star-schema warehouse; freshness and history complexity are the main trade-offs.",
+      "learnTopics": [
+        "data-engineering-system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.category_move",
+      "after": "deep.grain",
+      "prompt": "Merchandising just reorganised the category tree and moved hundreds of products. Finance wants last year's report unchanged, but marketing wants it restated in the new categories. How do you serve both?",
+      "agendaItemId": "deep.history"
+    },
+    {
+      "id": "cb.refund_wave",
+      "after": "deep.incremental",
+      "prompt": "A payment bug means thousands of orders from last month will be refunded over the next week. What happens to your tables and last month's reports?",
+      "agendaItemId": "deep.refunds"
+    }
+  ],
+  "vocabulary": [
+    "star schema",
+    "fact table",
+    "grain",
+    "dimension",
+    "surrogate key",
+    "SCD Type 2",
+    "MERGE",
+    "upsert",
+    "dbt",
+    "Airflow",
+    "Snowflake",
+    "BigQuery",
+    "Redshift",
+    "read replica",
+    "CDC",
+    "updated_at",
+    "materialized view",
+    "partition pruning",
+    "clustering key",
+    "average order value"
+  ],
+  "alternatives": [
+    {
+      "choice": "One wide denormalised table (one big table) for BI",
+      "whenBetter": "When a small team serves a single BI tool and dimensions rarely change; often built as a mart on top of the star."
+    },
+    {
+      "choice": "Change data capture instead of nightly incremental extracts",
+      "whenBetter": "When deletes and late updates are frequent or the business later wants fresher data."
+    },
+    {
+      "choice": "Full nightly reload of small dimension tables",
+      "whenBetter": "When a dimension is small enough that a reload is cheaper and simpler than change tracking."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Grain-first star schema with safe loads",
+      "outline": "Clarifies consumers, questions, daily freshness and three-year history, then estimates about ten million order lines a day and concludes a cloud warehouse is enough. Extracts from the replica into raw, models staging and a star schema with an order-line fact and product, customer, date and region dimensions keyed by surrogate keys. Declares the grain and keeps shipping fees in an order fact. Uses SCD Type 2 for category where finance needs history. Loads incrementally with a lookback and delete handling, idempotent MERGE, refunds as negative fact rows, date clustering, daily aggregates and reconciliation checks that block publishing."
+    },
+    {
+      "band": "adequate",
+      "label": "Reasonable star, fragile loads",
+      "outline": "Builds a recognisable star schema and a replica-based nightly load, but repeats the shipping fee on each line, overwrites product categories, and handles reruns with a delete-then-insert that ignores late refunds. Some data checks, no reconciliation with the source."
+    },
+    {
+      "band": "weak",
+      "label": "Reports on the source schema",
+      "outline": "Copies operational tables into the warehouse nightly by appending and points dashboards at them, with no declared grain, no history handling and no rerun safety; refunds and deletes are not considered."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.3,
+    "deep_dive": 0.45,
+    "wrap_up": 0.1
+  }
+}

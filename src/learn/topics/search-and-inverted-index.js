@@ -179,7 +179,7 @@ for hit in response["hits"]["hits"]:
     "Mention ranking signals beyond text match: popularity, recency, personalisation.",
   ],
   related: ["database-indexing", "outbox-pattern", "sharding", "nosql-database-types", "caching"],
-  practice: ["autocomplete", "rag-search", "web-crawler"],
+  practice: ["log-analytics", "autocomplete", "rag-search", "web-crawler"],
   reading: [
     { title: "Elastic demo gallery", publisher: "Elastic", url: "https://www.elastic.co/demo-gallery/ent-search" },
   ],

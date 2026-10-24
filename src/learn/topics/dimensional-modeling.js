@@ -75,7 +75,7 @@ group by d.month, p.category;
     "Mention conformed dimensions when several business processes share an entity.",
   ],
   related: ["slowly-changing-dimensions", "normalization-denormalization", "data-warehouse-vs-data-lake", "medallion-architecture", "data-engineering-architecture"],
-  practice: ["scd2-warehouse", "realtime-analytics"],
+  practice: ["ecommerce-warehouse", "scd2-warehouse", "realtime-analytics"],
   reading: [
     { title: "Dimensional Modeling Techniques", publisher: "Kimball Group", url: "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/" },
     { title: "The Data Warehouse Toolkit, 3rd edition", publisher: "Ralph Kimball and Margy Ross, Wiley", url: "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/books/data-warehouse-dw-toolkit/" },

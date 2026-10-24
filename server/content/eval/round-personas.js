@@ -20,6 +20,49 @@ export const roundPersonas = {
     expect: { score: [25, 58] },
   },
   ],
+  "ecommerce-warehouse": [
+    {
+      id: "strong",
+      persona: "A strong senior data engineer. Asks who the analysts are, which questions they answer, how fresh data must be and how much history is needed, then estimates about 10 million order lines a day and concludes a cloud warehouse with SQL models is enough. Draws as they go. Unprompted, they extract from the read replica into a raw layer, build a star schema whose fact grain is one row per order line, keep the shipping fee in a separate order-level fact, use SCD Type 2 for product category because finance reports by category at the time of sale, load incrementally with a lookback window and handle hard deletes, make loads idempotent with MERGE on order_line_id, record refunds as negative fact rows on the refund date, cluster facts by order date, and add checks that reconcile row counts and revenue with the source. They raise trade-offs of their own design before being asked. Never needs hints. Answers concisely.",
+      expect: { score: [82, 93], allowAbove90: true },
+    },
+    {
+      id: "recovers",
+      persona: "A competent mid-level data engineer who makes three specific mistakes and recovers when helped. (1) Their first fact table has one row per order line but also repeats the order's shipping fee on every line; only when asked what summing the fee gives do they realise it overstates revenue and move it to an order-level fact. (2) Asked what happens if the nightly load is rerun, they press the hint button once (wantsHint true) instead of answering; after the hint they switch from appending to MERGE on order_line_id. (3) They overwrite the product's category in place; only if the interviewer asks what last year's report shows after a category change do they switch to SCD Type 2. (4) They describe their tables and keys in words only and draw no data model tables until the interviewer asks for the data model; then they draw the fact and dimension tables with their columns. Otherwise reasonable: asks about freshness and volume, extracts from the read replica, builds a star schema and draws the pipeline components they describe.",
+      expect: { score: [62, 82], noStrongAfterHelp: true },
+    },
+    {
+      id: "weak",
+      persona: "A junior engineer with shallow knowledge. Doesn't ask clarifying questions and gives no numbers. Proposes copying the store's tables into the warehouse every night by appending them, and pointing dashboards at those copies. Can't explain what a fact table's grain is and says 'I'm not sure' when asked. When asked about reruns, refunds or history, gives vague answers like 'we can fix it manually'. Draws the source database, a warehouse and a dashboard, and little else.",
+      expect: { score: [25, 58] },
+    },
+  ],
+  // Tests the interviewer's data model request: a solid candidate who only ever talks
+  // about the schema until the interviewer asks for it on the canvas.
+  "ecommerce-warehouse:words-only": [
+    {
+      id: "words-only",
+      persona: "A solid mid-level data engineer. Asks about consumers, freshness and volume, then draws the pipeline (read replica, a nightly ETL job, the warehouse, a BI dashboard) and explains it. They describe the star schema in words in detail: a fact table at one row per order line with order_line_id as primary key, foreign keys to customer, product and date dimensions, and the shipping fee kept in a separate order-level fact. They draw NO data model tables until the interviewer asks them to put the data model or tables on the canvas; when asked, they draw fact_order_line, dim_customer and dim_product as tables with their columns and keys, and say they've added them. Otherwise reasonable: MERGE on order_line_id for reruns, SCD Type 2 for product category, refunds as negative fact rows. Answers concisely.",
+      expect: { score: [62, 88], allowAbove90: false, dataModelAsk: true },
+    },
+  ],
+  "cdc-pipeline": [
+    {
+      id: "strong",
+      persona: "A strong senior data engineer. Clarifies freshness (5 minutes), the busiest tables, write rate, that updates and hard deletes must be reflected, and that the primary must not be loaded. Draws as they go. Unprompted, they reject polling on updated_at because it misses deletes and loads the primary, and choose Debezium reading the Postgres WAL through a logical replication slot into Kafka topics keyed by primary key with a schema registry. They bootstrap with an incremental snapshot tied to the stream position, land raw changes append-only, and run a MERGE every few minutes that keeps the latest change per key by LSN so replays are idempotent. Deletes remove rows or set a soft-delete flag; breaking schema changes pause the table and alert. They warn that a stalled slot makes the primary retain WAL, cap it and alert on slot lag. They raise trade-offs before being asked. Never needs hints. Answers concisely.",
+      expect: { score: [82, 93], allowAbove90: true },
+    },
+    {
+      id: "recovers",
+      persona: "A competent mid-level data engineer who makes three specific mistakes and recovers when helped. (1) They first propose polling the primary every few minutes for rows with a newer updated_at; only when asked about deletes and tables without updated_at do they switch to log-based CDC with Debezium and Kafka. (2) Asked how to load the existing rows and start streaming without gaps, they press the hint button once (wantsHint true) instead of answering; after the hint they tie the snapshot to a log position and stream from there. (3) They order changes by the event's wall-clock timestamp; only if the interviewer asks about two updates in the same millisecond do they switch to the LSN and partitioning by primary key. Otherwise reasonable: asks about freshness and volume, merges into current-state tables and draws what they describe.",
+      expect: { score: [62, 82], noStrongAfterHelp: true },
+    },
+    {
+      id: "weak",
+      persona: "A junior engineer with shallow knowledge. Doesn't ask clarifying questions and gives no numbers. Proposes a cron job that runs SELECT * on each production table every five minutes and inserts the results into the warehouse. Has never heard of the write-ahead log or CDC tools and says 'I'm not sure' when asked. When asked about deletes, failures or schema changes, gives vague answers like 'it should be fine' or 'we'd rerun it'. Draws the database, a script and the warehouse, and little else.",
+      expect: { score: [25, 58] },
+    },
+  ],
   "url-shortener": [
     {
       id: "strong",

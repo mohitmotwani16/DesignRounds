@@ -4,7 +4,7 @@ DesignRounds is a practice portal for system design interviews. Learners pick a 
 
 ## What's in this version
 
-- **Practice library:** 49 rounds across six disciplines (SDE, Data engineering, ML & AI, Platform, Distributed systems, Frontend & mobile). 28 rounds (57%) are free. You can filter by discipline, access, level, time, and topic, and search the requirements text.
+- **Practice library:** 63 rounds across six disciplines (SDE, Data engineering, ML & AI, Platform, Distributed systems, Frontend & mobile). 11 rounds are free, at least one per discipline; the rest are Plus. You can filter by discipline, access, level, time, and topic, and search the requirements text.
 - **Accounts:** Google sign-in (OAuth) plus passwordless email OTP as a fallback. Browsing the library is public, but starting or resuming a round requires signing in. New users set up a profile with name, target role, experience, and headline.
 - **Profile:** practice history with resume/complete/delete actions, profile editing, sign out (here or on all devices), and account deletion.
 - **Canvas:** 247 components (about 140 generic system-design blocks in 12 categories plus about 110 technology logos), zones/boundaries, text labels, and decision notes. Connections are labeled and can be sync/async and one-way/two-way. It also has an inspector panel, inline rename, undo/redo, copy/paste/duplicate, box selection, snap-to-grid, and a minimap.

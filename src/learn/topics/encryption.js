@@ -61,5 +61,5 @@ export default {
     "Hash passwords with a slow algorithm and keep secrets in a secrets manager.",
   ],
   related: ["authentication-authorization", "http", "service-mesh", "object-storage", "api-gateway", "webhooks"],
-  practice: ["secrets-platform", "payment-platform", "file-storage", "chat-system"],
+  practice: ["gdpr-deletion", "secrets-platform", "payment-platform", "file-storage", "chat-system"],
 };

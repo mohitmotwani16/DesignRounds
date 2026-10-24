@@ -16,6 +16,7 @@ import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
 import { changeMode, handleLearnerTurn, handleTick, presentV3State, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
 import { requireUser } from "./identity.js";
+import { needsDataModel } from "./pks/index.js";
 import { hasInterviewer, isPlus, limitsFor } from "./plans.js";
 import { claimTrial, trialStatus } from "./trial.js";
 import { deleteInterviewAudioForTurn, interviewAudioKey, objectStorage, putInterviewAudio } from "../object-storage.js";
@@ -210,6 +211,7 @@ function taskInput({ session, state, turns, trigger, selectedNodeId, design, cha
     changes,
     candidates,
     hints: { used: state.hints_used, limit: limits.hintsPerRound },
+    dataModel: { needed: needsDataModel(prompt.id) },
   };
 }
 
@@ -670,7 +672,7 @@ async function v2Check(req, res, session, state, body) {
 
   const design = describeDiagram(session.diagram);
   const changes = [
-    ...diff.added.map((entry) => `Added: [${entry.id}] ${entry.kind} "${entry.label}"${entry.hasNote ? " (has a why note)" : " (no note)"}${covered.has(entry.id) ? " (already covered)" : ""}`),
+    ...diff.added.map((entry) => `Added: [${entry.id}] ${entry.kind} "${entry.label}"${entry.columns !== undefined ? ` (data model table, ${entry.columns} columns)` : ""}${entry.hasNote ? " (has a why note)" : " (no note)"}${covered.has(entry.id) ? " (already covered)" : ""}`),
     ...diff.removed.map((id) => `Removed: [${id}]`),
     ...(diff.edgeChanges ? [`Connections added or removed: ${diff.edgeChanges}`] : []),
   ].join("\n");

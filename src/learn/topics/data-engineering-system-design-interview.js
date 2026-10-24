@@ -45,5 +45,5 @@ export default {
     "Say the trade-off behind every choice out loud.",
   ],
   related: ["data-engineering-design-patterns","batch-vs-stream-processing","medallion-architecture","data-quality","backfill-and-reprocessing","design-food-delivery-analytics"],
-  practice: ["clickstream","food-delivery-analytics","etl-framework","scd2-warehouse"],
+  practice: ["ecommerce-warehouse", "cdc-pipeline", "clickstream", "food-delivery-analytics", "etl-framework", "scd2-warehouse"],
 };

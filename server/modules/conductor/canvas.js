@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { isAnonymousKind } from "../ai/components.js";
+import { isDataModelKind, isTable, tableText } from "../ai/data-model.js";
 
 // Canvas signals for the planner: pure functions of the diagram and the conversation.
 // A real interviewer keeps the candidate drawing, doesn't ask for a part that's already
@@ -8,11 +9,23 @@ import { isAnonymousKind } from "../ai/components.js";
 
 const lower = (value) => String(value ?? "").toLowerCase();
 
+// Components and data model tables; a table's text includes its columns, so a
+// "valid_from" column is evidence for an item about validity dates.
 export function canvasComponents(diagram) {
   return (diagram?.nodes ?? [])
-    .filter((node) => node.type === "systemNode" || !node.type)
-    .map((node) => ({ id: node.id, kind: node.data?.kind, text: lower(`${node.data?.label ?? ""} ${node.data?.subtitle ?? ""} ${node.data?.note ?? ""}`) }));
+    .filter((node) => node.type === "systemNode" || node.type === "tableNode" || !node.type)
+    .map((node) => ({
+      id: node.id,
+      kind: node.data?.kind,
+      table: isTable(node),
+      text: lower(node.type === "tableNode" ? tableText(node) : `${node.data?.label ?? ""} ${node.data?.subtitle ?? ""} ${node.data?.note ?? ""}`),
+    }));
 }
+
+// An agenda item is about the data model when the pack ties it to data model kinds
+// (table, fact-table, ...). Such an item is drawn only once a table is on the canvas:
+// a warehouse box is not a schema.
+export const needsDataModel = (item) => (item?.triggers?.componentKinds ?? []).some(isDataModelKind);
 
 export function canvasStats(diagram) {
   return { components: canvasComponents(diagram).length, connections: (diagram?.edges ?? []).length };
@@ -38,6 +51,7 @@ const keywordHit = (item, text) => (item.triggers?.keywords ?? []).some((keyword
 // Drawn: a component of one of the item's kinds is on the canvas. A generic kind (a
 // plain service, a client) counts only when its label or note names the item.
 export function itemDrawn(item, components) {
+  if (needsDataModel(item)) return components.some((component) => component.table);
   const kinds = new Set(item.triggers?.componentKinds ?? []);
   return components.some((component) => kinds.has(component.kind) && (!isAnonymousKind(component.kind) || keywordHit(item, component.text)))
     || components.some((component) => !isAnonymousKind(component.kind) && keywordHit(item, component.text));
@@ -78,6 +92,8 @@ export function canvasSignals({ agenda, diagram, learnerTexts, seed, learnerTurn
   return {
     components: components.length,
     connections: (diagram?.edges ?? []).length,
+    tables: components.filter((component) => component.table).length,
+    dataModelItems: new Set(agenda.filter(needsDataModel).map((item) => item.id)),
     needs,
     drawn,
     emphasis: emphasisScores(agenda, learnerTexts, components),

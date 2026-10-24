@@ -15,7 +15,8 @@ function load() {
   const kindToGroup = new Map();
   headers.forEach((header, index) => {
     const body = source.slice(header.index, headers[index + 1]?.index ?? source.length);
-    for (const match of body.matchAll(/\b[ct]\("([^"]+)"/g)) kindToGroup.set(match[1], header[1]);
+    // c() components, t() technologies and m() data model entities.
+    for (const match of body.matchAll(/\b[ctm]\("([^"]+)"/g)) kindToGroup.set(match[1], header[1]);
   });
   if (kindToGroup.size < 50) console.warn(`[ai] read only ${kindToGroup.size} component kinds from the catalog; treating unknown kinds as significant`);
   return kindToGroup;

@@ -1,0 +1,639 @@
+{
+  "opening": "Product teams here run lots of A/B tests, and each team computes results in its own notebooks, so nobody trusts the numbers. Let's design the data pipeline behind a shared experiment results platform. Where would you start?",
+  "clarifications": [
+    {
+      "id": "scale.experiments",
+      "topics": [
+        "experiments",
+        "how many",
+        "concurrent",
+        "tests"
+      ],
+      "answer": "About 300 experiments run at once, each lasting 2 to 4 weeks."
+    },
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "traffic",
+        "daily users",
+        "dau"
+      ],
+      "answer": "About 40 million daily users."
+    },
+    {
+      "id": "scale.events",
+      "topics": [
+        "events",
+        "volume",
+        "logging",
+        "warehouse",
+        "data size"
+      ],
+      "answer": "Products log about 5 billion events a day into the warehouse already, partitioned by date."
+    },
+    {
+      "id": "req.metrics",
+      "topics": [
+        "metrics",
+        "kpis",
+        "definitions",
+        "guardrails",
+        "how many metrics"
+      ],
+      "answer": "About 500 metrics are defined, such as conversion, revenue per user, sessions per user and page latency. Each experiment picks primary, secondary and guardrail metrics."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "how often",
+        "daily",
+        "hourly",
+        "latency"
+      ],
+      "answer": "Scorecards refresh daily. Guardrail metrics should refresh hourly so a harmful test can be stopped early."
+    },
+    {
+      "id": "assign.how",
+      "topics": [
+        "assignment",
+        "bucketing",
+        "randomisation",
+        "variant",
+        "allocation"
+      ],
+      "answer": "An assignment service puts users in variants. Today it logs every assignment, even for users who never reach the changed screen."
+    },
+    {
+      "id": "req.stats",
+      "topics": [
+        "statistics",
+        "confidence interval",
+        "p-value",
+        "significance",
+        "variance"
+      ],
+      "answer": "Teams want per-variant metric values with confidence intervals and a clear call on significance."
+    },
+    {
+      "id": "id.logged_out",
+      "topics": [
+        "logged out",
+        "anonymous",
+        "device id",
+        "identity",
+        "login"
+      ],
+      "answer": "Many users browse logged out with a device id and log in later."
+    }
+  ],
+  "clarificationPolicy": "Answer as the experimentation platform lead. Keep the focus on the data pipeline and metric correctness rather than deep statistics; decide unlisted details so exposure logging, shared aggregates and health checks stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "users",
+          "experiment"
+        ],
+        "keywords": [
+          "experiments",
+          "metrics",
+          "scorecard",
+          "freshness",
+          "guardrails",
+          "confidence intervals"
+        ]
+      },
+      "goal": "Establish the number of experiments, users, event volume, metrics, refresh cadence and what a result must show.",
+      "opener": "What do you need to know about the experiments and what teams expect from their results?",
+      "evidence": {
+        "strong": "Asks about concurrent experiments, users, event volume, the metric catalog, refresh cadence for scorecards and guardrails, what a scorecard shows, and how assignment works today.",
+        "adequate": "Asks about volume and metrics but not refresh needs or assignment.",
+        "weak": "Starts on statistics or tools without understanding the scale or the metrics."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.per_test",
+          "pattern": "Assumes each experiment can just be analysed independently from raw data.",
+          "challenge": "Three hundred experiments each scan five billion events every day. What does that cost?"
+        }
+      ],
+      "probes": [
+        "What does a team need to see to decide to ship?",
+        "How are users put into variants today?"
+      ],
+      "hints": [
+        "The number of experiments multiplies every cost.",
+        "Ask how assignment is logged."
+      ],
+      "moveOnSummary": "Hundreds of concurrent experiments on tens of millions of users, hundreds of shared metrics, daily scorecards and hourly guardrails.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "data-engineering-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.flow",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "t-kafka",
+          "warehouse",
+          "orchestrator",
+          "t-airflow"
+        ],
+        "keywords": [
+          "exposure events",
+          "assignment service",
+          "metric pipeline",
+          "scorecard",
+          "results store",
+          "daily job"
+        ]
+      },
+      "goal": "Lay out the flow from assignment and exposure to computed results.",
+      "opener": "Walk me through how a scorecard gets computed, from a user entering an experiment to the numbers on screen.",
+      "evidence": {
+        "strong": "Deterministic assignment, exposure events logged when the variant is shown, an exposure table, a daily orchestrated pipeline joining exposures to events into per-user metrics, per-variant statistics, a stats engine and a results store behind the scorecard UI, with an hourly guardrail job.",
+        "adequate": "Describes joining assignments to events and computing results but not where exposure is logged or how jobs are scheduled.",
+        "weak": "Has each team query raw events with their own SQL."
+      },
+      "misconceptions": [
+        {
+          "id": "flow.assignment_log",
+          "pattern": "Thinks the assignment log is the right list of users in the experiment.",
+          "challenge": "Most assigned users never open the changed checkout page. What happens to the measured effect if you include them?"
+        }
+      ],
+      "probes": [
+        "Where exactly is exposure recorded?",
+        "What runs daily and what hourly?"
+      ],
+      "hints": [
+        "Being assigned and seeing the change are different events.",
+        "One pipeline can serve every experiment."
+      ],
+      "moveOnSummary": "Assignment, exposure events at the point of use, and an orchestrated daily pipeline to per-user then per-variant results.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "data-pipeline-orchestration"
+      ]
+    },
+    {
+      "id": "hl.catalog",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-catalog",
+          "t-dbt"
+        ],
+        "keywords": [
+          "metric catalog",
+          "metric definition",
+          "as code",
+          "owner",
+          "versioned",
+          "single source"
+        ]
+      },
+      "goal": "Define metrics once, as code, so every experiment uses the same definition.",
+      "opener": "How do you make sure revenue per user means the same thing in every experiment?",
+      "evidence": {
+        "strong": "A metric catalog with definitions as code (source events, filters, aggregation, unit, window, owner), reviewed and versioned; the pipeline generates SQL from definitions, so every experiment uses the same logic.",
+        "adequate": "A shared document of definitions that each team implements in its own SQL.",
+        "weak": "Leaves definitions to each team."
+      },
+      "misconceptions": [
+        {
+          "id": "catalog.docs",
+          "pattern": "Believes a wiki page of metric definitions keeps them consistent.",
+          "challenge": "Two teams implement revenue per user from the same wiki page and get different numbers. Why?"
+        }
+      ],
+      "probes": [
+        "What happens when someone changes a definition?"
+      ],
+      "hints": [
+        "Definitions should be executable, not just described.",
+        "Version definitions like code."
+      ],
+      "moveOnSummary": "A versioned metric catalog with definitions as code that the pipeline compiles into the computation.",
+      "learnTopics": [
+        "data-contracts-schema-evolution",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.exposure",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "clickstream",
+          "ingestion"
+        ],
+        "keywords": [
+          "exposure logging",
+          "first exposure",
+          "dilution",
+          "triggered",
+          "point of use",
+          "assigned but not exposed"
+        ]
+      },
+      "goal": "Count users from their first exposure and only if they were exposed.",
+      "opener": "Which users count in an experiment's results, and from when?",
+      "evidence": {
+        "strong": "Logs an exposure event where the variant is rendered, takes each user's first exposure per experiment, counts only events after that exposure, and explains dilution from counting assigned-but-unexposed users.",
+        "adequate": "Uses exposures but counts events from before exposure, or doesn't take the first one.",
+        "weak": "Counts every assigned user."
+      },
+      "misconceptions": [
+        {
+          "id": "exp.assigned",
+          "pattern": "Thinks counting all assigned users is safer.",
+          "challenge": "If nine out of ten assigned users never see the change, what happens to the measured effect size and the power?"
+        }
+      ],
+      "probes": [
+        "What if a user is exposed on several days?"
+      ],
+      "hints": [
+        "The variant matters only once the user sees it.",
+        "Events before exposure can't be caused by the change."
+      ],
+      "moveOnSummary": "Count only exposed users, from their first exposure, and only events after it.",
+      "learnTopics": [
+        "ab-testing-experimentation"
+      ]
+    },
+    {
+      "id": "deep.aggregates",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "table",
+          "aggregator",
+          "batch-processor",
+          "t-spark"
+        ],
+        "keywords": [
+          "per-user aggregates",
+          "incremental",
+          "sufficient statistics",
+          "sum of squares",
+          "shared across experiments",
+          "partitioned by date"
+        ]
+      },
+      "goal": "Compute results for hundreds of experiments without scanning raw events per experiment.",
+      "opener": "How do you compute revenue per user with a confidence interval for all running experiments without scanning billions of events once per experiment?",
+      "evidence": {
+        "strong": "Builds daily per-user per-metric aggregates once from raw events (incremental, partitioned by date) and reuses them for all experiments; joins with exposures and reduces to per-variant sufficient statistics (count, sum, sum of squares) from which means and variances follow cheaply.",
+        "adequate": "Pre-aggregates per experiment, or per user but recomputes all history each day.",
+        "weak": "Runs a separate query over raw events for each experiment and metric."
+      },
+      "misconceptions": [
+        {
+          "id": "agg.per_experiment",
+          "pattern": "Believes each experiment needs its own pass over raw events.",
+          "challenge": "A user is in twenty experiments. How many times does your design read their events each day?"
+        }
+      ],
+      "probes": [
+        "What is the minimum you need to store per variant to compute a mean and a variance?",
+        "How do you update cumulative results daily without recomputing from the start?"
+      ],
+      "hints": [
+        "Many experiments share the same users and metrics.",
+        "Mean and variance only need a few running totals."
+      ],
+      "moveOnSummary": "Shared incremental per-user daily aggregates reduced to per-variant sufficient statistics.",
+      "learnTopics": [
+        "precomputation-pattern",
+        "materialized-views"
+      ]
+    },
+    {
+      "id": "deep.srm",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "data-quality",
+          "alerting"
+        ],
+        "keywords": [
+          "sample ratio mismatch",
+          "srm",
+          "chi-square",
+          "health check",
+          "imbalance",
+          "broken experiment"
+        ]
+      },
+      "goal": "Detect broken experiments automatically.",
+      "opener": "One variant has noticeably more users than its planned share. What does your system do, and what might cause it?",
+      "evidence": {
+        "strong": "Runs a sample ratio mismatch check (chi-square on exposure counts versus planned split) daily, flags and hides results for failing experiments, and lists causes: exposure logged differently per variant, bots, redirects or crashes in one variant, assignment bugs; also checks pre-period bias and data freshness.",
+        "adequate": "Notices imbalance but treats it as noise or only checks manually.",
+        "weak": "Has no health checks."
+      },
+      "misconceptions": [
+        {
+          "id": "srm.noise",
+          "pattern": "Thinks a small imbalance in a large experiment is just randomness.",
+          "challenge": "With millions of users, how likely is a two-point imbalance by chance alone?"
+        }
+      ],
+      "probes": [
+        "Should results still be shown for an experiment that fails the check?"
+      ],
+      "hints": [
+        "With large samples, small imbalances are rarely chance.",
+        "Compare observed counts with the planned split."
+      ],
+      "moveOnSummary": "Automatic sample ratio mismatch and freshness checks that flag and suppress results of broken experiments.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.peeking",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "dashboard"
+        ],
+        "keywords": [
+          "peeking",
+          "sequential testing",
+          "false positives",
+          "early stopping",
+          "fixed horizon",
+          "always valid"
+        ]
+      },
+      "goal": "Handle daily looks at results without inflating false positives.",
+      "opener": "Product managers check results every day. What problem does that cause, and how does the platform handle it?",
+      "evidence": {
+        "strong": "Explains that repeated looks with fixed-horizon tests inflate false positives; uses sequential or always-valid confidence intervals, or shows results as provisional until the planned end, while guardrails use their own stopping rules.",
+        "adequate": "Knows peeking is risky but only adds a warning.",
+        "weak": "Doesn't see a problem with checking p-values daily."
+      },
+      "misconceptions": [
+        {
+          "id": "peek.fine",
+          "pattern": "Believes checking significance every day is harmless.",
+          "challenge": "If you check twenty times and stop the first time p is below the threshold, what's your real false positive rate?"
+        }
+      ],
+      "probes": [
+        "How do guardrails differ from primary metrics here?"
+      ],
+      "hints": [
+        "Each look is another chance for noise to look significant.",
+        "Some methods stay valid under continuous monitoring."
+      ],
+      "moveOnSummary": "Sequential or always-valid intervals, or provisional results until the planned end; guardrails have separate stopping rules.",
+      "learnTopics": [
+        "ab-testing-experimentation"
+      ]
+    },
+    {
+      "id": "deep.identity",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "auth-service"
+        ],
+        "keywords": [
+          "logged out",
+          "device id",
+          "identity stitching",
+          "assignment unit",
+          "consistent assignment",
+          "login"
+        ]
+      },
+      "goal": "Keep assignment and analysis consistent when users move from logged out to logged in.",
+      "opener": "A user is logged out on the first day and logs in on the third. Which variant are they in, and how is that analysed?",
+      "evidence": {
+        "strong": "Chooses the assignment unit per experiment (device for logged-out flows, account for logged-in ones), keeps assignment stable by hashing the chosen id, records the mapping at login, and analyses at the same unit as assignment.",
+        "adequate": "Reassigns at login or analyses at a different unit than assignment.",
+        "weak": "Doesn't consider identity changes."
+      },
+      "misconceptions": [
+        {
+          "id": "id.reassign",
+          "pattern": "Thinks switching the user to their account's variant at login is harmless.",
+          "challenge": "The user saw variant B for two days, then A. Which effect are you measuring?"
+        }
+      ],
+      "probes": [
+        "Which unit would you randomise on for a signup-page test?"
+      ],
+      "hints": [
+        "Analyse at the same unit you randomised on.",
+        "Login creates a link between two ids."
+      ],
+      "moveOnSummary": "Pick the randomisation unit per experiment, keep it stable, record the mapping at login and analyse at that unit.",
+      "learnTopics": [
+        "ab-testing-experimentation"
+      ]
+    },
+    {
+      "id": "deep.backfill",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "batch-job"
+        ],
+        "keywords": [
+          "definition change",
+          "metric version",
+          "backfill",
+          "recompute",
+          "restate",
+          "history of results"
+        ]
+      },
+      "goal": "Handle metric definition changes and bugs with versioned recomputation.",
+      "opener": "A metric's definition changes in the middle of an experiment. What happens to past results?",
+      "evidence": {
+        "strong": "Versions definitions; a change creates a new metric version and triggers a backfill of affected per-user aggregates from raw events, results show which version they used, and old results stay readable for decisions already made.",
+        "adequate": "Recomputes silently with the new definition.",
+        "weak": "Mixes old and new definitions across days."
+      },
+      "misconceptions": [
+        {
+          "id": "back.silent",
+          "pattern": "Thinks silently recomputing everything with the new definition is fine.",
+          "challenge": "A team shipped a feature last month based on the old numbers. What do they see now?"
+        }
+      ],
+      "probes": [
+        "How far back would you recompute, and what does it cost?"
+      ],
+      "hints": [
+        "Results should record which definition produced them.",
+        "Backfills recompute only what the change touched."
+      ],
+      "moveOnSummary": "Versioned definitions with targeted backfills; results record their metric version and old results stay readable.",
+      "learnTopics": [
+        "backfill-and-reprocessing"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost",
+          "freshness",
+          "limitation",
+          "trust"
+        ]
+      },
+      "goal": "Summarise trade-offs between freshness, cost and statistical rigour.",
+      "opener": "What are the main trade-offs in your design, and what would you improve next?",
+      "evidence": {
+        "strong": "Weighs daily batch versus fresher results, shared aggregates versus flexibility for ad-hoc metrics, statistical safeguards versus simplicity, and proposes next steps such as variance reduction with pre-period data.",
+        "adequate": "Names a trade-off without consequence.",
+        "weak": "Claims the results are always trustworthy."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.trust",
+          "pattern": "Believes a shared pipeline guarantees correct conclusions.",
+          "challenge": "Which failure could still make a team ship a harmful change?"
+        }
+      ],
+      "probes": [
+        "What would make results available faster?"
+      ],
+      "hints": [
+        "Think about cost, freshness and safeguards.",
+        "Pre-experiment data can reduce variance."
+      ],
+      "moveOnSummary": "Shared daily aggregates trade freshness for cost and consistency; health checks and sequential methods protect conclusions.",
+      "learnTopics": [
+        "ab-testing-experimentation"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.imbalance",
+      "after": "deep.exposure",
+      "prompt": "A checkout experiment shows a big win, but the treatment variant has a few percent more users than control. Should the team ship?",
+      "agendaItemId": "deep.srm"
+    },
+    {
+      "id": "cb.daily",
+      "after": "deep.aggregates",
+      "prompt": "A product manager stops a test on day three because the dashboard shows significance. A week later the effect is gone. What went wrong, and what should the platform do?",
+      "agendaItemId": "deep.peeking"
+    }
+  ],
+  "vocabulary": [
+    "A/B test",
+    "variant",
+    "control",
+    "treatment",
+    "assignment",
+    "exposure",
+    "bucketing",
+    "salt",
+    "metric catalog",
+    "guardrail",
+    "confidence interval",
+    "p-value",
+    "t-test",
+    "delta method",
+    "CUPED",
+    "sample ratio mismatch",
+    "SRM",
+    "chi-square",
+    "sequential testing",
+    "peeking",
+    "sufficient statistics",
+    "dbt",
+    "Airflow",
+    "Spark"
+  ],
+  "alternatives": [
+    {
+      "choice": "A commercial experimentation platform reading from the warehouse",
+      "whenBetter": "When the company would rather buy the stats engine and UI and only own exposure logging and metrics."
+    },
+    {
+      "choice": "Streaming computation of guardrail metrics",
+      "whenBetter": "When harmful changes must be caught within minutes, for example for latency or crash rates."
+    },
+    {
+      "choice": "Session or page-view as the unit of analysis",
+      "whenBetter": "For experiments where users can't be identified and the change is per page."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Exposure-first shared pipeline",
+      "outline": "Clarifies experiment count, users, event volume, metric catalog and cadence. Uses deterministic assignment and logs exposures where variants render, taking first exposure per user and experiment. A versioned metric catalog compiles to SQL; a daily orchestrated job builds incremental per-user per-metric aggregates once, joins exposures and reduces to per-variant sufficient statistics, and a stats engine computes intervals with the delta method for ratio metrics. Hourly guardrails, daily sample ratio mismatch and freshness checks, sequential intervals for peeking, stable identity units and versioned backfills."
+    },
+    {
+      "band": "adequate",
+      "label": "Correct pipeline, weak safeguards",
+      "outline": "Builds a catalog and a daily pipeline over exposures with per-variant statistics, but recomputes each experiment from raw events, has no sample ratio mismatch check and shows daily fixed-horizon p-values."
+    },
+    {
+      "band": "weak",
+      "label": "Notebook per test",
+      "outline": "Joins the assignment log to raw events separately for each experiment with team-written SQL, analyses events as independent samples and reports p-values daily."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

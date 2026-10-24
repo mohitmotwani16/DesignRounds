@@ -91,5 +91,5 @@ export default {
     "Note that unified engines let one codebase serve both modes.",
   ],
   related: ["data-engineering-design-patterns", "batch-vs-stream-processing", "stream-processing", "stream-processing-frameworks", "event-streaming-kafka", "backfill-and-reprocessing", "event-sourcing-cqrs"],
-  practice: ["realtime-analytics", "clickstream", "etl-framework"],
+  practice: ["ad-click-aggregator", "realtime-analytics", "clickstream", "etl-framework"],
 };

@@ -5,14 +5,14 @@ import {
 } from "@xyflow/react";
 import {
   ArrowLeft, ChevronDown, ChevronRight, CircleCheck, Command, FileText, Keyboard, LayoutPanelLeft, LoaderCircle, Magnet,
-  Map as MapIcon, MessageSquare, MousePointer2, Network, Plus, Redo2, RotateCcw, SquareDashed, StickyNote, Type, Undo2, Upload,
+  Map as MapIcon, MessageSquare, MousePointer2, Network, Plus, Redo2, RotateCcw, SquareDashed, StickyNote, Table2, Type, Undo2, Upload,
 } from "lucide-react";
 import { api } from "../api.js";
 import { findPrompt } from "../data/prompts.js";
 import { Brand, FullPageMessage, UserMenu } from "../components/ui.jsx";
 import { openReportProblem } from "../components/ReportProblem.jsx";
 import { navigate } from "../router.js";
-import { getItem } from "./catalog.jsx";
+import { DATA_MODEL_TRACKS, getItem } from "./catalog.jsx";
 import { createNode, createPoint, POINT_SIZE, decorateEdge, entrySide, hydrateDiagram, newId, nodeCenter, routeCenter, serializeDiagram, snapTarget, strayPoints } from "./diagram.js";
 import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
 import { CanvasActions, edgeTypes, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
@@ -27,6 +27,10 @@ import { useTheme } from "../theme.js";
 const SAVE_DELAY_MS = 800;
 const RETRY_DELAY_MS = 5000;
 const HISTORY_LIMIT = 80;
+// A new table's footprint (with room between tables for a relationship label), and the
+// room its editor takes on the right of the canvas.
+const TABLE_SIZE = { width: 232, height: 120, gap: 64 };
+const TABLE_EDITOR_WIDTH = 364;
 const minimapColors = { blue: "#cfe0fb", violet: "#e2dcfb", green: "#cdeedd", orange: "#fbe5c8", teal: "#cbede9", rose: "#fad6db", slate: "#e1e6ee" };
 
 export default function WorkspaceRoute({ sessionId }) {
@@ -198,11 +202,21 @@ function Workspace({ session, prompt }) {
     let position = at;
     if (!position) {
       const bounds = canvasRef.current?.getBoundingClientRect();
-      const center = reactFlow.screenToFlowPosition({
-        x: bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2,
-        y: bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2,
-      });
-      position = findFreeSpot(nodesRef.current, { x: center.x - 89, y: center.y - 32 });
+      if (item.nodeType === "tableNode" && bounds) {
+        // A table opens its wide editor over the right of the canvas: centre it in what
+        // stays visible, and keep it fully on screen.
+        const visible = { left: bounds.left + 16, top: bounds.top + 56, right: bounds.right - TABLE_EDITOR_WIDTH, bottom: bounds.bottom - 16 };
+        const topLeft = reactFlow.screenToFlowPosition({ x: visible.left, y: visible.top });
+        const bottomRight = reactFlow.screenToFlowPosition({ x: Math.max(visible.left + 260, visible.right), y: visible.bottom });
+        const center = { x: (topLeft.x + bottomRight.x) / 2, y: (topLeft.y + bottomRight.y) / 2 };
+        position = findFreeSpot(nodesRef.current, { x: center.x - TABLE_SIZE.width / 2, y: center.y - TABLE_SIZE.height / 2 }, TABLE_SIZE, { ...topLeft, right: bottomRight.x, bottom: bottomRight.y });
+      } else {
+        const center = reactFlow.screenToFlowPosition({
+          x: bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2,
+          y: bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2,
+        });
+        position = findFreeSpot(nodesRef.current, { x: center.x - 89, y: center.y - 32 });
+      }
     }
     const node = createNode(item.kind, position);
     if (node.type === "groupNode" && !at) node.position = { x: position.x - 105, y: position.y - 95 };
@@ -568,7 +582,7 @@ function Workspace({ session, prompt }) {
   }, [setEdges, setNodes]);
 
   const selectedNodes = nodes.filter((node) => node.selected);
-  const selectedComponent = selectedNodes.length === 1 && selectedNodes[0].type === "systemNode" ? selectedNodes[0] : null;
+  const selectedComponent = selectedNodes.length === 1 && ["systemNode", "tableNode"].includes(selectedNodes[0].type) ? selectedNodes[0] : null;
   const selectedEdges = edges.filter((edge) => edge.selected);
   const selectionCount = selectedNodes.length + selectedEdges.length;
   const singleNode = selectionCount === 1 ? selectedNodes[0] : null;
@@ -657,6 +671,7 @@ function Workspace({ session, prompt }) {
             case "g": run(() => actions.addItem(getItem("group"))); break;
             case "t": run(() => actions.addItem(getItem("text"))); break;
             case "n": run(() => actions.addItem(getItem("note"))); break;
+            case "d": run(() => actions.addItem(getItem("table"))); break;
             default:
           }
       }
@@ -825,6 +840,7 @@ function Workspace({ session, prompt }) {
           <button className="rail-tool" title="Add a zone / boundary (G)" aria-label="Add a zone" disabled={readOnly} onClick={() => addItem(getItem("group"))}><SquareDashed size={17} /></button>
           <button className="rail-tool" title="Add text (T)" aria-label="Add text" disabled={readOnly} onClick={() => addItem(getItem("text"))}><Type size={17} /></button>
           <button className="rail-tool" title="Add a decision note (N)" aria-label="Add a decision note" disabled={readOnly} onClick={() => addItem(getItem("note"))}><StickyNote size={17} /></button>
+          <button className="rail-tool" title="Add a data model table (D)" aria-label="Add a data model table" disabled={readOnly} onClick={() => addItem(getItem("table"))}><Table2 size={17} /></button>
           <span className="rail-separator" />
           <button className="rail-tool" title="Undo (Ctrl+Z)" aria-label="Undo" disabled={readOnly} onClick={undo}><Undo2 size={16} /></button>
           <button className="rail-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={readOnly} onClick={redo}><Redo2 size={16} /></button>
@@ -879,7 +895,9 @@ function Workspace({ session, prompt }) {
                 connectionLineType={ConnectionLineType.SmoothStep}
                 connectionLineStyle={{ stroke: "#6672d7", strokeWidth: 1.6 }}
                 connectionRadius={28}
-                fitView
+                // Fit a saved design on open. An empty canvas keeps its view: fitting on the
+                // first added node would re-centre it under the editor panel.
+                fitView={initial.nodes.length > 0}
                 fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
                 minZoom={0.15}
                 maxZoom={2.5}
@@ -907,7 +925,12 @@ function Workspace({ session, prompt }) {
                 <span className="empty-canvas-icon"><Network size={22} /></span>
                 <h3>A clean slate.</h3>
                 <p>{readOnly ? "This round was finished without any components." : <>Click or drag components from the library.<br />Connect them by dragging from a node's edge dot.</>}</p>
-                {!readOnly && <button className="button button-outline button-small" onClick={() => addItem(getItem("client"))}><Plus size={14} /> Add a client to start</button>}
+                {!readOnly && (
+                  <div className="empty-canvas-actions">
+                    <button className="button button-outline button-small" onClick={() => addItem(getItem("client"))}><Plus size={14} /> Add a client to start</button>
+                    {DATA_MODEL_TRACKS.has(prompt.track) && <button className="button button-outline button-small" onClick={() => addItem(getItem("table"))}><Table2 size={14} /> Add a data model table</button>}
+                  </div>
+                )}
               </div>
             )}
 
@@ -918,11 +941,12 @@ function Workspace({ session, prompt }) {
             )}
             {singleEdge && (
               <EdgeInspector edge={singleEdge} sourceLabel={labelFor(singleEdge.source)} targetLabel={labelFor(singleEdge.target)} readOnly={readOnly} focusLabel={focusEdgeLabel}
+                betweenTables={[singleEdge.source, singleEdge.target].every((end) => nodes.find((entry) => entry.id === end)?.type === "tableNode")}
                 onBegin={record} onChange={updateEdge} onReverse={() => reverseEdge(singleEdge.id)} onDelete={deleteSelection} onClose={clearSelection} />
             )}
             {selectionCount > 1 && !boxSelecting && <MultiInspector count={selectionCount} readOnly={readOnly} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection} />}
 
-            <div className="canvas-session-label"><span className="session-pulse" /> {nodes.length} components <span>·</span> {edges.length} connections</div>
+            <div className="canvas-session-label"><span className="session-pulse" /> {nodes.length} {nodes.length === 1 ? "component" : "components"} <span>·</span> {edges.length} {edges.length === 1 ? "connection" : "connections"}</div>
           </div>
           <div className="canvas-footer">
             <span><MousePointer2 size={13} /> Drag to move around · Shift + drag to select several · Double-click to rename</span>
@@ -952,8 +976,10 @@ function alignTo(from, at, slack = 12) {
 }
 
 // Nearest grid slot (spiralling out from the preferred point) that doesn't overlap a component.
-function findFreeSpot(nodes, preferred, size = { width: 178, height: 64 }) {
-  const gap = 24;
+// The nearest spot to `preferred` that overlaps nothing, searched in rings. With
+// `within` (a flow-space box), spots that wouldn't fit inside it are skipped.
+function findFreeSpot(nodes, preferred, size = { width: 178, height: 64 }, within = null) {
+  const gap = size.gap ?? 24;
   const solid = nodes.filter((node) => node.type !== "groupNode" && node.type !== "pointNode");
   const overlaps = (x, y) => solid.some((node) => {
     const width = node.measured?.width ?? node.width ?? size.width;
@@ -969,7 +995,8 @@ function findFreeSpot(nodes, preferred, size = { width: 178, height: 64 }) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
         const x = preferred.x + dx * stepX;
         const y = preferred.y + dy * stepY;
-        if (!overlaps(x, y)) return { x, y };
+        const inside = !within || (x >= within.x && y >= within.y && x + size.width <= within.right && y + size.height <= within.bottom);
+        if (inside && !overlaps(x, y)) return { x, y };
       }
     }
   }

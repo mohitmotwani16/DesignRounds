@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isProduction } from "../../flags.js";
+import { isDataModelKind } from "../ai/data-model.js";
 import { promptById } from "../rounds.js";
 import { buildPack } from "./builder.js";
 import { briefOf, inputsFor, packableQuestions } from "./inputs.js";
@@ -82,6 +83,18 @@ export function readPackFiles(dir = packsDir()) {
     const { schemaVersion: _s, promptId: _p, version: _v, inputsFingerprint: _i, builder: _b, ...content } = raw;
     return { promptId, file, content };
   });
+}
+
+// Questions whose data model is part of a good answer: their pack ties an agenda item to
+// data model kinds. Questions without a pack file fall back to their track. Used by the
+// v2 interviewer, which has no pack in its prompt (the Conductor reads the pack itself).
+const DATA_MODEL_TRACKS = new Set(["data-engineering", "machine-learning"]);
+let dataModelPacks = null;
+export function needsDataModel(promptId) {
+  if (!dataModelPacks) {
+    dataModelPacks = new Map(readPackFiles().map(({ promptId: id, content }) => [id, content.agenda.some((item) => item.triggers.componentKinds.some(isDataModelKind))]));
+  }
+  return dataModelPacks.get(promptId) ?? DATA_MODEL_TRACKS.has(promptById.get(promptId)?.track);
 }
 
 export async function importPackFiles(dir = packsDir()) {

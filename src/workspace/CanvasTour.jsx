@@ -37,7 +37,7 @@ export function canvasTourSteps(finished) {
       targets: ["rail", "library"],
       kicker: "Components",
       title: "Add components from the library",
-      body: "Click a component to drop it on the canvas, or drag it where you want it. Search when you know the name. The rail also adds a service, a zone, text, or a decision note.",
+      body: "Click a component to drop it on the canvas, or drag it where you want it. Search when you know the name. The rail also adds a service, a zone, text, a decision note, or a data model table to sketch your schema.",
     },
     {
       id: "connect",

@@ -1,0 +1,602 @@
+{
+  "opening": "Today we have a data warehouse for reporting and a big object-storage bucket of raw files that nobody trusts. Leadership wants one platform for both analytics and machine learning. How would you design it?",
+  "clarifications": [
+    {
+      "id": "scale.data",
+      "topics": [
+        "scale",
+        "volume",
+        "size",
+        "petabytes",
+        "how much data"
+      ],
+      "answer": "About 2 PB in object storage today, growing by about 20 TB a day."
+    },
+    {
+      "id": "src.sources",
+      "topics": [
+        "sources",
+        "ingestion",
+        "cdc",
+        "streams",
+        "batch"
+      ],
+      "answer": "Roughly 300 sources: nightly batch extracts, change streams from production databases and event streams from apps."
+    },
+    {
+      "id": "users.who",
+      "topics": [
+        "users",
+        "consumers",
+        "analysts",
+        "data scientists",
+        "teams"
+      ],
+      "answer": "About 500 analysts using BI tools and SQL, and about 50 data scientists using Spark and notebooks."
+    },
+    {
+      "id": "req.bi_latency",
+      "topics": [
+        "dashboard",
+        "query latency",
+        "interactive",
+        "bi",
+        "performance"
+      ],
+      "answer": "Dashboards on curated tables should answer in under about 10 seconds."
+    },
+    {
+      "id": "req.repro",
+      "topics": [
+        "reproducible",
+        "training",
+        "snapshot",
+        "time travel",
+        "ml"
+      ],
+      "answer": "Data scientists must be able to rebuild a training set exactly as the data looked on a past date, for audits of model decisions."
+    },
+    {
+      "id": "req.governance",
+      "topics": [
+        "pii",
+        "governance",
+        "access control",
+        "security",
+        "sensitive"
+      ],
+      "answer": "Several tables contain personal data such as emails and phone numbers. Analysts must not see them raw; some data scientists may see hashed values."
+    },
+    {
+      "id": "req.updates",
+      "topics": [
+        "updates",
+        "deletes",
+        "upserts",
+        "corrections",
+        "gdpr"
+      ],
+      "answer": "Tables need updates and deletes: CDC upserts, late corrections and privacy deletion requests."
+    },
+    {
+      "id": "org.cloud",
+      "topics": [
+        "cloud",
+        "vendor",
+        "aws",
+        "tools",
+        "engine"
+      ],
+      "answer": "We're on AWS and don't want to be locked into a single query engine."
+    }
+  ],
+  "clarificationPolicy": "Answer as the head of data platform. Keep it a lakehouse architecture problem at petabyte scale on object storage; decide unlisted details so table formats, file layout and governance stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "users",
+          "dashboard"
+        ],
+        "keywords": [
+          "consumers",
+          "data volume",
+          "bi latency",
+          "reproducible",
+          "pii",
+          "updates and deletes"
+        ]
+      },
+      "goal": "Establish consumers, volume, latency, reproducibility, update and governance needs.",
+      "opener": "Before choosing technology, what do you need to understand about the users and the data?",
+      "evidence": {
+        "strong": "Asks who the consumers are (BI analysts, data scientists), data volume and growth, dashboard latency, reproducibility needs, update and delete requirements, sensitive data rules and engine constraints.",
+        "adequate": "Covers users and volume but not governance, deletes or reproducibility.",
+        "weak": "Names a vendor product without asking about needs."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.storage_only",
+          "pattern": "Thinks a lakehouse is just putting files in object storage.",
+          "challenge": "If two jobs write the same table and a dashboard reads it at the same time, what does the dashboard see with plain files?"
+        }
+      ],
+      "probes": [
+        "What does the ML team need that BI doesn't?",
+        "What must be true about personal data?"
+      ],
+      "hints": [
+        "Ask how each group reads data, and how fast.",
+        "Updates, deletes and access rules shape the storage layer."
+      ],
+      "moveOnSummary": "BI and ML share one copy at petabyte scale, needing interactive queries, reproducible snapshots, updates and deletes, and central control of personal data.",
+      "learnTopics": [
+        "lakehouse-architecture",
+        "data-warehouse-vs-data-lake"
+      ]
+    },
+    {
+      "id": "hl.layers",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-lake",
+          "t-s3",
+          "ingestion",
+          "etl",
+          "orchestrator",
+          "t-spark"
+        ],
+        "keywords": [
+          "bronze",
+          "silver",
+          "gold",
+          "medallion",
+          "layers",
+          "curated"
+        ]
+      },
+      "goal": "Organise data into layers from raw to curated with clear contracts between them.",
+      "opener": "How would you organise the data from the moment it lands to the tables analysts use?",
+      "evidence": {
+        "strong": "Bronze holds raw data as received for replay; silver holds cleaned, conformed, deduplicated tables; gold holds business-level aggregates and marts; transformations are orchestrated with quality gates between layers and owners per table.",
+        "adequate": "Describes raw and curated zones but not what each guarantees or who owns them.",
+        "weak": "Keeps one zone of files that everyone reads and writes."
+      },
+      "misconceptions": [
+        {
+          "id": "layers.skip_raw",
+          "pattern": "Thinks keeping raw data is wasteful once it is cleaned.",
+          "challenge": "A cleaning bug ran for a month. What do you rebuild silver from?"
+        }
+      ],
+      "probes": [
+        "What guarantee does each layer give its readers?",
+        "Where do quality checks sit?"
+      ],
+      "hints": [
+        "Keep data as received before you change it.",
+        "Each layer should promise more to its readers than the last."
+      ],
+      "moveOnSummary": "Medallion layers: raw bronze for replay, cleaned silver, business gold, with quality gates and owners between them.",
+      "learnTopics": [
+        "medallion-architecture",
+        "data-engineering-architecture"
+      ]
+    },
+    {
+      "id": "hl.format",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-catalog",
+          "t-databricks",
+          "storage"
+        ],
+        "keywords": [
+          "iceberg",
+          "delta lake",
+          "hudi",
+          "table format",
+          "acid",
+          "catalog"
+        ]
+      },
+      "goal": "Use an open table format and a catalog to get transactions, schema evolution and time travel on object storage.",
+      "opener": "Your tables are files in object storage. How do readers and writers agree on what a table contains at any moment?",
+      "evidence": {
+        "strong": "Uses an open table format (Iceberg, Delta or Hudi) whose metadata gives atomic commits, snapshot isolation, schema evolution and time travel, with one catalog as the source of table definitions; explains the choice against engine-neutrality needs.",
+        "adequate": "Picks a table format but can't explain what it adds over Parquet folders.",
+        "weak": "Uses plain Parquet folders and naming conventions."
+      },
+      "misconceptions": [
+        {
+          "id": "fmt.parquet_enough",
+          "pattern": "Believes Parquet files plus folder naming give a reliable table.",
+          "challenge": "A job fails halfway through writing a partition. What does a reader see?"
+        }
+      ],
+      "probes": [
+        "Why might Iceberg suit us better than Delta, or the reverse?",
+        "What does the catalog do?"
+      ],
+      "hints": [
+        "Something must record which files make up the table right now.",
+        "Open table formats keep that record as metadata."
+      ],
+      "moveOnSummary": "An open table format with a shared catalog provides ACID commits, schema evolution and time travel over object storage.",
+      "learnTopics": [
+        "open-table-formats",
+        "columnar-file-formats"
+      ]
+    },
+    {
+      "id": "deep.smallfiles",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "batch-job",
+          "scheduler"
+        ],
+        "keywords": [
+          "small files",
+          "compaction",
+          "commit interval",
+          "file size",
+          "optimize",
+          "rewrite data files"
+        ]
+      },
+      "goal": "Prevent and repair the small-file problem from streaming and frequent commits.",
+      "opener": "A streaming job commits to a table every minute. What happens to query speed after a month, and what do you do about it?",
+      "evidence": {
+        "strong": "Explains that frequent commits create many small files and much metadata, slowing planning and scans; sets a sensible commit interval and target file size, runs scheduled compaction and metadata cleanup, and monitors file counts per partition.",
+        "adequate": "Mentions compaction but not why small files hurt or when to run it.",
+        "weak": "Doesn't foresee any slowdown."
+      },
+      "misconceptions": [
+        {
+          "id": "small.more_compute",
+          "pattern": "Thinks more compute fixes small-file slowdowns.",
+          "challenge": "Planning a query must open metadata for a huge number of tiny files. Does a bigger cluster make that faster?"
+        }
+      ],
+      "probes": [
+        "What file size would you aim for, and why?",
+        "How do compaction and active writers avoid conflicting?"
+      ],
+      "hints": [
+        "Count the files a month of one-minute commits creates.",
+        "Rewriting many small files into fewer large ones is routine maintenance."
+      ],
+      "moveOnSummary": "Frequent commits create small files; tune commit size and run scheduled compaction and metadata cleanup.",
+      "learnTopics": [
+        "data-layout-optimization",
+        "open-table-formats"
+      ]
+    },
+    {
+      "id": "deep.layout",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "table",
+          "warehouse",
+          "storage"
+        ],
+        "keywords": [
+          "partitioning",
+          "hidden partitioning",
+          "z-order",
+          "clustering",
+          "sort order",
+          "high cardinality"
+        ]
+      },
+      "goal": "Choose partitioning and clustering that match query patterns without exploding file counts.",
+      "opener": "How would you partition and lay out a large events table so common queries stay fast?",
+      "evidence": {
+        "strong": "Partitions coarsely (usually by day) using hidden partitioning where available, clusters or sorts within partitions on frequent filters, avoids high-cardinality partition columns, and checks pruning with query plans.",
+        "adequate": "Partitions by date but doesn't consider clustering or the cost of over-partitioning.",
+        "weak": "Partitions by user id or another high-cardinality column."
+      },
+      "misconceptions": [
+        {
+          "id": "layout.by_user",
+          "pattern": "Believes partitioning by user id speeds up per-user queries.",
+          "challenge": "With tens of millions of users, how many partitions and files does one day create?"
+        }
+      ],
+      "probes": [
+        "What would you do for queries that filter by customer rather than date?"
+      ],
+      "hints": [
+        "Partitions should be few and large.",
+        "Sorting within files helps skip data too."
+      ],
+      "moveOnSummary": "Coarse date partitions plus clustering or sorting on common filters; never partition on high-cardinality columns.",
+      "learnTopics": [
+        "data-layout-optimization"
+      ]
+    },
+    {
+      "id": "deep.timetravel",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "model-registry"
+        ],
+        "keywords": [
+          "time travel",
+          "snapshot id",
+          "as of",
+          "training set",
+          "tagged snapshot",
+          "snapshot retention"
+        ]
+      },
+      "goal": "Make training data reproducible on a past date while controlling snapshot retention.",
+      "opener": "A data scientist needs exactly the training data that was used on a particular date months ago. How do they get it?",
+      "evidence": {
+        "strong": "Records the table snapshot ids (or tags them) used for each training run in the model registry, reads with time travel, and sets snapshot retention so needed snapshots are tagged and kept while others expire; notes that deletion obligations may require rebuilding rather than keeping old snapshots.",
+        "adequate": "Mentions time travel but not retention or recording which snapshot was used.",
+        "weak": "Copies the training data into a separate folder each time, or says it can't be done."
+      },
+      "misconceptions": [
+        {
+          "id": "tt.forever",
+          "pattern": "Thinks keeping every snapshot forever is the safe default.",
+          "challenge": "Storage keeps every old file version forever, and a user asked to be deleted. What does that mean?"
+        }
+      ],
+      "probes": [
+        "How long would you keep snapshots, and who decides?"
+      ],
+      "hints": [
+        "The table format already versions every commit.",
+        "Record which version a model was trained on."
+      ],
+      "moveOnSummary": "Record or tag snapshot ids per training run and read with time travel; expire untagged snapshots under a retention policy.",
+      "learnTopics": [
+        "open-table-formats",
+        "mlops-model-registry"
+      ]
+    },
+    {
+      "id": "deep.governance",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "iam",
+          "data-catalog",
+          "lineage"
+        ],
+        "keywords": [
+          "column masking",
+          "row filter",
+          "tags",
+          "grants",
+          "fine-grained access",
+          "unity catalog"
+        ]
+      },
+      "goal": "Control access to sensitive data centrally across engines.",
+      "opener": "How do you stop analysts from seeing raw email addresses while some data scientists see hashed ones?",
+      "evidence": {
+        "strong": "Tags sensitive columns in the catalog and applies policies there: column masks (hash or redact) and row filters by role, enforced for every engine through the catalog, with audit logs and lineage to find derived copies.",
+        "adequate": "Restricts whole tables or keeps separate copies with columns removed.",
+        "weak": "Uses bucket policies per team, or no access control."
+      },
+      "misconceptions": [
+        {
+          "id": "gov.bucket",
+          "pattern": "Believes object-storage bucket policies are enough access control.",
+          "challenge": "An analyst needs most columns of a table but not the email column. Can a bucket policy express that?"
+        }
+      ],
+      "probes": [
+        "How do you know where else an email column was copied to?"
+      ],
+      "hints": [
+        "Control access at the table and column level, not the file level.",
+        "Tags let one policy cover many tables."
+      ],
+      "moveOnSummary": "Tag-based column masks and row filters in the catalog, enforced for all engines, with audit and lineage.",
+      "learnTopics": [
+        "authorization-rbac-abac-oauth",
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.compute",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "t-trino",
+          "cluster",
+          "cache"
+        ],
+        "keywords": [
+          "trino",
+          "query engine",
+          "separate clusters",
+          "workload isolation",
+          "warehouse copy",
+          "serving bi"
+        ]
+      },
+      "goal": "Serve BI and ML workloads without one starving the other.",
+      "opener": "Should dashboards query the lake directly or a warehouse copy, and how do you keep a big backfill from slowing every report?",
+      "evidence": {
+        "strong": "Separates compute per workload (ETL, BI SQL engine, ML Spark) over the same storage, autoscaled; serves BI from gold tables with a SQL engine and caching, or copies gold into a warehouse when concurrency and latency demand it; explains the trade-off.",
+        "adequate": "Separates compute but doesn't say how BI gets interactive latency.",
+        "weak": "Runs everything on one shared cluster."
+      },
+      "misconceptions": [
+        {
+          "id": "compute.one_cluster",
+          "pattern": "Thinks one big shared cluster is simplest and fine.",
+          "challenge": "A two-year backfill starts at nine in the morning. What happens to the CEO's dashboard?"
+        }
+      ],
+      "probes": [
+        "When would a warehouse copy of gold tables be worth it?"
+      ],
+      "hints": [
+        "Storage and compute can scale separately here.",
+        "Different workloads deserve different engines and capacity."
+      ],
+      "moveOnSummary": "Separate compute per workload on shared storage; BI from gold via a SQL engine and caching, or a warehouse copy when needed.",
+      "learnTopics": [
+        "lakehouse-architecture",
+        "multi-tenancy"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost",
+          "migration",
+          "limitation",
+          "risk"
+        ]
+      },
+      "goal": "Summarise trade-offs and a migration path from today's warehouse and raw bucket.",
+      "opener": "What are the biggest trade-offs, and how would you migrate from today's setup without breaking reports?",
+      "evidence": {
+        "strong": "Names trade-offs (maintenance overhead of table formats, lake versus warehouse serving, retention versus cost) and proposes an incremental migration: dual-run key tables, validate against the warehouse, move consumers table by table.",
+        "adequate": "Names a trade-off but no migration plan.",
+        "weak": "Proposes switching everything at once, or names no trade-offs."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.big_bang",
+          "pattern": "Believes a one-weekend cutover is the cleanest migration.",
+          "challenge": "What happens to reports that silently differ after the switch?"
+        }
+      ],
+      "probes": [
+        "How would you prove the new tables match the old warehouse?"
+      ],
+      "hints": [
+        "Run old and new side by side for a while.",
+        "Table maintenance is ongoing work, not a one-off."
+      ],
+      "moveOnSummary": "An open lakehouse trades maintenance work for one governed copy; migrate incrementally with side-by-side validation.",
+      "learnTopics": [
+        "data-engineering-system-design-interview"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.customer_filter",
+      "after": "deep.smallfiles",
+      "prompt": "The new customer-success dashboards filter the main events table by customer, not by date, and every query scans the whole table. What would you change?",
+      "agendaItemId": "deep.layout"
+    },
+    {
+      "id": "cb.audit",
+      "after": "deep.governance",
+      "prompt": "A regulator asks you to show exactly what data a credit model was trained on eight months ago. Can you?",
+      "agendaItemId": "deep.timetravel"
+    }
+  ],
+  "vocabulary": [
+    "lakehouse",
+    "Iceberg",
+    "Delta Lake",
+    "Hudi",
+    "Parquet",
+    "medallion",
+    "bronze",
+    "silver",
+    "gold",
+    "catalog",
+    "Glue",
+    "Unity Catalog",
+    "Trino",
+    "Spark",
+    "time travel",
+    "snapshot",
+    "compaction",
+    "Z-order",
+    "hidden partitioning",
+    "copy-on-write",
+    "merge-on-read",
+    "column masking",
+    "row filter",
+    "S3"
+  ],
+  "alternatives": [
+    {
+      "choice": "Keep a cloud warehouse for BI and a lake for ML",
+      "whenBetter": "When BI concurrency and latency needs are high and the team prefers managed warehouse performance over one copy."
+    },
+    {
+      "choice": "Delta Lake on Databricks as the whole platform",
+      "whenBetter": "When the company is committed to Databricks and engine neutrality isn't a requirement."
+    },
+    {
+      "choice": "Hudi for CDC-heavy tables",
+      "whenBetter": "When most tables are high-frequency upserts from change streams."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Governed open lakehouse",
+      "outline": "Clarifies BI and ML consumers, petabyte volume, latency, reproducibility, deletes and PII rules. Lands raw data in bronze on S3, conforms it in silver and builds gold marts, all as Iceberg tables in one catalog with quality gates between layers. Explains ACID commits and snapshots versus plain Parquet. Plans commit sizes and scheduled compaction to avoid small files, partitions by day with clustering, tags training snapshots in the model registry, enforces tag-based column masks in the catalog for every engine, and isolates ETL, BI and ML compute, copying gold to a warehouse only if BI latency demands it."
+    },
+    {
+      "band": "adequate",
+      "label": "Lakehouse by name",
+      "outline": "Chooses Delta tables with bronze, silver and gold layers and Spark for everything, but doesn't anticipate small files, partitions by customer, and handles access with separate table copies; time travel is mentioned without retention."
+    },
+    {
+      "band": "weak",
+      "label": "Bigger bucket",
+      "outline": "Puts all data as Parquet files in folders, lets teams read and write directly, uses bucket policies for access and one shared cluster, with no plan for updates, reproducibility or layout."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

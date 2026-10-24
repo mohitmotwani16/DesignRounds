@@ -120,5 +120,5 @@ for msg in consumer:
     "Mention idempotent consumers, ordering per key and monitoring lag.",
   ],
   related: ["outbox-pattern", "event-streaming-kafka", "search-and-inverted-index", "cache-invalidation", "database-per-service", "write-ahead-log", "materialized-views"],
-  practice: ["etl-framework", "realtime-analytics", "fraud-data-platform"],
+  practice: ["cdc-pipeline", "etl-framework", "realtime-analytics", "fraud-data-platform"],
 };

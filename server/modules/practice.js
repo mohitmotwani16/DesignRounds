@@ -16,9 +16,16 @@ export const canStartPrompt = canAccessRound;
 
 const finite = z.number().finite().min(-1e6).max(1e6);
 const id = z.string().min(1).max(80);
+// A data model table's columns (tableNode; see src/workspace/diagram.js cleanColumns).
+const columnSchema = z.object({
+  name: z.string().min(1).max(64),
+  type: z.string().max(40).optional(),
+  keys: z.array(z.enum(["pk", "fk", "part", "sort"])).max(4).optional(),
+  ref: z.string().max(120).optional(),
+});
 const nodeSchema = z.object({
   id,
-  type: z.enum(["systemNode", "groupNode", "textNode", "noteNode", "pointNode"]),
+  type: z.enum(["systemNode", "groupNode", "textNode", "noteNode", "tableNode", "pointNode"]),
   position: z.object({ x: finite, y: finite }),
   width: z.number().finite().min(20).max(4000).optional(),
   height: z.number().finite().min(20).max(4000).optional(),
@@ -29,6 +36,7 @@ const nodeSchema = z.object({
     subtitle: z.string().max(120).optional(),
     note: z.string().max(2000).optional(),
     color: z.string().max(24).optional(),
+    columns: z.array(columnSchema).max(60).optional(),
   }),
 });
 const edgeSchema = z.object({

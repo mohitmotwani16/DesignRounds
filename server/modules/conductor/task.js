@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { filterFillerWords } from "../ai/communication.js";
+import { DATA_MODEL_HOW_TO } from "../ai/data-model.js";
 import { list, oneOf, text } from "../ai/schema.js";
 import { answerContextNotes, communicationNotes } from "../ai/tasks/interviewer.js";
 import { CLASSIFICATIONS, MODEL_MOVES, OPENING_MOVES } from "./moves.js";
@@ -49,7 +50,9 @@ export function fakeConductorReply({ plan, learnerText = "", trigger = "reply", 
     hint: "(Sample hint) Think about which part of this gets the most traffic, and what happens when one machine isn't enough.",
     probe: "(Sample interviewer) Can you be more specific about how that works when traffic grows tenfold?",
     wrap_up: "(Sample interviewer) Let's wrap up. Summarise your design, the biggest risk in it, and what you'd improve.",
-    ask_to_draw: "(Sample interviewer) Before we go further, put that part on the canvas so we can look at it together.",
+    ask_to_draw: plan.dataModelItemId
+      ? `(Sample interviewer) Before we go further, sketch the data model so we can look at it together. ${DATA_MODEL_HOW_TO}`
+      : "(Sample interviewer) Before we go further, put that part on the canvas so we can look at it together.",
     listen: "(Sample interviewer) Okay, so writes land in the database first and the cache fills on reads. That works. Keep going.",
     stay_silent: "",
   }[move] ?? `(Sample interviewer) ${openers[focusItemId] ?? "Tell me more about that."}`;

@@ -1,7 +1,7 @@
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import { BaseEdge, Handle, NodeResizer, Position } from "@xyflow/react";
-import { Server, StickyNote } from "lucide-react";
-import { getItem } from "./catalog.jsx";
+import { Server, StickyNote, Table2 } from "lucide-react";
+import { COLUMN_KEYS, getItem } from "./catalog.jsx";
 import { routeEdge } from "./diagram.js";
 
 // Lets nodes commit inline edits through the workspace (so they join undo history).
@@ -112,6 +112,45 @@ export const NoteNode = memo(function NoteNode({ id, data, selected }) {
   );
 });
 
+const VISIBLE_COLUMNS = 14;
+const KEY_ORDER = COLUMN_KEYS.map((key) => key.id);
+
+// A data model entity (table, fact, dimension, document or event schema): its name, an
+// optional grain or description, and its columns with types and key badges. Columns are
+// edited in the inspector; the name inline, like any node.
+export const TableNode = memo(function TableNode({ id, data, selected }) {
+  const item = getItem(data.kind);
+  const Icon = item?.icon || Table2;
+  const columns = data.columns ?? [];
+  const hidden = columns.length - VISIBLE_COLUMNS;
+  return (
+    <div className={`table-node ${selected ? "node-selected" : ""}`}>
+      <div className="table-node-head">
+        <Icon size={14} strokeWidth={2} />
+        <InlineLabel id={id} value={data.label} className="table-node-name" />
+        <span className="table-node-role">{item?.role || "Table"}</span>
+      </div>
+      {data.subtitle && <div className="table-node-grain" title={data.subtitle}>{data.subtitle}</div>}
+      {columns.length ? (
+        <ul className="table-node-columns">
+          {columns.slice(0, VISIBLE_COLUMNS).map((column) => (
+            <li key={column.id ?? column.name} title={column.ref ? `${column.name} → ${column.ref}` : column.name}>
+              <span className="table-node-keys">
+                {[...(column.keys ?? [])].sort((a, b) => KEY_ORDER.indexOf(a) - KEY_ORDER.indexOf(b)).map((key) => <span key={key} className={`column-key key-${key}`}>{COLUMN_KEYS.find((entry) => entry.id === key)?.label}</span>)}
+              </span>
+              <span className="table-node-column">{column.name || <em>unnamed</em>}</span>
+              <span className="table-node-type">{column.type}</span>
+            </li>
+          ))}
+          {hidden > 0 && <li className="table-node-more">+{hidden} more columns</li>}
+        </ul>
+      ) : <div className="table-node-empty">No columns yet. Select the table to add them.</div>}
+      {data.note && <span className="node-note-flag" title={data.note}><StickyNote size={11} /></span>}
+      <Handles />
+    </div>
+  );
+});
+
 // The free end of an arrow dropped on empty canvas. All four handles sit on the dot;
 // the arrow picks the side it approaches from. Arrows can end here but not start here,
 // so a drag on the dot always moves it.
@@ -138,4 +177,4 @@ export const BendableEdge = memo(function BendableEdge({
 
 export const edgeTypes = { bendable: BendableEdge };
 
-export const nodeTypes = { systemNode: SystemNode, groupNode: GroupNode, textNode: TextNode, noteNode: NoteNode, pointNode: PointNode };
+export const nodeTypes = { systemNode: SystemNode, groupNode: GroupNode, textNode: TextNode, noteNode: NoteNode, tableNode: TableNode, pointNode: PointNode };

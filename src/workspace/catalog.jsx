@@ -41,8 +41,20 @@ function brand(icon) {
 
 const c = (kind, label, icon, color, keywords = "") => ({ kind, label, icon, color, keywords });
 const t = (kind, label, icon, keywords = "") => ({ kind, label, icon: brand(icon), color: "slate", keywords, tech: true });
+// A data model entity: a table node listing its columns, types and keys. The kinds are
+// mirrored in server/modules/ai/data-model.js.
+const m = (kind, label, icon, keywords, role) => ({ ...c(kind, label, icon, "teal", `data model schema columns keys erd ${keywords}`), nodeType: "tableNode", role });
 
 export const catalog = [
+  {
+    id: "data-model", label: "Data model", items: [
+      m("table", "Table", Table2, "sql relational entity rows primary key", "Table"),
+      m("fact-table", "Fact table", Columns3, "star schema measures grain warehouse", "Fact"),
+      m("dimension-table", "Dimension table", Tags, "star schema attributes scd warehouse", "Dimension"),
+      m("collection", "Document / key-value", FileJson, "nosql collection item partition key dynamodb mongodb", "Document"),
+      m("event-schema", "Event schema", ScrollText, "message payload topic avro protobuf contract", "Event"),
+    ],
+  },
   {
     id: "clients", label: "Clients & users", items: [
       c("client", "Web client", Globe, "blue", "browser spa frontend website"),
@@ -344,3 +356,17 @@ export function searchItems(term) {
 }
 
 export const nodeColors = ["blue", "violet", "green", "orange", "teal", "rose", "slate"];
+
+export const DATA_MODEL_KINDS = catalog[0].items.map((item) => item.kind);
+export const isDataModelKind = (kind) => DATA_MODEL_KINDS.includes(kind);
+// Tracks whose rounds usually need a data model: the brief and the empty canvas point at tables.
+export const DATA_MODEL_TRACKS = new Set(["data-engineering", "machine-learning"]);
+
+// Column keys a data model table can mark, in display order.
+export const COLUMN_KEYS = [
+  { id: "pk", label: "PK", title: "Primary key" },
+  { id: "fk", label: "FK", title: "Foreign key: references another table" },
+  { id: "part", label: "Partition", title: "Partition key (or shard / distribution key)" },
+  { id: "sort", label: "Sort", title: "Sort, cluster or range key" },
+];
+export const COLUMN_TYPES = ["bigint", "int", "string", "varchar", "text", "uuid", "decimal(12,2)", "float", "boolean", "date", "timestamp", "json", "array<string>", "map<string,string>"];

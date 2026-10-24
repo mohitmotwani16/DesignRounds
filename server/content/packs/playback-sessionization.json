@@ -1,0 +1,584 @@
+{
+  "opening": "We run a video streaming service. Our players send telemetry while people watch, and several teams want to understand viewing and playback quality from it. Let's design that pipeline. Where would you begin?",
+  "clarifications": [
+    {
+      "id": "scale.viewers",
+      "topics": [
+        "scale",
+        "viewers",
+        "users",
+        "concurrent",
+        "streams"
+      ],
+      "answer": "About 50 million daily viewers and up to 10 million concurrent streams at peak."
+    },
+    {
+      "id": "events.types",
+      "topics": [
+        "events",
+        "heartbeat",
+        "telemetry",
+        "payload",
+        "what does the player send"
+      ],
+      "answer": "Players send a heartbeat every 30 seconds with playhead position, bitrate and buffer state, plus events: start, rebuffer start and end, bitrate change, error and stop."
+    },
+    {
+      "id": "req.qoe",
+      "topics": [
+        "quality",
+        "qoe",
+        "operations",
+        "rebuffering",
+        "startup time",
+        "dashboard"
+      ],
+      "answer": "Operations wants startup time, rebuffering ratio and error rate by CDN, region, ISP and device, no more than a minute behind."
+    },
+    {
+      "id": "req.licensing",
+      "topics": [
+        "licensing",
+        "viewing hours",
+        "content team",
+        "royalties",
+        "accuracy"
+      ],
+      "answer": "The content team needs viewing hours per title per day for licensing reports. These must be accurate; a day's delay is fine."
+    },
+    {
+      "id": "req.session",
+      "topics": [
+        "session",
+        "definition",
+        "pause",
+        "gap",
+        "timeout"
+      ],
+      "answer": "A session is one continuous playback of a title on one device. Pauses within the same playback belong to the same session."
+    },
+    {
+      "id": "net.offline",
+      "topics": [
+        "offline",
+        "downloads",
+        "late",
+        "mobile"
+      ],
+      "answer": "Mobile apps can play downloaded videos offline and send their events days later."
+    },
+    {
+      "id": "net.dupes",
+      "topics": [
+        "duplicates",
+        "retries",
+        "delivery",
+        "lost events"
+      ],
+      "answer": "Players retry failed uploads, so duplicates happen; a few events are lost entirely."
+    }
+  ],
+  "clarificationPolicy": "Answer as the streaming analytics product owner. Keep it a stateful streaming plus batch problem with two consumers of different accuracy; decide unlisted details to keep session logic and late data relevant.",
+  "agenda": [
+    {
+      "id": "req.consumers",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "users",
+          "dashboard"
+        ],
+        "keywords": [
+          "consumers",
+          "qoe",
+          "licensing",
+          "accuracy",
+          "freshness",
+          "concurrent streams"
+        ]
+      },
+      "goal": "Separate the operations and licensing consumers and their freshness and accuracy needs, and size the stream.",
+      "opener": "Who uses this data, and what does each group need from it?",
+      "evidence": {
+        "strong": "Identifies two consumers: operations needs quality metrics within a minute and tolerates small errors; licensing needs exact daily viewing hours and tolerates delay; asks event types and rates and estimates heartbeats per second.",
+        "adequate": "Finds both consumers but treats their accuracy needs the same, or skips sizing.",
+        "weak": "Designs one dashboard without asking who uses it."
+      },
+      "misconceptions": [
+        {
+          "id": "req.one_path",
+          "pattern": "Assumes one real-time pipeline should serve every team equally.",
+          "challenge": "If the live numbers are slightly off because of late events, is that acceptable for royalty payments?"
+        }
+      ],
+      "probes": [
+        "How many events a second does peak viewing produce?",
+        "What does each team do if the numbers are a bit wrong?"
+      ],
+      "hints": [
+        "Ask about each consumer's tolerance for delay and error.",
+        "Concurrent streams times heartbeat frequency gives the event rate."
+      ],
+      "moveOnSummary": "Operations needs minute-fresh quality metrics; licensing needs exact daily viewing hours; peak is hundreds of thousands of heartbeats a second.",
+      "learnTopics": [
+        "data-engineering-system-design-interview",
+        "lambda-vs-kappa-architecture"
+      ]
+    },
+    {
+      "id": "hl.ingest",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "clickstream",
+          "ingestion",
+          "t-kafka",
+          "topic",
+          "cdn"
+        ],
+        "keywords": [
+          "player sdk",
+          "collector",
+          "playback session id",
+          "batching",
+          "event schema",
+          "partition by session"
+        ]
+      },
+      "goal": "Collect player events and route them into a log keyed for sessionization.",
+      "opener": "How do player events get from the device into your pipeline?",
+      "evidence": {
+        "strong": "The player SDK creates a playback session id and per-session sequence numbers, batches and retries events to edge collectors, which validate against a schema and publish to Kafka partitioned by playback session id so one session's events stay together and ordered.",
+        "adequate": "Collects events into Kafka but partitions by user or randomly.",
+        "weak": "Writes events straight into a database or the warehouse."
+      },
+      "misconceptions": [
+        {
+          "id": "ing.user_key",
+          "pattern": "Thinks partitioning by user id is the natural choice.",
+          "challenge": "One user watches on a TV and a phone at the same time. What happens when both sessions land in one stream of events?"
+        }
+      ],
+      "probes": [
+        "What identifiers does each event carry?",
+        "Why does the partition key matter for sessions?"
+      ],
+      "hints": [
+        "The player knows when a playback starts; it can name it.",
+        "Events of one session should be processed together."
+      ],
+      "moveOnSummary": "SDK-generated playback session ids and sequence numbers, edge collectors, and Kafka partitioned by session id.",
+      "learnTopics": [
+        "event-streaming-kafka",
+        "data-contracts-schema-evolution"
+      ]
+    },
+    {
+      "id": "hl.paths",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "t-flink",
+          "t-druid",
+          "data-lake",
+          "batch-processor"
+        ],
+        "keywords": [
+          "streaming path",
+          "batch path",
+          "olap",
+          "raw events",
+          "gold table",
+          "two paths"
+        ]
+      },
+      "goal": "Lay out a streaming path for quality metrics and a batch path for exact viewing hours over the same events.",
+      "opener": "How do the same events serve a one-minute operations dashboard and an exact daily licensing report?",
+      "evidence": {
+        "strong": "Streams events through a stateful processor into per-minute quality aggregates in an OLAP store, while raw events land in the lake and a daily batch job rebuilds sessions with full lateness to produce gold viewing hours per title.",
+        "adequate": "Has both paths but no clear source of truth for viewing hours.",
+        "weak": "Computes everything in one streaming job and reports those numbers for licensing."
+      },
+      "misconceptions": [
+        {
+          "id": "paths.stream_truth",
+          "pattern": "Believes the streaming numbers can be the licensing numbers.",
+          "challenge": "Offline viewing events arrive three days later. Which report includes them?"
+        }
+      ],
+      "probes": [
+        "Which path is the source of truth for which number?"
+      ],
+      "hints": [
+        "Different accuracy needs can justify different paths.",
+        "Keep raw events so you can recompute."
+      ],
+      "moveOnSummary": "Streaming path to an OLAP store for minute-level quality, batch path over raw events for exact daily viewing hours.",
+      "learnTopics": [
+        "lambda-vs-kappa-architecture",
+        "real-time-analytics-architecture"
+      ]
+    },
+    {
+      "id": "deep.sessions",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-flink",
+          "stream-processor"
+        ],
+        "keywords": [
+          "session window",
+          "gap timeout",
+          "inactivity",
+          "close session",
+          "keyed state",
+          "pause"
+        ]
+      },
+      "goal": "Assemble sessions correctly with gap-based closing and bounded state.",
+      "opener": "A viewer pauses for twenty minutes and then resumes. Is that one session or two, and how does your pipeline decide?",
+      "evidence": {
+        "strong": "Keys state by playback session id: a pause on the same playback is one session (paused heartbeats keep it alive or the stop event ends it); a gap timeout with no heartbeats closes it; state has a TTL; periodic updates are emitted before the session closes.",
+        "adequate": "Uses session windows but keyed on user id, or with no rule for pauses.",
+        "weak": "Defines a session as fixed time buckets, or never closes sessions."
+      },
+      "misconceptions": [
+        {
+          "id": "sess.gap_only",
+          "pattern": "Thinks a pure inactivity gap on user activity defines sessions.",
+          "challenge": "The player keeps sending heartbeats while paused. With a gap rule on activity, when does the session end?"
+        }
+      ],
+      "probes": [
+        "When exactly does your pipeline decide a session is over?",
+        "How do live dashboards get numbers before a session closes?"
+      ],
+      "hints": [
+        "The playback session id already groups events.",
+        "A timeout only needs to cover events that stop arriving."
+      ],
+      "moveOnSummary": "Sessions keyed by playback session id, closed by stop event or gap timeout, with state TTL and early updates.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks",
+        "stream-processing"
+      ]
+    },
+    {
+      "id": "deep.watchtime",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "aggregator",
+          "warehouse"
+        ],
+        "keywords": [
+          "watch time",
+          "playhead",
+          "position delta",
+          "seek",
+          "heartbeat count",
+          "viewing hours"
+        ]
+      },
+      "goal": "Compute watch time correctly from heartbeats.",
+      "opener": "How do you turn heartbeats into viewing hours for a title?",
+      "evidence": {
+        "strong": "Uses playhead position deltas between consecutive heartbeats while playing, excluding pauses, seeks and rebuffering, capped at the heartbeat interval, deduplicated by sequence; sums per title per day in the batch job.",
+        "adequate": "Counts heartbeats but excludes some pauses, or uses session start to end time.",
+        "weak": "Multiplies heartbeat count by the interval."
+      },
+      "misconceptions": [
+        {
+          "id": "watch.count_times",
+          "pattern": "Believes heartbeat count times the interval is watch time.",
+          "challenge": "The viewer paused for an hour with the player open, sending heartbeats. How much did they watch?"
+        }
+      ],
+      "probes": [
+        "What happens when the viewer seeks forward ten minutes?"
+      ],
+      "hints": [
+        "The heartbeat carries where the playhead is.",
+        "Only count time that was actually played."
+      ],
+      "moveOnSummary": "Sum playhead deltas while playing, excluding pauses, seeks and rebuffering, deduplicated by sequence.",
+      "learnTopics": [
+        "data-quality"
+      ]
+    },
+    {
+      "id": "deep.late",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "dlq",
+          "batch-job"
+        ],
+        "keywords": [
+          "late events",
+          "allowed lateness",
+          "duplicates",
+          "sequence number",
+          "offline playback",
+          "watermark"
+        ]
+      },
+      "goal": "Handle late, duplicate and offline events without double counting.",
+      "opener": "A phone loses signal and sends ten minutes of heartbeats at once, some of them twice. What happens to the session and the dashboard?",
+      "evidence": {
+        "strong": "Deduplicates on session id and sequence, uses event time with watermarks and allowed lateness so late heartbeats update their session and minute buckets, routes very late and offline events to the batch path, and monitors lateness.",
+        "adequate": "Deduplicates but places late events in the minute they arrived.",
+        "weak": "Ignores duplicates and lateness."
+      },
+      "misconceptions": [
+        {
+          "id": "late.processing_time",
+          "pattern": "Thinks counting events by arrival time is fine for quality metrics.",
+          "challenge": "Ten minutes of buffered rebuffering events arrive at once. Which minute shows the spike?"
+        }
+      ],
+      "probes": [
+        "How late can an event be before only the batch path sees it?"
+      ],
+      "hints": [
+        "Sequence numbers make duplicates easy to spot.",
+        "Event time puts late events back where they belong."
+      ],
+      "moveOnSummary": "Dedupe on session and sequence, event-time windows with allowed lateness, very late and offline events via batch.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "deep.qoe",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "t-druid",
+          "dashboard"
+        ],
+        "keywords": [
+          "rebuffering ratio",
+          "startup time",
+          "cdn",
+          "isp",
+          "dimensions",
+          "cardinality"
+        ]
+      },
+      "goal": "Compute quality metrics by many dimensions without double counting or cardinality blow-up.",
+      "opener": "How do you compute rebuffering ratio per CDN per minute without double counting?",
+      "evidence": {
+        "strong": "Defines rebuffering ratio as rebuffer time over watch time, computed per session then summed as numerator and denominator per minute and dimension; pre-aggregates in the stream into an OLAP store, caps long-tail values (rare ISPs) into other, and uses approximate distinct counts for viewers.",
+        "adequate": "Averages per-session ratios or ignores dimension cardinality.",
+        "weak": "Stores raw events and computes ratios at query time."
+      },
+      "misconceptions": [
+        {
+          "id": "qoe.avg_ratios",
+          "pattern": "Thinks averaging each session's ratio gives the right overall ratio.",
+          "challenge": "One session rebuffered for ten seconds out of twenty, another for ten seconds out of two hours. What does the average say?"
+        }
+      ],
+      "probes": [
+        "How many dimension combinations can there be, and what do you do about it?"
+      ],
+      "hints": [
+        "Keep numerators and denominators so ratios combine correctly.",
+        "Rare dimension values can be grouped."
+      ],
+      "moveOnSummary": "Aggregate numerators and denominators per minute and dimension in an OLAP store, with long-tail capping and HLL for viewers.",
+      "learnTopics": [
+        "real-time-analytics-architecture",
+        "probabilistic-data-structures"
+      ]
+    },
+    {
+      "id": "deep.state",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "kv-store",
+          "storage"
+        ],
+        "keywords": [
+          "state size",
+          "rocksdb",
+          "ttl",
+          "checkpoint size",
+          "open sessions",
+          "state growth"
+        ]
+      },
+      "goal": "Bound and size the streaming job's state.",
+      "opener": "Your stream job's state keeps growing. What's in it, and how do you bound it?",
+      "evidence": {
+        "strong": "Estimates state as open sessions times bytes per session (a few GB), keeps it in RocksDB with incremental checkpoints, sets TTLs and the gap timeout so abandoned sessions close, and bounds dedupe state by sequence windows.",
+        "adequate": "Knows state needs a TTL but can't estimate its size.",
+        "weak": "Doesn't think state needs bounding."
+      },
+      "misconceptions": [
+        {
+          "id": "state.memory",
+          "pattern": "Believes all state must fit in the job's memory.",
+          "challenge": "Ten million open sessions at a few hundred bytes each: where does that live, and what happens on restart?"
+        }
+      ],
+      "probes": [
+        "What happens to state for a player that crashes without a stop event?"
+      ],
+      "hints": [
+        "Multiply open sessions by bytes each.",
+        "Every key needs a way to expire."
+      ],
+      "moveOnSummary": "State is open sessions times bytes each, held in RocksDB with incremental checkpoints and TTLs.",
+      "learnTopics": [
+        "stream-processing-frameworks"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "disagree",
+          "source of truth",
+          "cost",
+          "limitation"
+        ]
+      },
+      "goal": "Summarise trade-offs and explain why the two paths may disagree.",
+      "opener": "Why might the real-time viewing hours and the daily report disagree, and which one wins?",
+      "evidence": {
+        "strong": "Explains lateness, offline playback, duplicates and lost events as causes; the batch report is the licensing truth and the dashboard is labelled provisional; names costs of two paths and state.",
+        "adequate": "Names one cause and picks a winner without reasoning.",
+        "weak": "Says they can't disagree."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.same",
+          "pattern": "Believes both paths will always match if coded correctly.",
+          "challenge": "Offline events arrive after the daily report was published. What then?"
+        }
+      ],
+      "probes": [
+        "What would you change to run only one path?"
+      ],
+      "hints": [
+        "Think about everything that arrives late or twice.",
+        "One number has to be the official one."
+      ],
+      "moveOnSummary": "Late, offline and duplicate events make paths differ; batch is the licensing truth, real time is provisional.",
+      "learnTopics": [
+        "lambda-vs-kappa-architecture"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.flood",
+      "after": "deep.sessions",
+      "prompt": "A mobile carrier has an outage and then millions of phones flush their buffered events at once, many duplicated. What happens to the dashboards?",
+      "agendaItemId": "deep.late"
+    },
+    {
+      "id": "cb.cdn",
+      "after": "deep.watchtime",
+      "prompt": "Operations suspects one CDN in one region is degrading for a specific TV brand. Can your aggregates answer that within a minute?",
+      "agendaItemId": "deep.qoe"
+    }
+  ],
+  "vocabulary": [
+    "heartbeat",
+    "playback session",
+    "sessionization",
+    "session window",
+    "gap timeout",
+    "watermark",
+    "allowed lateness",
+    "Flink",
+    "RocksDB",
+    "checkpoint",
+    "Kafka",
+    "Druid",
+    "Pinot",
+    "QoE",
+    "rebuffering ratio",
+    "startup time",
+    "bitrate",
+    "CDN",
+    "ISP",
+    "HyperLogLog",
+    "playhead",
+    "viewing hours"
+  ],
+  "alternatives": [
+    {
+      "choice": "Kappa: one streaming job with replay for corrections",
+      "whenBetter": "When the team trusts replay from long Kafka retention and wants one codebase; offline events still need a correction path."
+    },
+    {
+      "choice": "Sessionize only in batch",
+      "whenBetter": "When nobody needs minute-level quality metrics and daily latency is acceptable."
+    },
+    {
+      "choice": "Server-side session inference from user and device ids",
+      "whenBetter": "When old players can't be updated to send a playback session id."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Two consumers, two paths, correct sessions",
+      "outline": "Separates operations and licensing and their accuracy needs, and estimates hundreds of thousands of heartbeats a second at peak. The SDK sends playback session ids and sequence numbers to collectors and Kafka keyed by session. Flink deduplicates on sequence, keeps per-session state in RocksDB with a gap timeout and TTL, computes watch time from playhead deltas, and emits per-minute numerators and denominators by CDN, region, ISP and device to Druid. Raw events land in the lake and a daily Spark job rebuilds sessions with full lateness, including offline events, to publish viewing hours as the licensing truth."
+    },
+    {
+      "band": "adequate",
+      "label": "Streaming sessions with shortcuts",
+      "outline": "Builds Kafka and Flink session windows with a QoE store, but keys by user id, multiplies heartbeats by thirty seconds for watch time, and uses the streaming totals for licensing."
+    },
+    {
+      "band": "weak",
+      "label": "Events in a table",
+      "outline": "Writes all player events into a warehouse table and computes sessions and metrics with nightly SQL, without deduplication, session ids, late-data handling or a real-time view for operations."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

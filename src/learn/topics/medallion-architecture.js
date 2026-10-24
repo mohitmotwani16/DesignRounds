@@ -59,7 +59,7 @@ export default {
     "Build gold only for named consumers, with owners.",
   ],
   related: ["lakehouse-architecture", "data-warehouse-vs-data-lake", "etl-vs-elt", "open-table-formats", "data-quality", "dimensional-modeling"],
-  practice: ["etl-framework", "clickstream", "data-quality"],
+  practice: ["lakehouse-platform", "etl-framework", "clickstream", "data-quality"],
   reading: [
     { title: "What is a medallion architecture?", publisher: "Databricks", url: "https://www.databricks.com/blog/what-is-medallion-architecture" },
     { title: "Delta Lake documentation", publisher: "Delta Lake (Linux Foundation)", url: "https://docs.delta.io/index.html" },

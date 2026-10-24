@@ -4,7 +4,7 @@ import { catalog, componentCount, getItem, searchItems, shapeItems, techCatalog 
 
 export const DRAG_TYPE = "application/designrounds-node";
 const EXPANDED_KEY = "designrounds:palette-expanded";
-const defaultExpanded = { shapes: true, clients: true, network: true, compute: true, databases: true, cache: true, messaging: true, storage: true };
+const defaultExpanded = { shapes: true, "data-model": true, clients: true, network: true, compute: true, databases: true, cache: true, messaging: true, storage: true };
 
 function readExpanded() {
   try {

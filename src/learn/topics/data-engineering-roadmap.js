@@ -30,8 +30,8 @@ export default {
 
     { type: "h2", text: "A six-week plan" },
     { type: "table", head: ["Week", "Stages", "Practise"], rows: [
-      ["1", "1-2", "Learn the six-step framework, then draw the end-to-end platform for an e-commerce company and justify each layer, with volume estimates."],
-      ["2", "3-4", "Explain a Spark job's stages and shuffles and fix a skewed join; then design the [clickstream pipeline](/system-design/clickstream) with late events and deduplication."],
+      ["1", "1-2", "Learn the six-step framework, then draw the end-to-end platform for an e-commerce company and justify each layer, with volume estimates. The [online store warehouse round](/system-design/ecommerce-warehouse) is a free place to start."],
+      ["2", "3-4", "Explain a Spark job's stages and shuffles and fix a skewed join; then design the [clickstream pipeline](/system-design/clickstream) with late events and deduplication, and the free [change data capture round](/system-design/cdc-pipeline)."],
       ["3", "5-6", "Compare Lambda and Kappa for one problem; model orders and customers as a star schema and as one big table, and load a customer dimension as SCD Type 2. Then try the [SCD2 warehouse round](/system-design/scd2-warehouse)."],
       ["4", "7-8", "Choose formats and a layout (partitioning or clustering) for a 75 TB event table; add quality checks per dimension and a data contract. Then the [data quality round](/system-design/data-quality)."],
       ["5", "9-10", "Design the [ETL framework](/system-design/etl-framework) with backfills, idempotent writes and schema changes; add a serving layer for a live dashboard."],
@@ -47,7 +47,7 @@ export default {
     { type: "p", text: "Batch. Most pipelines are batch, the concepts (idempotency, partitioning, backfills) carry over, and streaming adds time semantics on top. See [batch vs stream processing](/learn/batch-vs-stream-processing)." },
   ],
   related: ["data-engineering-system-design-interview", "data-engineering-design-patterns", "data-engineering-architecture", "lakehouse-architecture", "dimensional-modeling", "batch-vs-stream-processing"],
-  practice: ["food-delivery-analytics", "scd2-warehouse", "clickstream", "etl-framework", "realtime-analytics"],
+  practice: ["food-delivery-analytics", "ecommerce-warehouse", "cdc-pipeline", "scd2-warehouse", "clickstream", "ad-click-aggregator", "etl-framework", "realtime-analytics"],
   reading: [
     { title: "Dimensional Modeling Techniques", publisher: "Kimball Group", url: "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/" },
     { title: "Apache Spark documentation", publisher: "Apache Software Foundation", url: "https://spark.apache.org/docs/latest/" },

@@ -1,5 +1,6 @@
 import { getSmoothStepPath, MarkerType } from "@xyflow/react";
 import { getItem } from "./catalog.jsx";
+import { cleanColumns, columnId } from "./columns.js";
 
 const EDGE_COLOR = "#8d9ab0";
 
@@ -20,8 +21,18 @@ export function createNode(kind, position) {
   }
   if (type === "textNode") node.data.label = "Text";
   if (type === "noteNode") Object.assign(node.data, { label: "Decision", note: "" });
+  if (type === "tableNode") Object.assign(node.data, { label: TABLE_STARTERS[kind]?.label ?? "table", color: undefined, columns: (TABLE_STARTERS[kind]?.columns ?? []).map((column) => ({ ...column, id: columnId() })) });
   return node;
 }
+
+// What a new data model table starts with: a name to rename and a first key column.
+const TABLE_STARTERS = {
+  table: { label: "new_table", columns: [{ name: "id", type: "bigint", keys: ["pk"] }] },
+  "fact-table": { label: "fact_table", columns: [{ name: "date_key", type: "int", keys: ["fk"] }] },
+  "dimension-table": { label: "dim_table", columns: [{ name: "surrogate_key", type: "bigint", keys: ["pk"] }] },
+  collection: { label: "items", columns: [{ name: "pk", type: "string", keys: ["part"] }, { name: "sk", type: "string", keys: ["sort"] }] },
+  "event-schema": { label: "event_name", columns: [{ name: "event_id", type: "uuid", keys: ["pk"] }, { name: "occurred_at", type: "timestamp", keys: [] }] },
+};
 
 export const POINT_SIZE = 14;
 
@@ -189,6 +200,7 @@ export function serializeDiagram(nodes, edges) {
         subtitle: node.data.subtitle || undefined,
         note: node.data.note || undefined,
         color: node.data.color || undefined,
+        columns: node.type === "tableNode" ? cleanColumns(node.data.columns) : undefined,
       },
     })),
     edges: edges.map((edge) => ({
@@ -209,7 +221,12 @@ export function hydrateDiagram(diagram) {
   const nodes = (diagram?.nodes || []).map((node) => ({
     ...node,
     type: node.type || "systemNode",
-    data: { ...node.data, kind: node.data?.kind || "service", label: node.data?.label ?? "" },
+    data: {
+      ...node.data,
+      kind: node.data?.kind || "service",
+      label: node.data?.label ?? "",
+      ...(node.type === "tableNode" ? { columns: (node.data?.columns ?? []).map((column) => ({ ...column, keys: column.keys ?? [], id: columnId() })) } : {}),
+    },
   }));
   const ids = new Set(nodes.map((node) => node.id));
   const edges = (diagram?.edges || [])

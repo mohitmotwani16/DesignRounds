@@ -64,12 +64,12 @@ export const prompts = [
   },
   {
     id: "news-feed", title: "Design a news feed", description: "Deliver a relevant, fresh feed as people and publishers post.",
-    track: "software-engineering", access: "paid", category: "Data systems", difficulty: "Advanced", minutes: 50, icon: "feed", color: "orange", popular: true,
+    track: "software-engineering", access: "paid", category: "Data systems", difficulty: "Advanced", minutes: 60, icon: "feed", color: "orange", popular: true,
     considerations: ["Fan-out strategy", "Feed freshness", "Ranking"],
   },
   {
     id: "file-storage", title: "Design cloud file storage", description: "Sync large files reliably across devices and collaborators.",
-    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 50, icon: "storage", color: "green",
+    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 60, icon: "storage", color: "green",
     considerations: ["Chunked uploads", "Metadata and blobs", "Sync conflicts"],
   },
   {
@@ -79,17 +79,17 @@ export const prompts = [
   },
   {
     id: "video-streaming", title: "Design video streaming", description: "Stream adaptive-quality video to a global audience.",
-    track: "software-engineering", access: "paid", category: "Media", difficulty: "Advanced", minutes: 55, icon: "video", color: "rose",
+    track: "software-engineering", access: "paid", category: "Media", difficulty: "Advanced", minutes: 60, icon: "video", color: "rose",
     considerations: ["Transcoding", "CDN delivery", "Adaptive bitrate"],
   },
   {
     id: "ride-hailing", title: "Design a ride-hailing service", description: "Match riders with nearby drivers and track trips in real time.",
-    track: "software-engineering", access: "paid", category: "Geospatial", difficulty: "Advanced", minutes: 55, icon: "map", color: "green",
+    track: "software-engineering", access: "paid", category: "Geospatial", difficulty: "Advanced", minutes: 60, icon: "map", color: "green",
     considerations: ["Geospatial indexing", "Matching fairness", "Trip state machine"],
   },
   {
     id: "ticket-booking", title: "Design a high-demand ticketing platform", description: "Sell limited-inventory tickets fairly when a popular event goes on sale.",
-    track: "software-engineering", access: "paid", category: "Transactions", difficulty: "Advanced", minutes: 50, icon: "booking", color: "orange",
+    track: "software-engineering", access: "paid", category: "Transactions", difficulty: "Advanced", minutes: 60, icon: "booking", color: "orange",
     considerations: ["Inventory consistency", "Reservation expiry", "Sale traffic spikes"],
   },
   {
@@ -101,7 +101,7 @@ export const prompts = [
   },
   {
     id: "web-crawler", title: "Design a distributed web crawler", description: "Discover and fetch public pages continuously while respecting site policies.",
-    track: "software-engineering", access: "paid", category: "Search", difficulty: "Advanced", minutes: 50, icon: "crawler", color: "blue",
+    track: "software-engineering", access: "paid", category: "Search", difficulty: "Advanced", minutes: 60, icon: "crawler", color: "blue",
     considerations: ["Frontier partitioning", "Politeness and robots rules", "Deduplication"],
   },
   {
@@ -111,7 +111,7 @@ export const prompts = [
   },
   {
     id: "collaborative-editor", title: "Design a collaborative document editor", description: "Let multiple people edit and comment on the same document in real time.",
-    track: "software-engineering", access: "paid", category: "Collaboration", difficulty: "Advanced", minutes: 55, icon: "editor", color: "green",
+    track: "software-engineering", access: "paid", category: "Collaboration", difficulty: "Advanced", minutes: 60, icon: "editor", color: "green",
     considerations: ["Conflict-free editing", "Presence and reconnects", "Version history"],
   },
   {
@@ -121,24 +121,24 @@ export const prompts = [
   },
   {
     id: "payment-platform", title: "Design a payment processing platform", description: "Accept payment requests reliably without charging a customer twice.",
-    track: "software-engineering", access: "paid", category: "Transactions", difficulty: "Advanced", minutes: 55, icon: "payment", color: "teal",
+    track: "software-engineering", access: "paid", category: "Transactions", difficulty: "Advanced", minutes: 60, icon: "payment", color: "teal",
     considerations: ["Idempotency keys", "State transitions", "Reconciliation and audit"],
   },
   {
     id: "task-scheduler", title: "Design a distributed task scheduler", description: "Schedule one-off and recurring jobs across a fleet of workers.",
-    track: "software-engineering", access: "free", category: "Distributed systems", difficulty: "Advanced", minutes: 50, icon: "scheduler", color: "orange",
+    track: "software-engineering", access: "free", category: "Distributed systems", difficulty: "Advanced", minutes: 60, icon: "scheduler", color: "orange",
     requirements: ["Clients can submit delayed and recurring tasks.", "Eligible tasks are dispatched to available workers.", "Worker crashes and retries do not silently lose scheduled work."],
     considerations: ["Time partitioning", "Leases and retries", "At-least-once execution"],
     expectedOutcome: "A schedule store and dispatcher design, worker lease/retry semantics, and explicit delivery and idempotency guarantees.",
   },
   {
     id: "distributed-cache", title: "Design a distributed caching service", description: "Serve frequently accessed data quickly across a growing fleet of application nodes.",
-    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 50, icon: "cache", color: "blue",
+    track: "software-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 60, icon: "cache", color: "blue",
     considerations: ["Partitioning and replication", "Eviction and expiry", "Hot keys"],
   },
   {
     id: "api-gateway", title: "Design a multi-tenant API gateway", description: "Route external API traffic safely to independently operated backend services.",
-    track: "software-engineering", access: "paid", category: "Networking", difficulty: "Advanced", minutes: 50, icon: "gateway", color: "violet",
+    track: "software-engineering", access: "paid", category: "Networking", difficulty: "Advanced", minutes: 60, icon: "gateway", color: "violet",
     considerations: ["Control plane vs data plane", "Policy evaluation", "Safe configuration rollout"],
   },
   {
@@ -155,7 +155,7 @@ export const prompts = [
   },
   {
     id: "dating-app", title: "Design a swipe-based dating app", description: "Show nearby profiles, record swipes, and match two people who like each other.",
-    track: "software-engineering", access: "paid", category: "Geospatial", difficulty: "Advanced", minutes: 50, icon: "map", color: "rose",
+    track: "software-engineering", access: "paid", category: "Geospatial", difficulty: "Advanced", minutes: 60, icon: "map", color: "rose",
     considerations: ["Geospatial candidate search", "Swipe write throughput", "Exactly-once matches"],
   },
 
@@ -168,7 +168,7 @@ export const prompts = [
   },
   {
     id: "realtime-analytics", title: "Design a real-time analytics platform", description: "Turn a large event stream into operational metrics people can act on.",
-    track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Advanced", minutes: 50, icon: "analytics", color: "teal", popular: true,
+    track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Advanced", minutes: 60, icon: "analytics", color: "teal", popular: true,
     considerations: ["Event time vs processing time", "Windowing", "Replay and deduplication"],
   },
   {
@@ -178,12 +178,12 @@ export const prompts = [
   },
   {
     id: "etl-framework", title: "Design a reusable ETL/ELT framework", description: "Give many teams a consistent way to build, run, and operate data pipelines.",
-    track: "data-engineering", access: "paid", category: "Orchestration", difficulty: "Advanced", minutes: 50, icon: "pipeline", color: "violet", popular: true,
+    track: "data-engineering", access: "paid", category: "Orchestration", difficulty: "Advanced", minutes: 60, icon: "pipeline", color: "violet", popular: true,
     considerations: ["Declarative task definitions", "Idempotent retries", "Multi-tenant isolation"],
   },
   {
     id: "clickstream", title: "Design clickstream event tracking at scale", description: "Collect trustworthy product events from web and mobile clients.",
-    track: "data-engineering", access: "paid", category: "Event ingestion", difficulty: "Advanced", minutes: 45, icon: "events", color: "orange", popular: true,
+    track: "data-engineering", access: "paid", category: "Event ingestion", difficulty: "Advanced", minutes: 60, icon: "events", color: "orange", popular: true,
     considerations: ["SDK batching", "Schema evolution", "PII minimization"],
   },
   {
@@ -193,7 +193,7 @@ export const prompts = [
   },
   {
     id: "fraud-data-platform", title: "Design a fraud detection data platform", description: "Join streaming payments with historical signals for fast, explainable fraud decisions.",
-    track: "data-engineering", access: "paid", category: "Data + ML", difficulty: "Advanced", minutes: 55, icon: "fraud", color: "teal",
+    track: "data-engineering", access: "paid", category: "Data + ML", difficulty: "Advanced", minutes: 60, icon: "fraud", color: "teal",
     considerations: ["Online/offline feature parity", "Feature freshness", "Decision audit trail"],
   },
   {
@@ -201,37 +201,91 @@ export const prompts = [
     track: "data-engineering", access: "paid", category: "Governance", difficulty: "Intermediate", minutes: 45, icon: "quality", color: "green",
     considerations: ["Contracts and expectations", "Lineage", "Anomaly detection"],
   },
+  {
+    id: "ecommerce-warehouse", title: "Design a data warehouse for an online store", description: "Model orders, products and customers so analysts can answer sales questions quickly and correctly.",
+    track: "data-engineering", access: "free", category: "Warehousing", difficulty: "Beginner", minutes: 40, icon: "cart", color: "green",
+    requirements: ["Orders, order items, products and customers are loaded from the store's operational database every day.", "Analysts can report revenue, units and repeat customers by day, product, category and region.", "Refunds, cancellations and reruns of a failed load never double-count or lose sales."],
+    considerations: ["Fact table grain", "Star schema", "Incremental loads"],
+    expectedOutcome: "A star schema with a declared fact grain and shared dimensions, an incremental and rerunnable daily load, and a plan for refunds, partitioning and data checks.",
+  },
+  {
+    id: "cdc-pipeline", title: "Design a change data capture pipeline", description: "Stream every insert, update and delete from a production database into the warehouse within minutes.",
+    track: "data-engineering", access: "free", category: "Change data capture", difficulty: "Intermediate", minutes: 45, icon: "cdc", color: "violet",
+    requirements: ["Changes to the main tables of a production database reach warehouse tables within 5 minutes.", "Updates and deletes are reflected correctly, not only new rows.", "The pipeline never slows the production database and recovers from failures without losing or duplicating changes."],
+    considerations: ["Log-based capture", "Initial snapshot and ordering", "Schema changes and deletes"],
+    expectedOutcome: "A log-based capture flow through a durable log, a snapshot-then-stream bootstrap, idempotent ordered merges into the warehouse, and handling of deletes, schema changes and replay.",
+  },
+  {
+    id: "ad-click-aggregator", title: "Design an ad click aggregator", description: "Count ad clicks in near real time for advertiser dashboards, accurately enough to bill on.",
+    track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Advanced", minutes: 60, icon: "click", color: "orange", popular: true,
+    considerations: ["Exactly-once counting", "Hot ads and skew", "Reconciliation with batch"],
+  },
+  {
+    id: "iot-telemetry", title: "Design an IoT sensor telemetry platform", description: "Ingest readings from millions of devices and serve live and historical views of each one.",
+    track: "data-engineering", access: "paid", category: "Time series", difficulty: "Advanced", minutes: 60, icon: "sensor", color: "teal",
+    considerations: ["Out-of-order device data", "Time-series storage and downsampling", "Hot and cold retention tiers"],
+  },
+  {
+    id: "lakehouse-platform", title: "Design a lakehouse for analytics and ML", description: "Give analysts and data scientists one governed copy of company data on low-cost object storage.",
+    track: "data-engineering", access: "paid", category: "Storage", difficulty: "Advanced", minutes: 60, icon: "lake", color: "blue",
+    considerations: ["Open table formats", "Small files and compaction", "Governance and access control"],
+  },
+  {
+    id: "log-analytics", title: "Design a centralized log ingestion pipeline", description: "Collect logs from thousands of servers so engineers can search recent logs in seconds and keep old ones for audits.",
+    track: "data-engineering", access: "paid", category: "Event ingestion", difficulty: "Intermediate", minutes: 45, icon: "logs", color: "rose",
+    considerations: ["Agents and buffering", "Search index vs archive tiers", "Bursts and backpressure"],
+  },
+  {
+    id: "playback-sessionization", title: "Design video playback analytics with sessions", description: "Turn player heartbeats into viewing sessions and quality-of-experience metrics for a streaming service.",
+    track: "data-engineering", access: "paid", category: "Streaming", difficulty: "Advanced", minutes: 60, icon: "play", color: "violet",
+    considerations: ["Session windows", "Late and duplicate heartbeats", "Quality metrics by device and region"],
+  },
+  {
+    id: "payments-reconciliation", title: "Design a payments reconciliation pipeline", description: "Match every internal payment against processor and bank settlement files, and flag what doesn't match.",
+    track: "data-engineering", access: "paid", category: "Finance data", difficulty: "Intermediate", minutes: 45, icon: "scale", color: "green",
+    considerations: ["Matching keys and tolerances", "Idempotent reruns", "Audit trail of breaks"],
+  },
+  {
+    id: "experimentation-analytics", title: "Design an A/B test analytics pipeline", description: "Compute trustworthy results for hundreds of concurrent experiments from assignment and event logs.",
+    track: "data-engineering", access: "paid", category: "Experimentation", difficulty: "Advanced", minutes: 60, icon: "experiment", color: "teal",
+    considerations: ["Exposure logging", "Metric definitions as code", "Sample ratio mismatch checks"],
+  },
+  {
+    id: "gdpr-deletion", title: "Design user data deletion across a data platform", description: "Honour right-to-be-forgotten requests across the warehouse, data lake, streams and backups within 30 days.",
+    track: "data-engineering", access: "paid", category: "Governance", difficulty: "Intermediate", minutes: 45, icon: "erase", color: "orange",
+    considerations: ["Finding every copy", "Deleting from immutable files", "Crypto-shredding and proof of deletion"],
+  },
 
   {
     id: "recommendation-engine", title: "Design a recommendation system", description: "Recommend useful content while balancing relevance, freshness, and exploration.",
-    track: "machine-learning", access: "free", category: "Personalization", difficulty: "Advanced", minutes: 50, icon: "model", color: "violet", popular: true,
+    track: "machine-learning", access: "free", category: "Personalization", difficulty: "Advanced", minutes: 60, icon: "model", color: "violet", popular: true,
     requirements: ["Recommendations use user and item signals.", "New users and new items still receive reasonable results.", "The system can measure changes without blocking requests."],
     considerations: ["Candidate generation", "Ranking", "Cold start"],
     expectedOutcome: "An online candidate/ranking flow, offline training loop, fallback behavior, and a measurable experimentation plan.",
   },
   {
     id: "feature-store", title: "Design a feature store", description: "Serve consistent ML features for both training jobs and online predictions.",
-    track: "machine-learning", access: "paid", category: "ML platforms", difficulty: "Advanced", minutes: 50, icon: "features", color: "blue",
+    track: "machine-learning", access: "paid", category: "ML platforms", difficulty: "Advanced", minutes: 60, icon: "features", color: "blue",
     considerations: ["Point-in-time correctness", "Offline/online parity", "Backfills"],
   },
   {
     id: "training-platform", title: "Design a distributed model training platform", description: "Schedule reproducible training jobs across shared compute and data.",
-    track: "machine-learning", access: "paid", category: "Training systems", difficulty: "Advanced", minutes: 55, icon: "training", color: "teal",
+    track: "machine-learning", access: "paid", category: "Training systems", difficulty: "Advanced", minutes: 60, icon: "training", color: "teal",
     considerations: ["Resource scheduling", "Checkpointing", "Experiment lineage"],
   },
   {
     id: "model-serving", title: "Design a low-latency ML model serving platform", description: "Deploy models safely and handle variable inference traffic.",
-    track: "machine-learning", access: "paid", category: "Inference", difficulty: "Advanced", minutes: 45, icon: "serve", color: "orange",
+    track: "machine-learning", access: "paid", category: "Inference", difficulty: "Advanced", minutes: 60, icon: "serve", color: "orange",
     considerations: ["Batching", "Autoscaling", "Canary rollout"],
   },
   {
     id: "rag-search", title: "Design a retrieval-augmented generation system", description: "Answer questions from a changing document collection with traceable sources.",
-    track: "machine-learning", access: "paid", category: "Generative AI", difficulty: "Advanced", minutes: 50, icon: "search", color: "rose",
+    track: "machine-learning", access: "paid", category: "Generative AI", difficulty: "Advanced", minutes: 60, icon: "search", color: "rose",
     considerations: ["Chunking and embedding", "Hybrid retrieval", "Grounding and access control"],
   },
   {
     id: "online-fraud-model", title: "Design real-time fraud scoring", description: "Score transactions in milliseconds and route uncertain cases for review.",
-    track: "machine-learning", access: "paid", category: "Fraud & risk", difficulty: "Advanced", minutes: 50, icon: "fraud", color: "green",
+    track: "machine-learning", access: "paid", category: "Fraud & risk", difficulty: "Advanced", minutes: 60, icon: "fraud", color: "green",
     considerations: ["Feature freshness", "Fallback policy", "Human review loop"],
   },
   {
@@ -242,14 +296,14 @@ export const prompts = [
 
   {
     id: "service-platform", title: "Design an internal developer platform", description: "Help product teams ship services without rebuilding infrastructure each time.",
-    track: "platform-infrastructure", access: "free", category: "Developer experience", difficulty: "Advanced", minutes: 50, icon: "platform", color: "violet", popular: true,
+    track: "platform-infrastructure", access: "free", category: "Developer experience", difficulty: "Advanced", minutes: 60, icon: "platform", color: "violet", popular: true,
     requirements: ["Teams can create services from supported templates.", "Standard deployment, observability, and ownership conventions are built in.", "Teams retain safe control over service-specific settings."],
     considerations: ["Golden paths", "Self-service APIs", "Escape hatches"],
     expectedOutcome: "A platform control plane, service catalog, template lifecycle, and clear boundaries between platform and product teams.",
   },
   {
     id: "multi-region", title: "Design a multi-region failover strategy", description: "Keep a customer-facing service available through a regional outage.",
-    track: "platform-infrastructure", access: "paid", category: "Resilience", difficulty: "Advanced", minutes: 50, icon: "regions", color: "blue",
+    track: "platform-infrastructure", access: "paid", category: "Resilience", difficulty: "Advanced", minutes: 60, icon: "regions", color: "blue",
     considerations: ["RTO and RPO", "Replication lag", "Failover testing"],
   },
   {
@@ -259,7 +313,7 @@ export const prompts = [
   },
   {
     id: "secrets-platform", title: "Design a secrets management platform", description: "Distribute and rotate credentials safely across services and environments.",
-    track: "platform-infrastructure", access: "paid", category: "Security", difficulty: "Advanced", minutes: 45, icon: "security", color: "rose",
+    track: "platform-infrastructure", access: "paid", category: "Security", difficulty: "Advanced", minutes: 60, icon: "security", color: "rose",
     considerations: ["Identity-based access", "Rotation workflow", "Audit and revocation"],
   },
   {
@@ -269,17 +323,17 @@ export const prompts = [
   },
   {
     id: "metrics-platform", title: "Design a metrics and observability platform", description: "Collect useful signals from services without making telemetry unbounded.",
-    track: "platform-infrastructure", access: "paid", category: "Observability", difficulty: "Advanced", minutes: 50, icon: "monitor", color: "green",
+    track: "platform-infrastructure", access: "paid", category: "Observability", difficulty: "Advanced", minutes: 60, icon: "monitor", color: "green",
     considerations: ["Cardinality control", "Retention tiers", "Alert routing"],
   },
   {
     id: "config-control-plane", title: "Design a configuration control plane", description: "Deliver safe, auditable configuration changes to a large service fleet.",
-    track: "platform-infrastructure", access: "paid", category: "Control planes", difficulty: "Advanced", minutes: 45, icon: "config", color: "teal",
+    track: "platform-infrastructure", access: "paid", category: "Control planes", difficulty: "Advanced", minutes: 60, icon: "config", color: "teal",
     considerations: ["Push vs pull", "Validation and rollout", "Last-known-good state"],
   },
   {
     id: "key-value-store", title: "Design a distributed key-value store", description: "Store and serve keys across many nodes with tunable consistency.",
-    track: "distributed-systems", access: "free", category: "Replication", difficulty: "Advanced", minutes: 55, icon: "kv", color: "rose",
+    track: "distributed-systems", access: "free", category: "Replication", difficulty: "Advanced", minutes: 60, icon: "kv", color: "rose",
     requirements: ["Clients can get, put, and delete values by key.", "The store survives the loss of individual nodes without losing acknowledged writes.", "Capacity grows by adding nodes without a full reshuffle."],
     considerations: ["Consistent hashing", "Quorum reads and writes", "Conflict resolution"],
     expectedOutcome: "A partitioning and replication scheme, read/write quorum choice, failure detection and repair, and the consistency guarantees clients get.",
@@ -291,22 +345,22 @@ export const prompts = [
   },
   {
     id: "distributed-message-queue", title: "Design a distributed message queue", description: "Build a durable, partitioned log that producers and consumers can rely on.",
-    track: "distributed-systems", access: "paid", category: "Messaging", difficulty: "Advanced", minutes: 55, icon: "queue", color: "blue",
+    track: "distributed-systems", access: "paid", category: "Messaging", difficulty: "Advanced", minutes: 60, icon: "queue", color: "blue",
     considerations: ["Partitions and ordering", "Replication and ISR", "Consumer offsets"],
   },
   {
     id: "distributed-lock-service", title: "Design a distributed lock service", description: "Let services coordinate exclusive access without deadlocks or split brain.",
-    track: "distributed-systems", access: "paid", category: "Coordination", difficulty: "Advanced", minutes: 45, icon: "lock", color: "orange",
+    track: "distributed-systems", access: "paid", category: "Coordination", difficulty: "Advanced", minutes: 60, icon: "lock", color: "orange",
     considerations: ["Leases and fencing tokens", "Consensus backing store", "Client failure detection"],
   },
   {
     id: "leader-election", title: "Design leader election for a service cluster", description: "Keep exactly one active coordinator while nodes come and go.",
-    track: "distributed-systems", access: "paid", category: "Consensus", difficulty: "Advanced", minutes: 45, icon: "crown", color: "teal",
+    track: "distributed-systems", access: "paid", category: "Consensus", difficulty: "Advanced", minutes: 60, icon: "crown", color: "teal",
     considerations: ["Raft-style terms", "Heartbeats and timeouts", "Split-brain prevention"],
   },
   {
     id: "geo-replicated-database", title: "Design a geo-replicated database", description: "Serve reads and writes from several regions with clear consistency trade-offs.",
-    track: "distributed-systems", access: "paid", category: "Replication", difficulty: "Advanced", minutes: 55, icon: "regions", color: "green",
+    track: "distributed-systems", access: "paid", category: "Replication", difficulty: "Advanced", minutes: 60, icon: "regions", color: "green",
     considerations: ["Single vs multi-leader", "Conflict resolution", "Cross-region latency"],
   },
   {
@@ -328,12 +382,12 @@ export const prompts = [
   },
   {
     id: "collaborative-whiteboard", title: "Design a collaborative whiteboard client", description: "Let many people draw on one canvas in real time without conflicts.",
-    track: "frontend-mobile", access: "paid", category: "Real-time", difficulty: "Advanced", minutes: 50, icon: "editor", color: "violet",
+    track: "frontend-mobile", access: "paid", category: "Real-time", difficulty: "Advanced", minutes: 60, icon: "editor", color: "violet",
     considerations: ["CRDTs vs OT", "Rendering pipeline", "Presence and reconnection"],
   },
   {
     id: "micro-frontend-platform", title: "Design a micro-frontend platform", description: "Let many teams ship parts of one web app independently.",
-    track: "frontend-mobile", access: "paid", category: "Architecture", difficulty: "Advanced", minutes: 45, icon: "platform", color: "blue",
+    track: "frontend-mobile", access: "paid", category: "Architecture", difficulty: "Advanced", minutes: 60, icon: "platform", color: "blue",
     considerations: ["Composition strategy", "Shared dependencies", "Isolation and fallbacks"],
   },
 ];
@@ -349,6 +403,8 @@ const prerequisites = {
   "key-value-store": ["Consistent hashing", "Replication and quorums", "CAP and consistency models", "Gossip and failure detection"],
   "offline-first-sync": ["Local databases on mobile", "Change logs and sync cursors", "Conflict resolution", "Reconnect and retry handling"],
   "comment-system": ["Message queues as buffers", "Cache-aside reads", "Eventual consistency", "Cursor pagination"],
+  "ecommerce-warehouse": ["Facts, dimensions and grain", "OLTP vs OLAP", "Star schema", "Idempotent batch loads"],
+  "cdc-pipeline": ["Database write-ahead logs and binlogs", "Kafka topics and partitions", "Upserts with MERGE", "Schema evolution"],
 };
 for (const prompt of prompts) prompt.prerequisites = prerequisites[prompt.id] ?? [];
 
