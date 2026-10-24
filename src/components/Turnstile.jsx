@@ -23,17 +23,19 @@ function loadTurnstile() {
   return scriptPromise;
 }
 
-// Visible Cloudflare Turnstile widget. Managed widgets pass most people silently
+// Cloudflare Turnstile widget. `invisible` runs it hidden for background checks. Managed widgets pass most people silently
 // and show a checkbox when Cloudflare wants a human to confirm. The token is
 // single-use: pass a new resetKey after each submission so the next attempt
 // gets a fresh one.
-export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", invisible = false, onToken }) {
+export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", invisible = false, onToken, onError }) {
   const slot = useRef(null);
   const widgetId = useRef(null);
   const onTokenRef = useRef(onToken);
+  const onErrorRef = useRef(onError);
   const { theme } = useTheme();
   const [problem, setProblem] = useState("");
   onTokenRef.current = onToken;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +47,9 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", inv
       renderedId = window.turnstile.render(slot.current, {
         sitekey: siteKey,
         theme: theme === "dark" ? "dark" : "light",
-        ...(invisible ? { size: "invisible" } : { appearance: "always" }),
+        // Background checks stay hidden unless Cloudflare wants the person to interact,
+        // and then hand over to the visible check (before-interactive-callback).
+        appearance: invisible ? "interaction-only" : "always",
         action,
         callback: (token) => {
           setProblem("");
@@ -53,14 +57,21 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", inv
         },
         "expired-callback": () => onTokenRef.current(""),
         "timeout-callback": () => onTokenRef.current(""),
+        "before-interactive-callback": () => {
+          if (invisible) onErrorRef.current?.();
+        },
+        "unsupported-callback": () => onErrorRef.current?.(),
         "error-callback": () => {
           onTokenRef.current("");
           setProblem("Human verification failed. Refresh the page and try again.");
+          onErrorRef.current?.();
         },
       });
       widgetId.current = renderedId;
     }).catch(() => {
-      if (!cancelled) setProblem("Human verification couldn't load. Check your connection and refresh.");
+      if (cancelled) return;
+      setProblem("Human verification couldn't load. Check your connection and refresh.");
+      onErrorRef.current?.();
     });
     return () => {
       cancelled = true;

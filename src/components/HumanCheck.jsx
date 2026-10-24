@@ -5,13 +5,11 @@ import { Logo } from "./site.jsx";
 import { TurnstileWidget } from "./Turnstile.jsx";
 import { navigate } from "../router.js";
 
-const COPY = {
-  launch: "Confirm you're human to continue. This runs once per browser session while you're signed in. Reloading the page doesn't ask again.",
-  network: "Your connection changed — for example Wi-Fi to mobile data, another network, or a VPN. Confirm you're human to continue.",
-};
+// Shown only when the invisible daily check couldn't confirm it on its own.
+const COPY = "We usually confirm this in the background about once a day. This time it needs a quick check from you before you continue.";
 
 export function HumanCheck() {
-  const { turnstileSiteKey, humanReason, confirmHuman, signOut } = useAuth();
+  const { turnstileSiteKey, confirmHuman, signOut } = useAuth();
   const [token, setToken] = useState("");
   const [resetKey, setResetKey] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -36,7 +34,7 @@ export function HumanCheck() {
       <section className="auth-card" aria-labelledby="human-title">
         <span className="auth-icon"><ShieldCheck size={20} /></span>
         <h1 id="human-title">Confirm you're human</h1>
-        <p className="auth-lede">{COPY[humanReason] || COPY.launch}</p>
+        <p className="auth-lede">{COPY}</p>
         <div>
           {turnstileSiteKey ? (
             <TurnstileWidget siteKey={turnstileSiteKey} action="continue" resetKey={resetKey} onToken={setToken} />

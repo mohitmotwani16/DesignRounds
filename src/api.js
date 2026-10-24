@@ -9,29 +9,73 @@ export class ApiError extends Error {
   }
 }
 
-// Human-check id for this browser tab session (also in sessionStorage across reloads).
-const HUMAN_LAUNCH_STORAGE_KEY = "dr_human_launch";
+// This browser's human-check pass: the launch id the server issued and when it
+// expires (24 hours after the check). Kept in localStorage so every tab shares it
+// and it survives restarts; the server decides whether it is still valid.
+const HUMAN_PASS_STORAGE_KEY = "dr_human_pass";
+const LEGACY_LAUNCH_KEY = "dr_human_launch";
 let humanLaunch = "";
+let humanValidUntil = "";
 let onHumanRequired = () => {};
+let onHumanPassChanged = () => {};
+let humanWaiters = [];
 
-export function readStoredHumanLaunch() {
-  try { return sessionStorage.getItem(HUMAN_LAUNCH_STORAGE_KEY) || ""; } catch { return ""; }
+export function readStoredHumanPass() {
+  try {
+    sessionStorage.removeItem(LEGACY_LAUNCH_KEY);
+    const pass = JSON.parse(localStorage.getItem(HUMAN_PASS_STORAGE_KEY) || "null");
+    return pass && typeof pass.launch === "string" ? { launch: pass.launch, validUntil: pass.validUntil || "" } : { launch: "", validUntil: "" };
+  } catch {
+    return { launch: "", validUntil: "" };
+  }
 }
 
-export function setHumanLaunch(id) {
+export function setHumanPass(id, validUntil = "") {
   humanLaunch = id || "";
+  humanValidUntil = id ? validUntil || "" : "";
   try {
-    if (id) sessionStorage.setItem(HUMAN_LAUNCH_STORAGE_KEY, id);
-    else sessionStorage.removeItem(HUMAN_LAUNCH_STORAGE_KEY);
-  } catch { /* preference only */ }
+    if (id) localStorage.setItem(HUMAN_PASS_STORAGE_KEY, JSON.stringify({ launch: humanLaunch, validUntil: humanValidUntil }));
+    else localStorage.removeItem(HUMAN_PASS_STORAGE_KEY);
+  } catch { /* the in-memory pass still works for this tab */ }
+  if (id) releaseHumanWaiters();
+}
+
+function releaseHumanWaiters() {
+  const waiters = humanWaiters;
+  humanWaiters = [];
+  for (const waiter of waiters) waiter.resolve();
 }
 
 export function getHumanLaunch() {
   return humanLaunch;
 }
 
+// Requests waiting for a pass give up when the user signs out.
+export function cancelHumanWaiters() {
+  const waiters = humanWaiters;
+  humanWaiters = [];
+  for (const waiter of waiters) waiter.reject(new ApiError(401, "AUTH_REQUIRED", "Sign in to continue."));
+}
+
 export function setHumanRequiredHandler(handler) {
   onHumanRequired = handler || (() => {});
+}
+
+// Called when another tab renews or clears the pass.
+export function setHumanPassListener(listener) {
+  onHumanPassChanged = listener || (() => {});
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== HUMAN_PASS_STORAGE_KEY) return;
+    // Another tab renewed or cleared the pass: adopt it without writing it back.
+    const { launch, validUntil } = readStoredHumanPass();
+    humanLaunch = launch;
+    humanValidUntil = validUntil;
+    if (launch) releaseHumanWaiters();
+    onHumanPassChanged({ launch, validUntil });
+  });
 }
 
 function requestHeaders(json) {
@@ -41,12 +85,16 @@ function requestHeaders(json) {
   };
 }
 
-function noteHumanFailure(status, payload) {
-  const code = payload?.error?.code;
-  if (status === 403 && (code === "HUMAN_CHECK_REQUIRED" || code === "NETWORK_CHANGED")) onHumanRequired(code);
+const needsHumanPass = (status, payload) => status === 403 && payload?.error?.code === "HUMAN_CHECK_REQUIRED";
+
+// A request refused for a missing or expired pass starts the (usually invisible)
+// check and waits for it, so the caller sees a slightly slower response, not an error.
+function waitForHumanPass() {
+  onHumanRequired();
+  return new Promise((resolve, reject) => humanWaiters.push({ resolve, reject }));
 }
 
-async function request(method, path, body, { signal } = {}) {
+async function request(method, path, body, { signal, humanRetried = false } = {}) {
   let response;
   try {
     response = await fetch(`/api/v1${path}`, {
@@ -62,7 +110,10 @@ async function request(method, path, body, { signal } = {}) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    noteHumanFailure(response.status, payload);
+    if (needsHumanPass(response.status, payload) && !humanRetried) {
+      await waitForHumanPass();
+      return request(method, path, body, { signal, humanRetried: true });
+    }
     // Gateway errors from the hosting platform (e.g. a timeout) carry no JSON body.
     const unavailable = !payload.error && [502, 503, 504].includes(response.status);
     const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
@@ -74,7 +125,7 @@ async function request(method, path, body, { signal } = {}) {
 // Interview replies are an event stream: `delta` appends text, `reset` drops a
 // discarded attempt, and `done` is the saved turns. Errors that happen before
 // the stream starts are still a single JSON body.
-async function streamRequest(method, path, body, { onDelta, onReset } = {}) {
+async function streamRequest(method, path, body, { onDelta, onReset, humanRetried = false } = {}) {
   let response;
   try {
     response = await fetch(`/api/v1${path}`, {
@@ -92,7 +143,10 @@ async function streamRequest(method, path, body, { onDelta, onReset } = {}) {
   if (!type.includes("text/event-stream")) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      noteHumanFailure(response.status, payload);
+      if (needsHumanPass(response.status, payload) && !humanRetried) {
+        await waitForHumanPass();
+        return streamRequest(method, path, body, { onDelta, onReset, humanRetried: true });
+      }
       const unavailable = !payload.error && [502, 503, 504].includes(response.status);
       const fallback = unavailable ? "DesignRounds took too long to respond. Try again in a moment." : `Request failed (${response.status}).`;
       throw new ApiError(response.status, payload.error?.code || (unavailable ? "UNAVAILABLE" : "HTTP_ERROR"), payload.error?.message || fallback, { problems: payload.error?.problems });
