@@ -10,7 +10,7 @@ import { listPacks, packDetail, processPackJobs, publishPack, requestBuild, reti
 export const packsRouter = express.Router();
 
 const versionParam = /^pack-[0-9a-f]{8}$/;
-const editBody = z.object({ pack: z.record(z.unknown()) }).strict();
+const editBody = z.object({ pack: z.record(z.string(), z.unknown()) }).strict();
 
 function checkVersion(version) {
   if (!versionParam.test(version)) throw new HttpError(400, "INVALID_REQUEST", "Not a pack version.");

@@ -50,11 +50,14 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "simple-icons": "13.21.0",
-    "zod": "3.25.76"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.7.0",
     "concurrently": "9.1.2",
     "vite": "6.4.3"
+  },
+  "overrides": {
+    "zod": "$zod"
   }
 }
