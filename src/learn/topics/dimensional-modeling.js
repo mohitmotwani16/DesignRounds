@@ -62,6 +62,15 @@ group by d.month, p.category;
     {"type":"p","text":"A common compromise: keep the star schema in silver as the source of truth and build a few OBT-style tables in gold for the hottest dashboards, rebuilt from silver so a rename is just a rerun. See [medallion architecture](/learn/medallion-architecture) and [normalization vs denormalization](/learn/normalization-denormalization)."},
     { type: "h2", text: "Dimensional modeling vs other approaches" },
     { type: "p", text: "Third normal form models (sometimes the Inmon approach) keep an integrated, normalised enterprise layer and build marts from it. Data vault models separate hubs, links and satellites to absorb change from many sources. One big table (OBT) flattens everything into a single wide table for a specific use. They aren't exclusive: many platforms use a normalised or vault-style integration layer and serve dimensional marts on top, or derive wide tables from a star for dashboards." },
+
+    { type: "h2", text: "Going deeper in this section" },
+    { type: "ul", items: [
+      "[The four-step design process](/learn/four-step-dimensional-design): business process, grain, dimensions, facts.",
+      "[Fact table types](/learn/fact-table-types): transaction, periodic and accumulating snapshots, factless facts, and additivity.",
+      "[Dimension table techniques](/learn/dimension-table-techniques): surrogate keys, role-playing, junk, mini and audit dimensions, late-arriving data.",
+      "[Hierarchies and bridge tables](/learn/hierarchies-and-bridge-tables) and [conformed dimensions and the bus matrix](/learn/conformed-dimensions-bus-matrix).",
+      "Two complete models, [e-commerce](/learn/dimensional-model-example-ecommerce) and [ride-hailing](/learn/dimensional-model-example-ride-hailing), and the [interview guide](/learn/dimensional-modeling-interview-guide).",
+    ] },
   ],
   uses: [
     { name: "Retail and e-commerce", text: "Order-line facts with date, customer, product and store dimensions power revenue, margin and basket analysis." },
@@ -74,7 +83,7 @@ group by d.month, p.category;
     "Default to a star schema and justify any snowflaking.",
     "Mention conformed dimensions when several business processes share an entity.",
   ],
-  related: ["slowly-changing-dimensions", "normalization-denormalization", "data-warehouse-vs-data-lake", "medallion-architecture", "data-engineering-architecture"],
+  related: ["dimensional-modeling-interview-guide", "four-step-dimensional-design", "fact-table-types", "dimension-table-techniques", "slowly-changing-dimensions", "normalization-denormalization", "medallion-architecture"],
   practice: ["ecommerce-warehouse", "scd2-warehouse", "realtime-analytics"],
   reading: [
     { title: "Dimensional Modeling Techniques", publisher: "Kimball Group", url: "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/" },

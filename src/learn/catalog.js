@@ -9,7 +9,7 @@
 // Category ids are stored with community articles, so never rename one.
 
 export const LEARN_PATH = "/learn";
-export const LEARN_UPDATED = "2026-10-20";
+export const LEARN_UPDATED = "2026-10-24";
 
 const NEW = "2026-10-17";
 const NOTES = "2026-10-20";
@@ -41,6 +41,7 @@ export const CATEGORIES = [
       { slug: "availability", title: "Availability, SLAs, SLOs and the Nines", short: "Availability and SLOs", level: "Beginner", description: "Availability explained: the nines, SLA vs SLO vs SLI, error budgets, and how redundancy and failover raise uptime in real systems." },
       { slug: "measuring-load-qps", title: "QPS, Load Parameters and Resource Estimation", short: "QPS and load", level: "Beginner", description: "How to describe load: DAU to QPS, read/write ratio, connections, throughput vs RPS, latency vs response time, what each QPS tier needs, with real examples.", published: NOTES },
       { slug: "back-of-the-envelope-estimation", title: "Back-of-the-Envelope Estimation", short: "Capacity estimation", level: "Beginner", description: "How to do back-of-the-envelope estimation for system design: QPS, storage, bandwidth, latency numbers and powers of two, with worked examples." },
+      { slug: "data-modeling-for-system-design", title: "Data Modeling for System Design Interviews: Entities to Partition Keys", short: "Data modeling", level: "Beginner", description: "How to model data in a system design interview: entities, relationships, access patterns, choosing SQL, document or wide-column stores, keys, indexes and partitioning.", published: "2026-10-24" },
       { slug: "cap-theorem", title: "CAP Theorem and PACELC", short: "CAP theorem", level: "Intermediate", description: "The CAP theorem explained correctly: what partitions force you to choose, CP vs AP systems, and PACELC's latency vs consistency trade-off." },
       { slug: "consistency-models", title: "Consistency Models: Strong, Eventual and Causal", short: "Consistency models", level: "Intermediate", description: "Consistency models explained: linearizability, sequential, causal, read-your-writes and eventual consistency, with examples of where each fits." },
       { slug: "acid-vs-base", title: "ACID vs BASE", short: "ACID vs BASE", level: "Beginner", description: "ACID vs BASE explained: atomicity, consistency, isolation, durability, and the basically-available, eventually-consistent alternative." },
@@ -228,8 +229,6 @@ export const CATEGORIES = [
       { slug: "data-warehouse-vs-data-lake", title: "Data Warehouse vs Data Lake vs Lakehouse", short: "Warehouse vs lake vs lakehouse", level: "Beginner", description: "Data warehouse vs data lake vs lakehouse: storage, schemas, query engines, governance and cost compared, and how to choose an analytics architecture.", published: NEW },
       { slug: "lakehouse-architecture", title: "What Is a Data Lakehouse? Lakehouse Architecture Explained", short: "Lakehouse architecture", level: "Intermediate", description: "Data lakehouse architecture explained: lakehouse vs data lake vs warehouse, why plain Parquet falls short, Delta Lake and Iceberg, catalogs and query engines.", published: "2026-10-21" },
       { slug: "data-mesh", title: "What Is Data Mesh? Principles, Architecture and Examples", short: "Data mesh", level: "Advanced", description: "What is data mesh? Its four principles, how domains share data products without copying, federated governance, data mesh vs lakehouse, and when to use it.", published: "2026-10-21" },
-      { slug: "dimensional-modeling", title: "Dimensional Modeling: Star Schema, Snowflake Schema and Facts", short: "Dimensional modeling", level: "Intermediate", description: "Dimensional data modeling explained: fact and dimension tables, grain, star vs snowflake schemas, surrogate keys and designing a warehouse model.", published: NEW, updated: "2026-10-21" },
-      { slug: "slowly-changing-dimensions", title: "Slowly Changing Dimensions: SCD Type 1, 2 and 3 Explained", short: "Slowly changing dimensions", level: "Intermediate", description: "Slowly changing dimensions explained: SCD Type 1, 2 and 3, effective dates and current flags, surrogate keys, and loading SCD2 tables with MERGE.", published: NEW },
       { slug: "medallion-architecture", title: "Medallion Architecture: Bronze, Silver and Gold Layers", short: "Medallion architecture", level: "Beginner", description: "The medallion architecture explained: bronze, silver and gold layers in a lakehouse, what belongs in each, data quality gates and common mistakes.", published: NEW },
       { slug: "batch-vs-stream-processing", title: "Batch vs Stream Processing", short: "Batch vs stream", level: "Intermediate", description: "Batch vs stream processing: MapReduce and Spark vs Flink and Kafka Streams, windows, event time, late data, and lambda vs kappa." },
       { slug: "mapreduce", title: "MapReduce and Unix Pipelines: How Batch Processing Scales", short: "MapReduce", level: "Intermediate", description: "From Unix pipelines to MapReduce: map, shuffle and reduce with word count, why the shuffle dominates, combiners, fault tolerance and multi-stage limits.", published: NOTES },
@@ -245,6 +244,24 @@ export const CATEGORIES = [
       { slug: "data-pipeline-orchestration", title: "Data Pipeline Orchestration: Airflow, DAGs and Backfills", short: "Pipeline orchestration", level: "Intermediate", description: "Data pipeline orchestration explained: DAGs, scheduling, dependencies, retries, idempotent tasks and backfills in Airflow, Dagster and similar tools.", published: NEW },
       { slug: "data-quality", title: "Data Quality and Data Observability: Checks, SLAs and Alerts", short: "Data quality", level: "Intermediate", description: "Data quality and data observability explained: freshness, volume, schema and distribution checks, data SLAs, where to test in a pipeline and alerting.", published: NEW },
       { slug: "data-contracts-schema-evolution", title: "Data Contracts and Schema Evolution", short: "Data contracts and schemas", level: "Advanced", description: "Data contracts and schema evolution explained: producer-owned schemas, compatibility rules, schema registries, breaking changes and versioning events.", published: NEW },
+    ],
+  },
+  {
+    id: "dimensional-modeling",
+    title: "Dimensional modeling",
+    track: "data-engineering",
+    blurb: "Kimball-style warehouse modeling for interviews: grain, facts, dimensions, history, integration, and two complete worked models.",
+    topics: [
+      { slug: "dimensional-modeling-interview-guide", title: "Dimensional Modeling Interview Questions and How to Answer Them", short: "Modeling interview guide", level: "Intermediate", description: "How to answer dimensional data modeling interview questions: a step-by-step method, what interviewers probe, common traps, and model answers to frequent questions.", published: "2026-10-24" },
+      { slug: "dimensional-modeling", title: "Dimensional Modeling: Star Schema, Snowflake Schema and Facts", short: "Dimensional modeling", level: "Intermediate", description: "Dimensional data modeling explained: fact and dimension tables, grain, star vs snowflake schemas, surrogate keys and designing a warehouse model.", published: NEW, updated: "2026-10-21", updated: "2026-10-24" },
+      { slug: "four-step-dimensional-design", title: "The Four-Step Dimensional Design Process: Process, Grain, Dimensions, Facts", short: "Four-step design process", level: "Beginner", description: "Kimball's four-step dimensional design process explained: choose the business process, declare the grain, identify dimensions and facts, with a worked example.", published: "2026-10-24" },
+      { slug: "fact-table-types", title: "Fact Table Types: Transaction, Periodic and Accumulating Snapshots", short: "Fact table types", level: "Intermediate", description: "Fact table types explained: transaction, periodic snapshot, accumulating snapshot and factless facts, additive vs semi-additive measures, and when to use each.", published: "2026-10-24" },
+      { slug: "dimension-table-techniques", title: "Dimension Table Techniques: Surrogate Keys, Role-Playing, Junk and More", short: "Dimension techniques", level: "Intermediate", description: "Dimension table design techniques: surrogate and durable keys, date dimensions, role-playing, degenerate, junk, mini and audit dimensions, and late-arriving data.", published: "2026-10-24" },
+      { slug: "slowly-changing-dimensions", title: "Slowly Changing Dimensions: SCD Type 1, 2 and 3 Explained", short: "Slowly changing dimensions", level: "Intermediate", description: "Slowly changing dimensions explained: SCD Type 1, 2 and 3, effective dates and current flags, surrogate keys, and loading SCD2 tables with MERGE.", published: NEW, updated: "2026-10-24" },
+      { slug: "hierarchies-and-bridge-tables", title: "Hierarchies and Bridge Tables in Dimensional Modeling", short: "Hierarchies and bridge tables", level: "Advanced", description: "Modeling hierarchies and many-to-many relationships in a warehouse: fixed and ragged hierarchies, flattening, bridge tables, weighting factors and double counting.", published: "2026-10-24" },
+      { slug: "conformed-dimensions-bus-matrix", title: "Conformed Dimensions and the Data Warehouse Bus Matrix", short: "Conformed dimensions and bus matrix", level: "Intermediate", description: "Conformed dimensions and facts, the enterprise bus matrix, shrunken dimensions and drilling across: how separate fact tables stay consistent and combinable.", published: "2026-10-24" },
+      { slug: "dimensional-model-example-ecommerce", title: "Dimensional Modeling Example: E-commerce Orders, Returns and Inventory", short: "Example: e-commerce warehouse", level: "Intermediate", description: "A complete dimensional model for an online store: bus matrix, order-line and returns facts, a shipment accumulating snapshot, daily inventory, and the SQL it answers.", published: "2026-10-24" },
+      { slug: "dimensional-model-example-ride-hailing", title: "Dimensional Modeling Example: Ride-Hailing Trips and Drivers", short: "Example: ride-hailing warehouse", level: "Advanced", description: "A complete dimensional model for a ride-hailing app like Uber: trip facts, a trip lifecycle snapshot, driver activity, role-playing locations, surge and shared rides.", published: "2026-10-24" },
     ],
   },
   {
@@ -364,7 +381,7 @@ export const GROUPS = [
   { id: "start", title: "Start here", blurb: "Roadmaps, interview guides and worked problems.", categories: ["roadmaps", "interview", "case-studies"] },
   { id: "core", title: "Core concepts", blurb: "The building blocks every design uses.", categories: ["foundations", "networking", "databases", "caching", "messaging"] },
   { id: "scale", title: "Distributed systems and reliability", blurb: "Agreement, failure and the shape of whole systems.", categories: ["distributed", "reliability", "architecture", "security"] },
-  { id: "disciplines", title: "By discipline", blurb: "What each role's interviews go deep on.", categories: ["building-blocks", "low-level-design", "data-engineering", "machine-learning", "ai-architecture", "operations", "frontend-mobile"] },
+  { id: "disciplines", title: "By discipline", blurb: "What each role's interviews go deep on.", categories: ["building-blocks", "low-level-design", "data-engineering", "dimensional-modeling", "machine-learning", "ai-architecture", "operations", "frontend-mobile"] },
 ];
 
 // Categories community authors can write in (roadmaps and interview guides are editorial).
@@ -379,7 +396,7 @@ export const START_HERE = [
 // Each interview discipline's roadmap, categories and first three guides, for the hub.
 export const DISCIPLINES = {
   "software-engineering": { roadmap: "backend-system-design-roadmap", categories: ["building-blocks", "low-level-design"], guides: ["system-design-interview", "api-design", "caching"] },
-  "data-engineering": { roadmap: "data-engineering-roadmap", categories: ["data-engineering"], guides: ["data-engineering-architecture", "etl-vs-elt", "dimensional-modeling"] },
+  "data-engineering": { roadmap: "data-engineering-roadmap", categories: ["data-engineering", "dimensional-modeling"], guides: ["data-engineering-architecture", "etl-vs-elt", "dimensional-modeling"] },
   "machine-learning": { roadmap: "machine-learning-system-design-roadmap", categories: ["machine-learning", "ai-architecture"], guides: ["machine-learning-system-architecture", "recommendation-system-design", "retrieval-augmented-generation"] },
   "platform-infrastructure": { roadmap: "platform-engineering-roadmap", categories: ["operations"], guides: ["kubernetes-architecture", "observability", "incident-management"] },
   "distributed-systems": { roadmap: "distributed-systems-roadmap", categories: ["distributed"], guides: ["fallacies-of-distributed-computing", "quorums", "consensus"] },
