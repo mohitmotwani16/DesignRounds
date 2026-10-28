@@ -7,6 +7,7 @@ import { Link, navigate, useRoute } from "../router.js";
 import { roundPath, trackPath } from "../seo.js";
 import { Avatar, ThemePicker, UserMenu, promptIcon } from "./ui.jsx";
 import { openReportProblem } from "./ReportProblem.jsx";
+import { StartRoundButton } from "./StartRound.jsx";
 
 // Landing-page sections linked from the header and footer, as /#<id> anchors.
 export const SECTIONS = [
@@ -24,12 +25,14 @@ export function Logo() {
   );
 }
 
-export function SiteNav() {
+export function SiteNav({ onStart }) {
   const { status, user, signOut } = useAuth();
   const { path } = useRoute();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [heroCtaInView, setHeroCtaInView] = useState(true);
   const sheetRef = useRef(null);
+  const showLandingCta = path === "/" && !heroCtaInView && typeof onStart === "function";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -37,6 +40,30 @@ export function SiteNav() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    if (path !== "/") {
+      setHeroCtaInView(true);
+      return undefined;
+    }
+    let observer;
+    let cancelled = false;
+    const watch = () => {
+      if (cancelled) return;
+      const target = document.getElementById("lp-hero-cta");
+      if (!target) {
+        window.requestAnimationFrame(watch);
+        return;
+      }
+      observer = new IntersectionObserver(
+        ([entry]) => { if (!cancelled) setHeroCtaInView(entry.isIntersecting); },
+        { rootMargin: "-68px 0px 0px 0px", threshold: 0 },
+      );
+      observer.observe(target);
+    };
+    watch();
+    return () => { cancelled = true; observer?.disconnect(); };
+  }, [path]);
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => {
     if (!open) return undefined;
@@ -73,9 +100,14 @@ export function SiteNav() {
             </>
           )}
         </div>
-        <button className="nav-burger" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"}>
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="nav-mobile-actions">
+          {showLandingCta && (
+            <StartRoundButton onStart={onStart} compact className="btn btn-primary btn-sm nav-start-cta" />
+          )}
+          <button className="nav-burger" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"}>
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
         <div className={`nav-sheet ${open ? "open" : ""}`}>
           <nav aria-label="Mobile">{navLinks("My Account")}</nav>
           <div className="nav-sheet-actions">
