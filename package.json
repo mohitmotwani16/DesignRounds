@@ -38,13 +38,13 @@
     "@anthropic-ai/vertex-sdk": "0.20.4",
     "@aws-sdk/client-s3": "3.1152.0",
     "@electric-sql/pglite": "0.4.6",
-    "@vercel/functions": "3.9.9",
+    "@vercel/functions": "3.10.1",
     "@xyflow/react": "12.12.0",
     "cookie-parser": "1.4.7",
     "express": "4.22.3",
     "google-auth-library": "10.9.1",
     "lucide-react": "0.577.0",
-    "nodemailer": "10.0.13",
+    "nodemailer": "10.1.1",
     "pg": "8.23.1",
     "posthog-js": "1.438.13",
     "react": "18.3.1",
@@ -55,7 +55,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "4.7.0",
     "concurrently": "9.1.2",
-    "vite": "6.4.3"
+    "vite": "6.4.4"
   },
   "overrides": {
     "zod": "$zod"
