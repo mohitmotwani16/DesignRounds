@@ -38,7 +38,7 @@ waitlistRouter.post("/plus/waitlist", route(async (req, res) => {
   const email = signedIn ? req.user.email : body.email;
   if (!email) throw new HttpError(400, "INVALID_REQUEST", "email: Required");
   // Visitors only: a signed-in page load has already passed the human check.
-  if (!signedIn) await assertHuman(req, body.turnstileToken, TURNSTILE_ACTION);
+  if (!signedIn) await assertHuman(req, body.turnstileToken, TURNSTILE_ACTION, { email });
 
   const inserted = await queryOne(
     `insert into plus_waitlist (email, user_id) values ($1, $2)

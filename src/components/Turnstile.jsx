@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getDiagnosticId, reportHumanCheck } from "../api.js";
 import { useTheme } from "../theme.js";
 
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -26,7 +27,11 @@ function loadTurnstile() {
 // Cloudflare Turnstile widget. `invisible` runs it hidden for background checks. Managed widgets pass most people silently
 // and show a checkbox when Cloudflare wants a human to confirm. The token is
 // single-use: pass a new resetKey after each submission so the next attempt
-// gets a fresh one.
+// gets a fresh one. Failures are reported for diagnostics (issue #103), and the
+// message shows Cloudflare's error code and this browser's reference so a person
+// who writes in can be matched to what was recorded.
+const withReference = (message) => `${message} Reference: ${getDiagnosticId()}.`;
+
 export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", invisible = false, onToken, onError }) {
   const slot = useRef(null);
   const widgetId = useRef(null);
@@ -42,6 +47,8 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", inv
     let renderedId = null;
     onTokenRef.current("");
     setProblem("");
+    const started = Date.now();
+    const report = (outcome, errorCode) => reportHumanCheck({ action, outcome, errorCode, detail: { invisible, elapsedMs: Date.now() - started } });
     loadTurnstile().then(() => {
       if (cancelled || !slot.current || !window.turnstile) return;
       renderedId = window.turnstile.render(slot.current, {
@@ -56,21 +63,33 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", inv
           onTokenRef.current(token);
         },
         "expired-callback": () => onTokenRef.current(""),
-        "timeout-callback": () => onTokenRef.current(""),
-        "before-interactive-callback": () => {
-          if (invisible) onErrorRef.current?.();
-        },
-        "unsupported-callback": () => onErrorRef.current?.(),
-        "error-callback": () => {
+        // The person didn't finish an interactive challenge in time; the widget refreshes itself.
+        "timeout-callback": () => {
+          report("timeout");
           onTokenRef.current("");
-          setProblem("Human verification failed. Refresh the page and try again.");
+        },
+        "before-interactive-callback": () => {
+          if (!invisible) return;
+          report("interactive");
+          onErrorRef.current?.();
+        },
+        "unsupported-callback": () => {
+          report("unsupported");
+          setProblem(withReference("This browser can't run the human check. Update it or try another browser."));
+          onErrorRef.current?.();
+        },
+        "error-callback": (errorCode) => {
+          report("widget-error", errorCode);
+          onTokenRef.current("");
+          setProblem(withReference(`Human verification failed${errorCode ? ` (error ${errorCode})` : ""}. Refresh the page and try again.`));
           onErrorRef.current?.();
         },
       });
       widgetId.current = renderedId;
     }).catch(() => {
       if (cancelled) return;
-      setProblem("Human verification couldn't load. Check your connection and refresh.");
+      report("load-failed");
+      setProblem(withReference("Human verification couldn't load. Check your connection or ad blocker and refresh."));
       onErrorRef.current?.();
     });
     return () => {
