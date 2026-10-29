@@ -1,0 +1,580 @@
+{
+  "opening": "Our social platform has a growing problem with harmful posts. Design a system that detects harmful content.",
+  "clarifications": [
+    {
+      "id": "scale.uploads",
+      "topics": [
+        "volume",
+        "uploads",
+        "posts per day",
+        "scale",
+        "traffic"
+      ],
+      "answer": "About a billion new posts, comments, images and short videos a day, in dozens of languages."
+    },
+    {
+      "id": "req.harms",
+      "topics": [
+        "harms",
+        "categories",
+        "policies",
+        "what counts",
+        "types"
+      ],
+      "answer": "Policies cover hate speech, harassment, violence, nudity, child safety, terrorism, self-harm, spam and scams; each has its own rules."
+    },
+    {
+      "id": "req.actions",
+      "topics": [
+        "actions",
+        "remove",
+        "enforcement",
+        "what happens",
+        "outcomes"
+      ],
+      "answer": "Possible actions are removal, reduced distribution, a warning screen, or sending to human review."
+    },
+    {
+      "id": "scale.reviewers",
+      "topics": [
+        "reviewers",
+        "human review",
+        "moderators",
+        "capacity",
+        "manual"
+      ],
+      "answer": "We have a few thousand trained reviewers who can make a few million decisions a day in total."
+    },
+    {
+      "id": "req.timing",
+      "topics": [
+        "timing",
+        "latency",
+        "before published",
+        "how fast",
+        "real-time"
+      ],
+      "answer": "Clear violations should be caught before or soon after posting, before many people see them."
+    },
+    {
+      "id": "req.appeals",
+      "topics": [
+        "appeals",
+        "mistakes",
+        "false positives",
+        "users complain"
+      ],
+      "answer": "Users can appeal any action, and wrongful removals are a major source of complaints and press attention."
+    },
+    {
+      "id": "req.metrics",
+      "topics": [
+        "metrics",
+        "measure",
+        "reporting",
+        "success",
+        "prevalence"
+      ],
+      "answer": "We publish how often people see violating content, and regulators ask for proof that it's going down."
+    }
+  ],
+  "clarificationPolicy": "Answer as the trust and safety product lead. Keep it multimodal, multilingual and high-volume with limited reviewer capacity; decide unlisted details so per-harm trade-offs, review prioritisation and measurement stay in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "harm categories",
+          "volume",
+          "languages",
+          "actions",
+          "reviewer capacity",
+          "appeals"
+        ]
+      },
+      "goal": "Establish harm types, volume, modalities, actions and reviewer capacity.",
+      "opener": "What do you want to clarify about the content, the policies and the people involved?",
+      "evidence": {
+        "strong": "Asks about volume and modalities, languages, harm categories and their severity, available actions, timing, reviewer capacity, appeals and how success is measured; realises error costs differ by harm.",
+        "adequate": "Gets volume and harm types but not reviewer capacity or measurement.",
+        "weak": "Assumes one binary classifier without asking."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.binary",
+          "pattern": "Treats harmful versus safe as one yes or no.",
+          "challenge": "Is missing a scam post as bad as missing child abuse material? Should the threshold be the same?"
+        }
+      ],
+      "probes": [
+        "Which mistakes are worse for each type of harm?",
+        "How many items can humans look at per day?"
+      ],
+      "hints": [
+        "Different harms carry very different stakes.",
+        "Human time is the scarcest resource."
+      ],
+      "moveOnSummary": "A billion multimodal, multilingual items a day, many harm policies with different stakes, several actions, limited reviewers, appeals and prevalence reporting.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "design-harmful-content-detection"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "vision",
+          "guardrails",
+          "queue"
+        ],
+        "keywords": [
+          "hash matching",
+          "classifier",
+          "policy engine",
+          "review queue",
+          "pipeline",
+          "upload"
+        ]
+      },
+      "goal": "Lay out the detection and enforcement pipeline.",
+      "opener": "Walk me through what happens to a post from upload to a decision.",
+      "evidence": {
+        "strong": "Hash matching against known violating media first, then text, image and video models producing per-harm scores, account signals, a policy engine mapping scores to actions per harm, and review queues for uncertain cases, with reviewer and appeal decisions feeding back as labels.",
+        "adequate": "A classifier and a review queue but no hashing or policy engine.",
+        "weak": "One model that deletes anything above a threshold."
+      },
+      "misconceptions": [
+        {
+          "id": "pipe.full_auto",
+          "pattern": "Believes models can make every decision alone.",
+          "challenge": "A news photo of a war zone looks like graphic violence. Who should decide?"
+        }
+      ],
+      "probes": [
+        "What happens to an image that was already removed once?",
+        "Where do decisions turn into labels?"
+      ],
+      "hints": [
+        "Known bad content can be matched cheaply.",
+        "Humans should see the cases models are unsure about."
+      ],
+      "moveOnSummary": "Hash matching, multimodal per-harm models plus account signals, a policy engine, review queues, and decisions flowing back as labels.",
+      "learnTopics": [
+        "design-harmful-content-detection",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "hl.models",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "embedding",
+          "llm"
+        ],
+        "keywords": [
+          "multimodal",
+          "multilabel",
+          "text encoder",
+          "image model",
+          "fusion",
+          "per-harm heads"
+        ]
+      },
+      "goal": "Choose models that handle several modalities and harms.",
+      "opener": "What models would you use, given text, images and video in many languages?",
+      "evidence": {
+        "strong": "A multilingual text encoder, an image encoder and frame-sampled video with audio transcripts, fused so captions and images are judged together, with a multilabel head per harm; large models or LLMs as teachers for smaller production models.",
+        "adequate": "Separate text and image classifiers with no fusion.",
+        "weak": "Keyword lists only."
+      },
+      "misconceptions": [
+        {
+          "id": "models.separate",
+          "pattern": "Judges image and caption separately.",
+          "challenge": "A harmless photo with a hateful caption: which separate model flags it?"
+        }
+      ],
+      "probes": [
+        "How do you handle a new language with little data?",
+        "Why one head per harm instead of one score?"
+      ],
+      "hints": [
+        "Meaning can come from combining modalities.",
+        "Policies differ, so outputs should too."
+      ],
+      "moveOnSummary": "Multilingual text, image and video encoders fused into a multilabel model with per-harm heads, distilled from larger teacher models.",
+      "learnTopics": [
+        "embeddings",
+        "model-compression"
+      ]
+    },
+    {
+      "id": "deep.thresholds",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "guardrails"
+        ],
+        "keywords": [
+          "threshold",
+          "precision",
+          "recall",
+          "per-harm threshold",
+          "false positives",
+          "cost of errors"
+        ]
+      },
+      "goal": "Set operating points per harm from the cost of each kind of error.",
+      "opener": "How do you decide the score at which content is removed, demoted or sent to review?",
+      "evidence": {
+        "strong": "Per-harm thresholds from error costs: very high recall with human review for the most severe harms, high precision for automatic removal of spam, a middle band sent to review or reduced distribution; tunes thresholds on labelled samples and revisits them as models change.",
+        "adequate": "Talks about precision and recall but uses one threshold.",
+        "weak": "Uses a fixed 0.5 everywhere."
+      },
+      "misconceptions": [
+        {
+          "id": "thr.half",
+          "pattern": "Thinks 0.5 is the natural cut-off.",
+          "challenge": "A model is 40% sure an image shows child abuse. Do you ignore it?"
+        }
+      ],
+      "probes": [
+        "Which harms justify automatic removal, and which need people?",
+        "What happens in the uncertain middle band?"
+      ],
+      "hints": [
+        "Thresholds encode how costly mistakes are.",
+        "There's more than remove or allow."
+      ],
+      "moveOnSummary": "Per-harm thresholds from error costs, automatic action at high confidence, review or reduced reach in the middle band.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "llm-guardrails"
+      ]
+    },
+    {
+      "id": "deep.review",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "labeling"
+        ],
+        "keywords": [
+          "review prioritisation",
+          "expected harm",
+          "predicted reach",
+          "reviewer capacity",
+          "queue ordering",
+          "virality"
+        ]
+      },
+      "goal": "Use limited reviewer time where it prevents the most harm.",
+      "opener": "Your models flag far more items than reviewers can handle. Which ones do humans see first?",
+      "evidence": {
+        "strong": "Orders queues by expected harm (severity x probability x predicted reach), re-scores and re-prioritises when items get reports or go viral, routes by language and specialty, reduces distribution while waiting, and protects reviewer wellbeing.",
+        "adequate": "Prioritises by score only.",
+        "weak": "First in, first out."
+      },
+      "misconceptions": [
+        {
+          "id": "rev.fifo",
+          "pattern": "Reviews items in arrival order.",
+          "challenge": "An account with millions of followers posts something borderline and it waits behind thousands of other items. What happens meanwhile?"
+        }
+      ],
+      "probes": [
+        "How does a post's audience change its priority?",
+        "What happens to a post while it waits in the queue?"
+      ],
+      "hints": [
+        "Reach multiplies harm.",
+        "Limiting distribution buys time."
+      ],
+      "moveOnSummary": "Queues ordered by severity times probability times predicted reach, re-prioritised on reports and virality, with reduced distribution while pending.",
+      "learnTopics": [
+        "message-queues",
+        "data-labeling"
+      ]
+    },
+    {
+      "id": "deep.labels",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "labeling",
+          "data-quality"
+        ],
+        "keywords": [
+          "labeling guidelines",
+          "active learning",
+          "label versions",
+          "inter-annotator agreement",
+          "appeals as labels",
+          "rare languages"
+        ]
+      },
+      "goal": "Keep a supply of accurate labels as policies and abuse change.",
+      "opener": "Where do the labels for these models come from, and what happens when a policy changes?",
+      "evidence": {
+        "strong": "Policy-written guidelines, multiple labels and adjudication for hard cases, agreement tracking, active learning around thresholds and for rare harms and languages, appeals and reversals as labels, and labels versioned with the policy so old labels can be relabelled.",
+        "adequate": "Uses reviewer decisions as labels without versioning or active learning.",
+        "weak": "No label strategy."
+      },
+      "misconceptions": [
+        {
+          "id": "lab.static",
+          "pattern": "Assumes labelled data stays valid forever.",
+          "challenge": "The definition of a banned category widens. Are last year's 'allowed' labels still right?"
+        }
+      ],
+      "probes": [
+        "How do you get labels for a language with few reviewers?",
+        "Which reviewer decisions should you not trust?"
+      ],
+      "hints": [
+        "Policies have versions; so should labels.",
+        "Label where the model is least sure."
+      ],
+      "moveOnSummary": "Guidelines, redundancy and agreement checks, active learning, appeals as labels, and labels versioned with policy.",
+      "learnTopics": [
+        "data-labeling",
+        "continual-learning"
+      ]
+    },
+    {
+      "id": "deep.adversarial",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "drift-monitor",
+          "fraud-check"
+        ],
+        "keywords": [
+          "adversarial",
+          "evasion",
+          "misspellings",
+          "coded language",
+          "rapid response",
+          "new abuse pattern"
+        ]
+      },
+      "goal": "Keep up with people actively evading detection.",
+      "opener": "Bad actors notice what gets removed and change their tactics. How does your system keep up?",
+      "evidence": {
+        "strong": "Augments training with perturbations (misspellings, noise, crops), monitors report rates against model flags to spot new patterns, lets analysts add hashes, keywords and rules within minutes, retrains frequently, and uses account and network signals that are harder to evade.",
+        "adequate": "Retrains periodically.",
+        "weak": "No plan for evasion."
+      },
+      "misconceptions": [
+        {
+          "id": "adv.retrain",
+          "pattern": "Thinks retraining every month is enough.",
+          "challenge": "A new coded slur spreads in a weekend. What catches it before the next retrain?"
+        }
+      ],
+      "probes": [
+        "How would you notice a new evasion pattern?",
+        "Which signals are hardest to fake?"
+      ],
+      "hints": [
+        "User reports reveal what models miss.",
+        "Behaviour is harder to disguise than words."
+      ],
+      "moveOnSummary": "Perturbation augmentation, report-versus-flag monitoring, rapid analyst rules and hashes, frequent retraining and behaviour signals.",
+      "learnTopics": [
+        "ml-model-monitoring",
+        "prompt-injection"
+      ]
+    },
+    {
+      "id": "deep.measure",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "dashboard",
+          "metrics"
+        ],
+        "keywords": [
+          "prevalence",
+          "random sample",
+          "proactive rate",
+          "appeal overturn",
+          "slice metrics",
+          "transparency report"
+        ]
+      },
+      "goal": "Measure what users actually experience, not just what models flag.",
+      "opener": "How would you show regulators that harmful content is going down?",
+      "evidence": {
+        "strong": "Prevalence from reviewed random samples of viewed content, proactive detection rate, precision and recall per harm, appeal overturn rates, and slices by language and region; warns that flag counts can fall because the model got worse.",
+        "adequate": "Counts removals.",
+        "weak": "No measurement plan."
+      },
+      "misconceptions": [
+        {
+          "id": "meas.removals",
+          "pattern": "Uses the number of removals as the success metric.",
+          "challenge": "Removals drop by half this month. Is that good news or a broken model?"
+        }
+      ],
+      "probes": [
+        "How do you measure what the models miss?",
+        "Which slice might be under-protected?"
+      ],
+      "hints": [
+        "Sample randomly from what people saw.",
+        "Averages can hide small languages."
+      ],
+      "moveOnSummary": "Prevalence from random samples, proactive rate, per-harm precision and recall, appeal overturns and language slices.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "ml-model-monitoring"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "over-enforcement",
+          "free expression",
+          "cost",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs and risks.",
+      "opener": "What are the hardest trade-offs in this design?",
+      "evidence": {
+        "strong": "Over- versus under-enforcement per harm, automation versus reviewer cost and wellbeing, latency versus thoroughness for video, coverage of smaller languages, and transparency.",
+        "adequate": "Mentions false positives versus false negatives.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where would you accept more false positives?",
+        "What would you build next?"
+      ],
+      "hints": [
+        "Think about who is hurt by each kind of mistake.",
+        "Video is expensive to analyse."
+      ],
+      "moveOnSummary": "Over- versus under-enforcement by harm, automation versus human cost, video latency, and language coverage.",
+      "learnTopics": [
+        "design-harmful-content-detection",
+        "ml-feedback-loops"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.coded",
+      "after": "deep.thresholds",
+      "prompt": "A new coded phrase spreads overnight and your models score it as harmless. What in your system notices, and how fast can you respond?",
+      "agendaItemId": "deep.adversarial"
+    },
+    {
+      "id": "cb.regulator",
+      "after": "deep.review",
+      "prompt": "A regulator asks for evidence that exposure to hate speech in a smaller language went down this year. What can you show them?",
+      "agendaItemId": "deep.measure"
+    }
+  ],
+  "vocabulary": [
+    "prevalence",
+    "proactive rate",
+    "perceptual hash",
+    "PhotoDNA",
+    "multilabel",
+    "multimodal",
+    "fusion",
+    "threshold",
+    "precision",
+    "recall",
+    "review queue",
+    "expected harm",
+    "appeal",
+    "overturn rate",
+    "active learning",
+    "adjudication",
+    "inter-annotator agreement",
+    "reduced distribution",
+    "CLIP",
+    "distillation"
+  ],
+  "alternatives": [
+    {
+      "choice": "An LLM with the policy in its prompt as the main classifier",
+      "whenBetter": "For new harm types or low volumes where speed of policy change matters more than cost; usually distilled later."
+    },
+    {
+      "choice": "Separate single-harm models instead of one multilabel model",
+      "whenBetter": "When teams own harms separately and need independent release cycles."
+    },
+    {
+      "choice": "User reports as the main detection signal",
+      "whenBetter": "For small communities with active moderators and low volume."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Layered, measured enforcement",
+      "outline": "Clarifies volume, modalities, languages, harm policies, actions, reviewer capacity, appeals and prevalence reporting. Layers hash matching, multimodal fused per-harm models and account signals, then a policy engine with per-harm thresholds: automatic action when confident, review or reduced reach in the middle. Orders review queues by severity, probability and predicted reach, re-scoring on reports and virality. Keeps labels flowing with versioned guidelines, active learning and appeals, adapts to evasion with augmentation and rapid rules, and measures prevalence from random samples with language slices."
+    },
+    {
+      "band": "adequate",
+      "label": "Classifier plus queue",
+      "outline": "Builds text and image classifiers with one threshold, sends uncertain items to a first-in-first-out review queue, retrains monthly on reviewer decisions and reports removal counts."
+    },
+    {
+      "band": "weak",
+      "label": "Keyword filter",
+      "outline": "Blocks posts containing words from a banned list and lets users report the rest; no models, review prioritisation or measurement."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

@@ -63,8 +63,8 @@ export default {
     "Use continuous batching and streaming, and plan capacity in tokens.",
     "Cut cost with routing, quantisation and caching, validated by evaluation.",
   ],
-  related: ["ai-application-architecture", "retrieval-augmented-generation", "model-serving", "rate-limiting", "autoscaling"],
-  practice: ["rag-search", "model-serving"],
+  related: ["ai-application-architecture", "retrieval-augmented-generation", "model-serving", "rate-limiting", "autoscaling", "llm-caching", "llm-gateway", "llm-cost-optimization", "design-chatgpt", "how-llms-work"],
+  practice: ["llm-inference-platform", "model-serving", "rag-search"],
   reading: [
     { title: "Efficient Memory Management for LLM Serving with PagedAttention", publisher: "Kwon et al., arXiv", url: "https://arxiv.org/abs/2309.06180" },
     { title: "vLLM documentation", publisher: "vLLM project", url: "https://docs.vllm.ai/en/latest/" },

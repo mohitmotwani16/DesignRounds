@@ -62,7 +62,7 @@ export default {
     "Mention sample size, peeking and sample ratio mismatch checks.",
     "Recognise network and marketplace effects and suggest cluster or switchback designs.",
   ],
-  related: ["ml-evaluation-metrics", "feature-flags", "recommendation-system-design", "ml-model-monitoring", "observability"],
+  related: ["ml-evaluation-metrics", "feature-flags", "recommendation-system-design", "ml-model-monitoring", "observability", "multi-armed-bandits", "ml-feedback-loops"],
   practice: ["experimentation-analytics", "recommendation-engine", "mobile-release-flags"],
   reading: [
     { title: "Trustworthy Online Controlled Experiments", publisher: "Kohavi, Tang and Xu, Cambridge University Press", url: "https://experimentguide.com/" },

@@ -1,0 +1,578 @@
+{
+  "opening": "Customers on our food delivery app complain that the delivery times we show are wrong. Design the system that predicts delivery time.",
+  "clarifications": [
+    {
+      "id": "scale.orders",
+      "topics": [
+        "orders",
+        "volume",
+        "scale",
+        "per day"
+      ],
+      "answer": "About 10 million orders a day."
+    },
+    {
+      "id": "scale.search",
+      "topics": [
+        "search",
+        "listing",
+        "restaurants shown",
+        "browse",
+        "qps"
+      ],
+      "answer": "Search pages show an estimate for each restaurant: about 50,000 search requests a second at peak, each listing around 40 restaurants."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "response time",
+        "milliseconds"
+      ],
+      "answer": "An estimate must come back within 50 ms."
+    },
+    {
+      "id": "req.when",
+      "topics": [
+        "when shown",
+        "checkout",
+        "updates",
+        "during order",
+        "tracking"
+      ],
+      "answer": "We show it on search, at checkout, and update it after a courier is assigned and after pickup."
+    },
+    {
+      "id": "req.asymmetry",
+      "topics": [
+        "late",
+        "early",
+        "accuracy",
+        "what matters",
+        "complaints"
+      ],
+      "answer": "Late deliveries cause complaints and refunds; early ones rarely do. Overly pessimistic estimates lose orders."
+    },
+    {
+      "id": "data.events",
+      "topics": [
+        "data",
+        "events",
+        "timestamps",
+        "gps",
+        "signals"
+      ],
+      "answer": "We record timestamps for order placed, restaurant confirmed, courier assigned, arrived, picked up and delivered, plus courier GPS every few seconds."
+    },
+    {
+      "id": "data.foodready",
+      "topics": [
+        "food ready",
+        "preparation",
+        "kitchen",
+        "prep time"
+      ],
+      "answer": "Restaurants are supposed to tap 'food ready', but many tap late or not at all."
+    }
+  ],
+  "clarificationPolicy": "Answer as the logistics product lead. Keep it a high-volume, latency-bound regression with real-time inputs and asymmetric costs; decide unlisted details so stage decomposition, fresh features and uncertainty stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "orders",
+          "search requests",
+          "latency",
+          "late deliveries",
+          "checkout",
+          "updates"
+        ]
+      },
+      "goal": "Establish where estimates are used, scale, latency and the cost of lateness.",
+      "opener": "What would you like to know before designing this?",
+      "evidence": {
+        "strong": "Asks where the ETA appears, orders and search volume, latency, available timestamps and signals, and how lateness versus earliness affect the business.",
+        "adequate": "Gets volume but not the asymmetry or the search use case.",
+        "weak": "Starts modelling immediately."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.symmetric",
+          "pattern": "Assumes being early and being late are equally bad.",
+          "challenge": "Which upsets a hungry customer more: food ten minutes early or ten minutes late?"
+        }
+      ],
+      "probes": [
+        "Where in the app is the estimate shown?",
+        "Is being late worse than being early?"
+      ],
+      "hints": [
+        "Count every place the number appears.",
+        "Errors don't all cost the same."
+      ],
+      "moveOnSummary": "Estimates on search, checkout and during the order, millions of orders and many search lookups, a tight latency budget, and lateness much costlier than earliness.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.framing",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "training"
+        ],
+        "keywords": [
+          "regression",
+          "stages",
+          "preparation time",
+          "travel time",
+          "quantile",
+          "label"
+        ]
+      },
+      "goal": "Frame the prediction, ideally decomposed into stages.",
+      "opener": "How would you frame the prediction, and is it one number or several?",
+      "evidence": {
+        "strong": "Regression on minutes, decomposed into restaurant confirmation, preparation, courier to restaurant, pickup wait and drive, each with its own signals; predicts quantiles because of the asymmetric cost.",
+        "adequate": "One regression model for the total time.",
+        "weak": "Distance divided by speed."
+      },
+      "misconceptions": [
+        {
+          "id": "frame.distance",
+          "pattern": "Believes distance and traffic decide delivery time.",
+          "challenge": "The restaurant is next door but the kitchen has twenty orders queued. When does the food arrive?"
+        }
+      ],
+      "probes": [
+        "Which part of the journey is hardest to predict?",
+        "Would you show the average or something else?"
+      ],
+      "hints": [
+        "The journey has distinct parts.",
+        "A range or a cautious estimate reflects uncertainty."
+      ],
+      "moveOnSummary": "Regression decomposed into confirmation, preparation, courier travel, pickup wait and drive, predicting quantiles.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "design-eta-prediction"
+      ]
+    },
+    {
+      "id": "hl.serving",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "stream-processor",
+          "location-service"
+        ],
+        "keywords": [
+          "eta service",
+          "routing engine",
+          "online features",
+          "real-time",
+          "events",
+          "architecture"
+        ]
+      },
+      "goal": "Lay out the data flow and serving path.",
+      "opener": "Walk me through the system that produces an estimate.",
+      "evidence": {
+        "strong": "Order events and courier GPS on streams, stream jobs computing kitchen load and courier supply per area into an online store, historical aggregates from batch, a routing engine for travel times, an ETA service calling the models, and re-prediction on order events.",
+        "adequate": "A model behind a service but no real-time inputs.",
+        "weak": "A static table of average times per restaurant."
+      },
+      "misconceptions": [
+        {
+          "id": "serve.static",
+          "pattern": "Uses each restaurant's average delivery time.",
+          "challenge": "It's raining and the dinner rush is on. Does last month's average still hold?"
+        }
+      ],
+      "probes": [
+        "Which inputs change minute to minute?",
+        "When do you predict again during an order?"
+      ],
+      "hints": [
+        "Current conditions matter most at peaks.",
+        "Each order event is a chance to update."
+      ],
+      "moveOnSummary": "Streams feed live kitchen and courier features to an online store, a routing engine supplies travel times, an ETA service serves models and re-predicts on events.",
+      "learnTopics": [
+        "stream-processing",
+        "feature-store"
+      ]
+    },
+    {
+      "id": "deep.features",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "stream-processor"
+        ],
+        "keywords": [
+          "kitchen load",
+          "courier supply",
+          "prep time history",
+          "weather",
+          "traffic",
+          "real-time features"
+        ]
+      },
+      "goal": "Pick and compute the features that drive each stage.",
+      "opener": "What features would you use for preparation time and for courier time, and where do they come from?",
+      "evidence": {
+        "strong": "Prep: historical prep time by restaurant, item and hour, open orders in the kitchen now, recent prep-time trend; courier: available couriers nearby, assignment delays, routing time, traffic and weather; order size and type; drop-off difficulty; real-time ones from streams, the rest from batch.",
+        "adequate": "Reasonable features without freshness or source.",
+        "weak": "Distance and time of day only."
+      },
+      "misconceptions": [
+        {
+          "id": "feat.history",
+          "pattern": "Relies only on historical averages.",
+          "challenge": "A restaurant usually takes twelve minutes, but has fifteen orders open right now. What's your estimate?"
+        }
+      ],
+      "probes": [
+        "How fresh must kitchen load be?",
+        "How do you handle a restaurant that never taps 'food ready'?"
+      ],
+      "hints": [
+        "What's happening right now beats last month.",
+        "Courier wait times reveal when food was really ready."
+      ],
+      "moveOnSummary": "Historical and live kitchen features, courier supply, routing, traffic and weather, order features, with real-time ones from streams.",
+      "learnTopics": [
+        "feature-engineering",
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "deep.uncertainty",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "experiment"
+        ],
+        "keywords": [
+          "quantile loss",
+          "p90",
+          "confidence",
+          "lateness rate",
+          "buffer",
+          "asymmetric loss"
+        ]
+      },
+      "goal": "Handle uncertainty and the asymmetric cost of lateness.",
+      "opener": "Your model predicts thirty minutes. What do you actually show the customer, and why?",
+      "evidence": {
+        "strong": "Predicts quantiles (P50 and P80 or P90) with quantile loss, shows a range or a cautious point, chooses the displayed quantile through experiments balancing conversion against lateness, and checks quantile coverage.",
+        "adequate": "Adds a fixed buffer.",
+        "weak": "Shows the mean."
+      },
+      "misconceptions": [
+        {
+          "id": "unc.mean",
+          "pattern": "Shows the average prediction.",
+          "challenge": "If you show the average, how often is the delivery late?"
+        }
+      ],
+      "probes": [
+        "How would you choose which quantile to show?",
+        "How do you check the P90 is really a P90?"
+      ],
+      "hints": [
+        "A model can predict more than the middle.",
+        "Coverage tells you if the upper estimate is honest."
+      ],
+      "moveOnSummary": "Quantile predictions with quantile loss, a range or cautious estimate chosen by experiment, and coverage checks.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "ml-model-selection"
+      ]
+    },
+    {
+      "id": "deep.searchscale",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "distributed-cache"
+        ],
+        "keywords": [
+          "search page",
+          "cache by area",
+          "hexagon",
+          "batch prediction",
+          "many restaurants",
+          "precompute"
+        ]
+      },
+      "goal": "Afford estimates for many restaurants on every search.",
+      "opener": "Each search shows estimates for dozens of restaurants. How do you afford that at peak?",
+      "evidence": {
+        "strong": "Computes the requests per second, caches estimates per restaurant and delivery area (for example a hexagon) for about a minute, batches model calls, precomputes for active restaurants, and reserves exact per-order predictions for checkout.",
+        "adequate": "Caches results without keys or TTL reasoning.",
+        "weak": "Calls the full model per restaurant per search."
+      },
+      "misconceptions": [
+        {
+          "id": "scale.percall",
+          "pattern": "Runs the full model for every restaurant on every search.",
+          "challenge": "Tens of thousands of searches a second times dozens of restaurants: how many model calls is that?"
+        }
+      ],
+      "probes": [
+        "What's the cache key?",
+        "How stale can a search-page estimate be?"
+      ],
+      "hints": [
+        "Nearby customers get similar estimates.",
+        "Checkout deserves a precise number."
+      ],
+      "moveOnSummary": "Cache per restaurant and delivery area for about a minute, batch calls, precompute for active restaurants, exact predictions at checkout.",
+      "learnTopics": [
+        "caching",
+        "geospatial-indexing"
+      ]
+    },
+    {
+      "id": "deep.model",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "training",
+          "model-registry"
+        ],
+        "keywords": [
+          "gradient boosted trees",
+          "residual",
+          "baseline",
+          "time split",
+          "retraining",
+          "model choice"
+        ]
+      },
+      "goal": "Choose and train the models sensibly.",
+      "opener": "Which models would you use, and how would you train them?",
+      "evidence": {
+        "strong": "A baseline of routing time plus average prep, gradient-boosted trees per stage, possibly a deep model predicting the residual over the routing estimate; time-based splits and rolling backtests; regular retraining.",
+        "adequate": "A reasonable model with no baseline or time split.",
+        "weak": "No model reasoning."
+      },
+      "misconceptions": [
+        {
+          "id": "model.random",
+          "pattern": "Uses a random train/test split.",
+          "challenge": "Training on next week's holiday rush to predict last week's: what goes wrong?"
+        }
+      ],
+      "probes": [
+        "What baseline must the model beat?",
+        "How do you split data for evaluation?"
+      ],
+      "hints": [
+        "Start with what the routing engine already gives you.",
+        "Time ordering matters."
+      ],
+      "moveOnSummary": "A routing-plus-average baseline, gradient-boosted stage models or a residual deep model, time-based splits and regular retraining.",
+      "learnTopics": [
+        "ml-model-selection",
+        "ml-training-data"
+      ]
+    },
+    {
+      "id": "deep.monitoring",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "drift-monitor",
+          "alerting"
+        ],
+        "keywords": [
+          "lateness alerts",
+          "city dashboards",
+          "abnormal conditions",
+          "drift",
+          "fallback",
+          "storm"
+        ]
+      },
+      "goal": "Detect bad estimates quickly and degrade safely.",
+      "opener": "A storm hits a city at dinner time. How do you know your estimates have gone wrong, and what do you do?",
+      "evidence": {
+        "strong": "Live dashboards of error and lateness by city and stage, alerts on spikes, feature-freshness checks on the streams, a conservative buffer or fallback when inputs look abnormal, and incidents feeding retraining.",
+        "adequate": "Periodic offline evaluation.",
+        "weak": "No monitoring."
+      },
+      "misconceptions": [
+        {
+          "id": "mon.offline",
+          "pattern": "Checks accuracy only in weekly reports.",
+          "challenge": "Estimates are twenty minutes late tonight in one city. When does a weekly report notice?"
+        }
+      ],
+      "probes": [
+        "Which streams must stay fresh?",
+        "What would you show if the model's inputs are broken?"
+      ],
+      "hints": [
+        "Watch lateness live, per city.",
+        "Have a safe default."
+      ],
+      "moveOnSummary": "Live error and lateness dashboards with alerts, stream freshness checks, and a conservative fallback under abnormal conditions.",
+      "learnTopics": [
+        "ml-model-monitoring",
+        "fallbacks-graceful-degradation"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "optimistic vs pessimistic",
+          "conversion",
+          "cost",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs does your design make?",
+      "evidence": {
+        "strong": "Optimistic versus pessimistic estimates and their effect on conversion and lateness, cache freshness versus cost, model complexity versus explainability, and next steps.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Who decides which quantile to show?",
+        "What would you improve first?"
+      ],
+      "hints": [
+        "Estimates change behaviour.",
+        "Cheaper isn't always worse here."
+      ],
+      "moveOnSummary": "Optimistic versus pessimistic estimates, cache freshness versus cost, and model complexity versus explainability.",
+      "learnTopics": [
+        "design-eta-prediction",
+        "ab-testing-experimentation"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.storm",
+      "after": "deep.features",
+      "prompt": "A sudden storm hits at seven in the evening and deliveries start running much later than shown. What in your system notices and reacts?",
+      "agendaItemId": "deep.monitoring"
+    },
+    {
+      "id": "cb.searchload",
+      "after": "deep.uncertainty",
+      "prompt": "Search traffic doubles during a promotion and the ETA service starts timing out. What do you change?",
+      "agendaItemId": "deep.searchscale"
+    }
+  ],
+  "vocabulary": [
+    "ETA",
+    "quantile regression",
+    "P50",
+    "P90",
+    "pinball loss",
+    "MAE",
+    "lateness rate",
+    "gradient boosted trees",
+    "residual",
+    "routing engine",
+    "kitchen load",
+    "courier supply",
+    "H3",
+    "hexagon",
+    "feature store",
+    "stream processing",
+    "backtest",
+    "time split",
+    "coverage",
+    "fallback"
+  ],
+  "alternatives": [
+    {
+      "choice": "One end-to-end model for the whole delivery time",
+      "whenBetter": "With limited engineering time and good data; less explainable and harder to debug by stage."
+    },
+    {
+      "choice": "A deep sequence model over the route",
+      "whenBetter": "When route-level traffic patterns dominate, as in ride-hailing arrival times."
+    },
+    {
+      "choice": "Rules plus averages per restaurant and hour",
+      "whenBetter": "For a young marketplace without enough order history."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Staged quantiles with live signals",
+      "outline": "Clarifies where estimates appear, order and search volume, latency and the cost of lateness. Splits the journey into stages and predicts quantiles per stage with gradient-boosted trees over historical and live kitchen, courier, traffic and weather features computed by stream jobs into an online store, plus routing times. Serves through an ETA service that caches per restaurant and area for search and predicts exactly at checkout, re-predicting on order events. Chooses the displayed quantile by experiment, monitors lateness by city live with fallbacks, and evaluates MAE, lateness and coverage on time-based splits."
+    },
+    {
+      "band": "adequate",
+      "label": "One regression model",
+      "outline": "Trains a single gradient-boosted model on distance, hour and restaurant averages, serves it per request with a fixed buffer and evaluates with MAE; no stages, live kitchen load or search-page plan."
+    },
+    {
+      "band": "weak",
+      "label": "Distance over speed",
+      "outline": "Computes distance divided by average courier speed plus a constant prep time; no data, model or monitoring."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

@@ -73,7 +73,7 @@ left join lateral (
     "Explain the point-in-time join, including feature availability time.",
     "Log served features to build future training data.",
   ],
-  related: ["machine-learning-system-architecture", "model-serving", "stream-processing-windows-watermarks", "ml-model-monitoring", "redis"],
+  related: ["machine-learning-system-architecture", "model-serving", "stream-processing-windows-watermarks", "ml-model-monitoring", "redis", "feature-engineering", "ml-training-data", "design-fraud-detection-system"],
   practice: ["feature-store", "online-fraud-model", "recommendation-engine"],
   reading: [
     { title: "Feast documentation: Concepts", publisher: "Feast (open source)", url: "https://docs.feast.dev/getting-started/concepts" },

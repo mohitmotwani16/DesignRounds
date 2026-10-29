@@ -734,5 +734,243 @@ export const plusBriefs = {
       "Durable workflows and retries"
     ],
     "expectedOutcome": "A deletion request service with a durable workflow, an inventory of where personal data lives, per-system deletion handlers including batched rewrites of lake files, crypto-shredding where rewriting is impractical, handling of backups and streams, verification and an audit trail."
+  },
+  "video-recommendations": {
+    "requirements": [
+      "About 500 million people open the home page each day; each load returns a ranked list of about 20 videos within 200 ms.",
+      "The catalogue holds billions of videos and grows by hundreds of thousands an hour; fresh uploads must be able to reach viewers.",
+      "Success is long-term viewer satisfaction and return visits, not clicks alone, and changes are proven with online experiments."
+    ],
+    "prerequisites": [
+      "Two-tower retrieval",
+      "Approximate nearest neighbour search",
+      "Multi-task ranking",
+      "A/B testing"
+    ],
+    "expectedOutcome": "A framed objective that values satisfied watch time, a funnel of candidate sources, a light and a heavy ranker with per-stage counts and latency, policy and diversity re-ranking, a cold-start plan for new uploads, offline and online metrics with guardrails, and retraining."
+  },
+  "feed-ranking": {
+    "requirements": [
+      "Two billion people open the feed several times a day; each has around 1,500 eligible posts from friends, pages and groups.",
+      "The first screen renders within 300 ms and the next page is ranked as the person scrolls.",
+      "Ranking optimises meaningful interactions and return visits while demoting spam, misinformation and other low-quality posts."
+    ],
+    "prerequisites": [
+      "Multi-task learning",
+      "Calibrated probabilities",
+      "Feature stores",
+      "Online experiments"
+    ],
+    "expectedOutcome": "A value model that combines predicted actions with weights, inventory and candidate sources, integrity models kept separate from engagement ranking, a light and heavy ranker inside the latency budget, final-pass diversity rules, and long-term guardrail metrics."
+  },
+  "search-ranking": {
+    "requirements": [
+      "An online store with 300 million products serves 50,000 searches a second at peak, returning results within 200 ms.",
+      "Results must match what shoppers mean, including misspellings, brands, model numbers and descriptive phrases.",
+      "Search should drive purchases, and ranking changes are tested on live traffic before they ship."
+    ],
+    "prerequisites": [
+      "Inverted indexes and BM25",
+      "Text embeddings",
+      "Learning to rank",
+      "NDCG and interleaving"
+    ],
+    "expectedOutcome": "Query understanding, lexical and semantic retrieval merged into one candidate set, a learning-to-rank model with relevance, quality and behaviour features, graded labels corrected for position bias, sharded serving with caching, and offline and online evaluation."
+  },
+  "content-moderation": {
+    "requirements": [
+      "About a billion posts, comments, images and short videos are uploaded every day in dozens of languages.",
+      "Clear violations are removed or limited before they spread; borderline cases go to a few thousand trained reviewers.",
+      "Each harm type has its own policy and tolerance for mistakes, users can appeal, and quality is reported publicly."
+    ],
+    "prerequisites": [
+      "Multilabel classifiers",
+      "Precision and recall trade-offs",
+      "Perceptual hashing",
+      "Human-in-the-loop labeling"
+    ],
+    "expectedOutcome": "Per-harm framing and thresholds, hash matching plus multimodal classifiers and account signals, a policy engine mapping scores to actions, review queues prioritised by expected harm, a labeling and retraining loop, and prevalence-based measurement."
+  },
+  "people-you-may-know": {
+    "requirements": [
+      "A social network has a billion members with an average of 300 connections each.",
+      "Each member sees about 20 suggestions that should be people they actually know, refreshed daily and soon after they make a new connection.",
+      "Suggestions respect blocks and privacy settings and never reveal sensitive relationships."
+    ],
+    "prerequisites": [
+      "Graph traversal",
+      "Link prediction",
+      "Node embeddings",
+      "Batch processing"
+    ],
+    "expectedOutcome": "A link-prediction framing on accepted connections, several candidate sources led by friends of friends, graph and affiliation features, mostly batch scoring with a real-time update path, privacy filters, and an evaluation plan that accounts for network effects."
+  },
+  "visual-search": {
+    "requirements": [
+      "People photograph or crop part of an image and get visually similar images and purchasable products back.",
+      "The index holds about 5 billion images, grows by 2 million a day, and answers 5,000 queries a second within 500 ms.",
+      "New images become searchable within an hour."
+    ],
+    "prerequisites": [
+      "Image embeddings",
+      "Contrastive learning",
+      "Vector indexes and quantization",
+      "Re-ranking"
+    ],
+    "expectedOutcome": "An embedding model trained contrastively, object detection to pick the query region, a sharded and compressed vector index, incremental indexing, re-ranking for quality and duplicates, a plan to re-embed the corpus when the model changes, and retrieval metrics."
+  },
+  "eta-prediction": {
+    "requirements": [
+      "A food delivery app takes about 10 million orders a day and shows an estimated delivery time on search results and at checkout.",
+      "The estimate updates during the order, after a courier is assigned and after pickup.",
+      "Late deliveries hurt customers more than early ones, and estimates must stay sensible during rain, peaks and holidays."
+    ],
+    "prerequisites": [
+      "Regression losses",
+      "Quantile prediction",
+      "Streaming features",
+      "Routing engines"
+    ],
+    "expectedOutcome": "A delivery time split into stages, real-time kitchen and courier features plus historical aggregates, a baseline then learned models predicting quantiles, caching for search pages, re-prediction on order events, and evaluation by lateness and quantile coverage."
+  },
+  "dynamic-pricing": {
+    "requirements": [
+      "A ride-hailing app operates in 400 cities; prices are recomputed per small map area every minute.",
+      "Higher prices should reduce excess demand and attract drivers so riders still get a car within a few minutes.",
+      "Prices must stay within regulatory and fairness limits, and changes to the pricing policy are tested before rollout."
+    ],
+    "prerequisites": [
+      "Time-series forecasting",
+      "Geospatial indexing",
+      "Price elasticity",
+      "Switchback experiments"
+    ],
+    "expectedOutcome": "Demand and supply forecasts per area and minute, a pricing policy that treats the multiplier as an intervention with elasticity estimates, streaming inputs, caps and smoothing, safeguards, and an experiment design that handles marketplace interference."
+  },
+  "notification-ranking": {
+    "requirements": [
+      "A social app with 300 million daily users generates billions of candidate notifications a day: likes, comments, follows, recommendations and reminders.",
+      "The system decides which to send by push, which to keep in the inbox only, and when.",
+      "It must grow long-term engagement without driving people to disable notifications or uninstall."
+    ],
+    "prerequisites": [
+      "Binary classification",
+      "Uplift modeling",
+      "Rate limiting",
+      "Holdout experiments"
+    ],
+    "expectedOutcome": "A framing based on the value of sending versus not sending, candidate generation and deduplication, a model for engagement and opt-out risk, per-user volume caps and send-time choice, delivery through queues, and long-term holdouts."
+  },
+  "code-assistant": {
+    "requirements": [
+      "About 2 million developers use the assistant in their editors; completions are requested as they pause typing.",
+      "Suggestions appear within about 300 ms and fit the surrounding code and the rest of the repository.",
+      "Enterprise customers require that their code is not stored or used for training, and leaders want proof the tool helps."
+    ],
+    "prerequisites": [
+      "Fill-in-the-middle models",
+      "Code retrieval",
+      "LLM serving latency",
+      "Product metrics"
+    ],
+    "expectedOutcome": "A latency budget with debouncing and cancellation, context assembly from the open file and repository, a small fast completion model, post-processing filters, a separate chat and agent mode, privacy controls, and usefulness metrics beyond acceptance rate."
+  },
+  "voice-ai-agent": {
+    "requirements": [
+      "A clinic network wants an AI to answer phone calls, answer common questions and book or move appointments.",
+      "Up to 5,000 calls run at once; the agent should start replying within about a second of the caller finishing.",
+      "Callers can interrupt the agent, and it transfers to staff when it can't help."
+    ],
+    "prerequisites": [
+      "Speech recognition",
+      "Text-to-speech",
+      "WebRTC and telephony",
+      "LLM tool calling"
+    ],
+    "expectedOutcome": "A streaming pipeline from audio in to audio out, turn detection and barge-in, a per-stage latency budget, booking tools with safe calls and confirmations, human transfer, capacity for concurrent calls, and evaluation of latency and task success."
+  },
+  "text-to-image": {
+    "requirements": [
+      "About 20 million image generation jobs a day; each prompt returns a grid of four images.",
+      "Fast-tier users expect results in under 20 seconds; a cheaper tier may wait minutes.",
+      "Prompts and images that break content policy are blocked, and users can upscale, vary and browse their past images."
+    ],
+    "prerequisites": [
+      "Diffusion models",
+      "GPU scheduling",
+      "Job queues",
+      "Content safety classifiers"
+    ],
+    "expectedOutcome": "An asynchronous job design with priority queues and quotas, GPU fleet sizing and warm models, batching and speed-ups, safety checks on prompts and outputs, object storage behind a CDN, and cost and latency metrics."
+  },
+  "document-ingestion": {
+    "requirements": [
+      "A platform makes customers' documents searchable for their LLM applications: PDFs, scans, office files, web pages and email.",
+      "It must import 50 million existing documents and then keep up with about 500,000 changes a day.",
+      "Changes appear in search within 15 minutes, deleted or permission-revoked documents disappear within 5, and tenants are isolated."
+    ],
+    "prerequisites": [
+      "OCR and layout parsing",
+      "Chunking for RAG",
+      "Embedding at scale",
+      "Idempotent pipelines"
+    ],
+    "expectedOutcome": "A staged pipeline connected by queues, type-aware parsing with escalation for hard pages, chunking with metadata and permissions, batch embedding, versioned updates and fast deletes, backfills isolated from live traffic, and parse-quality monitoring."
+  },
+  "ai-answer-engine": {
+    "requirements": [
+      "People ask questions in plain language and get a short answer drawn from the live web, with numbered citations.",
+      "About 10 million questions a day; sources appear within about two seconds and the answer streams soon after.",
+      "Follow-up questions in a thread keep context, and answers about recent events are current."
+    ],
+    "prerequisites": [
+      "Web search and crawling",
+      "RAG pipelines",
+      "Rerankers",
+      "Caching"
+    ],
+    "expectedOutcome": "Query planning and rewriting, search plus parallel page fetching with timeouts and caching, passage extraction and reranking, generation with inline citations and grounding checks, a latency plan, cost per answer, and quality metrics."
+  },
+  "llm-gateway": {
+    "requirements": [
+      "Forty internal services call models from several providers and a self-hosted model, about 3,000 requests a second at peak.",
+      "One provider outage must not take down the company's AI features.",
+      "Each team has a monthly spend budget, provider keys must not live in application code, and every call is traceable."
+    ],
+    "prerequisites": [
+      "API gateways",
+      "Rate limiting",
+      "Circuit breakers",
+      "Streaming responses"
+    ],
+    "expectedOutcome": "A single internal API with central credentials, model aliases and routing, retries and fallback chains with per-model prompts, token-based rate limits and budgets, caching, streaming support, asynchronous usage metering and observability."
+  },
+  "llm-inference-platform": {
+    "requirements": [
+      "A company self-hosts several open-weight LLMs for chat and batch workloads on its own GPU fleet.",
+      "Interactive traffic needs the first token within about 500 ms and steady streaming; batch jobs only need high throughput.",
+      "Teams can deploy fine-tuned variants, and GPU spend must stay predictable as traffic doubles."
+    ],
+    "prerequisites": [
+      "KV cache",
+      "Continuous batching",
+      "GPU memory planning",
+      "Autoscaling"
+    ],
+    "expectedOutcome": "Capacity estimates from tokens and GPU memory, a serving engine with continuous batching and paged KV cache, a router and queues separating interactive and batch traffic, autoscaling on queue and cache pressure, adapter serving, safe rollouts and cost metrics."
+  },
+  "llm-eval-platform": {
+    "requirements": [
+      "Twenty product teams ship LLM features and agents; each change to a prompt, model or retrieval setting must be tested before release.",
+      "Teams need repeatable test runs on their own datasets with automatic grading, and comparisons against the current version.",
+      "Results must be trustworthy enough to block a release, and production failures should become new test cases."
+    ],
+    "prerequisites": [
+      "Golden datasets",
+      "LLM-as-a-judge",
+      "CI pipelines",
+      "Tracing"
+    ],
+    "expectedOutcome": "Versioned datasets and configurations, a run orchestrator with repeated trials, code-based and calibrated model graders, sandboxes for agent tasks, comparison reports by slice, release gates in CI, and a feedback loop from production traces."
   }
 };

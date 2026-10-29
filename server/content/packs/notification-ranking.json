@@ -1,0 +1,580 @@
+{
+  "opening": "Our app sends a lot of push notifications and more people are turning them off. Design a system that decides which notifications to send.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "daily",
+        "scale",
+        "audience"
+      ],
+      "answer": "About 300 million daily users."
+    },
+    {
+      "id": "scale.candidates",
+      "topics": [
+        "candidates",
+        "volume",
+        "how many notifications",
+        "events",
+        "per day"
+      ],
+      "answer": "Billions of candidate notifications a day from likes, comments, follows, friend posts, recommendations and reminders."
+    },
+    {
+      "id": "req.channels",
+      "topics": [
+        "channels",
+        "push",
+        "inbox",
+        "email",
+        "where shown"
+      ],
+      "answer": "Each candidate can be sent as a push, kept in the in-app inbox only, or dropped."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "metric",
+        "success",
+        "objective",
+        "engagement"
+      ],
+      "answer": "The goal is long-term engagement; opt-outs, disabled notifications and uninstalls are the main costs."
+    },
+    {
+      "id": "req.timing",
+      "topics": [
+        "timing",
+        "when",
+        "time zones",
+        "quiet hours",
+        "send time"
+      ],
+      "answer": "Sending at the wrong time annoys people; users are spread across many time zones and some set quiet hours."
+    },
+    {
+      "id": "req.urgent",
+      "topics": [
+        "urgent",
+        "security",
+        "transactional",
+        "must send",
+        "messages"
+      ],
+      "answer": "Security alerts and direct messages must always be delivered promptly; everything else is optional."
+    },
+    {
+      "id": "data.signals",
+      "topics": [
+        "data",
+        "logs",
+        "opens",
+        "history",
+        "signals"
+      ],
+      "answer": "We log every notification sent, opened, dismissed or followed by an opt-out, plus app activity times."
+    }
+  ],
+  "clarificationPolicy": "Answer as the notifications product lead. Keep it a high-volume decision problem with long-term costs and timing; decide unlisted details so uplift framing, budgets and long-term measurement stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "candidates",
+          "channels",
+          "opt-outs",
+          "long-term",
+          "time zones",
+          "urgent"
+        ]
+      },
+      "goal": "Establish volume, decisions available, costs and must-send cases.",
+      "opener": "What would you like to know before designing this?",
+      "evidence": {
+        "strong": "Asks about users and candidate volume, the options (push, inbox, drop), the goal and the cost of opt-outs, timing and quiet hours, and which notifications must always go out.",
+        "adequate": "Gets volume but not the cost of sending.",
+        "weak": "Assumes every notification should be sent."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.more",
+          "pattern": "Assumes more notifications mean more engagement.",
+          "challenge": "If someone gets thirty pushes a day, what do they eventually do?"
+        }
+      ],
+      "probes": [
+        "What does sending one too many cost?",
+        "Are any notifications non-negotiable?"
+      ],
+      "hints": [
+        "Every push spends some of the user's patience.",
+        "Separate must-send from optional."
+      ],
+      "moveOnSummary": "Billions of optional candidates for hundreds of millions of users, push versus inbox versus drop, opt-outs as the cost, timing matters, and transactional alerts always sent.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "notification-service",
+          "push"
+        ],
+        "keywords": [
+          "candidate stream",
+          "aggregation",
+          "decision service",
+          "scheduler",
+          "delivery",
+          "dedupe"
+        ]
+      },
+      "goal": "Lay out the pipeline from events to delivered notifications.",
+      "opener": "Walk me through how an event becomes a notification on someone's phone.",
+      "evidence": {
+        "strong": "Producers emit candidates to a queue, an aggregator dedupes and batches similar events, a decision service scores and applies budgets, a scheduler holds items for the chosen send time, and a delivery service sends through push providers with retries; transactional alerts bypass ranking.",
+        "adequate": "A model and a sender with no aggregation or scheduling.",
+        "weak": "Every event sends a push immediately."
+      },
+      "misconceptions": [
+        {
+          "id": "pipe.each",
+          "pattern": "Sends one push per event.",
+          "challenge": "Fifty people like a photo in ten minutes. How many pushes does the owner get?"
+        }
+      ],
+      "probes": [
+        "Where do you combine similar events?",
+        "How do urgent alerts avoid waiting behind ranking?"
+      ],
+      "hints": [
+        "Combine before you decide.",
+        "Not everything should go through the same path."
+      ],
+      "moveOnSummary": "Candidates queued, aggregated and deduplicated, scored with budgets, scheduled, and delivered with retries; transactional alerts bypass ranking.",
+      "learnTopics": [
+        "design-webhook-service",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "hl.framing",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "training"
+        ],
+        "keywords": [
+          "uplift",
+          "incremental value",
+          "open probability",
+          "opt-out risk",
+          "label",
+          "decision"
+        ]
+      },
+      "goal": "Frame the decision as the value of sending versus not sending.",
+      "opener": "What exactly should a model predict to decide whether to send?",
+      "evidence": {
+        "strong": "Predicts the incremental effect of sending (uplift on sessions) and the risk of opt-out or uninstall, combining them into a value; notes that high open probability may reflect people who would open the app anyway; trains with randomised holdouts.",
+        "adequate": "Predicts open probability and adds an opt-out penalty.",
+        "weak": "Predicts opens only."
+      },
+      "misconceptions": [
+        {
+          "id": "frame.opens",
+          "pattern": "Sends notifications with the highest predicted open rate.",
+          "challenge": "Someone opens the app every hour anyway. Does a push to them add anything?"
+        }
+      ],
+      "probes": [
+        "How do you know a notification caused the visit?",
+        "How do you put a cost on an opt-out?"
+      ],
+      "hints": [
+        "Compare with what would have happened without the push.",
+        "Some costs show up weeks later."
+      ],
+      "moveOnSummary": "Predict the uplift of sending and the opt-out risk, combine into a value, and learn from randomised holdouts.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "multi-armed-bandits"
+      ]
+    },
+    {
+      "id": "deep.budget",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "kv-store"
+        ],
+        "keywords": [
+          "volume cap",
+          "daily budget",
+          "fatigue",
+          "per-user limit",
+          "competition",
+          "knapsack"
+        ]
+      },
+      "goal": "Limit volume per user and choose the best few.",
+      "opener": "A user has thirty candidates today. How many do they get, and which ones?",
+      "evidence": {
+        "strong": "A per-user daily budget learned from tolerance, candidates competing for slots by value, fatigue features (recent volume, recent dismissals), lower-value items moved to the inbox, and counters in a fast store.",
+        "adequate": "A fixed global cap.",
+        "weak": "No limit."
+      },
+      "misconceptions": [
+        {
+          "id": "bud.independent",
+          "pattern": "Decides each notification independently.",
+          "challenge": "Ten notifications each look worth sending. Together are they still worth it?"
+        }
+      ],
+      "probes": [
+        "Should every user have the same cap?",
+        "What happens to notifications that don't make the cut?"
+      ],
+      "hints": [
+        "Notifications compete with each other.",
+        "People differ in how many they tolerate."
+      ],
+      "moveOnSummary": "Per-user learned budgets, competition by value, fatigue features, and inbox fallback for lower-value items.",
+      "learnTopics": [
+        "rate-limiting",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.timing",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "clock"
+        ],
+        "keywords": [
+          "send time",
+          "time zone",
+          "quiet hours",
+          "activity pattern",
+          "delay",
+          "scheduling"
+        ]
+      },
+      "goal": "Send at times people are likely to welcome it.",
+      "opener": "When should a notification be sent?",
+      "evidence": {
+        "strong": "Uses each user's activity pattern and time zone to choose a send window, respects quiet hours, keeps time-sensitive items immediate, uses a scheduler with delayed jobs, and re-checks relevance at send time.",
+        "adequate": "Respects time zones only.",
+        "weak": "Sends immediately always."
+      },
+      "misconceptions": [
+        {
+          "id": "time.now",
+          "pattern": "Thinks sending immediately is always best.",
+          "challenge": "A friend posts at 3 am your time. Should your phone buzz?"
+        }
+      ],
+      "probes": [
+        "What if the item is no longer relevant when the window comes?",
+        "Which notifications can't wait?"
+      ],
+      "hints": [
+        "Learn when each person usually uses the app.",
+        "Re-validate before delivering a delayed item."
+      ],
+      "moveOnSummary": "Per-user send windows from activity and time zone, quiet hours, immediate time-sensitive items, and re-validation at send time.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "push-notifications"
+      ]
+    },
+    {
+      "id": "deep.longterm",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "evaluation"
+        ],
+        "keywords": [
+          "long-term holdout",
+          "retention",
+          "opt-out rate",
+          "short-term lift",
+          "novelty",
+          "measurement"
+        ]
+      },
+      "goal": "Measure long-term effects, not just short-term lifts.",
+      "opener": "How would you know a change is good for the product over months?",
+      "evidence": {
+        "strong": "A long-running holdout with fewer or no optional notifications, tracking retention, notification-disable and uninstall rates alongside sessions; warns that sending more lifts short-term metrics while eroding long-term engagement.",
+        "adequate": "An A/B test on daily sessions for a week or two.",
+        "weak": "Measures open rate."
+      },
+      "misconceptions": [
+        {
+          "id": "lt.short",
+          "pattern": "Trusts a two-week lift in sessions.",
+          "challenge": "Sending twice as many pushes lifts sessions for two weeks. What could happen in month three?"
+        }
+      ],
+      "probes": [
+        "What metric would reveal slow damage?",
+        "Why keep some users with fewer notifications for a long time?"
+      ],
+      "hints": [
+        "Annoyance accumulates.",
+        "A holdout shows the true long-term effect."
+      ],
+      "moveOnSummary": "Long-running holdouts tracking retention, disables and uninstalls alongside sessions.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.delivery",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "push",
+          "dlq"
+        ],
+        "keywords": [
+          "push provider",
+          "retries",
+          "device tokens",
+          "rate limits",
+          "delivery receipts",
+          "dead letter"
+        ]
+      },
+      "goal": "Deliver reliably at very high volume.",
+      "opener": "How do the chosen notifications actually get delivered at this scale?",
+      "evidence": {
+        "strong": "A delivery service with queues per provider, respect for provider rate limits, retries with backoff, dead-letter handling, device token management (removing invalid tokens), idempotency to avoid duplicates, and delivery and open receipts fed back to logs.",
+        "adequate": "Sends through a provider with retries.",
+        "weak": "Calls the provider synchronously from the decision service."
+      },
+      "misconceptions": [
+        {
+          "id": "del.dupes",
+          "pattern": "Retries blindly on failure.",
+          "challenge": "The provider timed out after actually sending. What does the user see after your retry?"
+        }
+      ],
+      "probes": [
+        "What happens to tokens for uninstalled apps?",
+        "How do you avoid sending the same push twice?"
+      ],
+      "hints": [
+        "Providers have limits and failures.",
+        "Idempotency keys stop duplicates."
+      ],
+      "moveOnSummary": "Per-provider queues within rate limits, retries with backoff, dead letters, token hygiene, idempotency, and receipts back to logs.",
+      "learnTopics": [
+        "push-notifications",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "deep.aggregation",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "aggregator",
+          "stream-processor"
+        ],
+        "keywords": [
+          "aggregation",
+          "digest",
+          "batching events",
+          "collapse",
+          "summary notification",
+          "window"
+        ]
+      },
+      "goal": "Combine low-value events into fewer, richer notifications.",
+      "opener": "How would you handle a burst of small events for one person?",
+      "evidence": {
+        "strong": "Groups similar events in a short window per user and type into one notification ('Asha and 12 others liked your photo'), with a digest option for low-value types, implemented as windowed aggregation in a stream job.",
+        "adequate": "Dedupes identical events only.",
+        "weak": "No aggregation."
+      },
+      "misconceptions": [
+        {
+          "id": "agg.none",
+          "pattern": "Treats every event as its own notification.",
+          "challenge": "A post goes viral and gets thousands of likes. What happens to the author's phone?"
+        }
+      ],
+      "probes": [
+        "How long do you wait before sending an aggregate?",
+        "Which types suit a daily digest?"
+      ],
+      "hints": [
+        "A short window collects related events.",
+        "Some updates can wait for a summary."
+      ],
+      "moveOnSummary": "Windowed per-user aggregation into summary notifications and digests for low-value types.",
+      "learnTopics": [
+        "stream-processing-windows-watermarks",
+        "fan-out"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "short vs long term",
+          "volume",
+          "timing",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs did you make?",
+      "evidence": {
+        "strong": "Short-term sessions versus long-term trust, immediacy versus better timing, personalised budgets versus simplicity, and measurement cost of holdouts.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What would you never trade away?",
+        "What would you build next?"
+      ],
+      "hints": [
+        "A disabled notification channel is hard to win back.",
+        "Holdouts cost some engagement to learn."
+      ],
+      "moveOnSummary": "Short-term lift versus long-term trust, immediacy versus timing, and personalisation versus simplicity.",
+      "learnTopics": [
+        "ml-feedback-loops",
+        "push-notifications"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.growth",
+      "after": "deep.budget",
+      "prompt": "The growth team doubled notification volume last quarter and sessions went up. Now opt-outs are climbing. How would you settle the argument?",
+      "agendaItemId": "deep.longterm"
+    },
+    {
+      "id": "cb.viral",
+      "after": "deep.timing",
+      "prompt": "A user's post goes viral overnight and they wake up to hundreds of notifications. What should have happened?",
+      "agendaItemId": "deep.aggregation"
+    }
+  ],
+  "vocabulary": [
+    "push notification",
+    "uplift modeling",
+    "opt-out",
+    "uninstall",
+    "fatigue",
+    "volume cap",
+    "budget",
+    "send-time optimisation",
+    "quiet hours",
+    "time zone",
+    "digest",
+    "aggregation",
+    "holdout",
+    "retention",
+    "APNs",
+    "FCM",
+    "device token",
+    "idempotency",
+    "dead-letter queue",
+    "inbox"
+  ],
+  "alternatives": [
+    {
+      "choice": "Contextual bandits choosing whether and when to send",
+      "whenBetter": "When fast online learning matters and the team can log propensities for evaluation."
+    },
+    {
+      "choice": "Rule-based caps and priorities with no model",
+      "whenBetter": "For a small app or as a launch baseline before outcome data exists."
+    },
+    {
+      "choice": "Daily digests instead of individual pushes for most types",
+      "whenBetter": "When most notifications are low-urgency and fatigue is high."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Uplift with budgets and holdouts",
+      "outline": "Clarifies volume, push versus inbox versus drop, opt-outs as the cost, timing and must-send alerts. Queues candidates, aggregates bursts into summaries, scores the uplift of sending and opt-out risk learned from randomised holdouts, allocates per-user budgets with fatigue features, picks send times from activity and time zones with quiet hours, and delivers through rate-limited, idempotent provider queues with retries. Transactional alerts bypass ranking. Measures with long-running holdouts on retention, disables and uninstalls."
+    },
+    {
+      "band": "adequate",
+      "label": "Open-rate model with a cap",
+      "outline": "Predicts open probability per notification, sends those above a threshold with a fixed daily cap and time-zone check, and A/B tests sessions for two weeks; no uplift framing, aggregation or long-term holdout."
+    },
+    {
+      "band": "weak",
+      "label": "Send everything",
+      "outline": "Sends a push for every event immediately and lets users disable types in settings; no model, budget or measurement."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

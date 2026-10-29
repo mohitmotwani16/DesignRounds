@@ -1,0 +1,579 @@
+{
+  "opening": "We want to help members of our social network find people they know. Design the People You May Know feature.",
+  "clarifications": [
+    {
+      "id": "scale.members",
+      "topics": [
+        "members",
+        "users",
+        "scale",
+        "how many people"
+      ],
+      "answer": "About 1 billion members."
+    },
+    {
+      "id": "scale.graph",
+      "topics": [
+        "connections",
+        "edges",
+        "graph size",
+        "friends per user",
+        "degree"
+      ],
+      "answer": "Members have about 300 connections on average, so the graph has roughly 150 billion edges, with some members having many thousands."
+    },
+    {
+      "id": "req.surface",
+      "topics": [
+        "surface",
+        "where shown",
+        "how many suggestions",
+        "ui"
+      ],
+      "answer": "About 20 suggestions appear on the home page and the network tab."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "how often",
+        "real-time",
+        "update",
+        "new connection"
+      ],
+      "answer": "Daily refresh is fine, but after someone makes a new connection, related suggestions should appear within minutes."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "metric",
+        "success",
+        "objective"
+      ],
+      "answer": "Success is accepted connections, especially for new members, not just invitations sent."
+    },
+    {
+      "id": "req.privacy",
+      "topics": [
+        "privacy",
+        "block",
+        "sensitive",
+        "opt out",
+        "contacts"
+      ],
+      "answer": "Blocks and 'don't suggest me' settings must always be respected, and suggestions must not reveal sensitive relationships."
+    },
+    {
+      "id": "data.signals",
+      "topics": [
+        "signals",
+        "data",
+        "schools",
+        "employers",
+        "contacts",
+        "profile views"
+      ],
+      "answer": "We have profiles with schools and employers, uploaded address books from members who opted in, profile views and group memberships."
+    }
+  ],
+  "clarificationPolicy": "Answer as the growth product lead. Keep it a billion-node graph problem with daily batch and some real-time updates; decide unlisted details so candidate generation, privacy and evaluation stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "members",
+          "connections",
+          "accepted",
+          "freshness",
+          "privacy",
+          "goal"
+        ]
+      },
+      "goal": "Establish graph scale, the success metric, freshness and privacy constraints.",
+      "opener": "What do you need to know before designing this?",
+      "evidence": {
+        "strong": "Asks about members and connections per member, surfaces, freshness, the success metric and privacy rules; prefers accepted connections over sends.",
+        "adequate": "Gets scale but not the metric or privacy.",
+        "weak": "No requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.sends",
+          "pattern": "Optimises invitations sent.",
+          "challenge": "If spammy suggestions get many invitations that are ignored, is the feature working?"
+        }
+      ],
+      "probes": [
+        "What counts as a successful suggestion?",
+        "What must never be suggested?"
+      ],
+      "hints": [
+        "Ask what happens after an invitation.",
+        "Privacy rules are requirements, not afterthoughts."
+      ],
+      "moveOnSummary": "A billion members with hundreds of connections each, accepted connections as the goal, daily refresh with fast reaction to new connections, and strict privacy.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.candidates",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "graph-db",
+          "batch-processor"
+        ],
+        "keywords": [
+          "friends of friends",
+          "two hop",
+          "candidate sources",
+          "mutual connections",
+          "affiliations",
+          "contacts"
+        ]
+      },
+      "goal": "Generate a few thousand good candidates per member without scanning everyone.",
+      "opener": "You can't score a billion people for each member. How do you pick candidates?",
+      "evidence": {
+        "strong": "Friends of friends ranked by mutual count with caps on high-degree nodes, shared schools and employers with overlapping years, contacts from opted-in address books, and graph-embedding neighbours, merged and deduplicated to a few thousand.",
+        "adequate": "Friends of friends only.",
+        "weak": "Random or most popular members."
+      },
+      "misconceptions": [
+        {
+          "id": "cand.all",
+          "pattern": "Thinks scoring all members is possible with enough machines.",
+          "challenge": "A billion members each scored against a billion others: how many pairs is that?"
+        }
+      ],
+      "probes": [
+        "Who would friends of friends miss?",
+        "What happens with someone who has many thousands of connections?"
+      ],
+      "hints": [
+        "Most acquaintances are close in the graph.",
+        "Schools and workplaces connect people without mutual friends."
+      ],
+      "moveOnSummary": "Friends of friends with degree caps, shared affiliations, opted-in contacts and graph-embedding neighbours, merged to a few thousand candidates.",
+      "learnTopics": [
+        "design-people-you-may-know",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "hl.ranking",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "feature-store"
+        ],
+        "keywords": [
+          "link prediction",
+          "ranking model",
+          "p(accept)",
+          "features",
+          "mutual count",
+          "label"
+        ]
+      },
+      "goal": "Rank candidates by the probability a connection is formed.",
+      "opener": "How do you order the candidates?",
+      "evidence": {
+        "strong": "Link prediction: a model predicting that an invitation is sent and accepted, trained on past suggestions and outcomes, with graph overlap, affiliation, interaction and candidate-quality features.",
+        "adequate": "A model on mutual count and a few features without a clear label.",
+        "weak": "Sort by mutual count only."
+      },
+      "misconceptions": [
+        {
+          "id": "rank.mutuals",
+          "pattern": "Believes the number of mutual connections is enough.",
+          "challenge": "You share fifty mutuals with a celebrity and three with your new teammate. Whom do you know?"
+        }
+      ],
+      "probes": [
+        "What's the label exactly?",
+        "How do you weigh a mutual friend who knows everyone?"
+      ],
+      "hints": [
+        "Acceptance is what matters.",
+        "Some mutual connections are more telling than others."
+      ],
+      "moveOnSummary": "A link-prediction model on accepted connections with graph, affiliation, interaction and candidate features.",
+      "learnTopics": [
+        "learning-to-rank",
+        "feature-engineering"
+      ]
+    },
+    {
+      "id": "deep.graphfeatures",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "embedding",
+          "graph-db"
+        ],
+        "keywords": [
+          "adamic-adar",
+          "common neighbours",
+          "node embeddings",
+          "node2vec",
+          "graph neural network",
+          "weighted mutuals"
+        ]
+      },
+      "goal": "Use graph structure well in features and embeddings.",
+      "opener": "What can the graph itself tell you about whether two people know each other?",
+      "evidence": {
+        "strong": "Weighted overlap measures such as Adamic-Adar, common-neighbour ratios, triangle and community features, and node embeddings (random-walk or graph neural network) whose similarity becomes a feature and a retrieval source.",
+        "adequate": "Raw mutual counts and maybe embeddings without detail.",
+        "weak": "No graph features."
+      },
+      "misconceptions": [
+        {
+          "id": "gf.raw",
+          "pattern": "Counts all mutual connections equally.",
+          "challenge": "A mutual connection with ten thousand connections versus one with twenty: which tells you more?"
+        }
+      ],
+      "probes": [
+        "How would you weight mutual connections?",
+        "How do embeddings help beyond two hops?"
+      ],
+      "hints": [
+        "Selective connections carry more information.",
+        "Embeddings capture community structure."
+      ],
+      "moveOnSummary": "Weighted overlap such as Adamic-Adar, community features and node embeddings as features and a retrieval source.",
+      "learnTopics": [
+        "embeddings",
+        "feature-engineering"
+      ]
+    },
+    {
+      "id": "deep.batch",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "batch-processor",
+          "kv-store",
+          "t-spark"
+        ],
+        "keywords": [
+          "daily batch",
+          "precompute",
+          "top suggestions",
+          "graph snapshot",
+          "pruning",
+          "storage per user"
+        ]
+      },
+      "goal": "Compute suggestions for a billion members within a daily batch window.",
+      "opener": "How do you compute suggestions for everyone every day, and where do they live?",
+      "evidence": {
+        "strong": "Daily graph snapshot, distributed two-hop expansion with pruning by mutual count and degree caps, scoring hundreds of candidates per member on a large cluster, storing the top couple of hundred per member in a key-value store, with sizing estimates.",
+        "adequate": "A nightly job without pruning or sizing.",
+        "weak": "Computes everything on request."
+      },
+      "misconceptions": [
+        {
+          "id": "batch.ondemand",
+          "pattern": "Computes two-hop neighbourhoods at request time.",
+          "challenge": "A member with five thousand connections opens the page. How many people are two hops away?"
+        }
+      ],
+      "probes": [
+        "How many candidate pairs do you score per day?",
+        "How much storage do precomputed suggestions need?"
+      ],
+      "hints": [
+        "Prune before you score.",
+        "Store only the top results per member."
+      ],
+      "moveOnSummary": "A daily distributed job with pruned two-hop expansion and scoring, storing top suggestions per member in a key-value store.",
+      "learnTopics": [
+        "mapreduce",
+        "apache-spark-architecture"
+      ]
+    },
+    {
+      "id": "deep.realtime",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "topic"
+        ],
+        "keywords": [
+          "new connection event",
+          "real-time update",
+          "incremental",
+          "fresh candidates",
+          "stream",
+          "minutes"
+        ]
+      },
+      "goal": "React within minutes to new connections and new members.",
+      "opener": "Someone connects with a new colleague right now. How soon do that colleague's teammates appear in their suggestions?",
+      "evidence": {
+        "strong": "Connection events on a stream trigger an updater that adds the new connection's connections as candidates, scores them lightly, merges into the stored list, and handles new members with onboarding signals until the next batch.",
+        "adequate": "Waits for the next daily batch with a note it could be faster.",
+        "weak": "No real-time path."
+      },
+      "misconceptions": [
+        {
+          "id": "rt.batch",
+          "pattern": "Thinks daily batch is good enough for new connections.",
+          "challenge": "A new employee connects with their manager on day one. Should suggestions wait until tomorrow?"
+        }
+      ],
+      "probes": [
+        "What triggers the update?",
+        "How do new members get suggestions before any batch runs?"
+      ],
+      "hints": [
+        "A connection is an event you can react to.",
+        "New members have little graph yet."
+      ],
+      "moveOnSummary": "Connection events trigger an incremental updater that adds and scores fresh candidates; new members use onboarding signals.",
+      "learnTopics": [
+        "stream-processing",
+        "cold-start-problem"
+      ]
+    },
+    {
+      "id": "deep.privacy",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "iam",
+          "guardrails"
+        ],
+        "keywords": [
+          "privacy",
+          "blocked users",
+          "sensitive relationships",
+          "opt out",
+          "contact upload",
+          "suggestion caps"
+        ]
+      },
+      "goal": "Avoid harmful or creepy suggestions.",
+      "opener": "What suggestions should never be shown, and how do you enforce that?",
+      "evidence": {
+        "strong": "Filters blocks in both directions, opt-outs and dismissed suggestions; excludes sensitive contact categories and signals (for example clinics or lawyers in address books); never reveals who uploaded whose contacts; caps how often one member is suggested to others.",
+        "adequate": "Respects blocks only.",
+        "weak": "Doesn't consider privacy."
+      },
+      "misconceptions": [
+        {
+          "id": "priv.blocks",
+          "pattern": "Believes respecting blocks covers privacy.",
+          "challenge": "Two patients of the same therapist are suggested to each other. Was a block involved?"
+        }
+      ],
+      "probes": [
+        "How could a suggestion reveal something private?",
+        "How do you stop one popular member getting flooded with invites?"
+      ],
+      "hints": [
+        "Some shared contacts are themselves sensitive.",
+        "Limit exposure of popular members."
+      ],
+      "moveOnSummary": "Bidirectional blocks, opt-outs and dismissals filtered; sensitive signals excluded; uploaders never revealed; exposure caps per member.",
+      "learnTopics": [
+        "authorization-rbac-abac-oauth",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.eval",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "evaluation"
+        ],
+        "keywords": [
+          "network effects",
+          "cluster randomisation",
+          "recall@k",
+          "acceptance rate",
+          "offline evaluation",
+          "interference"
+        ]
+      },
+      "goal": "Evaluate fairly despite network effects.",
+      "opener": "How would you test a new ranking model when members influence each other?",
+      "evidence": {
+        "strong": "Offline recall@k of connections formed next week; online accepted connections, acceptance rate and new-member connections with guardrails such as ignored or reported invites; cluster-based randomisation because treated members change the graph for control members.",
+        "adequate": "An A/B test by member without considering interference.",
+        "weak": "Offline only."
+      },
+      "misconceptions": [
+        {
+          "id": "eval.userlevel",
+          "pattern": "Assumes member-level A/B tests are clean.",
+          "challenge": "A treated member invites a control member who accepts. Which group gets credit?"
+        }
+      ],
+      "probes": [
+        "Why might the control group change during the test?",
+        "What metric shows invites are unwelcome?"
+      ],
+      "hints": [
+        "Members in the same community affect each other.",
+        "Ignored invites are a signal."
+      ],
+      "moveOnSummary": "Offline recall of future connections, online acceptance metrics with guardrails, and cluster randomisation for network effects.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "ml-evaluation-metrics"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "batch vs real-time",
+          "growth vs privacy",
+          "cost",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs did you make?",
+      "evidence": {
+        "strong": "Batch versus real-time freshness and cost, growth versus privacy, mutual-heavy versus discovery suggestions, and model complexity versus explainability ('you both worked at...').",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Would you show the reason for a suggestion?",
+        "Where would you spend more compute?"
+      ],
+      "hints": [
+        "Explanations can raise acceptance.",
+        "Freshness costs compute."
+      ],
+      "moveOnSummary": "Freshness versus cost, growth versus privacy, and model complexity versus explainable suggestions.",
+      "learnTopics": [
+        "design-people-you-may-know",
+        "continual-learning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.newhire",
+      "after": "deep.batch",
+      "prompt": "A new employee joins and connects with their manager on their first morning. They want to see their teammates now, not tomorrow. What changes?",
+      "agendaItemId": "deep.realtime"
+    },
+    {
+      "id": "cb.creepy",
+      "after": "deep.graphfeatures",
+      "prompt": "A journalist reports that the feature suggested two people who had only visited the same clinic. What went wrong, and how do you prevent it?",
+      "agendaItemId": "deep.privacy"
+    }
+  ],
+  "vocabulary": [
+    "People You May Know",
+    "PYMK",
+    "friends of friends",
+    "two-hop",
+    "mutual connections",
+    "Adamic-Adar",
+    "common neighbours",
+    "link prediction",
+    "node2vec",
+    "GraphSAGE",
+    "graph neural network",
+    "degree cap",
+    "affiliation",
+    "address book",
+    "cluster randomisation",
+    "network effect",
+    "recall at k",
+    "acceptance rate",
+    "key-value store",
+    "Spark"
+  ],
+  "alternatives": [
+    {
+      "choice": "Graph neural network producing both candidates and scores",
+      "whenBetter": "When the team has graph ML infrastructure and wants to capture multi-hop structure directly."
+    },
+    {
+      "choice": "Rules on mutual counts and affiliations with no model",
+      "whenBetter": "For a young network without enough outcome data to train on."
+    },
+    {
+      "choice": "Fully real-time candidate generation",
+      "whenBetter": "For smaller networks where two-hop neighbourhoods are cheap to compute per request."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Graph candidates, batch plus stream",
+      "outline": "Clarifies a billion members, about 300 connections each, accepted connections as the goal, daily refresh plus fast reaction, and privacy rules. Generates candidates from pruned friends of friends, affiliations, opted-in contacts and graph embeddings; ranks with a link-prediction model using weighted overlap, affiliation, interaction and embedding features. Computes daily in a distributed job storing top suggestions per member, adds a stream-driven updater for new connections, filters blocks, opt-outs and sensitive signals with exposure caps, and evaluates with recall of future connections and cluster-randomised experiments."
+    },
+    {
+      "band": "adequate",
+      "label": "Mutual friends ranked",
+      "outline": "Computes friends of friends nightly, ranks by a model on mutual counts and shared employers, respects blocks, and A/B tests by member; no real-time path, sensitive-signal handling or network-effect awareness."
+    },
+    {
+      "band": "weak",
+      "label": "Most mutuals",
+      "outline": "Shows the people with the most mutual friends, computed when the page opens; no model, privacy handling or evaluation."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

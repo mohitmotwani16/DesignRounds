@@ -68,6 +68,6 @@ export default {
     "Give the inference path a latency budget, timeout, capacity limit, and fallback.",
     "Separate infrastructure monitoring from delayed model-quality and drift signals.",
   ],
-  related: ["data-engineering-architecture", "batch-vs-stream-processing", "observability", "caching", "delivery-semantics"],
+  related: ["data-engineering-architecture", "batch-vs-stream-processing", "observability", "caching", "delivery-semantics", "ml-system-design-interview", "ml-platform-architecture", "ml-problem-framing"],
   practice: ["feature-store", "model-serving"],
 };

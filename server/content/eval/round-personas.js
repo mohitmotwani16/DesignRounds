@@ -20,6 +20,57 @@ export const roundPersonas = {
     expect: { score: [25, 58] },
   },
   ],
+  "ad-click-prediction": [
+    {
+      id: "strong",
+      persona: "A strong senior ML engineer. Asks about impressions and candidates per request, the scoring latency budget, the click rate and how the score is used, then points out that the auction multiplies probabilities by bids so calibration matters. Draws as they go. Unprompted, they frame per-impression binary classification with a short click window and log loss, join impressions to clicks in a stream while logging served features, downsample negatives and correct the probabilities afterwards, use hashed ids with sharded embedding tables and smoothed real-time CTR counters, serve a light model then a deep model on GPUs within the budget, add an isotonic calibration layer, retrain incrementally every few hours with holdout gates, handle new ads with advertiser priors, creative embeddings and some exploration, and evaluate with normalised log loss, calibration and an A/B test on revenue with user guardrails. They raise trade-offs before being asked. Never needs hints. Answers concisely.",
+      expect: { score: [82, 93], allowAbove90: true },
+    },
+    {
+      id: "recovers",
+      persona: "A competent mid-level ML engineer who makes three specific mistakes and recovers when helped. (1) They evaluate the model only with AUC; when asked whether the probabilities are right for the auction, they realise calibration matters and add a calibration step. (2) Asked what downsampling negatives does to predictions, they press the hint button once (wantsHint true) instead of answering; after the hint they explain the correction. (3) They plan a weekly retrain; only when the interviewer mentions campaigns launching every day do they move to frequent incremental training with validation. Otherwise reasonable: asks about scale and latency, builds training data from impression logs, uses embeddings for ids, and draws the serving path they describe.",
+      expect: { score: [62, 82], noStrongAfterHelp: true },
+    },
+    {
+      id: "weak",
+      persona: "A junior engineer with shallow knowledge. Doesn't ask clarifying questions. Proposes computing each ad's historical click rate and multiplying it by the bid, refreshed weekly. Doesn't know what calibration is and says 'I'm not sure' when asked. When asked about new ads or latency, gives vague answers like 'use a faster server'. Draws a user, an ad server and a database, and little else.",
+      expect: { score: [25, 58] },
+    },
+  ],
+  "chatgpt-assistant": [
+    {
+      id: "strong",
+      persona: "A strong senior AI engineer. Asks about daily users, messages, tokens in and out per request, first-token latency, self-hosting, plans, history and safety, then estimates input and output tokens per second, explains that output tokens drive GPU decode capacity and gives a GPU count and cost per message. Draws as they go. Unprompted, they put token-based plan limits in the gateway, store conversations partitioned by user with messages carrying parent ids for regenerate and edits, assemble context from recent turns, summaries of older turns and retrieved memory with the system prompt first for prefix caching, run moderation on input and on streamed output, route to a continuously batched GPU fleet with priorities for paid users, stream over SSE with cancellation that reaches the GPU and partial saves, degrade free users to a smaller model under overload, and ship model changes through evals and canaries. Never needs hints. Answers concisely.",
+      expect: { score: [82, 93], allowAbove90: true },
+    },
+    {
+      id: "recovers",
+      persona: "A competent mid-level engineer who makes three specific mistakes and recovers when helped. (1) They size the system by requests per second; when asked what decides how many GPUs are needed, they switch to token-based estimates with output tokens driving capacity. (2) Asked what they send to the model for a very long conversation, they press the hint button once (wantsHint true); after the hint they keep recent turns and summarise older ones. (3) When the user presses stop, they only close the client stream; when the interviewer asks what the GPU is doing, they add cancellation propagated to the inference server. Otherwise reasonable: streams responses, stores conversations in a database and draws the components they describe.",
+      expect: { score: [62, 82], noStrongAfterHelp: true },
+    },
+    {
+      id: "weak",
+      persona: "A junior engineer with shallow knowledge. Doesn't ask clarifying questions or give numbers. Proposes a web server that calls the model with the latest message and returns the full answer when it's done, keeping history in the browser. Doesn't know what tokens or a context window are and says 'I'm not sure'. When asked about scale or abuse, says 'add more servers'. Draws a client, a server and the model.",
+      expect: { score: [25, 58] },
+    },
+  ],
+  "support-ai-agent": [
+    {
+      id: "strong",
+      persona: "A strong senior AI engineer. Asks about conversation volume, which actions the agent may take and their limits, how customers are identified, handoff expectations and success metrics. Draws as they go. Unprompted, they route common intents to fixed workflows and the long tail to an agent loop with retrieval over help articles, give it narrow typed tools behind a policy layer that takes the customer identity from the session and enforces refund limits in code, send larger refunds to a human approval queue, use idempotency keys on writes, hand off with a summary, treat customer and article text as untrusted, cap steps and tokens, evaluate with repeated simulated scenarios in a sandboxed order system with zero tolerance for unauthorised actions, measure cost per resolved conversation and roll out from shadow mode to read-only to small refunds. Never needs hints. Answers concisely.",
+      expect: { score: [82, 93], allowAbove90: true },
+    },
+    {
+      id: "recovers",
+      persona: "A competent mid-level engineer who makes three specific mistakes and recovers when helped. (1) They put the refund limit and account rules only in the system prompt; when asked what stops a customer who claims to be acting for their spouse, they move identity to the session and enforce rules in a policy layer in code. (2) Asked what happens when the refund API times out and the agent retries, they press the hint button once (wantsHint true); after the hint they add idempotency keys. (3) They plan to test with a few dozen manual chats; only when the interviewer asks how they'd know it's safe to launch do they propose simulated scenarios against a sandbox run several times. Otherwise reasonable: one agent with retrieval and tools, a handoff to humans, and drawings of what they describe.",
+      expect: { score: [62, 82], noStrongAfterHelp: true },
+    },
+    {
+      id: "weak",
+      persona: "A junior engineer with shallow knowledge. Doesn't ask clarifying questions. Proposes pasting the help articles into a prompt so a chatbot answers questions, and says refunds can be handled by 'the AI calling the refund API'. Can't explain how the agent knows who the customer is and says 'I'm not sure'. When asked about mistakes or safety, says 'the model is pretty smart'. Draws a user, a chatbot and the model.",
+      expect: { score: [25, 58] },
+    },
+  ],
   "ecommerce-warehouse": [
     {
       id: "strong",

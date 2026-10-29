@@ -56,7 +56,7 @@ export default {
     "Address delayed labels with leading indicators and sampled review.",
     "Distinguish pipeline bugs from real drift before retraining.",
   ],
-  related: ["ml-evaluation-metrics", "data-quality", "observability", "model-serving", "feature-store"],
+  related: ["ml-evaluation-metrics", "data-quality", "observability", "model-serving", "feature-store", "continual-learning", "ml-feedback-loops", "llmops-observability"],
   practice: ["model-monitoring", "online-fraud-model"],
   reading: [
     { title: "What is data drift in ML, and how to detect and handle it", publisher: "Evidently AI", url: "https://www.evidentlyai.com/ml-in-production/data-drift" },
