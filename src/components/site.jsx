@@ -109,7 +109,12 @@ export function SiteNav({ onStart }) {
           </button>
         </div>
         <div className={`nav-sheet ${open ? "open" : ""}`}>
-          <nav aria-label="Mobile">{navLinks("My Account")}</nav>
+          <nav aria-label="Mobile">
+            {navLinks("My Account")}
+            {signedIn && user?.isAdmin && (
+              <Link className="nav-link-btn" to="/admin" onClick={close} aria-current={current(path === "/admin" || path.startsWith("/admin/"))}>Admin</Link>
+            )}
+          </nav>
           <div className="nav-sheet-actions">
             {signedIn ? (
               <>

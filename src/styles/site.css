@@ -542,6 +542,58 @@
   .lp-demo-stage--stack .lp-wire-label { font-size: 11px; stroke-width: 4px; }
   .lp-demo-note-below { margin: 10px 12px 14px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 12.5px; line-height: 1.45; }
   .lp-demo-note-below b { display: block; margin-bottom: 2px; color: var(--accent-text); font-size: 12px; }
+  /* Round timeline: compact cards on phones only (matches MOBILE_MEDIA; laptop/tablet unchanged). */
+  #how .lp-bar { margin-top: 28px; gap: 8px; }
+  #how .lp-seg { gap: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-raised); box-shadow: var(--shadow-sm); overflow: hidden; }
+  #how .lp-seg:hover { transform: none; }
+  #how .lp-seg .lp-seg-fill {
+    height: auto;
+    min-height: 0;
+    padding: 10px 12px;
+    border-radius: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    background: var(--bg-sunken);
+    color: var(--ink);
+  }
+  #how .lp-seg .lp-seg-fill::after { display: none; }
+  #how .lp-bar.in .lp-seg-fill::after { animation: none; transform: none; }
+  #how .lp-bar.in .lp-seg-accent .lp-seg-fill,
+  #how .lp-bar.in .lp-seg-ink .lp-seg-fill { animation: none; color: var(--ink); }
+  #how .lp-seg-teal .lp-seg-fill { border-left: 4px solid var(--t-teal); background: color-mix(in srgb, var(--t-teal-soft) 70%, var(--bg-sunken)); }
+  #how .lp-seg-blue .lp-seg-fill { border-left: 4px solid var(--t-blue); background: color-mix(in srgb, var(--t-blue-soft) 70%, var(--bg-sunken)); }
+  #how .lp-seg-accent .lp-seg-fill { border-left: 4px solid var(--accent); background: var(--accent-soft); }
+  #how .lp-seg-orange .lp-seg-fill { border-left: 4px solid var(--t-orange); background: color-mix(in srgb, var(--t-orange-soft) 70%, var(--bg-sunken)); }
+  #how .lp-seg-ink .lp-seg-fill { border-left: 4px solid var(--ink); background: var(--bg-sunken); }
+  #how .lp-seg .lp-seg-fill strong { flex: 1 1 auto; min-width: 0; max-width: none; font-size: 15px; letter-spacing: -0.02em; order: 1; }
+  #how .lp-seg .lp-seg-time {
+    order: 2;
+    flex: none;
+    height: 26px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--bg-raised);
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  #how .lp-seg p {
+    margin: 0;
+    padding: 8px 12px 10px;
+    max-width: none;
+    border-top: 1px solid var(--line);
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
   .lp-plan-foot { flex-direction: column; align-items: stretch; }
   .lp-plan-foot .lp-btn { justify-content: center; width: 100%; }
   .lp-tabs { margin-top: 28px; gap: 6px; }
