@@ -98,8 +98,8 @@ export default function SignInPage({ next, error: initialError, email: initialEm
     setBusy(true);
     setError("");
     try {
-      const { user, launchId } = await api.verifyCode(email, code);
-      if (launchId) noteLaunch(launchId);
+      const { user, launchId, humanValidUntil } = await api.verifyCode(email, code);
+      if (launchId) noteLaunch(launchId, humanValidUntil);
       setUser(user);
       navigate(user.onboarded ? destination : `/welcome?next=${encodeURIComponent(destination)}`, { replace: true });
     } catch (verifyError) {

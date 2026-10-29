@@ -1,16 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, getHumanLaunch, readStoredHumanLaunch, setHumanLaunch, setHumanRequiredHandler } from "./api.js";
+import { api, cancelHumanWaiters, readStoredHumanPass, setHumanPass, setHumanPassListener, setHumanRequiredHandler } from "./api.js";
 
 const AuthContext = createContext(null);
 
-function transport(type) {
-  if (!type || type === "unknown" || type === "none") return null;
-  return type;
-}
+// Renew the human-check pass this long before it expires, invisibly, so a request
+// is never refused for an expired pass during normal use.
+const RENEW_BEFORE_MS = 2 * 60 * 60_000;
+const RENEW_TICK_MS = 10 * 60_000;
+// A renewal that fails while the pass is still valid waits this long before trying again.
+const RENEW_RETRY_MS = 30 * 60_000;
 
-function hydrateLaunchFromStorage() {
-  const stored = readStoredHumanLaunch();
-  if (stored) setHumanLaunch(stored);
+function hydratePassFromStorage() {
+  const stored = readStoredHumanPass();
+  if (stored.launch) setHumanPass(stored.launch, stored.validUntil);
   return stored;
 }
 
@@ -19,84 +21,87 @@ export function AuthProvider({ children, initialStatus = "loading" }) {
   const [googleAuth, setGoogleAuth] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState(null);
   const [humanCheckRequired, setHumanCheckRequired] = useState(false);
-  const [humanLaunch, setHumanLaunchState] = useState(() => hydrateLaunchFromStorage());
-  const [silentHumanRecheck, setSilentHumanRecheck] = useState(() => Boolean(readStoredHumanLaunch()));
-  const [humanReason, setHumanReason] = useState("launch");
+  const [humanPass, setHumanPassState] = useState(() => hydratePassFromStorage());
+  // The visible check page is a fallback: shown only when the invisible check couldn't pass.
+  const [humanVisible, setHumanVisible] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [renewRetryAt, setRenewRetryAt] = useState(0);
 
-  const noteLaunch = useCallback((id, { oauthHandoff = false, keepSilentRecheck = false } = {}) => {
-    setHumanLaunch(id);
-    setHumanLaunchState(id || "");
+  const noteLaunch = useCallback((id, validUntil = "") => {
+    setHumanPass(id, validUntil);
+    setHumanPassState({ launch: id || "", validUntil: id ? validUntil || "" : "" });
     if (id) {
-      if (!oauthHandoff) setHumanReason("launch");
       setHumanCheckRequired(true);
-      if (!keepSilentRecheck) setSilentHumanRecheck(false);
-    } else {
-      setSilentHumanRecheck(false);
+      setHumanVisible(false);
     }
   }, []);
 
-  const requireHuman = useCallback((reason) => {
-    setHumanLaunch("");
-    setHumanLaunchState("");
-    setSilentHumanRecheck(false);
-    setHumanReason(reason === "network" || reason === "NETWORK_CHANGED" ? "network" : "launch");
+  // The server refused the pass (missing or expired): drop it, which starts the invisible check.
+  const requireHuman = useCallback(() => {
+    setHumanPass("");
+    setHumanPassState({ launch: "", validUntil: "" });
   }, []);
+
+  // The invisible check couldn't pass. Without a valid pass the visible check takes over;
+  // with one still valid, nobody is interrupted: try again later.
+  const passValid = Boolean(humanPass.launch && (!humanPass.validUntil || Date.parse(humanPass.validUntil) > Date.now()));
+  const escalateHuman = useCallback(() => {
+    if (passValid) setRenewRetryAt(Date.now() + RENEW_RETRY_MS);
+    else setHumanVisible(true);
+  }, [passValid]);
 
   const refresh = useCallback(async () => {
     try {
-      const { user, googleAuth: google, turnstileSiteKey: siteKey, humanCheckRequired: required, launchId } = await api.session();
+      const { user, googleAuth: google, turnstileSiteKey: siteKey, humanCheckRequired: required, launchId, humanValidUntil } = await api.session();
       setGoogleAuth(Boolean(google));
       setTurnstileSiteKey(siteKey || null);
       setHumanCheckRequired(Boolean(required));
-      if (launchId) noteLaunch(launchId, { oauthHandoff: true });
+      if (launchId) noteLaunch(launchId, humanValidUntil);
       else if (!user) noteLaunch("");
+      else if (required) {
+        // The server confirms a stored pass by returning its expiry; anything else means renew.
+        const stored = readStoredHumanPass();
+        if (stored.launch && humanValidUntil) noteLaunch(stored.launch, humanValidUntil);
+        else if (stored.launch) requireHuman();
+      }
       setState({ status: user ? "signed-in" : "signed-out", user, error: null });
     } catch (error) {
       setState({ status: "signed-out", user: null, error });
     }
-  }, [noteLaunch]);
+  }, [noteLaunch, requireHuman]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => setHumanRequiredHandler(requireHuman), [requireHuman]);
 
-  // A network change has to drop the check even if the next click hasn't happened yet.
-  // The server repeats the test on every signed-in request, using the public address.
+  // Another tab renewed or cleared the shared pass.
   useEffect(() => {
-    if (state.status !== "signed-in" || !humanCheckRequired || !humanLaunch) return undefined;
-    const connection = navigator.connection;
-    let lastTransport = transport(connection?.type);
+    setHumanPassListener(({ launch, validUntil }) => {
+      setHumanPassState({ launch, validUntil });
+      if (launch) setHumanVisible(false);
+    });
+    return () => setHumanPassListener(null);
+  }, []);
 
-    const recheck = () => {
-      if (!getHumanLaunch()) return;
-      api.me().catch((error) => {
-        if (error.code === "NETWORK_CHANGED") requireHuman("network");
-        else if (error.code === "HUMAN_CHECK_REQUIRED") requireHuman("launch");
-      });
-    };
-    const onConnection = () => {
-      const next = transport(connection?.type);
-      if (lastTransport && next && lastTransport !== next) requireHuman("network");
-      if (next) lastTransport = next;
-      else recheck();
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") recheck();
-    };
-
-    connection?.addEventListener?.("change", onConnection);
-    window.addEventListener("online", recheck);
+  // Re-evaluate "renewal due" now and then, and whenever the tab comes back into view.
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const onVisible = () => { if (document.visibilityState === "visible") tick(); };
+    const timer = window.setInterval(tick, RENEW_TICK_MS);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      connection?.removeEventListener?.("change", onConnection);
-      window.removeEventListener("online", recheck);
+      window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [state.status, humanCheckRequired, humanLaunch, requireHuman]);
+  }, []);
+
+  const renewalDue = Boolean(humanPass.launch && humanPass.validUntil && Date.parse(humanPass.validUntil) - now < RENEW_BEFORE_MS && now >= renewRetryAt);
+  // The invisible check runs when signed in without a current pass, or when it's about to expire.
+  const humanBackgroundCheck = Boolean(state.status === "signed-in" && humanCheckRequired && turnstileSiteKey && !humanVisible && (!humanPass.launch || renewalDue));
 
   const confirmHuman = useCallback(async (token) => {
-    const { launchId } = await api.confirmHuman(token);
-    noteLaunch(launchId);
+    const { launchId, humanValidUntil } = await api.confirmHuman(token);
+    noteLaunch(launchId, humanValidUntil);
   }, [noteLaunch]);
 
   const value = useMemo(() => ({
@@ -104,22 +109,25 @@ export function AuthProvider({ children, initialStatus = "loading" }) {
     googleAuth,
     turnstileSiteKey,
     humanCheckRequired,
-    humanLaunch,
-    silentHumanRecheck,
-    humanReason,
+    humanLaunch: humanPass.launch,
+    humanVisible,
+    humanBackgroundCheck,
     noteLaunch,
     confirmHuman,
     requireHuman,
+    escalateHuman,
     setUser: (user) => setState({ status: user ? "signed-in" : "signed-out", user, error: null }),
     refresh,
     signOut: async () => {
       try { await api.signOut(); } finally {
+        cancelHumanWaiters();
         noteLaunch("");
+        setHumanVisible(false);
         setHumanCheckRequired(false);
         setState({ status: "signed-out", user: null, error: null });
       }
     },
-  }), [state, googleAuth, turnstileSiteKey, humanCheckRequired, humanLaunch, silentHumanRecheck, humanReason, noteLaunch, confirmHuman, requireHuman, refresh]);
+  }), [state, googleAuth, turnstileSiteKey, humanCheckRequired, humanPass.launch, humanVisible, humanBackgroundCheck, noteLaunch, confirmHuman, requireHuman, escalateHuman, refresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

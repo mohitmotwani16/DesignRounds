@@ -89,7 +89,7 @@ function Routes() {
 
   // A saved login survives a reload. Ask on a new browser session or network change;
   // reloads in the same session re-check Turnstile in the background.
-  if (auth.status === "signed-in" && auth.humanCheckRequired && !auth.humanLaunch && path !== "/signin") {
+  if (auth.status === "signed-in" && auth.humanCheckRequired && auth.humanVisible && !auth.humanLaunch && path !== "/signin") {
     return <HumanCheck />;
   }
 
