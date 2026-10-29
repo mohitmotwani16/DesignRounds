@@ -8,7 +8,7 @@ import { navigate } from "../router.js";
 
 const shortTitle = (title) => title.replace(/^Design (a |an )?/i, "").replace(/^./, (char) => char.toUpperCase());
 
-export function StartRoundButton({ onStart, className = "btn btn-primary btn-lg" }) {
+export function StartRoundButton({ onStart, className = "btn btn-primary btn-lg", compact = false }) {
   const { status, user } = useAuth();
   const [sessions, setSessions] = useState([]);
 
@@ -45,10 +45,15 @@ export function StartRoundButton({ onStart, className = "btn btn-primary btn-lg"
     onStart(resumable?.prompt.id ?? recommended.id);
   }
 
+  const label = resumable
+    ? (compact ? "Resume" : `Resume: ${shortTitle(resumable.prompt.title)}`)
+    : "Start free round";
+  const arrow = compact ? 15 : 17;
+
   return (
     <button className={className} onClick={start}>
-      {resumable ? `Resume: ${shortTitle(resumable.prompt.title)}` : "Start a free round"}
-      <ArrowRight size={17} className="nudge" />
+      {label}
+      <ArrowRight size={arrow} className="nudge" />
     </button>
   );
 }

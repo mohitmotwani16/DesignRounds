@@ -9,6 +9,7 @@ import { StartRoundButton } from "../components/StartRound.jsx";
 import { Link, useRoute } from "../router.js";
 import { LEARN_PATH, topicPath } from "../learn/catalog.js";
 import { roundPath, trackPath } from "../seo.js";
+import { MOBILE_MEDIA, useMediaQuery } from "../useMediaQuery.js";
 
 // The page's one motif is the round's clock: every DesignRounds round is timed, so a
 // circle (the dial) times the demo, rounds every button and marks every question.
@@ -55,7 +56,7 @@ function Hero({ onStart }) {
         <h1 id="lp-title" className="rise" style={{ "--d": 0 }}>Mock system design interviews with AI</h1>
         <div className="lp-hero-text">
           <p className="lp-hero-sub rise" style={{ "--d": 1 }}>Design real interview questions on a canvas while an AI interviewer asks why. Every round ends with a scored review that shows exactly what to fix.</p>
-          <div className="lp-hero-actions rise" style={{ "--d": 2 }}>
+          <div className="lp-hero-actions rise" id="lp-hero-cta" style={{ "--d": 2 }}>
             <StartRoundButton onStart={onStart} className="btn lp-btn" />
             <Link className="lp-text-link" to="/library">Browse the questions</Link>
           </div>
@@ -150,10 +151,12 @@ function useRoundClock() {
   return { text: `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`, used: 1 - left / ROUND_SECONDS };
 }
 
-// A URL shortener as a learner would draw it. Requests flow left to right as packets
-// on the wires. Positions are in a 960×560 stage; the HTML nodes are placed by
-// percentage, so they stay on the SVG wires at any width.
-const at = (x, y) => ({ left: `${(x / 960) * 100}%`, top: `${(y / 560) * 100}%` });
+// A URL shortener as a learner would draw it. Requests flow left to right on desktop;
+// on narrow viewports the same diagram stacks top to bottom. Positions are in stage
+// coordinates; HTML nodes are placed by percentage so they stay on the SVG wires.
+const STAGE_DESKTOP = { w: 960, h: 560 };
+const STAGE_MOBILE = { w: 340, h: 620 };
+const at = (x, y, stage = STAGE_DESKTOP) => ({ left: `${(x / stage.w) * 100}%`, top: `${(y / stage.h) * 100}%` });
 const NODES = [
   { id: "users", x: 95, y: 280, label: "Users", sub: "web and mobile", Icon: MonitorSmartphone, tone: "slate" },
   { id: "gateway", x: 300, y: 280, label: "API gateway", sub: "rate limits", Icon: Network, tone: "violet" },
@@ -172,13 +175,35 @@ const WIRES = [
   { d: "M 515 306 L 515 428", label: "async", lx: 548, ly: 372, async: true },
   { d: "M 600 455 L 705 455", label: "stream", lx: 652, ly: 435 },
 ];
+const MOBILE_NODES = [
+  { id: "users", x: 170, y: 44, label: "Users", sub: "web and mobile", Icon: MonitorSmartphone, tone: "slate" },
+  { id: "gateway", x: 170, y: 118, label: "API gateway", sub: "rate limits", Icon: Network, tone: "violet" },
+  { id: "service", x: 170, y: 198, label: "Link service", sub: "stateless", Icon: Server, tone: "blue", focus: true },
+  { id: "cache", x: 170, y: 278, label: "Redis", sub: "cache-aside", Icon: Zap, tone: "rose" },
+  { id: "db", x: 170, y: 358, label: "PostgreSQL", sub: "replicated", Icon: Database, tone: "teal" },
+  { id: "queue", x: 170, y: 438, label: "Kafka", sub: "click events", Icon: ListOrdered, tone: "orange" },
+  { id: "analytics", x: 170, y: 518, label: "Analytics", sub: "stream jobs", Icon: Workflow, tone: "green" },
+];
+const MOBILE_WIRES = [
+  { d: "M 170 66 L 170 96", label: "HTTPS", lx: 228, ly: 81 },
+  { d: "M 170 140 L 170 170", label: "/:code", lx: 228, ly: 155 },
+  { d: "M 170 220 L 170 250", label: "GET", lx: 228, ly: 235 },
+  { d: "M 188 212 C 252 212 252 350 188 350", label: "on miss", lx: 268, ly: 282 },
+  { d: "M 152 212 C 88 212 88 410 170 410", label: "async", lx: 58, ly: 312, async: true },
+  { d: "M 170 460 L 170 496", label: "stream", lx: 228, ly: 478 },
+];
+const MOBILE_NOTE = "Reads outnumber writes by about 100 to 1, so cache-aside keeps redirects fast.";
 
 function Demo() {
+  const mobile = useMediaQuery(MOBILE_MEDIA);
+  const stage = mobile ? STAGE_MOBILE : STAGE_DESKTOP;
+  const nodes = mobile ? MOBILE_NODES : NODES;
+  const wires = mobile ? MOBILE_WIRES : WIRES;
   const clock = useRoundClock();
   const R = 15;
   const C = 2 * Math.PI * R;
   return (
-    <div className="lp-demo" data-ui role="img" aria-label="A DesignRounds practice round: an AI interviewer asks about a URL shortener design drawn on the canvas, with requests flowing between components">
+    <div className={`lp-demo${mobile ? " lp-demo--mobile" : ""}`} data-ui role="img" aria-label="A DesignRounds practice round: an AI interviewer asks about a URL shortener design drawn on the canvas, with requests flowing between components">
       <div className="lp-demo-bar" aria-hidden="true">
         <svg className="lp-dial" viewBox="0 0 36 36" width="30" height="30">
           <circle cx="18" cy="18" r={R} className="lp-dial-track" />
@@ -189,42 +214,54 @@ function Demo() {
         <span className="lp-demo-saved">Saved</span>
       </div>
       <div className="lp-demo-body" aria-hidden="true">
-        <aside className="lp-demo-chat">
-          <p className="lp-demo-chat-head"><Sparkles size={15} /> Interviewer <span>live</span></p>
-          <div className="lp-demo-log">
-            <div className="lp-msg lp-msg-ai" style={{ "--m": 0 }}><b>Interviewer</b>Walk me through a redirect. Where does the lookup go first?</div>
-            <div className="lp-msg lp-msg-me" style={{ "--m": 1 }}><b>You</b>Redis first, cache-aside. On a miss I read a replica and backfill with a 24-hour TTL.</div>
-            <div className="lp-typing" style={{ "--m": 2 }}><i /><i /><i /></div>
-            <div className="lp-msg lp-msg-ai" style={{ "--m": 3 }}><b>Interviewer</b>A link goes viral and its key expires. What happens to your database?</div>
-          </div>
-          <div className="lp-demo-input">Explain your thinking… <span><ArrowUp size={14} /></span></div>
-        </aside>
+        {mobile ? (
+          <p className="lp-demo-chat-teaser">
+            <Sparkles size={15} aria-hidden="true" />
+            <span><b>Interviewer</b> Walk me through a redirect. Where does the lookup go first?</span>
+          </p>
+        ) : (
+          <aside className="lp-demo-chat">
+            <p className="lp-demo-chat-head"><Sparkles size={15} /> Interviewer <span>live</span></p>
+            <div className="lp-demo-log">
+              <div className="lp-msg lp-msg-ai" style={{ "--m": 0 }}><b>Interviewer</b>Walk me through a redirect. Where does the lookup go first?</div>
+              <div className="lp-msg lp-msg-me" style={{ "--m": 1 }}><b>You</b>Redis first, cache-aside. On a miss I read a replica and backfill with a 24-hour TTL.</div>
+              <div className="lp-typing" style={{ "--m": 2 }}><i /><i /><i /></div>
+              <div className="lp-msg lp-msg-ai" style={{ "--m": 3 }}><b>Interviewer</b>A link goes viral and its key expires. What happens to your database?</div>
+            </div>
+            <div className="lp-demo-input">Explain your thinking… <span><ArrowUp size={14} /></span></div>
+          </aside>
+        )}
         <div className="lp-demo-canvas">
-          <div className="lp-demo-stage">
-            <svg className="lp-wires" viewBox="0 0 960 560">
+          <div className={`lp-demo-stage${mobile ? " lp-demo-stage--stack" : ""}`} style={{ "--lp-stage-ar": `${stage.w} / ${stage.h}` }}>
+            <svg className="lp-wires" viewBox={`0 0 ${stage.w} ${stage.h}`}>
               <defs>
                 <marker id="lp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" className="lp-arrow" /></marker>
               </defs>
-              {WIRES.map((wire, index) => (
+              {wires.map((wire, index) => (
                 <g key={wire.d}>
                   <path className={wire.async ? "lp-wire lp-wire-async" : "lp-wire"} d={wire.d} markerEnd="url(#lp-arrow)" style={{ "--w": index }} />
                   <text className="lp-wire-label" x={wire.lx} y={wire.ly} textAnchor="middle" style={{ "--w": index }}>{wire.label}</text>
                 </g>
               ))}
-              {WIRES.map((wire, index) => (
+              {!mobile && wires.map((wire, index) => (
                 <circle key={`packet-${wire.d}`} r="5" className="lp-packet">
                   <animateMotion dur={`${1.3 + (index % 3) * 0.3}s`} repeatCount="indefinite" begin={`${1.6 + index * 0.3}s`} path={wire.d} />
                 </circle>
               ))}
             </svg>
-            {NODES.map((node, index) => (
-              <div key={node.id} className={`lp-node tone-${node.tone} ${node.focus ? "lp-node-focus" : ""}`} style={{ ...at(node.x, node.y), "--n": index }}>
+            {nodes.map((node, index) => (
+              <div key={node.id} className={`lp-node tone-${node.tone} ${node.focus ? "lp-node-focus" : ""}`} style={{ ...at(node.x, node.y, stage), "--n": index }}>
                 <i><node.Icon size={17} /></i>
                 <span>{node.label}<small>{node.sub}</small></span>
               </div>
             ))}
-            <div className="lp-note" style={at(250, 95)}><b>Why Redis?</b>Reads outnumber writes by about 100 to 1, so cache-aside keeps redirects fast.</div>
+            {!mobile && (
+              <div className="lp-note" style={at(250, 95, stage)}><b>Why Redis?</b>Reads outnumber writes by about 100 to 1, so cache-aside keeps redirects fast.</div>
+            )}
           </div>
+          {mobile && (
+            <p className="lp-demo-note-below"><b>Why Redis?</b> {MOBILE_NOTE}</p>
+          )}
         </div>
       </div>
     </div>
