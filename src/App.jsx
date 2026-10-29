@@ -124,7 +124,7 @@ function Routes() {
 
   return (
     <div className="site-shell site">
-      <SiteNav />
+      <SiteNav onStart={startPrompt} />
       <Page path={path} onStart={startPrompt} />
       {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} alternative={freeAlternative(lockedPromptId)} onStart={startPrompt} onClose={() => setLockedPromptId(null)} />}
     </div>
