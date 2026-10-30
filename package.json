@@ -30,6 +30,7 @@
     "test:scoring": "node --test server/modules/ai/scoring.test.js",
     "test:vertex": "node --test server/modules/ai/anthropic-vertex.test.js server/modules/ai/gemini-vertex.test.js server/modules/ai/pricing.test.js",
     "test:conductor": "node --test server/modules/ucs/ucs.test.js server/modules/pks/pks.test.js server/modules/conductor/conductor.test.js server/modules/conductor/gate.test.js server/modules/conductor/canvas.test.js server/modules/conductor/data-model.test.js",
+    "test:learn-linkify": "node --test src/learn/linkify.test.js",
     "test:smoke:v3": "node scripts/smoke-conductor.js",
     "theme": "node scripts/theme-tokens.mjs"
   },

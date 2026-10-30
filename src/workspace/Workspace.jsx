@@ -958,7 +958,7 @@ function Workspace({ session, prompt }) {
           {...SIDE_PANEL_WIDTH} defaultWidth={panelTab === "review" ? SIDE_PANEL_WIDTH.reviewWidth : SIDE_PANEL_WIDTH.defaultWidth} />}
         {panelOpen && (
           <SidePanel tab={panelTab} onTab={setPanelTab} onClose={togglePanel} interview={interview} unread={unread}
-            selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} />
+            selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} promptTrack={prompt.track} />
         )}
       </div>
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}

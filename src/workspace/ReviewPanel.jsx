@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Brain, ChevronDown, CircleCheck, Flag, HelpCircle, LoaderCircle, LockKeyhole, MessageSquareText, RefreshCw, Scale, Sparkles, Target } from "lucide-react";
 import { api } from "../api.js";
 import { track } from "../analytics.js";
 import { useAuth } from "../auth.jsx";
+import { Rich } from "../components/rich.jsx";
+import { annotateLearnText, learnAllowlistSet } from "../learn/linkify.js";
 
 const POLL_MS = 4000;
 const POLL_LIMIT_MS = 6 * 60_000;
@@ -20,7 +22,7 @@ function allowanceText(allowance) {
 
 // Final AI review of a finished round: request (with a visible credit cost), progress,
 // and the result. What the server returns already reflects the learner's plan.
-export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor }) {
+export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor, promptTrack }) {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -28,6 +30,12 @@ export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor })
   const [selectedId, setSelectedId] = useState(null);
   const pendingRequest = useRef(null);
   const plan = useAuth().user?.plan;
+
+  const learnAllowlist = useMemo(() => {
+    if (data?.learnAllowlist?.length) return new Set(data.learnAllowlist);
+    if (promptTrack) return learnAllowlistSet({ track: promptTrack });
+    return new Set();
+  }, [data?.learnAllowlist, promptTrack]);
 
   const load = useCallback(async () => {
     try {
@@ -140,7 +148,7 @@ export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor })
               </select>
             </label>
           )}
-          <ReviewResult review={current} onFocusNode={onFocusNode} labelFor={labelFor} />
+          <ReviewResult review={current} onFocusNode={onFocusNode} labelFor={labelFor} learnAllowlist={learnAllowlist} />
           {roundFinished && !generating && allowance.remaining > 0 && (
             <div className="review-again">
               <p>Changed your design since this review? Reopen the round, improve it, finish again, then ask for a new review.</p>
@@ -277,7 +285,7 @@ function NodeChips({ ids, onFocusNode, labelFor }) {
   );
 }
 
-function ReviewResult({ review, onFocusNode, labelFor }) {
+function ReviewResult({ review, onFocusNode, labelFor, learnAllowlist }) {
   const full = review.access === "full";
   const [open, setOpen] = useState(null);
   const locked = review.locked;
@@ -325,7 +333,18 @@ function ReviewResult({ review, onFocusNode, labelFor }) {
                             {gaps.map((risk) => <li key={risk.point}><span className={`review-severity severity-${risk.severity}`}>{risk.severity}</span>{risk.point}</li>)}
                           </ul>
                         )}
-                        <p><strong>Improve:</strong> {dimension.improvement}</p>
+                        <p className="review-improve">
+                          <strong>Improve:</strong>{" "}
+                          <Rich
+                            text={annotateLearnText(dimension.improvement, learnAllowlist)}
+                            linkClassName="review-learn-link"
+                            onInternalLinkClick={(_, { href }) => {
+                              if (!href.startsWith("/learn/")) return;
+                              const slug = href.slice("/learn/".length);
+                              if (slug) track("learn_link_clicked", { slug, dimension_id: dimension.id });
+                            }}
+                          />
+                        </p>
                       </>
                     )}
                   </div>
