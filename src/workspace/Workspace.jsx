@@ -20,7 +20,7 @@ import { DRAG_TYPE, Palette } from "./Palette.jsx";
 import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from "./CanvasTour.jsx";
 import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
 import { PanelResizer } from "./PanelResizer.jsx";
-import { useInterview } from "./useInterview.js";
+import { inspectorAskMode, useInterview } from "./useInterview.js";
 import { useAuth } from "../auth.jsx";
 import { useTheme } from "../theme.js";
 
@@ -756,6 +756,7 @@ function Workspace({ session, prompt }) {
     setPanelOpen(true);
   }, []);
   const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose });
+  const inspectorAsk = inspectorAskMode(interview, status, user);
   useEffect(() => { if (panelOpen && panelTab === "interviewer") setUnread(0); }, [panelOpen, panelTab]);
 
   // ---- Derived view state --------------------------------------------------
@@ -937,7 +938,7 @@ function Workspace({ session, prompt }) {
             {singleNode && inspectedId === singleNode.id && singleNode.type !== "pointNode" && (
               <NodeInspector id={singleNode.id} type={singleNode.type} data={singleNode.data} readOnly={readOnly}
                 onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection}
-                ask={interview.access !== "full" ? "plus" : status !== "in_progress" ? "finished" : "available"} onAsk={askAboutSelection} />
+                ask={inspectorAsk} onAsk={askAboutSelection} />
             )}
             {singleEdge && (
               <EdgeInspector edge={singleEdge} sourceLabel={labelFor(singleEdge.source)} targetLabel={labelFor(singleEdge.target)} readOnly={readOnly} focusLabel={focusEdgeLabel}

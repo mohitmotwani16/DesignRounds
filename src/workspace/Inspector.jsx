@@ -17,6 +17,7 @@ function Field({ label, value, onChange, onBegin, placeholder, multiline, maxLen
 
 const ASK_TITLES = {
   available: "Ask the interviewer about this component",
+  loading: "Loading interviewer…",
   plus: "The live interviewer is part of Plus",
   finished: "The interview ends when the round is finished",
 };
@@ -170,7 +171,7 @@ export const NodeInspector = memo(function NodeInspector({ id, type, data, readO
         )}
       </div>
       <div className="inspector-actions">
-        <button className="inspector-ask" disabled={ask !== "available"} title={ASK_TITLES[ask]} onClick={onAsk}><MessageSquare size={14} /> Ask the interviewer about this</button>
+        <button type="button" className={`inspector-ask${ask === "available" ? " button button-outline button-small" : ""}`} disabled={ask !== "available"} title={ASK_TITLES[ask] ?? ASK_TITLES.plus} onClick={onAsk}><MessageSquare size={14} /> Ask the interviewer about this</button>
         {!readOnly && (
           <div className="inspector-row">
             <button className="button button-outline button-small" onClick={onDuplicate}><Copy size={13} /> Duplicate</button>

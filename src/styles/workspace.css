@@ -263,7 +263,10 @@ body.dragging-edge, body.dragging-edge * { cursor: move !important; user-select:
 .inspector-actions { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--bd-eef0f3); }
 .inspector-row { display: flex; gap: 8px; }
 .inspector-row .button { height: 32px; flex: 1; gap: 6px; font-size: 12px; }
-.inspector-ask { height: 32px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--fg-8a91c4); border: 1px dashed var(--bd-d5d9ef); border-radius: 7px; background: var(--bg-f8f8fd); font-size: 12px; cursor: not-allowed; }
+.inspector-ask { width: 100%; height: 32px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; }
+.inspector-ask.button { transform: none; }
+.inspector-ask.button:hover { transform: none; }
+.inspector-ask:disabled:not(.button) { color: var(--fg-8a91c4); border: 1px dashed var(--bd-d5d9ef); border-radius: 7px; background: var(--bg-f8f8fd); cursor: not-allowed; opacity: .72; font-weight: 600; }
 .danger-text { color: var(--fg-b54848) !important; }
 .danger-text:hover { border-color: var(--bd-efcaca) !important; background: var(--bg-fdf2f2) !important; }
 
