@@ -3,7 +3,7 @@ import { resetConsent } from "../analytics.js";
 import { SiteFooter } from "../components/site.jsx";
 import { Link } from "../router.js";
 
-export const PRIVACY_UPDATED = "October 22, 2026";
+export const PRIVACY_UPDATED = "October 29, 2026";
 export const CONTACT_EMAIL = "designrounds.app@gmail.com";
 
 // What we collect, why, who processes it and how to delete it. Keep this in step with
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
             <li><strong>Your practice work:</strong> the designs you build, your notes and explanations, earlier versions of a design, your conversations with the AI interviewer, extracted technical context and communication gaps, and the reviews generated for you.</li>
             <li><strong>Voice answers:</strong> if you answer the interviewer by voice (a Plus feature), we store the recording, a verbatim transcript, a filler-reduced copy for technical context, and measurements of your delivery, such as speaking pace, filler words and pauses. These help inform later interviewer turns and your review. We don't use your voice to identify you.</li>
             <li><strong>Security and sign-in records:</strong> one-time sign-in codes (stored only as a hash), the browser user-agent of each signed-in session, and IP addresses used for rate limiting and abuse prevention.</li>
-            <li><strong>Human check:</strong> Cloudflare Turnstile checks that a sign-in, the first time you open the site in a browser session while signed in, and a change of network (such as Wi-Fi to mobile data) comes from a person. Reloading the page in the same session runs the check in the background without blocking the site. We store the network address of the last successful check with your session so a different connection asks again. We receive only a pass or fail from Cloudflare. Cloudflare sees the page address, your IP address, and browser signals it uses to tell visitors from bots. This is not an advertising or analytics cookie.</li>
+            <li><strong>Human check:</strong> Cloudflare Turnstile checks that a sign-in comes from a person, and repeats the check about once a day while you're signed in, usually in the background without blocking the site. We receive only a pass or fail from Cloudflare, and store when this browser last passed and the network address it passed from with your session. To fix sign-in problems, we keep a record of each check for 30 days: the outcome, any Cloudflare error code, the page, your browser's user agent, your country, your email address if you were signing in, and a random reference your browser keeps, which we show in error messages so you can quote it. Cloudflare sees the page address, your IP address, and browser signals it uses to tell visitors from bots. This is not an advertising or analytics cookie.</li>
             <li><strong>Plus early-access list:</strong> if you ask for early access to Plus, we store your email address and when you asked, and send you one confirmation. We use it only to tell you when Plus opens. Ask us to remove it at any time; deleting your account removes it too.</li>
             <li><strong>Problem reports:</strong> if you report a problem, we store your email address, what you wrote, the page you were on and your browser's user agent, so we can investigate and reply. Deleting your account removes your reports.</li>
             <li><strong>Usage counts:</strong> how many AI reviews and interviewer replies you've used, so plan limits can be applied.</li>

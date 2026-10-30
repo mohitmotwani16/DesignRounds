@@ -54,7 +54,7 @@ export default {
     "Explain how filters interact with ANN search.",
     "Plan for sharding, freshness and re-embedding when the model changes.",
   ],
-  related: ["retrieval-augmented-generation", "recommendation-system-design", "search-and-inverted-index", "sharding", "ai-application-architecture"],
+  related: ["retrieval-augmented-generation", "recommendation-system-design", "search-and-inverted-index", "sharding", "ai-application-architecture", "embeddings", "hybrid-search-reranking", "design-visual-search"],
   practice: ["rag-search", "recommendation-engine"],
   reading: [
     { title: "Efficient and robust approximate nearest neighbor search using HNSW graphs", publisher: "Malkov and Yashunin, arXiv", url: "https://arxiv.org/abs/1603.09320" },

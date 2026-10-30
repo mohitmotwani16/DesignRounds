@@ -78,10 +78,56 @@ if (typeof window !== "undefined") {
   });
 }
 
+// A random id this browser keeps so its human-check events can be found later
+// (issue #103). People see it as the "reference" in human-check errors.
+const DIAGNOSTIC_ID_KEY = "dr_diag_id";
+const DIAGNOSTIC_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
+let diagnosticId = "";
+
+export function getDiagnosticId() {
+  if (diagnosticId) return diagnosticId;
+  try {
+    const stored = localStorage.getItem(DIAGNOSTIC_ID_KEY) || "";
+    if (/^[A-Z0-9]{8,32}$/.test(stored)) return (diagnosticId = stored);
+  } catch {
+    // Storage blocked: keep an id for this page load only.
+  }
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  diagnosticId = Array.from(bytes, (byte) => DIAGNOSTIC_ALPHABET[byte % DIAGNOSTIC_ALPHABET.length]).join("");
+  try { localStorage.setItem(DIAGNOSTIC_ID_KEY, diagnosticId); } catch { /* page-load id only */ }
+  return diagnosticId;
+}
+
+// Reports a human-check failure that happened in the browser, so it can be looked
+// into later. Best effort: one report per kind of failure per page load, never retried,
+// and it never throws.
+const reportedHumanChecks = new Set();
+export function reportHumanCheck({ action, outcome, errorCode, detail }) {
+  const key = `${action}:${outcome}:${errorCode || ""}`;
+  if (typeof window === "undefined" || reportedHumanChecks.has(key)) return;
+  reportedHumanChecks.add(key);
+  const body = {
+    action,
+    outcome,
+    ...(errorCode ? { errorCode: String(errorCode).slice(0, 20) } : {}),
+    page: window.location.pathname.slice(0, 300),
+    detail: { online: navigator.onLine, ...detail },
+  };
+  fetch("/api/v1/diagnostics/human-check", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: requestHeaders(true),
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 function requestHeaders(json) {
   return {
     ...(json ? { "Content-Type": "application/json" } : {}),
     ...(humanLaunch ? { "X-Human-Launch": humanLaunch } : {}),
+    "X-Diagnostic-Id": getDiagnosticId(),
   };
 }
 
@@ -244,6 +290,7 @@ export const api = {
   reportProblem: (body) => request("POST", "/reports", body),
   adminReports: () => request("GET", "/admin/reports"),
   setReportStatus: (id, status) => request("PATCH", `/admin/reports/${id}`, { status }),
+  adminHumanChecks: (params) => request("GET", `/admin/human-checks${query(params)}`),
   getInvitation: (token) => request("GET", `/invitations/${encodeURIComponent(token)}`),
   acceptInvitation: (token) => request("POST", `/invitations/${encodeURIComponent(token)}/accept`, {}),
 };

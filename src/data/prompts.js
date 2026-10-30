@@ -17,11 +17,19 @@ export const tracks = [
   },
   {
     id: "machine-learning",
-    label: "Machine learning & AI",
-    shortLabel: "ML & AI",
-    description: "Design the pipelines and serving systems behind production ML.",
+    label: "Machine learning",
+    shortLabel: "ML",
+    description: "Design the data, training, ranking and serving systems behind production ML.",
     icon: "model",
     color: "teal",
+  },
+  {
+    id: "ai-engineering",
+    label: "AI engineering",
+    shortLabel: "AI engineering",
+    description: "Design products on LLMs: RAG, agents, evaluation, guardrails and LLM serving.",
+    icon: "ai",
+    color: "violet",
   },
   {
     id: "platform-infrastructure",
@@ -280,7 +288,7 @@ export const prompts = [
   },
   {
     id: "rag-search", title: "Design a retrieval-augmented generation system", description: "Answer questions from a changing document collection with traceable sources.",
-    track: "machine-learning", access: "paid", category: "Generative AI", difficulty: "Advanced", minutes: 60, icon: "search", color: "rose",
+    track: "ai-engineering", access: "paid", category: "Retrieval", difficulty: "Advanced", minutes: 60, icon: "search", color: "rose",
     considerations: ["Chunking and embedding", "Hybrid retrieval", "Grounding and access control"],
   },
   {
@@ -292,6 +300,114 @@ export const prompts = [
     id: "model-monitoring", title: "Design an ML model monitoring system", description: "Notice when a production model becomes slow, biased, or less useful.",
     track: "machine-learning", access: "paid", category: "Model quality", difficulty: "Intermediate", minutes: 40, icon: "monitor", color: "blue",
     considerations: ["Delayed ground truth", "Drift metrics", "Privacy-preserving telemetry"],
+  },
+
+  {
+    id: "ad-click-prediction", title: "Design ad click prediction", description: "Predict the chance a user clicks an ad, accurately enough to price it in a real-time auction.",
+    track: "machine-learning", access: "free", category: "Ads", difficulty: "Advanced", minutes: 60, icon: "click", color: "orange", popular: true,
+    requirements: ["About 1 billion people see ads in a social feed; each ad request scores hundreds of eligible ads within tens of milliseconds.", "The predicted click probability is multiplied by the advertiser's bid in an auction, so it must match real click rates, not only rank ads well.", "New ads and campaigns start every minute and must get sensible predictions from their first impressions."],
+    considerations: ["Calibrated probabilities", "Sparse features at scale", "Fresh models for new ads"],
+    expectedOutcome: "A clear label and training set built from impressions, sparse and real-time features, a baseline then deep model, calibration, a serving path inside the auction's latency budget, frequent retraining, and offline and online metrics.",
+  },
+  {
+    id: "video-recommendations", title: "Design YouTube video recommendations", description: "Rank a home feed of videos from billions of candidates for hundreds of millions of viewers.",
+    track: "machine-learning", access: "paid", category: "Personalization", difficulty: "Advanced", minutes: 60, icon: "play", color: "violet", popular: true,
+    considerations: ["Multi-stage retrieval and ranking", "Watch time vs satisfaction", "New uploads and cold start"],
+  },
+  {
+    id: "feed-ranking", title: "Design news feed ranking", description: "Choose which posts each person sees first in a social feed, optimising for value rather than clicks.",
+    track: "machine-learning", access: "paid", category: "Personalization", difficulty: "Advanced", minutes: 60, icon: "feed", color: "blue",
+    considerations: ["Multi-objective value model", "Integrity demotions", "Freshness and diversity"],
+  },
+  {
+    id: "search-ranking", title: "Design search ranking for an online store", description: "Return the most relevant products first for every query, in a couple of hundred milliseconds.",
+    track: "machine-learning", access: "paid", category: "Search", difficulty: "Advanced", minutes: 60, icon: "search", color: "teal",
+    considerations: ["Query understanding", "Hybrid retrieval", "Learning to rank and position bias"],
+  },
+  {
+    id: "content-moderation", title: "Design harmful content detection", description: "Find hate, violence, nudity and scams in uploads before many people see them.",
+    track: "machine-learning", access: "paid", category: "Trust & safety", difficulty: "Advanced", minutes: 60, icon: "shield", color: "rose",
+    considerations: ["Per-harm thresholds", "Human review queues", "Measuring prevalence"],
+  },
+  {
+    id: "people-you-may-know", title: "Design People You May Know", description: "Suggest people a member is likely to know and connect with on a social network.",
+    track: "machine-learning", access: "paid", category: "Graph ML", difficulty: "Advanced", minutes: 60, icon: "people", color: "green",
+    considerations: ["Graph candidate generation", "Link prediction", "Privacy and blocking"],
+  },
+  {
+    id: "visual-search", title: "Design visual image search", description: "Let people photograph something and find visually similar images and products.",
+    track: "machine-learning", access: "paid", category: "Search", difficulty: "Advanced", minutes: 60, icon: "image", color: "violet",
+    considerations: ["Contrastive embeddings", "Billion-scale vector index", "Re-embedding on model change"],
+  },
+  {
+    id: "eta-prediction", title: "Design ETA prediction for food delivery", description: "Predict delivery time at checkout and keep it accurate while the order is on its way.",
+    track: "machine-learning", access: "paid", category: "Prediction", difficulty: "Intermediate", minutes: 45, icon: "eta", color: "orange",
+    considerations: ["Stage-by-stage prediction", "Real-time kitchen and courier signals", "Quantiles and lateness"],
+  },
+  {
+    id: "dynamic-pricing", title: "Design dynamic pricing for ride-hailing", description: "Set surge prices per area and minute so riders get cars and drivers go where demand is.",
+    track: "machine-learning", access: "paid", category: "Prediction", difficulty: "Advanced", minutes: 60, icon: "pricing", color: "teal",
+    considerations: ["Demand and supply forecasting", "Price as an intervention", "Experiments in a two-sided market"],
+  },
+  {
+    id: "notification-ranking", title: "Design push notification ranking", description: "Decide which notifications to send each person, and when, without annoying them into turning them off.",
+    track: "machine-learning", access: "paid", category: "Personalization", difficulty: "Intermediate", minutes: 45, icon: "notification", color: "blue",
+    considerations: ["Long-term vs short-term metrics", "Volume caps and fatigue", "Send-time optimisation"],
+  },
+
+  {
+    id: "chatgpt-assistant", title: "Design ChatGPT", description: "Serve a chat assistant to millions of people with streamed answers, saved history and fair usage limits.",
+    track: "ai-engineering", access: "free", category: "Assistants", difficulty: "Advanced", minutes: 60, icon: "ai", color: "violet", popular: true,
+    requirements: ["Tens of millions of people a day hold multi-turn conversations; answers stream token by token and the first words appear within about a second.", "Conversations are saved, can be reopened and continued, and long conversations still work.", "Free and paid plans get different models and usage limits, and harmful requests and answers are caught."],
+    considerations: ["Token-based capacity planning", "Streaming and cancellation", "Context management"],
+    expectedOutcome: "Estimates in tokens, a conversation store, context assembly for long chats, a streaming path from a GPU inference fleet with cancellation, plan-based limits and overload behaviour, moderation, and how quality and cost are measured.",
+  },
+  {
+    id: "support-ai-agent", title: "Design a customer support AI agent", description: "Resolve support chats with tools and refunds within policy, and hand off to a human when needed.",
+    track: "ai-engineering", access: "free", category: "AI agents", difficulty: "Advanced", minutes: 60, icon: "agent", color: "teal", popular: true,
+    requirements: ["The agent answers policy questions, looks up orders and takes actions such as rescheduling deliveries and issuing small refunds.", "It never acts on another customer's account and follows refund policy exactly; larger refunds need human approval.", "Conversations it can't resolve are handed to a human agent without the customer repeating themselves."],
+    considerations: ["Tool permissions and approvals", "Human handoff", "Evaluating agent outcomes"],
+    expectedOutcome: "A workflow-or-agent decision, typed tools behind a policy layer bound to the customer's session, approvals and handoff, guardrails against misuse and injection, an evaluation suite of simulated conversations, cost per resolution, and a staged rollout.",
+  },
+  {
+    id: "code-assistant", title: "Design an AI code assistant", description: "Suggest code as developers type, using context from their repository, in a few hundred milliseconds.",
+    track: "ai-engineering", access: "paid", category: "Assistants", difficulty: "Advanced", minutes: 60, icon: "code", color: "blue",
+    considerations: ["Latency budget", "Repository context", "Measuring usefulness"],
+  },
+  {
+    id: "voice-ai-agent", title: "Design a real-time voice AI agent", description: "Answer phone calls with an AI that listens, books appointments and replies without awkward pauses.",
+    track: "ai-engineering", access: "paid", category: "AI agents", difficulty: "Advanced", minutes: 60, icon: "voice", color: "orange",
+    considerations: ["Streaming speech pipeline", "Turn-taking and interruptions", "Latency per stage"],
+  },
+  {
+    id: "text-to-image", title: "Design a text-to-image generation service", description: "Turn prompts into images in seconds for millions of users while keeping GPUs busy and output safe.",
+    track: "ai-engineering", access: "paid", category: "Generative AI", difficulty: "Advanced", minutes: 60, icon: "palette", color: "rose",
+    considerations: ["GPU job queues and priorities", "Prompt and image safety", "Storage and delivery"],
+  },
+  {
+    id: "document-ingestion", title: "Design a document ingestion pipeline for RAG", description: "Parse, chunk and index millions of PDFs, scans and office files so LLM apps can search them.",
+    track: "ai-engineering", access: "paid", category: "Retrieval", difficulty: "Advanced", minutes: 60, icon: "docs", color: "green",
+    considerations: ["Parsing messy formats", "Incremental updates and deletes", "Backfills at scale"],
+  },
+  {
+    id: "ai-answer-engine", title: "Design an AI answer engine", description: "Answer questions from the live web with cited sources in a few seconds, like Perplexity.",
+    track: "ai-engineering", access: "paid", category: "Retrieval", difficulty: "Advanced", minutes: 60, icon: "search", color: "blue",
+    considerations: ["Query planning", "Parallel fetching and caching", "Grounded citations"],
+  },
+  {
+    id: "llm-gateway", title: "Design an LLM gateway", description: "Give every team one safe way to call many model providers, with routing, fallbacks and budgets.",
+    track: "ai-engineering", access: "paid", category: "LLM infrastructure", difficulty: "Intermediate", minutes: 45, icon: "gateway", color: "orange",
+    considerations: ["Provider fallback", "Token rate limits and budgets", "Routing and caching"],
+  },
+  {
+    id: "llm-inference-platform", title: "Design an LLM inference platform", description: "Serve open-weight LLMs on a GPU fleet with high throughput and predictable latency.",
+    track: "ai-engineering", access: "paid", category: "LLM infrastructure", difficulty: "Advanced", minutes: 60, icon: "gpu", color: "violet",
+    considerations: ["Continuous batching and the KV cache", "Autoscaling GPUs", "Many models and adapters"],
+  },
+  {
+    id: "llm-eval-platform", title: "Design an LLM evaluation platform", description: "Let teams test prompt, model and agent changes against golden datasets before they ship.",
+    track: "ai-engineering", access: "paid", category: "Model quality", difficulty: "Intermediate", minutes: 45, icon: "experiment", color: "green",
+    considerations: ["Golden datasets and graders", "LLM-as-a-judge calibration", "Release gates"],
   },
 
   {
@@ -405,6 +521,9 @@ const prerequisites = {
   "comment-system": ["Message queues as buffers", "Cache-aside reads", "Eventual consistency", "Cursor pagination"],
   "ecommerce-warehouse": ["Facts, dimensions and grain", "OLTP vs OLAP", "Star schema", "Idempotent batch loads"],
   "cdc-pipeline": ["Database write-ahead logs and binlogs", "Kafka topics and partitions", "Upserts with MERGE", "Schema evolution"],
+  "ad-click-prediction": ["Binary classification and log loss", "Calibration", "Feature hashing and embeddings", "Online A/B tests"],
+  "chatgpt-assistant": ["Tokens and context windows", "LLM inference: prefill, decode and batching", "Streaming over SSE or WebSockets", "Rate limiting"],
+  "support-ai-agent": ["LLM tool calling", "Retrieval-augmented generation", "Authorization and idempotency", "Evaluating LLM output"],
 };
 for (const prompt of prompts) prompt.prerequisites = prerequisites[prompt.id] ?? [];
 

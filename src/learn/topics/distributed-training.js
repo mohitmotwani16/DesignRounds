@@ -60,7 +60,7 @@ export default {
     "Design checkpointing and automatic restart from the failure rate.",
     "Keep accelerators busy with a fast input pipeline and gang scheduling.",
   ],
-  related: ["mlops-model-registry", "machine-learning-system-architecture", "model-serving", "object-storage", "llm-inference-serving"],
+  related: ["mlops-model-registry", "machine-learning-system-architecture", "model-serving", "object-storage", "llm-inference-serving", "ml-platform-architecture", "llm-fine-tuning"],
   practice: ["training-platform"],
   reading: [
     { title: "PyTorch: Getting started with Fully Sharded Data Parallel", publisher: "PyTorch documentation", url: "https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html" },

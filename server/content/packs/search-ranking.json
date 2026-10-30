@@ -1,0 +1,580 @@
+{
+  "opening": "Shoppers on our store say search results are poor. Design the system that ranks products when someone searches.",
+  "clarifications": [
+    {
+      "id": "scale.catalogue",
+      "topics": [
+        "products",
+        "catalogue",
+        "catalog",
+        "items",
+        "how many"
+      ],
+      "answer": "About 300 million products from many sellers."
+    },
+    {
+      "id": "scale.qps",
+      "topics": [
+        "qps",
+        "traffic",
+        "searches",
+        "queries per second",
+        "peak"
+      ],
+      "answer": "About 50,000 searches a second at peak."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "milliseconds",
+        "response time"
+      ],
+      "answer": "Results within 200 ms at p99."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "metric",
+        "success",
+        "business",
+        "conversion"
+      ],
+      "answer": "The business goal is purchases from search; relevance problems show up as people rephrasing or leaving."
+    },
+    {
+      "id": "data.queries",
+      "topics": [
+        "query types",
+        "head",
+        "tail",
+        "long tail",
+        "distribution"
+      ],
+      "answer": "A small set of popular queries carries a large share of traffic, but most distinct queries are rare."
+    },
+    {
+      "id": "data.labels",
+      "topics": [
+        "labels",
+        "ratings",
+        "raters",
+        "human judgments",
+        "relevance data"
+      ],
+      "answer": "We have a team of raters who can grade query-product relevance on a 0 to 3 scale, and full click, cart and purchase logs."
+    },
+    {
+      "id": "req.personal",
+      "topics": [
+        "personalisation",
+        "personalization",
+        "user history",
+        "per user"
+      ],
+      "answer": "Light personalisation is welcome (sizes, preferred brands, location), but relevance comes first."
+    }
+  ],
+  "clarificationPolicy": "Answer as the search product lead. Keep it a large-catalogue product search with a tight latency budget and conversion goal; decide unlisted details so retrieval, labels and position bias stay in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "search-service"
+        ],
+        "keywords": [
+          "catalogue size",
+          "qps",
+          "latency",
+          "conversion",
+          "query distribution",
+          "relevance"
+        ]
+      },
+      "goal": "Establish scale, latency, the goal and the shape of queries.",
+      "opener": "What would you like to know about the catalogue, the traffic and what good search means here?",
+      "evidence": {
+        "strong": "Asks for catalogue size, peak queries, latency budget, business goal, head versus tail query mix, available labels and personalisation expectations.",
+        "adequate": "Gets scale and latency but not the goal or query mix.",
+        "weak": "Starts with a model without requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.clicks",
+          "pattern": "Treats clicks as the goal.",
+          "challenge": "A misleading thumbnail gets clicks but no purchases. Is search better?"
+        }
+      ],
+      "probes": [
+        "How would you tell search got better?",
+        "Are most queries popular or rare?"
+      ],
+      "hints": [
+        "Ask how the business measures search.",
+        "Popular and rare queries behave differently."
+      ],
+      "moveOnSummary": "Hundreds of millions of products, tens of thousands of queries a second, a tight latency budget, purchases as the goal, and a long tail of rare queries.",
+      "learnTopics": [
+        "ml-system-design-interview",
+        "non-functional-requirements"
+      ]
+    },
+    {
+      "id": "hl.retrieval",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "search-index",
+          "vector-db",
+          "t-elasticsearch"
+        ],
+        "keywords": [
+          "inverted index",
+          "bm25",
+          "semantic retrieval",
+          "hybrid",
+          "candidates",
+          "sharded index"
+        ]
+      },
+      "goal": "Retrieve a relevant candidate set from the whole catalogue quickly.",
+      "opener": "How do you get from a query to a few hundred candidate products?",
+      "evidence": {
+        "strong": "Query understanding first, then lexical retrieval over a sharded inverted index with BM25 and semantic retrieval with query and product embeddings in an ANN index, merged into a candidate set of about a thousand, with scatter-gather across shards.",
+        "adequate": "Uses only one retriever, or doesn't explain sharding.",
+        "weak": "Scans products or uses a database LIKE query."
+      },
+      "misconceptions": [
+        {
+          "id": "ret.vectors_only",
+          "pattern": "Believes vector search alone covers everything.",
+          "challenge": "Someone searches an exact model number. How does an embedding treat that?"
+        }
+      ],
+      "probes": [
+        "What does each retriever catch that the other misses?",
+        "How is the index split across machines?"
+      ],
+      "hints": [
+        "Words and meanings are different signals.",
+        "Each shard can return its own top results."
+      ],
+      "moveOnSummary": "Query understanding, then sharded BM25 and embedding retrieval merged into about a thousand candidates.",
+      "learnTopics": [
+        "hybrid-search-reranking",
+        "search-and-inverted-index"
+      ]
+    },
+    {
+      "id": "hl.ranker",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "feature-store"
+        ],
+        "keywords": [
+          "learning to rank",
+          "ranking model",
+          "features",
+          "lambdamart",
+          "rerank",
+          "business rules"
+        ]
+      },
+      "goal": "Rank candidates with a learned model and apply business rules.",
+      "opener": "Once you have candidates, how are they ordered?",
+      "evidence": {
+        "strong": "A learning-to-rank model (LambdaMART or a deep ranker) over text-match, quality, behaviour, commercial and light personal features, then rules for stock, sponsored slots and dedupe; optional cross-encoder check on the top results.",
+        "adequate": "A ranking model with a few features but no rules or feature groups.",
+        "weak": "Sort by popularity or price."
+      },
+      "misconceptions": [
+        {
+          "id": "rank.popularity",
+          "pattern": "Thinks popularity should dominate ranking.",
+          "challenge": "A best-selling phone case appears for a query about laptop bags. Is that good?"
+        }
+      ],
+      "probes": [
+        "Which feature groups would you use?",
+        "Where do out-of-stock items get removed?"
+      ],
+      "hints": [
+        "Relevance, quality and behaviour all matter.",
+        "Rules can run after the model."
+      ],
+      "moveOnSummary": "A learning-to-rank model over relevance, quality, behaviour, commercial and personal features, followed by stock and business rules.",
+      "learnTopics": [
+        "learning-to-rank",
+        "design-search-ranking"
+      ]
+    },
+    {
+      "id": "deep.labels",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "labeling",
+          "clickstream"
+        ],
+        "keywords": [
+          "relevance labels",
+          "graded labels",
+          "position bias",
+          "rater guidelines",
+          "implicit feedback",
+          "click model"
+        ]
+      },
+      "goal": "Create trustworthy ranking labels from raters and behaviour.",
+      "opener": "Where do your training labels come from, and how do you trust them?",
+      "evidence": {
+        "strong": "Human graded labels for evaluation and some training, graded implicit labels (shown, click, cart, purchase) at scale, corrected for position bias with position features, propensity weighting or randomised swaps, and rater guidelines with agreement checks.",
+        "adequate": "Uses clicks as labels but ignores position bias.",
+        "weak": "No labels plan."
+      },
+      "misconceptions": [
+        {
+          "id": "lab.raw_clicks",
+          "pattern": "Believes clicks directly measure relevance.",
+          "challenge": "Results at the top always get more clicks. What does a model trained on raw clicks learn?"
+        }
+      ],
+      "probes": [
+        "How do you separate relevance from position in click data?",
+        "What do raters do that clicks can't?"
+      ],
+      "hints": [
+        "The top slot gets clicks regardless.",
+        "Graded labels can mix several behaviours."
+      ],
+      "moveOnSummary": "Rater grades for evaluation, graded implicit labels at scale, and position-bias correction.",
+      "learnTopics": [
+        "data-labeling",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.query",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "llm",
+          "search-service"
+        ],
+        "keywords": [
+          "query understanding",
+          "spell correction",
+          "query classification",
+          "attribute extraction",
+          "query expansion",
+          "zero results"
+        ]
+      },
+      "goal": "Understand queries well enough to retrieve and filter correctly.",
+      "opener": "Someone types 'red nike runing shoes size 10'. What does your system do with that string?",
+      "evidence": {
+        "strong": "Normalises and spell-corrects, classifies category, extracts brand, colour and size as filters or features, expands synonyms, caches interpretations of head queries, and relaxes terms when there are no results.",
+        "adequate": "Spell correction or synonyms but no attribute extraction.",
+        "weak": "Passes the raw string to the index."
+      },
+      "misconceptions": [
+        {
+          "id": "q.raw",
+          "pattern": "Assumes the index will handle typos and attributes.",
+          "challenge": "How does a keyword index match 'runing' to products titled 'running'?"
+        }
+      ],
+      "probes": [
+        "What happens when a query has zero results?",
+        "Which parts of the query should become filters?"
+      ],
+      "hints": [
+        "Structure hides inside free text.",
+        "Removing a term can rescue an empty result."
+      ],
+      "moveOnSummary": "Normalisation, spell correction, category classification, attribute extraction, synonyms, cached head-query interpretations and query relaxation.",
+      "learnTopics": [
+        "typeahead-autocomplete",
+        "advanced-rag"
+      ]
+    },
+    {
+      "id": "deep.serving",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "distributed-cache",
+          "shard"
+        ],
+        "keywords": [
+          "scatter gather",
+          "result cache",
+          "latency budget",
+          "shard replicas",
+          "head queries",
+          "p99"
+        ]
+      },
+      "goal": "Serve searches at peak within the latency budget.",
+      "opener": "How does all of this fit into the time budget at peak traffic?",
+      "evidence": {
+        "strong": "Shards with replicas and scatter-gather with per-shard top-k and timeouts, caches head-query results briefly by query and locale, fetches features in bulk, budgets each stage, and degrades to retrieval order if ranking is slow.",
+        "adequate": "Caching or sharding without a latency budget.",
+        "weak": "Assumes one big server."
+      },
+      "misconceptions": [
+        {
+          "id": "serve.cache_all",
+          "pattern": "Thinks caching every query result solves latency.",
+          "challenge": "Most distinct queries are rare. How often would a rare query hit the cache?"
+        }
+      ],
+      "probes": [
+        "What happens if one shard is slow?",
+        "Which results can you cache, and for how long?"
+      ],
+      "hints": [
+        "The slowest shard sets the response time.",
+        "Popular queries repeat; rare ones don't."
+      ],
+      "moveOnSummary": "Replicated shards with scatter-gather and timeouts, head-query result caching, bulk features, per-stage budgets and a fallback order.",
+      "learnTopics": [
+        "sharding",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.eval",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "experiment"
+        ],
+        "keywords": [
+          "ndcg",
+          "interleaving",
+          "a/b test",
+          "query segments",
+          "reformulation rate",
+          "offline evaluation"
+        ]
+      },
+      "goal": "Measure ranking quality offline and online by query segment.",
+      "opener": "How would you decide a new ranker is better before shipping it to everyone?",
+      "evidence": {
+        "strong": "NDCG@10 on rated query sets split into head, torso and tail, recall for retrieval, interleaving for sensitive comparisons, then an A/B test on conversion and revenue per search with guardrails such as zero-result and reformulation rates.",
+        "adequate": "NDCG and an A/B test without segments.",
+        "weak": "Only clicks."
+      },
+      "misconceptions": [
+        {
+          "id": "eval.average",
+          "pattern": "Trusts one average metric over all queries.",
+          "challenge": "A change helps popular queries and hurts rare ones. Does the average show it?"
+        }
+      ],
+      "probes": [
+        "Why might you use interleaving before an A/B test?",
+        "Which metric shows people didn't find what they wanted?"
+      ],
+      "hints": [
+        "Split queries by popularity.",
+        "Rephrasing a query is a signal."
+      ],
+      "moveOnSummary": "Segmented NDCG on rated sets, interleaving, and A/B tests on conversion with zero-result and reformulation guardrails.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "learning-to-rank"
+      ]
+    },
+    {
+      "id": "deep.coldstart",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "embedding",
+          "vision"
+        ],
+        "keywords": [
+          "new product",
+          "no clicks",
+          "content features",
+          "category prior",
+          "product embeddings",
+          "cold start"
+        ]
+      },
+      "goal": "Rank new products sensibly before they have behaviour data.",
+      "opener": "A seller lists a new product an hour ago. How does it rank?",
+      "evidence": {
+        "strong": "Uses text and image content features and embeddings, category and seller priors, and smoothed behaviour features so the product can rank on relevance, with a small exploration boost.",
+        "adequate": "Falls back to category averages only.",
+        "weak": "New products effectively never appear."
+      },
+      "misconceptions": [
+        {
+          "id": "cold.behaviour",
+          "pattern": "Depends entirely on behaviour features.",
+          "challenge": "If ranking needs clicks and clicks need ranking, how does a new product start?"
+        }
+      ],
+      "probes": [
+        "What do you know about a product on day one?",
+        "How do behaviour features handle small counts?"
+      ],
+      "hints": [
+        "Titles and images describe a product.",
+        "Priors smooth small numbers."
+      ],
+      "moveOnSummary": "Content embeddings, category and seller priors, smoothed behaviour features and a small exploration boost.",
+      "learnTopics": [
+        "cold-start-problem",
+        "embeddings"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "relevance vs revenue",
+          "sponsored",
+          "retraining",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs and next steps.",
+      "opener": "What trade-offs does your design make, and what would you work on next?",
+      "evidence": {
+        "strong": "Discusses relevance versus revenue and sponsored placements, personalisation versus consistency, retraining cadence, latency versus model size, and next improvements.",
+        "adequate": "Mentions one or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do sponsored products fit without hurting trust?",
+        "How often would you retrain?"
+      ],
+      "hints": [
+        "Money and relevance can pull in different directions.",
+        "Query intent drifts slowly except for seasonal spikes."
+      ],
+      "moveOnSummary": "Relevance versus revenue, personalisation, retraining cadence and latency versus model size.",
+      "learnTopics": [
+        "learning-to-rank",
+        "continual-learning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.newlisting",
+      "after": "deep.labels",
+      "prompt": "A large seller complains that the products they listed this morning don't show up even when shoppers search their exact names. What in your design causes that?",
+      "agendaItemId": "deep.coldstart"
+    },
+    {
+      "id": "cb.blackfriday",
+      "after": "deep.query",
+      "prompt": "On a big sale day traffic triples and many shoppers search the same few deals. What happens to latency, and what do you do?",
+      "agendaItemId": "deep.serving"
+    }
+  ],
+  "vocabulary": [
+    "BM25",
+    "inverted index",
+    "embedding",
+    "ANN",
+    "hybrid search",
+    "reciprocal rank fusion",
+    "learning to rank",
+    "LambdaMART",
+    "NDCG",
+    "MRR",
+    "interleaving",
+    "position bias",
+    "query understanding",
+    "spell correction",
+    "query expansion",
+    "scatter-gather",
+    "shard",
+    "cross-encoder",
+    "zero results",
+    "reformulation"
+  ],
+  "alternatives": [
+    {
+      "choice": "Deep ranker consuming raw text embeddings instead of LambdaMART",
+      "whenBetter": "With abundant training data and a need to model text semantics directly; costlier to serve."
+    },
+    {
+      "choice": "Lexical search plus manual synonym lists, no semantic retrieval",
+      "whenBetter": "For small, jargon-heavy catalogues where exact terms dominate."
+    },
+    {
+      "choice": "Per-category rankers",
+      "whenBetter": "When categories behave very differently, such as groceries versus electronics."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Hybrid retrieval, debiased LTR",
+      "outline": "Clarifies catalogue size, peak queries, latency, the purchase goal and the long tail. Understands the query (spelling, category, attributes, synonyms), retrieves with sharded BM25 and embedding search merged into about a thousand candidates, ranks with LambdaMART over relevance, quality, behaviour, commercial and light personal features, then applies stock and sponsored rules. Labels mix rater grades and graded behaviour corrected for position bias. Serves with scatter-gather, head-query caching and budgets, handles new products with content features and priors, and evaluates with segmented NDCG, interleaving and conversion A/B tests."
+    },
+    {
+      "band": "adequate",
+      "label": "Keyword search plus a ranker",
+      "outline": "Uses BM25 retrieval and a learned ranker trained on clicks with sensible features, plus an A/B test, but ignores position bias, has no semantic retrieval and evaluates with one average metric."
+    },
+    {
+      "band": "weak",
+      "label": "Database search",
+      "outline": "Matches product titles with a database text query and sorts by popularity; no ranking model, labels or latency plan."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

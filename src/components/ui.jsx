@@ -4,6 +4,7 @@ import {
   HardDrive, Hash, Image, Layers2, Link2, ListOrdered, LockKeyhole, LogOut, Menu, MessageSquare, MonitorSmartphone,
   Network, RefreshCcw, Search, Server, Settings2, ShieldCheck, Sparkles, SquarePen, Waypoints, Zap, KeyRound, Lock,
   ChevronDown, X, ShoppingCart, ArrowLeftRight, MousePointerClick, Cpu, Waves, ScrollText, MonitorPlay, Scale, UserX,
+  Bot, Headset, CodeXml, Mic, Palette, FileStack, TrendingUp, Timer, Users,
 } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
 import { api } from "../api.js";
@@ -119,12 +120,14 @@ export function promptIcon(icon) {
     service: Server, kv: KeyRound, id: Hash, queue: ListOrdered, lock: Lock, crown: Crown, sync: RefreshCcw, image: Image,
     flag: Flag, identity: Fingerprint, cart: ShoppingCart, cdc: ArrowLeftRight, click: MousePointerClick, sensor: Cpu,
     lake: Waves, logs: ScrollText, play: MonitorPlay, scale: Scale, experiment: FlaskConical, erase: UserX,
+    people: Users, eta: Timer, pricing: TrendingUp, ai: Bot, agent: Headset, code: CodeXml, voice: Mic, palette: Palette,
+    docs: FileStack, gpu: Cpu,
   };
   return icons[icon] || Network;
 }
 
 export function trackIcon(icon) {
-  const icons = { service: Server, database: Database, model: Sparkles, platform: Layers2, distributed: Waypoints, frontend: MonitorSmartphone };
+  const icons = { service: Server, database: Database, model: Sparkles, ai: Bot, platform: Layers2, distributed: Waypoints, frontend: MonitorSmartphone };
   return icons[icon] || Network;
 }
 

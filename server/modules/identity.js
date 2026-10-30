@@ -7,7 +7,7 @@ import { deliveryMode, sendLoginCode, sendWelcomeEmail } from "../email.js";
 import { INTEREST_OPTIONS, interestLabel } from "../../src/data/interests.js";
 import { afterResponse, HttpError, createLimiter, parse, route } from "../http.js";
 import { deleteInterviewAudioForUser } from "../object-storage.js";
-import { assertHuman, networkKey, turnstileRequired, turnstileSiteKey } from "../turnstile.js";
+import { assertHuman, networkKey, recordHumanCheck, turnstileRequired, turnstileSiteKey } from "../turnstile.js";
 import { planFor } from "./plans.js";
 
 const SESSION_DAYS = 30;
@@ -305,25 +305,32 @@ const HUMAN_EXEMPT = new Set([
   "POST /v1/auth/google/start",
   "GET /v1/auth/google",
   "GET /v1/auth/google/callback",
+  "POST /v1/diagnostics/human-check",
 ]);
 
 // The browser holding this session (not just its cookie) passed Turnstile in the
 // last 24 hours. The launch id lives in that browser's storage, so a copied session
 // cookie alone isn't enough. A new network is not a reason to ask again: mobile
 // carriers and ISPs change public addresses all the time.
-const humanPassCurrent = (req) => {
+// Returns why the pass isn't current, or null when it is.
+const humanPassProblem = (req) => {
   const launch = req.get("x-human-launch") || "";
   const expected = req.user?.human_launch || "";
-  if (!expected || !launch || !safeEqual(launch, expected)) return false;
+  if (!expected) return "no-pass";
+  if (!launch) return "no-launch-header";
+  if (!safeEqual(launch, expected)) return "launch-mismatch";
   const checkedAt = req.user.human_checked_at ? new Date(req.user.human_checked_at).getTime() : 0;
-  return Date.now() - checkedAt < HUMAN_PASS_MS;
+  return Date.now() - checkedAt < HUMAN_PASS_MS ? null : "expired";
 };
+const humanPassCurrent = (req) => !humanPassProblem(req);
 
 export function requireCurrentHuman(req, _res, next) {
   if (!req.user || !turnstileRequired()) return next();
   if (HUMAN_EXEMPT.has(`${req.method} ${req.path}`)) return next();
-  if (!humanPassCurrent(req)) return next(new HttpError(403, "HUMAN_CHECK_REQUIRED", "Confirm you're human to continue."));
-  next();
+  const reason = humanPassProblem(req);
+  if (!reason) return next();
+  recordHumanCheck(req, { action: "continue", outcome: "pass-required", detail: { reason, route: `${req.method} ${req.path}` } })
+    .finally(() => next(new HttpError(403, "HUMAN_CHECK_REQUIRED", "Confirm you're human to continue.")));
 }
 
 export const identityRouter = express.Router();
@@ -347,7 +354,7 @@ identityRouter.post("/auth/request-code", route(async (req, res) => {
   }
 
   // After the cheap limits, before a code is created. Siteverify consumes the token.
-  await assertHuman(req, token);
+  await assertHuman(req, token, "sign-in", { email });
 
   const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
   await query("update login_codes set consumed_at = now() where email = $1 and consumed_at is null", [email]);
@@ -410,6 +417,8 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
   // only when the code is entered on that same network.
   const sameNetwork = !turnstileRequired() || networkKey(consumed.request_ip) === networkKey(req.ip);
   const launchId = await createSession(res, user, req.get("user-agent"), { network: sameNetwork ? networkKey(req.ip) : null });
+  // The person signed in but will be asked to check again straight away.
+  if (!sameNetwork) await recordHumanCheck(req, { action: "sign-in", outcome: "carry-over-missed", userId: user.id, email, detail: { method: "email", reason: "network-changed" } });
   await welcomeFirstLogin(user);
   const body = { user: toPublicUser(user) };
   if (launchId) Object.assign(body, { launchId, humanValidUntil: humanValidUntil(new Date()) });
@@ -539,6 +548,9 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
   const grant = readHumanGrant(req.cookies?.[HUMAN_GRANT_COOKIE]);
   const network = grant && grant.ip === networkKey(req.ip) ? grant.ip : null;
   const launchId = await createSession(res, user, req.get("user-agent"), { network: turnstileRequired() ? network : null });
+  if (turnstileRequired() && !network) {
+    await recordHumanCheck(req, { action: "sign-in", outcome: "carry-over-missed", userId: user.id, email: user.email, detail: { method: "google", reason: grant ? "network-changed" : "no-grant" } });
+  }
   await welcomeFirstLogin(user);
   clearOAuth();
   res.clearCookie(HUMAN_GRANT_COOKIE, { ...grantCookieOptions(), maxAge: undefined });
@@ -632,6 +644,8 @@ identityRouter.delete("/me", requireUser, route(async (req, res) => {
   await query("delete from plus_waitlist where email = $1", [req.user.email]);
   // Reports sent while signed in cascade with the user; this also removes any sent as a visitor.
   await query("delete from problem_reports where email = $1", [req.user.email]);
+  // Human-check events recorded while signed in cascade too; this removes sign-in attempts.
+  await query("delete from human_check_events where email = $1", [req.user.email]);
   // interviewer_trials keeps only a hash of the address, so a new account can't claim a second trial.
   res.clearCookie(COOKIE_NAME, { ...cookieOptions(), maxAge: undefined });
   res.json({ ok: true });

@@ -1,0 +1,627 @@
+{
+  "opening": "We want to launch a consumer AI chat assistant, something like ChatGPT, running on our own models. Design the system behind it.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "daily",
+        "scale",
+        "messages",
+        "traffic"
+      ],
+      "answer": "About 50 million daily users sending around 10 messages each."
+    },
+    {
+      "id": "scale.tokens",
+      "topics": [
+        "tokens",
+        "prompt size",
+        "response length",
+        "context",
+        "how long"
+      ],
+      "answer": "A typical request has about 2,500 input tokens including history and produces about 400 output tokens."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "first token",
+        "streaming",
+        "response time"
+      ],
+      "answer": "The first words should appear within about a second, then stream smoothly."
+    },
+    {
+      "id": "req.hosting",
+      "topics": [
+        "hosting",
+        "gpus",
+        "own models",
+        "api",
+        "infrastructure"
+      ],
+      "answer": "Models run on our own GPU fleet, which is our largest cost."
+    },
+    {
+      "id": "req.plans",
+      "topics": [
+        "plans",
+        "free",
+        "paid",
+        "limits",
+        "tiers"
+      ],
+      "answer": "Free users get a smaller model and lower limits; paid users get the best model, higher limits and priority."
+    },
+    {
+      "id": "req.history",
+      "topics": [
+        "history",
+        "conversations",
+        "saved",
+        "memory",
+        "resume"
+      ],
+      "answer": "Conversations are saved and can be reopened and continued later; users can regenerate or edit a message."
+    },
+    {
+      "id": "req.safety",
+      "topics": [
+        "safety",
+        "moderation",
+        "harmful",
+        "abuse",
+        "policy"
+      ],
+      "answer": "Harmful requests and answers must be caught, and abuse such as scripted scraping must be limited."
+    }
+  ],
+  "clarificationPolicy": "Answer as the product and infrastructure lead. Keep it a very large consumer chat product on self-hosted GPUs; decide unlisted details so token-based capacity, context management and streaming stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "daily users",
+          "messages",
+          "tokens",
+          "first token",
+          "plans",
+          "history"
+        ]
+      },
+      "goal": "Establish usage, token sizes, latency, plans, history and safety needs.",
+      "opener": "What do you want to clarify about the product and its constraints before designing?",
+      "evidence": {
+        "strong": "Asks about users and messages, tokens per request in and out, time to first token, hosting, plan differences, history and editing, and safety; plans to estimate in tokens.",
+        "adequate": "Gets users and latency but not token sizes or plans.",
+        "weak": "Starts drawing without requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.rps",
+          "pattern": "Plans capacity from requests per second alone.",
+          "challenge": "One request asks for a one-word answer, another for a long essay. Do they cost the same?"
+        }
+      ],
+      "probes": [
+        "How long are prompts and answers, typically?",
+        "What differs between free and paid users?"
+      ],
+      "hints": [
+        "LLM cost and capacity are counted in tokens.",
+        "Plans change both model and limits."
+      ],
+      "moveOnSummary": "Tens of millions of daily users, a few thousand tokens in and a few hundred out per message, a sub-second first token, plan-based models and limits, saved history and safety.",
+      "learnTopics": [
+        "ai-engineer-system-design-interview",
+        "how-llms-work"
+      ]
+    },
+    {
+      "id": "req.estimates",
+      "stage": "requirements",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "tokens per second",
+          "gpu count",
+          "peak",
+          "output tokens",
+          "cost per message",
+          "estimate"
+        ]
+      },
+      "goal": "Turn usage into token throughput, GPU and cost estimates.",
+      "opener": "Can you estimate the load this puts on the system?",
+      "evidence": {
+        "strong": "Computes messages per second at average and peak, input and output tokens per second, notes that output tokens drive decode capacity, estimates GPU count from per-GPU throughput and cost per message, and storage per day.",
+        "adequate": "Estimates requests per second but not tokens.",
+        "weak": "No estimates."
+      },
+      "misconceptions": [
+        {
+          "id": "est.input",
+          "pattern": "Thinks input tokens dominate GPU capacity.",
+          "challenge": "Input is processed in one parallel pass; output is generated one token at a time. Which ties up GPUs longer?"
+        }
+      ],
+      "probes": [
+        "Which number decides how many GPUs you need?",
+        "Roughly what does one message cost?"
+      ],
+      "hints": [
+        "Separate input and output tokens.",
+        "Decode speed per GPU bounds throughput."
+      ],
+      "moveOnSummary": "Messages per second to input and output tokens per second, output-driven decode capacity, a GPU estimate and cost per message.",
+      "learnTopics": [
+        "back-of-the-envelope-estimation",
+        "llm-cost-optimization"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "llm",
+          "gpu"
+        ],
+        "keywords": [
+          "chat service",
+          "inference fleet",
+          "router",
+          "gateway",
+          "streaming",
+          "moderation"
+        ]
+      },
+      "goal": "Lay out the request path from client to GPUs and back.",
+      "opener": "Walk me through what happens when someone sends a message.",
+      "evidence": {
+        "strong": "Client to API gateway (auth, plan limits), chat service storing the message and assembling context, input moderation, an inference router choosing model and replica, a GPU fleet with continuous batching, tokens streamed back through the chat service, output moderation, final message saved, async jobs for titles and metering.",
+        "adequate": "Client, server and model with streaming but no router, limits or moderation.",
+        "weak": "A server calling the model synchronously with no streaming."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.sync",
+          "pattern": "Waits for the full answer before responding.",
+          "challenge": "An answer takes eight seconds to generate. What does the user stare at?"
+        }
+      ],
+      "probes": [
+        "Where do plan limits get enforced?",
+        "How do tokens get from the GPU to the user's screen?"
+      ],
+      "hints": [
+        "Stream tokens as they're produced.",
+        "Put a router between the app and the GPUs."
+      ],
+      "moveOnSummary": "Gateway with plan limits, a chat service assembling context, moderation, a router to a continuously batched GPU fleet, streamed tokens and saved messages.",
+      "learnTopics": [
+        "design-chatgpt",
+        "llm-inference-serving"
+      ]
+    },
+    {
+      "id": "hl.storage",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "wide-column",
+          "document-db",
+          "database"
+        ],
+        "keywords": [
+          "conversations table",
+          "messages",
+          "partition by user",
+          "parent id",
+          "regenerate",
+          "history list"
+        ]
+      },
+      "goal": "Store conversations so listing, loading and branching work at scale.",
+      "opener": "How do you store conversations and messages?",
+      "evidence": {
+        "strong": "Conversations keyed by user (title, model, timestamps) and messages keyed by conversation with sequence and parent id for regenerate and edit branches, in a partitioned store; user message saved before generation, assistant message saved at the end with partial saves.",
+        "adequate": "A messages table without branching or partitioning.",
+        "weak": "Keeps history only in the client."
+      },
+      "misconceptions": [
+        {
+          "id": "store.client",
+          "pattern": "Keeps history only on the device.",
+          "challenge": "The user switches from phone to laptop. Where's their conversation?"
+        }
+      ],
+      "probes": [
+        "How does regenerate fit your data model?",
+        "What happens if the connection drops mid-answer?"
+      ],
+      "hints": [
+        "Edits and regenerations form a tree.",
+        "Save what you have before the stream ends."
+      ],
+      "moveOnSummary": "Conversations partitioned by user and messages by conversation, with parent ids for branches and partial saves of streamed answers.",
+      "learnTopics": [
+        "data-modeling-for-system-design",
+        "nosql-database-types"
+      ]
+    },
+    {
+      "id": "deep.context",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "llm",
+          "vector-db"
+        ],
+        "keywords": [
+          "context window",
+          "summarize history",
+          "truncation",
+          "long-term memory",
+          "prompt caching",
+          "context assembly"
+        ]
+      },
+      "goal": "Fit long conversations into the model's context affordably.",
+      "opener": "A conversation is two hundred turns long. What do you send to the model on the next message?",
+      "evidence": {
+        "strong": "Keeps recent turns verbatim, summarises older ones, drops or summarises large pasted content once answered, retrieves relevant long-term memories, counts tokens before the call, and puts the stable system prompt first for prefix caching.",
+        "adequate": "Truncates to the last few turns.",
+        "weak": "Sends the whole history every time."
+      },
+      "misconceptions": [
+        {
+          "id": "ctx.all",
+          "pattern": "Sends the entire conversation each time.",
+          "challenge": "Each turn resends everything before it. What happens to cost and latency by turn two hundred?"
+        }
+      ],
+      "probes": [
+        "What do you lose by cutting old turns, and how do you keep it?",
+        "How does prompt caching change where you put things?"
+      ],
+      "hints": [
+        "Summaries keep the gist of old turns.",
+        "Stable text first lets the prefix be reused."
+      ],
+      "moveOnSummary": "Recent turns verbatim, summaries of older turns, retrieved memory, token counting, and a stable cached prefix.",
+      "learnTopics": [
+        "agent-memory",
+        "llm-caching"
+      ]
+    },
+    {
+      "id": "deep.streaming",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "load-balancer"
+        ],
+        "keywords": [
+          "server-sent events",
+          "websocket",
+          "cancel generation",
+          "stop button",
+          "disconnect",
+          "partial answer"
+        ]
+      },
+      "goal": "Stream responses reliably and free GPUs when generation is no longer wanted.",
+      "opener": "The user presses stop halfway through an answer, or closes the app. What happens on the server?",
+      "evidence": {
+        "strong": "Streams over SSE or WebSockets through stateless chat servers, propagates cancellation to the inference server to free the KV cache and batch slot, saves the partial answer, lets clients reconnect and fetch it, and handles many concurrent long-lived connections.",
+        "adequate": "Streams but only stops sending on stop, leaving generation running.",
+        "weak": "No streaming."
+      },
+      "misconceptions": [
+        {
+          "id": "stream.stop",
+          "pattern": "Thinks stopping means just closing the client connection.",
+          "challenge": "The client is gone but the GPU keeps generating. Who pays for those tokens?"
+        }
+      ],
+      "probes": [
+        "How many open streams do you hold at peak?",
+        "What does the user see when they reconnect?"
+      ],
+      "hints": [
+        "Cancellation has to reach the GPU.",
+        "Long-lived connections need capacity planning."
+      ],
+      "moveOnSummary": "SSE or WebSocket streaming, cancellation propagated to the inference server, partial saves and reconnects, sized for concurrent streams.",
+      "learnTopics": [
+        "real-time-communication",
+        "llm-inference-serving"
+      ]
+    },
+    {
+      "id": "deep.overload",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "rate-limiter"
+        ],
+        "keywords": [
+          "priority queue",
+          "degrade",
+          "smaller model",
+          "load shedding",
+          "token rate limit",
+          "gpu saturation"
+        ]
+      },
+      "goal": "Behave well when demand exceeds GPU capacity.",
+      "opener": "A launch doubles traffic and every GPU is busy. Who waits, and what do they get?",
+      "evidence": {
+        "strong": "Per-model queues with priority for paid users, short bounded waits, then degradation (smaller model or shorter max output for free users) before rejection, token-based per-user limits, autoscaling with headroom because GPUs are slow to add, and clear messaging to users.",
+        "adequate": "Rate limits but no priorities or degradation.",
+        "weak": "Requests time out randomly."
+      },
+      "misconceptions": [
+        {
+          "id": "ov.autoscale",
+          "pattern": "Believes autoscaling absorbs any spike.",
+          "challenge": "New GPU capacity takes many minutes to bring online. What happens in the meantime?"
+        }
+      ],
+      "probes": [
+        "Which users get degraded first?",
+        "Why limit by tokens rather than messages?"
+      ],
+      "hints": [
+        "Not all traffic is equally important.",
+        "A smaller model is better than an error."
+      ],
+      "moveOnSummary": "Priority queues, bounded waits, degradation to smaller models or shorter outputs for free users, token-based limits and headroom.",
+      "learnTopics": [
+        "load-shedding",
+        "llm-gateway"
+      ]
+    },
+    {
+      "id": "deep.safety",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "fraud-check"
+        ],
+        "keywords": [
+          "moderation",
+          "output filter",
+          "jailbreak",
+          "abuse detection",
+          "refusal",
+          "self-harm"
+        ]
+      },
+      "goal": "Catch harmful requests and answers without ruining the experience.",
+      "opener": "How do you keep the assistant from producing harmful content, and from being abused?",
+      "evidence": {
+        "strong": "Input moderation before generation, output checks on streamed chunks with the ability to cut a stream, policy-tuned refusals and special handling for self-harm topics, abuse detection for scripted usage feeding stricter limits, and measuring false refusals.",
+        "adequate": "A moderation call on input only.",
+        "weak": "Relies on the model alone."
+      },
+      "misconceptions": [
+        {
+          "id": "safe.input",
+          "pattern": "Checks only the user's input.",
+          "challenge": "A harmless-looking request leads the model to a harmful answer. What catches it?"
+        }
+      ],
+      "probes": [
+        "How do you check an answer that's still streaming?",
+        "How do you avoid refusing normal requests?"
+      ],
+      "hints": [
+        "Check both sides of the model.",
+        "Over-blocking is a cost too."
+      ],
+      "moveOnSummary": "Input and streamed-output moderation, careful refusals, abuse detection with limits, and false-refusal tracking.",
+      "learnTopics": [
+        "llm-guardrails",
+        "prompt-injection"
+      ]
+    },
+    {
+      "id": "deep.quality",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "experiment"
+        ],
+        "keywords": [
+          "evals",
+          "thumbs feedback",
+          "a/b test model",
+          "regenerate rate",
+          "golden set",
+          "model rollout"
+        ]
+      },
+      "goal": "Measure quality and roll out model and prompt changes safely.",
+      "opener": "How would you know a new model or system prompt is better before giving it to everyone?",
+      "evidence": {
+        "strong": "Offline eval suites and red-team sets per model and system prompt version, canary rollout with online signals (thumbs, regenerate rate, conversation length, retention) and A/B tests, with cost and latency tracked per version.",
+        "adequate": "An A/B test only.",
+        "weak": "Ships when it looks good."
+      },
+      "misconceptions": [
+        {
+          "id": "q.vibes",
+          "pattern": "Judges models by trying a few prompts.",
+          "challenge": "The new model is better at your favourite prompts and worse at code. Would you notice?"
+        }
+      ],
+      "probes": [
+        "Which online signal suggests answers got worse?",
+        "What stops a bad model reaching everyone?"
+      ],
+      "hints": [
+        "Users regenerating is a quiet complaint.",
+        "Roll out gradually."
+      ],
+      "moveOnSummary": "Offline evals and red-team sets, canary and A/B rollouts on thumbs, regenerate rate and retention, with cost and latency per version.",
+      "learnTopics": [
+        "llm-evaluation",
+        "llmops-observability"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cost vs quality",
+          "free tier",
+          "latency",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What are the main trade-offs in your design?",
+      "evidence": {
+        "strong": "Model quality versus GPU cost, free-tier generosity versus capacity, context length versus cost and latency, safety strictness versus helpfulness, and next steps such as routing easy requests to smaller models.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where would you cut cost first?",
+        "What would you add next?"
+      ],
+      "hints": [
+        "Not every message needs the biggest model.",
+        "Context costs tokens every turn."
+      ],
+      "moveOnSummary": "Quality versus GPU cost, free-tier limits, context length versus cost, and safety versus helpfulness.",
+      "learnTopics": [
+        "llm-cost-optimization",
+        "choosing-an-llm"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.launch",
+      "after": "deep.context",
+      "prompt": "A viral launch triples traffic in an hour and GPUs are saturated. Paid users are complaining. What do you do right now?",
+      "agendaItemId": "deep.overload"
+    },
+    {
+      "id": "cb.badmodel",
+      "after": "deep.streaming",
+      "prompt": "After switching to a new model, the regenerate rate jumps and coding questions get worse. How would you have caught that before everyone saw it?",
+      "agendaItemId": "deep.quality"
+    }
+  ],
+  "vocabulary": [
+    "tokens",
+    "context window",
+    "time to first token",
+    "TTFT",
+    "prefill",
+    "decode",
+    "KV cache",
+    "continuous batching",
+    "server-sent events",
+    "SSE",
+    "WebSocket",
+    "prompt caching",
+    "summarization",
+    "rate limit",
+    "moderation",
+    "refusal",
+    "jailbreak",
+    "regenerate",
+    "canary",
+    "GPU"
+  ],
+  "alternatives": [
+    {
+      "choice": "Use a hosted model API instead of self-hosting",
+      "whenBetter": "To launch fast or at moderate scale without GPU operations; trades control and unit cost for speed."
+    },
+    {
+      "choice": "WebSockets instead of server-sent events",
+      "whenBetter": "When the client also needs to send real-time signals mid-stream, such as voice or collaborative features."
+    },
+    {
+      "choice": "A relational database for conversations",
+      "whenBetter": "At smaller scale or when strong querying across conversations matters more than write throughput."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Token-aware chat at scale",
+      "outline": "Clarifies users, tokens in and out, first-token latency, self-hosting, plans, history and safety, then estimates tokens per second, GPUs and cost per message. Gateway with token-based plan limits, a chat service that saves messages and assembles context from recent turns, summaries, memory and a cached prefix, moderation on both sides, and a router to a continuously batched GPU fleet. Streams over SSE with cancellation reaching the GPU and partial saves. Conversations partitioned by user with branchable messages. Overload uses priority queues and degrades free users first. Changes ship through evals, canaries and A/B tests."
+    },
+    {
+      "band": "adequate",
+      "label": "Streaming chat, loose capacity",
+      "outline": "Streams answers from a model service and stores conversations, with rate limits per message and input moderation, but sends full histories, has no cancellation or priorities, and sizes by requests rather than tokens."
+    },
+    {
+      "band": "weak",
+      "label": "Request-response bot",
+      "outline": "A web server calls the model with the latest message and returns the full answer; history lives in the browser; no estimates, limits or safety."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

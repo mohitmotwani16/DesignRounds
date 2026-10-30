@@ -16,6 +16,8 @@ import { pruneUcsVersions } from "./ucs/index.js";
 // The scheduler authenticates with `Authorization: Bearer <CRON_SECRET>`. Without
 // CRON_SECRET the endpoint doesn't exist.
 const LOGIN_CODE_RETENTION = "1 day";
+// Human-check diagnostics (issue #103): long enough to look into a report a few weeks later.
+const HUMAN_CHECK_EVENT_RETENTION = "30 days";
 // Raw voice recordings (Postgres bytea or R2 objects): 30-day TTL from transcription.
 // interview_turns.content (verbatim transcript), answer_context, communication, and
 // interview_audio.delivery stay until the round or account is deleted — never purged here.
@@ -52,6 +54,7 @@ export async function runMaintenance() {
     loginCodes: await count(`delete from login_codes where created_at < now() - interval '${LOGIN_CODE_RETENTION}'`),
     authSessions: await count("delete from auth_sessions where expires_at < now()"),
     rateLimits: await count("delete from rate_limits where reset_at < now()"),
+    humanCheckEvents: await count(`delete from human_check_events where created_at < now() - interval '${HUMAN_CHECK_EVENT_RETENTION}'`),
     voiceRecordings: await purgeVoiceRecordings(),
   };
 }

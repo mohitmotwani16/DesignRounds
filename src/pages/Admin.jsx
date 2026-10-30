@@ -51,8 +51,9 @@ function AdminHome() {
           <button role="tab" aria-selected={tab === "packs"} onClick={() => setTab("packs")}>Interviewer packs</button>
           <button role="tab" aria-selected={tab === "waitlist"} onClick={() => setTab("waitlist")}>Plus waitlist</button>
           <button role="tab" aria-selected={tab === "reports"} onClick={() => setTab("reports")}>Problem reports</button>
+          <button role="tab" aria-selected={tab === "human"} onClick={() => setTab("human")}>Human checks</button>
         </div>
-        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : tab === "waitlist" ? <PlusWaitlist /> : tab === "reports" ? <ProblemReports /> : <InvitationForm />}
+        {tab === "articles" ? <ArticleQueue /> : tab === "admins" ? <AdminList /> : tab === "members" ? <MemberList /> : tab === "packs" ? <PackAdmin /> : tab === "waitlist" ? <PlusWaitlist /> : tab === "reports" ? <ProblemReports /> : tab === "human" ? <HumanChecks /> : <InvitationForm />}
       </div>
     </main>
   );
@@ -402,6 +403,108 @@ function ProblemReports() {
           {data.total > data.reports.length && <p className="admin-hint">Showing {data.reports.length} of {data.total}.</p>}
         </>
       )}
+    </section>
+  );
+}
+
+// Human-check (Turnstile) events from the last 30 days (issue #103): what the server
+// saw at siteverify and what browsers reported about the widget. Search by the
+// reference a person quotes, their email, a Cloudflare error code or a request id.
+const HUMAN_OUTCOMES = {
+  passed: "Passed",
+  rejected: "Rejected by Cloudflare",
+  unavailable: "Cloudflare unreachable",
+  "not-configured": "Keys missing",
+  "missing-token": "No token sent",
+  "pass-required": "Asked to check again",
+  "carry-over-missed": "Signed in, check not carried over",
+  "load-failed": "Widget script didn't load",
+  "widget-error": "Widget error",
+  unsupported: "Browser unsupported",
+  timeout: "Challenge timed out",
+  interactive: "Background check needed interaction",
+  stalled: "Background check stalled",
+};
+
+function HumanChecks() {
+  const [search, setSearch] = useState("");
+  const [problemsOnly, setProblemsOnly] = useState(true);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  async function load(q = search.trim(), problems = problemsOnly) {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await api.adminHumanChecks({ q, problems: problems ? "1" : "0" }));
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  function toggleProblems() {
+    setProblemsOnly(!problemsOnly);
+    load(search.trim(), !problemsOnly);
+  }
+
+  return (
+    <section className="admin-waitlist admin-reports">
+      <form className="admin-grant" onSubmit={(event) => { event.preventDefault(); load(); }}>
+        <label className="field-label" htmlFor="human-search">Find events</label>
+        <div>
+          <input id="human-search" className="text-input" placeholder="Reference, email, error code or request id" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <button className="btn btn-primary"><Search size={15} /> Find</button>
+          {search && <button type="button" className="btn btn-ghost" onClick={() => { setSearch(""); load(""); }}>Clear</button>}
+        </div>
+        <small>People see a reference in human-check errors. Events are kept for 30 days. Cloudflare explains its error codes at developers.cloudflare.com/turnstile/troubleshooting/client-side-errors/error-codes/.</small>
+      </form>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {data && (
+        <div className="admin-waitlist-head">
+          <p>
+            Last 24 hours:{" "}
+            {data.summary.length === 0
+              ? "no events."
+              : data.summary.map((row) => `${HUMAN_OUTCOMES[row.outcome] || row.outcome} (${row.source}) ${row.count}`).join(" · ")}
+          </p>
+          <div className="admin-filters">
+            <button type="button" aria-pressed={problemsOnly} onClick={toggleProblems}>Problems only</button>
+          </div>
+        </div>
+      )}
+      {loading && <p className="learn-loading"><LoaderCircle size={16} className="spin" /> Loading…</p>}
+      {!loading && data && (data.events.length === 0 ? (
+        <p className="write-empty">{search ? "No events match that search." : "No human-check events recorded yet."}</p>
+      ) : (
+        <ul className="write-list">
+          {data.events.map((event) => (
+            <li key={event.id} className="admin-report">
+              <div className="admin-report-head">
+                <span className="write-list-title">
+                  {HUMAN_OUTCOMES[event.outcome] || event.outcome}
+                  {event.errorCodes.length > 0 && ` · ${event.errorCodes.join(", ")}`}
+                  <small>
+                    {event.source === "client" ? "Browser" : "Server"} · {event.action}
+                    {event.email ? ` · ${event.email}` : ""}
+                    {event.reference ? ` · ref ${event.reference}` : ""}
+                    {event.page ? ` · ${event.page}` : ""}
+                    {event.country ? ` · ${event.country}` : ""}
+                  </small>
+                </span>
+                <span className="write-list-date">{formatDate(event.createdAt)}</span>
+              </div>
+              {Object.keys(event.detail).length > 0 && <p className="admin-report-agent">{JSON.stringify(event.detail)}</p>}
+              {event.userAgent && <p className="admin-report-agent">{event.userAgent}</p>}
+              {event.requestId && <p className="admin-report-agent">request {event.requestId}</p>}
+            </li>
+          ))}
+        </ul>
+      ))}
+      {data && data.events.length >= data.limit && <p className="admin-hint">Showing the latest {data.limit}. Search to narrow it down.</p>}
     </section>
   );
 }

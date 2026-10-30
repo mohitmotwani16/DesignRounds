@@ -1,0 +1,644 @@
+{
+  "opening": "We show ads in our social feed and charge advertisers per click. We need a model that predicts whether someone will click an ad. How would you design it?",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "scale",
+        "traffic",
+        "impressions",
+        "volume",
+        "per day"
+      ],
+      "answer": "About 1 billion daily users and roughly 100 billion ad impressions a day."
+    },
+    {
+      "id": "scale.candidates",
+      "topics": [
+        "candidates",
+        "ads per request",
+        "eligible ads",
+        "how many ads"
+      ],
+      "answer": "After targeting and budget filters, each ad request has a few thousand eligible ads; the model needs to score several hundred of them."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "time budget",
+        "how fast",
+        "milliseconds"
+      ],
+      "answer": "The whole ad request has about 100 ms; scoring gets roughly 30 ms of that."
+    },
+    {
+      "id": "req.auction",
+      "topics": [
+        "auction",
+        "bid",
+        "pricing",
+        "how is it used",
+        "revenue"
+      ],
+      "answer": "Ads are ranked in an auction by bid times predicted click probability, which also sets the price, so the probability itself must be right."
+    },
+    {
+      "id": "data.ctr",
+      "topics": [
+        "click rate",
+        "ctr",
+        "positives",
+        "imbalance",
+        "how often"
+      ],
+      "answer": "Click-through rate is around 1% on average and varies a lot by placement and ad type."
+    },
+    {
+      "id": "data.new_ads",
+      "topics": [
+        "new ads",
+        "campaigns",
+        "cold start",
+        "churn",
+        "how many ads"
+      ],
+      "answer": "About 10 million ads are active, and tens of thousands of new ads start every day."
+    },
+    {
+      "id": "data.logs",
+      "topics": [
+        "logs",
+        "labels",
+        "data available",
+        "history",
+        "training data"
+      ],
+      "answer": "We log every impression with its context and every click, and keep 90 days of history."
+    },
+    {
+      "id": "req.conversions",
+      "topics": [
+        "conversions",
+        "purchases",
+        "installs",
+        "beyond clicks"
+      ],
+      "answer": "Conversions matter later, but for this round focus on clicks; conversions arrive hours or days after the click."
+    }
+  ],
+  "clarificationPolicy": "Answer as the ads ranking lead. Keep it a large-scale, latency-bound click model feeding an auction; decide unlisted details so calibration, sparse features and freshness stay in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "dashboard"
+        ],
+        "keywords": [
+          "impressions",
+          "click rate",
+          "latency",
+          "auction",
+          "bid",
+          "calibrated"
+        ]
+      },
+      "goal": "Establish scale, the latency budget, how the prediction is used in the auction, and the base click rate.",
+      "opener": "Before designing, what do you want to know about how this prediction is used and the constraints around it?",
+      "evidence": {
+        "strong": "Asks about impressions and candidates per request, the scoring latency budget, the click rate, and how the score is used; recognises that an auction multiplying bids needs calibrated probabilities, not just a good ordering.",
+        "adequate": "Gets scale and latency but doesn't connect the auction to calibration.",
+        "weak": "Jumps to a model without asking how the output is used or how fast it must be."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.rank_only",
+          "pattern": "Assumes only the order of ads matters, like a search ranking.",
+          "challenge": "If every prediction were doubled, the order wouldn't change. Would advertisers' prices still be right?"
+        }
+      ],
+      "probes": [
+        "How is the predicted probability used once you have it?",
+        "How many ads does one request need scored, and in how long?"
+      ],
+      "hints": [
+        "Think about what the auction does with the number.",
+        "Ask about the base click rate; it shapes the data and the metrics."
+      ],
+      "moveOnSummary": "Hundreds of candidates per request scored in about 30 ms, a click rate near 1%, and probabilities multiplied by bids, so they must be calibrated.",
+      "learnTopics": [
+        "ml-system-design-interview",
+        "ml-problem-framing"
+      ]
+    },
+    {
+      "id": "req.framing",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "label",
+          "binary classification",
+          "click window",
+          "log loss",
+          "positive",
+          "negative"
+        ]
+      },
+      "goal": "Frame the task as binary classification with a clear label and loss.",
+      "opener": "How would you frame this as a machine learning problem: what's the label and what does the model output?",
+      "evidence": {
+        "strong": "Binary classification of (user, ad, context) with label 1 if clicked within a short window after the impression, trained with log loss to output a probability; conversions treated as a separate later task.",
+        "adequate": "Binary classification but a vague label definition or no mention of the loss.",
+        "weak": "Treats it as ranking only or regression on CTR per ad without per-impression labels."
+      },
+      "misconceptions": [
+        {
+          "id": "frame.ad_ctr",
+          "pattern": "Predicts one CTR per ad and ignores the user and context.",
+          "challenge": "Would the same sports-shoe ad be equally likely to be clicked by a runner and by someone who never exercises?"
+        }
+      ],
+      "probes": [
+        "What is one training example, exactly?",
+        "How long after an impression do you wait before calling it a negative?"
+      ],
+      "hints": [
+        "One row per impression works well.",
+        "A probability output pairs naturally with log loss."
+      ],
+      "moveOnSummary": "Per-impression binary classification with a short click window as the label, trained with log loss to produce a probability.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-training-data"
+      ]
+    },
+    {
+      "id": "hl.data",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "clickstream",
+          "t-kafka",
+          "stream-processor",
+          "data-lake"
+        ],
+        "keywords": [
+          "impression log",
+          "label join",
+          "training data",
+          "downsampling",
+          "negatives",
+          "time split"
+        ]
+      },
+      "goal": "Build labelled training data from impression and click logs without leakage.",
+      "opener": "Where does the training data come from, and how do you turn logs into labelled examples?",
+      "evidence": {
+        "strong": "Joins impression logs to clicks within the label window in a stream or batch job, logs the features used at serving time, downsamples negatives and notes the need to recalibrate, splits by time, and filters bot clicks.",
+        "adequate": "Joins impressions and clicks but misses downsampling effects, time splits or leakage.",
+        "weak": "Trains on clicks only, or on aggregated CTRs with no negatives."
+      },
+      "misconceptions": [
+        {
+          "id": "data.random_split",
+          "pattern": "Thinks a random train/test split is fine for this data.",
+          "challenge": "If you train on Friday's impressions and test on Thursday's, what does the model already know?"
+        }
+      ],
+      "probes": [
+        "With so few clicks, how do you keep the training set manageable?",
+        "How do you make sure features in training match what serving saw?"
+      ],
+      "hints": [
+        "Most impressions are negatives, so you can keep a fraction of them.",
+        "Logging the served features avoids a mismatch."
+      ],
+      "moveOnSummary": "Impressions joined to clicks within a window, served features logged, negatives downsampled with later recalibration, time-based splits and bot filtering.",
+      "learnTopics": [
+        "ml-training-data",
+        "feature-store"
+      ]
+    },
+    {
+      "id": "hl.serving",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "feature-store",
+          "api-gateway",
+          "kv-store"
+        ],
+        "keywords": [
+          "scoring service",
+          "ad request",
+          "auction",
+          "features at request time",
+          "candidate",
+          "serving"
+        ]
+      },
+      "goal": "Lay out the serving path from ad request to auction within the latency budget.",
+      "opener": "Walk me through what happens from an ad request to the auction picking a winner.",
+      "evidence": {
+        "strong": "Targeting and budgets narrow eligible ads, features are fetched once for the user and in bulk for ads, a scoring service scores candidates in a batch, probabilities are calibrated, and the auction ranks by bid times probability; impressions and clicks are logged back.",
+        "adequate": "A scoring service and auction, but feature fetching or logging is unclear.",
+        "weak": "Scores every ad in the system per request, or leaves the auction out."
+      },
+      "misconceptions": [
+        {
+          "id": "serve.per_ad_calls",
+          "pattern": "Calls the model once per ad over the network.",
+          "challenge": "With hundreds of candidates and a tight budget, what does one call per ad cost?"
+        }
+      ],
+      "probes": [
+        "Which features do you fetch per user and which per ad?",
+        "Where is the result logged for training?"
+      ],
+      "hints": [
+        "Batch the candidates into one model call.",
+        "The same features you serve with should be logged."
+      ],
+      "moveOnSummary": "Targeting narrows ads, features fetched in bulk, one batched scoring call, calibration, then bid times probability in the auction, with logging back to training.",
+      "learnTopics": [
+        "model-serving",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "deep.calibration",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "model-serving"
+        ],
+        "keywords": [
+          "calibration",
+          "isotonic",
+          "platt scaling",
+          "recalibrate",
+          "predicted vs observed",
+          "reliability"
+        ]
+      },
+      "goal": "Make predicted probabilities match observed click rates, including after negative downsampling.",
+      "opener": "Your model ranks ads well. How do you know its probabilities are actually right, and what do you do if they aren't?",
+      "evidence": {
+        "strong": "Measures predicted versus observed CTR in buckets and by segment, corrects for negative downsampling with the sampling-rate formula, adds isotonic or Platt calibration on recent data, and monitors the calibration ratio per advertiser and placement.",
+        "adequate": "Knows calibration matters and suggests a calibration step but misses the downsampling correction or monitoring.",
+        "weak": "Relies on AUC alone."
+      },
+      "misconceptions": [
+        {
+          "id": "cal.auc",
+          "pattern": "Believes a high AUC means probabilities are correct.",
+          "challenge": "Multiply every prediction by two. What happens to AUC, and what happens to advertiser prices?"
+        }
+      ],
+      "probes": [
+        "You kept one in ten negatives. What does that do to the raw outputs?",
+        "Where would miscalibration show up first in the business?"
+      ],
+      "hints": [
+        "Compare average prediction with actual click rate in buckets.",
+        "Sampling changes the base rate the model learned."
+      ],
+      "moveOnSummary": "Bucketed predicted-versus-observed checks, a downsampling correction, an isotonic or Platt layer, and calibration monitoring per segment.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "ml-training-data"
+      ]
+    },
+    {
+      "id": "deep.features",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "embedding"
+        ],
+        "keywords": [
+          "embedding table",
+          "feature hashing",
+          "sparse ids",
+          "feature crosses",
+          "smoothed ctr",
+          "counters"
+        ]
+      },
+      "goal": "Represent billions of sparse ids and fresh statistics as features that fit in memory and time.",
+      "opener": "User ids, ad ids and advertiser ids have millions of values each. How do you turn them into features?",
+      "evidence": {
+        "strong": "Uses hashing and learned embedding tables for sparse ids, sharded across parameter servers with hot ids cached, adds crosses or an interaction layer, and smoothed CTR counters per ad and advertiser over several windows from a stream, using priors so new ads aren't extreme.",
+        "adequate": "Mentions embeddings or one-hot but not memory size, sharding or smoothing.",
+        "weak": "One-hot encodes every id or uses raw unsmoothed CTRs."
+      },
+      "misconceptions": [
+        {
+          "id": "feat.raw_ctr",
+          "pattern": "Uses raw clicks divided by impressions as a feature for every ad.",
+          "challenge": "A new ad has one click from two impressions. What CTR feature does it get?"
+        }
+      ],
+      "probes": [
+        "How big are the embedding tables, and where do they live?",
+        "How fresh do the counter features need to be?"
+      ],
+      "hints": [
+        "Learned vectors per id handle large vocabularies.",
+        "Add a prior to counts that are still small."
+      ],
+      "moveOnSummary": "Hashed ids with sharded embedding tables, an interaction layer, and smoothed multi-window CTR counters from a stream.",
+      "learnTopics": [
+        "feature-engineering",
+        "embeddings"
+      ]
+    },
+    {
+      "id": "deep.freshness",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "training",
+          "model-registry"
+        ],
+        "keywords": [
+          "incremental training",
+          "online learning",
+          "retrain",
+          "warm start",
+          "model snapshot",
+          "freshness"
+        ]
+      },
+      "goal": "Keep the model fresh as ads and behaviour change, and push updates safely.",
+      "opener": "How often does this model need to be retrained, and how do you get new versions into production safely?",
+      "evidence": {
+        "strong": "Justifies frequent incremental training (hours) from a measured freshness gain plus periodic full retrains, validates each snapshot on a recent holdout for log loss and calibration before pushing, and can roll back.",
+        "adequate": "Retrains on a schedule but with no validation gate or rollback.",
+        "weak": "Retrains rarely and pushes models without checks."
+      },
+      "misconceptions": [
+        {
+          "id": "fresh.weekly",
+          "pattern": "Thinks a weekly retrain is fine for ads.",
+          "challenge": "A big campaign launches Monday morning. What does a model trained last Sunday know about it?"
+        }
+      ],
+      "probes": [
+        "How would you measure whether fresher models help?",
+        "What stops a corrupted batch of logs from breaking production?"
+      ],
+      "hints": [
+        "Compare models trained on data ending on different days.",
+        "Check each new snapshot before it serves traffic."
+      ],
+      "moveOnSummary": "Incremental retraining every few hours plus periodic full retrains, with holdout validation of log loss and calibration and fast rollback.",
+      "learnTopics": [
+        "continual-learning",
+        "mlops-model-registry"
+      ]
+    },
+    {
+      "id": "deep.coldstart",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "vision"
+        ],
+        "keywords": [
+          "new ad",
+          "cold start",
+          "prior",
+          "exploration",
+          "creative embedding",
+          "new campaign"
+        ]
+      },
+      "goal": "Give brand-new ads sensible predictions and a chance to collect data.",
+      "opener": "An advertiser launches a new ad five minutes ago. What does your model predict for it, and is that fair?",
+      "evidence": {
+        "strong": "Uses advertiser and category priors, content embeddings of the creative's image and text, smoothed counters, and a small exploration budget, then lets real engagement take over quickly through fresh counters.",
+        "adequate": "Falls back to a category average but no exploration or content features.",
+        "weak": "Gives new ads a zero or random prediction."
+      },
+      "misconceptions": [
+        {
+          "id": "cold.zero",
+          "pattern": "Thinks new ads can wait until they have data.",
+          "challenge": "If new ads are never shown because they have no clicks, how do they ever get clicks?"
+        }
+      ],
+      "probes": [
+        "Which information exists about an ad before anyone has seen it?",
+        "How much traffic would you spend exploring?"
+      ],
+      "hints": [
+        "The advertiser and the creative itself carry signal.",
+        "A little exploration buys data."
+      ],
+      "moveOnSummary": "Advertiser and category priors, creative content embeddings, smoothed counters and a bounded exploration budget for new ads.",
+      "learnTopics": [
+        "cold-start-problem",
+        "multi-armed-bandits"
+      ]
+    },
+    {
+      "id": "deep.latency",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "distributed-cache"
+        ],
+        "keywords": [
+          "latency budget",
+          "light model",
+          "two-stage scoring",
+          "gpu batching",
+          "parameter server",
+          "p99"
+        ]
+      },
+      "goal": "Score hundreds of candidates within the scoring budget at peak load.",
+      "opener": "How do you fit scoring hundreds of ads per request into the time you have, at peak traffic?",
+      "evidence": {
+        "strong": "Uses a light model to trim candidates before the heavy model, batches requests on GPUs, caches hot embeddings and ad features on inference hosts, sets a per-step budget with a fallback score when the heavy model times out, and sizes the fleet from predictions per second.",
+        "adequate": "Mentions caching or a smaller model without numbers or a fallback.",
+        "weak": "Assumes the heavy model can score everything in time."
+      },
+      "misconceptions": [
+        {
+          "id": "lat.one_model",
+          "pattern": "Believes one large model can score all candidates within budget.",
+          "challenge": "How many predictions per second is that at peak, and what does each cost?"
+        }
+      ],
+      "probes": [
+        "What happens when the heavy model is slow for one request?",
+        "How many predictions per second does the fleet need?"
+      ],
+      "hints": [
+        "A cheap first pass can shrink the candidate list.",
+        "Batching across requests helps GPUs."
+      ],
+      "moveOnSummary": "A light model trims candidates, the heavy model scores the rest in GPU batches with cached embeddings, and a fallback score covers timeouts.",
+      "learnTopics": [
+        "model-serving",
+        "model-compression"
+      ]
+    },
+    {
+      "id": "wrap.metrics",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "log loss",
+          "online test",
+          "revenue",
+          "guardrail",
+          "monitoring"
+        ]
+      },
+      "goal": "Tie offline metrics to online outcomes and name monitoring and risks.",
+      "opener": "How would you decide this model is better than the current one, and what would you watch after launch?",
+      "evidence": {
+        "strong": "Offline normalised log loss, AUC and calibration; an online A/B test on revenue per impression and advertiser outcomes with user guardrails such as ad hides; monitoring of calibration, feature freshness and click anomalies.",
+        "adequate": "Names offline and online metrics but no guardrails or monitoring.",
+        "weak": "Only accuracy or only offline AUC."
+      },
+      "misconceptions": [
+        {
+          "id": "wrap.accuracy",
+          "pattern": "Uses accuracy as the main metric.",
+          "challenge": "With a click rate near one percent, what accuracy does predicting no click everywhere get?"
+        }
+      ],
+      "probes": [
+        "What could go up in revenue while hurting users?",
+        "What would page you at night?"
+      ],
+      "hints": [
+        "Advertisers and users both need protecting.",
+        "Watch calibration after launch, not just before."
+      ],
+      "moveOnSummary": "Normalised log loss, AUC and calibration offline; an A/B test on revenue and advertiser value with user guardrails; calibration and freshness monitoring.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "ab-testing-experimentation"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.newcampaign",
+      "after": "deep.features",
+      "prompt": "A huge brand launches a campaign with thousands of new ads at once. What does your system do with them in the first hour?",
+      "agendaItemId": "deep.coldstart"
+    },
+    {
+      "id": "cb.stale",
+      "after": "deep.calibration",
+      "prompt": "The training pipeline broke two days ago and nobody noticed. What happened to revenue, and how would you have caught it?",
+      "agendaItemId": "deep.freshness"
+    }
+  ],
+  "vocabulary": [
+    "CTR",
+    "pCTR",
+    "calibration",
+    "isotonic regression",
+    "Platt scaling",
+    "log loss",
+    "normalised entropy",
+    "AUC",
+    "embedding table",
+    "feature hashing",
+    "parameter server",
+    "DLRM",
+    "wide and deep",
+    "downsampling",
+    "eCPM",
+    "second-price auction",
+    "cold start",
+    "exploration",
+    "incremental training",
+    "warm start"
+  ],
+  "alternatives": [
+    {
+      "choice": "Logistic regression with hashed features and crosses as the production model",
+      "whenBetter": "When latency and simplicity dominate, or data is smaller; it's calibrated by construction and trains online easily."
+    },
+    {
+      "choice": "Gradient-boosted trees feeding a linear model",
+      "whenBetter": "When dense engineered features dominate and the team wants strong accuracy without deep learning infrastructure."
+    },
+    {
+      "choice": "Separate models per placement",
+      "whenBetter": "When placements behave very differently and traffic per placement is large enough to train each."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Calibrated, fresh, sparse-aware",
+      "outline": "Clarifies scale, the scoring budget, the base click rate and that pCTR multiplies bids, so calibration is required. Frames per-impression binary classification with a click window and log loss. Joins impressions to clicks in a stream, logs served features, downsamples negatives and recalibrates, splits by time and filters bots. Serving narrows ads by targeting, fetches features in bulk, runs a light then a deep model with sharded embedding tables on GPUs, calibrates, and feeds the auction. Retrains incrementally every few hours with holdout gates; handles new ads with priors, creative embeddings and exploration. Measures normalised log loss and calibration offline and revenue with guardrails online."
+    },
+    {
+      "band": "adequate",
+      "label": "Good model, loose probabilities",
+      "outline": "Builds training data from impressions and clicks and a deep model with embeddings, and serves it behind the auction, but evaluates mostly with AUC, doesn't correct for downsampling, retrains daily with no validation gate and gives new ads a category average."
+    },
+    {
+      "band": "weak",
+      "label": "Per-ad CTR table",
+      "outline": "Computes each ad's historical CTR from logs, multiplies by the bid, and refreshes weekly; no per-user features, no calibration discussion, no plan for new ads or latency."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

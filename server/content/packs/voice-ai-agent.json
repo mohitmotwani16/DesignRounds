@@ -1,0 +1,580 @@
+{
+  "opening": "A network of clinics wants an AI to answer their phone lines, answer questions and book appointments. Design the voice agent.",
+  "clarifications": [
+    {
+      "id": "scale.calls",
+      "topics": [
+        "calls",
+        "concurrent",
+        "volume",
+        "scale",
+        "how many"
+      ],
+      "answer": "Up to 5,000 calls at the same time at peak."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "response time",
+        "pause",
+        "how fast",
+        "delay"
+      ],
+      "answer": "The agent should start replying within about a second of the caller finishing; around 800 ms feels natural."
+    },
+    {
+      "id": "req.tasks",
+      "topics": [
+        "tasks",
+        "what it does",
+        "booking",
+        "questions",
+        "scope"
+      ],
+      "answer": "It answers common questions (hours, locations, preparation) and books, moves or cancels appointments in the scheduling system."
+    },
+    {
+      "id": "req.interrupt",
+      "topics": [
+        "interrupt",
+        "barge-in",
+        "talk over",
+        "overlap"
+      ],
+      "answer": "Callers often interrupt; the agent must stop talking and listen."
+    },
+    {
+      "id": "req.transfer",
+      "topics": [
+        "transfer",
+        "human",
+        "staff",
+        "escalation",
+        "emergency"
+      ],
+      "answer": "It transfers to clinic staff when it can't help, and immediately for anything that sounds like an emergency."
+    },
+    {
+      "id": "req.compliance",
+      "topics": [
+        "compliance",
+        "recording",
+        "consent",
+        "privacy",
+        "disclosure"
+      ],
+      "answer": "Callers must be told they're speaking with an AI; calls may be recorded with consent, and health details need careful handling."
+    },
+    {
+      "id": "req.channels",
+      "topics": [
+        "channels",
+        "phone",
+        "app",
+        "telephony",
+        "web"
+      ],
+      "answer": "Mostly regular phone calls, plus some in-app voice calls."
+    }
+  ],
+  "clarificationPolicy": "Answer as the clinic network's operations lead. Keep it a real-time voice problem where latency, turn-taking and safe booking matter; decide unlisted details so the streaming pipeline and interruptions stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "concurrent calls",
+          "latency",
+          "booking",
+          "interruptions",
+          "transfer",
+          "consent"
+        ]
+      },
+      "goal": "Establish concurrency, latency target, tasks, interruptions, transfer and compliance.",
+      "opener": "What do you want to know before designing this?",
+      "evidence": {
+        "strong": "Asks about concurrent calls, the response-time target, tasks and systems involved, interruptions, transfers and emergencies, recording consent and privacy, and channels.",
+        "adequate": "Gets tasks and scale but not latency or interruptions.",
+        "weak": "Treats it as a text chatbot with speech added."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.text",
+          "pattern": "Assumes a text chatbot plus speech conversion is enough.",
+          "challenge": "In text, a three-second wait is fine. On the phone, what does the caller do after three seconds of silence?"
+        }
+      ],
+      "probes": [
+        "How long a pause feels acceptable on a call?",
+        "What happens if the caller interrupts?"
+      ],
+      "hints": [
+        "Silence on the phone feels much longer than in chat.",
+        "Conversation has turn-taking rules."
+      ],
+      "moveOnSummary": "Thousands of concurrent calls, replies within about a second, question answering and booking, interruptions, transfers and consent.",
+      "learnTopics": [
+        "design-ai-voice-agent",
+        "ai-engineer-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "t-webrtc",
+          "llm",
+          "stream-processor"
+        ],
+        "keywords": [
+          "speech recognition",
+          "text to speech",
+          "streaming pipeline",
+          "media server",
+          "asr",
+          "tts"
+        ]
+      },
+      "goal": "Lay out the audio-in to audio-out pipeline.",
+      "opener": "Walk me through how the caller's voice becomes the agent's spoken reply.",
+      "evidence": {
+        "strong": "Telephony or WebRTC into media servers, streaming speech recognition with partial transcripts, end-of-turn detection, an LLM agent with tools, streaming text-to-speech starting from the first phrase, audio back to the caller; explains choosing a cascade over speech-to-speech for control.",
+        "adequate": "ASR, LLM and TTS in sequence, not streamed.",
+        "weak": "Records the whole message, transcribes, answers, then synthesises."
+      },
+      "misconceptions": [
+        {
+          "id": "pipe.batch",
+          "pattern": "Runs each stage only after the previous one finishes.",
+          "challenge": "Add up full transcription, full answer generation and full synthesis. How long is the silence?"
+        }
+      ],
+      "probes": [
+        "Which stages can start before the previous one finishes?",
+        "Why keep a text step in the middle?"
+      ],
+      "hints": [
+        "Every stage can stream.",
+        "Text makes tools and checks easier."
+      ],
+      "moveOnSummary": "Media servers, streaming ASR, end-of-turn detection, an LLM agent with tools, and streaming TTS, as a cascade rather than speech-to-speech.",
+      "learnTopics": [
+        "design-ai-voice-agent",
+        "real-time-communication"
+      ]
+    },
+    {
+      "id": "hl.tools",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ai-agent",
+          "external-api"
+        ],
+        "keywords": [
+          "booking tool",
+          "find slots",
+          "confirm",
+          "scheduling system",
+          "caller identity",
+          "tool calls"
+        ]
+      },
+      "goal": "Connect the agent to scheduling safely.",
+      "opener": "How does the agent find and book appointments?",
+      "evidence": {
+        "strong": "Typed tools (find slots, book, reschedule, cancel) against the scheduling system, caller verification before changes, confirmation of date and time aloud before booking, idempotent booking calls, and short spoken-style responses.",
+        "adequate": "Booking tools without verification or confirmation.",
+        "weak": "The model writes to the calendar directly."
+      },
+      "misconceptions": [
+        {
+          "id": "tools.noconfirm",
+          "pattern": "Books as soon as the model hears a time.",
+          "challenge": "Speech recognition hears 'fifteen' when the caller said 'fifty'. What gets booked?"
+        }
+      ],
+      "probes": [
+        "How do you know who the caller is?",
+        "When do you repeat details back?"
+      ],
+      "hints": [
+        "Confirm critical details out loud.",
+        "Retries shouldn't double-book."
+      ],
+      "moveOnSummary": "Typed booking tools, caller verification, spoken confirmations of dates and times, and idempotent calls.",
+      "learnTopics": [
+        "llm-tool-calling-mcp",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "deep.latency",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "edge-function"
+        ],
+        "keywords": [
+          "latency budget",
+          "time to first audio",
+          "co-location",
+          "first sentence",
+          "streaming tts",
+          "filler phrases"
+        ]
+      },
+      "goal": "Hit the response-time target with a per-stage budget.",
+      "opener": "Break down the time from the caller's last word to the agent's first sound. Where can you save time?",
+      "evidence": {
+        "strong": "Budgets turn detection, final transcript, LLM time to first sentence and TTS first audio; streams every stage, co-locates services near media servers, uses a fast model with a compact cached prompt, starts speaking from the first phrase, and uses fillers while tools run.",
+        "adequate": "Mentions streaming but no per-stage budget.",
+        "weak": "Assumes the stages are fast enough."
+      },
+      "misconceptions": [
+        {
+          "id": "lat.model",
+          "pattern": "Believes the LLM is the only latency that matters.",
+          "challenge": "If you wait a full second of silence to decide the caller has finished, what's left for everything else?"
+        }
+      ],
+      "probes": [
+        "Which stage is hardest to make fast?",
+        "What does the caller hear while a booking lookup runs?"
+      ],
+      "hints": [
+        "Turn detection eats a large share.",
+        "A short filler beats silence."
+      ],
+      "moveOnSummary": "A per-stage budget, streaming everywhere, co-location, a fast model with a cached prompt, speaking from the first phrase, and fillers during tool calls.",
+      "learnTopics": [
+        "llm-inference-serving",
+        "llm-caching"
+      ]
+    },
+    {
+      "id": "deep.turns",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "clock"
+        ],
+        "keywords": [
+          "turn detection",
+          "barge-in",
+          "voice activity detection",
+          "echo cancellation",
+          "end of utterance",
+          "cancel tts"
+        ]
+      },
+      "goal": "Handle turn-taking and interruptions naturally.",
+      "opener": "How do you know the caller has finished, and what happens when they talk over the agent?",
+      "evidence": {
+        "strong": "Voice activity detection plus a learned end-of-turn signal from the transcript instead of a long fixed silence; while speaking, keeps listening with echo cancellation, and on barge-in stops audio immediately, cancels generation and records what was actually said so history matches.",
+        "adequate": "A fixed silence threshold and stopping audio on interruption.",
+        "weak": "No turn-taking design."
+      },
+      "misconceptions": [
+        {
+          "id": "turn.silence",
+          "pattern": "Uses a long fixed silence to detect the end of a turn.",
+          "challenge": "A caller pauses mid-sentence to find their insurance number. What does a long-silence rule do, and a short one?"
+        }
+      ],
+      "probes": [
+        "How do you avoid the agent hearing itself?",
+        "What goes into history after an interruption?"
+      ],
+      "hints": [
+        "Words and silence together signal a finished turn.",
+        "Stop fast when the caller speaks."
+      ],
+      "moveOnSummary": "Voice activity plus learned end-of-turn detection, echo cancellation, immediate stop and cancellation on barge-in, and accurate history.",
+      "learnTopics": [
+        "design-ai-voice-agent",
+        "stream-processing"
+      ]
+    },
+    {
+      "id": "deep.safety",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "alerting"
+        ],
+        "keywords": [
+          "emergency detection",
+          "transfer",
+          "medical advice",
+          "disclosure",
+          "escalation",
+          "health data"
+        ]
+      },
+      "goal": "Handle emergencies, medical questions and transfers safely.",
+      "opener": "A caller describes chest pain while trying to book an appointment. What happens?",
+      "evidence": {
+        "strong": "Emergency detection that immediately advises emergency services and transfers to staff, no medical advice beyond approved scripts, AI disclosure at the start, transfer with a summary when stuck or asked, and privacy handling of health details in recordings and transcripts.",
+        "adequate": "Transfers when asked.",
+        "weak": "Keeps trying to book."
+      },
+      "misconceptions": [
+        {
+          "id": "safe.book",
+          "pattern": "Treats every call as a booking task.",
+          "challenge": "The caller says they can't breathe properly. Is offering Tuesday at three the right response?"
+        }
+      ],
+      "probes": [
+        "What must the agent never do?",
+        "What does staff receive on transfer?"
+      ],
+      "hints": [
+        "Some calls aren't about booking.",
+        "Scripts and transfers are safer than improvising."
+      ],
+      "moveOnSummary": "Emergency detection with immediate transfer, approved scripts only for medical topics, AI disclosure, summarised transfers and careful handling of health data.",
+      "learnTopics": [
+        "llm-guardrails",
+        "design-customer-support-ai-agent"
+      ]
+    },
+    {
+      "id": "deep.capacity",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "t-kubernetes",
+          "load-balancer"
+        ],
+        "keywords": [
+          "concurrent sessions",
+          "stateful media",
+          "asr streams",
+          "tts streams",
+          "draining",
+          "capacity planning"
+        ]
+      },
+      "goal": "Plan capacity for thousands of concurrent stateful calls.",
+      "opener": "What changes when five thousand calls are happening at once?",
+      "evidence": {
+        "strong": "Each call holds a media session plus an ASR stream and intermittent LLM and TTS work; estimates concurrent streams and LLM requests per second, pins sessions to media servers, drains servers before deploys, scales ASR and TTS pools separately, and handles telephony provider limits.",
+        "adequate": "Autoscaling without session awareness.",
+        "weak": "Treats calls as stateless requests."
+      },
+      "misconceptions": [
+        {
+          "id": "cap.stateless",
+          "pattern": "Assumes any server can handle any packet of a call.",
+          "challenge": "A deploy restarts a media server mid-call. What does the caller experience?"
+        }
+      ],
+      "probes": [
+        "How many LLM requests per second do the calls generate?",
+        "How do you deploy without dropping calls?"
+      ],
+      "hints": [
+        "Calls are long-lived sessions.",
+        "Different stages scale differently."
+      ],
+      "moveOnSummary": "Session-pinned media servers with draining, separately scaled ASR and TTS pools, LLM request estimates, and telephony limits.",
+      "learnTopics": [
+        "stateless-vs-stateful",
+        "autoscaling"
+      ]
+    },
+    {
+      "id": "deep.eval",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "logging"
+        ],
+        "keywords": [
+          "word error rate",
+          "task success",
+          "simulated calls",
+          "transfer rate",
+          "latency percentiles",
+          "call review"
+        ]
+      },
+      "goal": "Measure quality and catch regressions.",
+      "opener": "How would you know the agent is doing a good job, and stays good after changes?",
+      "evidence": {
+        "strong": "Per-stage and end-to-end latency percentiles, interruption handling success, recognition errors on names, numbers and dates, task success (correct bookings), transfer rate and caller satisfaction; simulated calls with synthetic voices and noise for regression tests; sampled call review with consent.",
+        "adequate": "Booking success rate only.",
+        "weak": "Complaints."
+      },
+      "misconceptions": [
+        {
+          "id": "eval.avg",
+          "pattern": "Watches average latency.",
+          "challenge": "Average reply time looks fine, but one call in ten has a three-second gap. Do callers notice?"
+        }
+      ],
+      "probes": [
+        "How do you test a change before real callers hear it?",
+        "Which recognition errors matter most?"
+      ],
+      "hints": [
+        "Tail latency is what callers remember.",
+        "Synthetic calls can be replayed."
+      ],
+      "moveOnSummary": "Latency percentiles, interruption success, entity recognition errors, booking success, transfer rate and satisfaction, with simulated-call regression tests.",
+      "learnTopics": [
+        "llm-evaluation",
+        "llmops-observability"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "cascade vs speech-to-speech",
+          "latency vs quality",
+          "cost per minute",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs did you make?",
+      "evidence": {
+        "strong": "Cascade versus speech-to-speech, model quality versus speed, aggressive versus cautious turn detection, automation versus transfers, and cost per call minute versus a human.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where would you accept a slower but smarter reply?",
+        "What would you build next?"
+      ],
+      "hints": [
+        "Cutting callers off and leaving gaps are both failures.",
+        "Cost per minute is a business number."
+      ],
+      "moveOnSummary": "Cascade versus speech-to-speech, speed versus quality, turn-detection aggressiveness, automation versus transfer, and cost per minute.",
+      "learnTopics": [
+        "choosing-an-llm",
+        "llm-cost-optimization"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.chestpain",
+      "after": "deep.latency",
+      "prompt": "Mid-booking, a caller says their father has collapsed and isn't responding. Walk me through exactly what your system does.",
+      "agendaItemId": "deep.safety"
+    },
+    {
+      "id": "cb.mondays",
+      "after": "deep.turns",
+      "prompt": "Monday mornings, concurrent calls triple within ten minutes and replies start lagging badly. What's happening and what do you change?",
+      "agendaItemId": "deep.capacity"
+    }
+  ],
+  "vocabulary": [
+    "ASR",
+    "speech recognition",
+    "TTS",
+    "text to speech",
+    "voice activity detection",
+    "VAD",
+    "barge-in",
+    "end of turn",
+    "echo cancellation",
+    "WebRTC",
+    "SIP",
+    "telephony",
+    "media server",
+    "streaming",
+    "time to first audio",
+    "speech-to-speech",
+    "word error rate",
+    "transfer",
+    "consent",
+    "filler"
+  ],
+  "alternatives": [
+    {
+      "choice": "A single speech-to-speech model",
+      "whenBetter": "When the lowest possible latency and natural prosody matter more than tool control, inspection and guardrails."
+    },
+    {
+      "choice": "A hosted voice-agent platform",
+      "whenBetter": "For a small team that wants telephony, ASR and TTS managed, accepting less control."
+    },
+    {
+      "choice": "An IVR menu with AI only for open questions",
+      "whenBetter": "Where regulations or reliability needs favour predictable flows over open conversation."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Streaming cascade with turn-taking",
+      "outline": "Clarifies concurrency, the one-second target, tasks, interruptions, transfers and consent. Streams calls through media servers into streaming recognition, learned end-of-turn detection, a fast LLM agent with typed booking tools that verify the caller and confirm details aloud, and streaming speech starting from the first phrase, with a per-stage latency budget and co-location. Handles barge-in with echo cancellation and cancellation, detects emergencies and transfers immediately, plans capacity for session-pinned calls with draining, and evaluates tail latency, booking success and recognition errors with simulated calls."
+    },
+    {
+      "band": "adequate",
+      "label": "Working but slow pipeline",
+      "outline": "Chains speech recognition, an LLM with booking tools and speech synthesis, with a fixed silence timeout and transfers on request; stages aren't fully streamed and interruptions and emergencies aren't handled."
+    },
+    {
+      "band": "weak",
+      "label": "Voicemail-style bot",
+      "outline": "Records the caller's full message, transcribes it, generates a reply and plays it back; no streaming, turn-taking, safe booking or transfers."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

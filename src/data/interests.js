@@ -1,11 +1,12 @@
 import { tracks } from "./prompts.js";
 
-// Roles a learner can pick on first sign-in. The first six are practice
+// Roles a learner can pick on first sign-in. The first seven are practice
 // disciplines and reorder the library; the rest are identity only.
 export const INTEREST_OPTIONS = [
   { id: "software-engineering", label: "Software engineer" },
   { id: "data-engineering", label: "Data engineer" },
-  { id: "machine-learning", label: "ML / AI engineer" },
+  { id: "machine-learning", label: "ML engineer" },
+  { id: "ai-engineering", label: "AI / LLM engineer" },
   { id: "platform-infrastructure", label: "Platform / SRE" },
   { id: "distributed-systems", label: "Distributed systems" },
   { id: "frontend-mobile", label: "Frontend / mobile engineer" },
@@ -15,7 +16,9 @@ export const INTEREST_OPTIONS = [
 ];
 
 const TRACK_IDS = new Set(tracks.map((track) => track.id));
-const LABEL_TO_ID = Object.fromEntries(INTEREST_OPTIONS.map((option) => [option.label, option.id]));
+// Older profiles stored the label of a single target role; "ML / AI engineer" was the
+// machine learning option before AI engineering became its own discipline.
+const LABEL_TO_ID = { "ML / AI engineer": "machine-learning", ...Object.fromEntries(INTEREST_OPTIONS.map((option) => [option.label, option.id])) };
 
 export const interestLabel = (id) => INTEREST_OPTIONS.find((option) => option.id === id)?.label ?? null;
 

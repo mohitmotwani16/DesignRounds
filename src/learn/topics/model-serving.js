@@ -63,7 +63,7 @@ export default {
     "Roll out with shadow traffic and canaries, with instant rollback.",
     "Define a fallback for timeouts and log every prediction with its model version.",
   ],
-  related: ["machine-learning-system-architecture", "feature-store", "mlops-model-registry", "ml-model-monitoring", "llm-inference-serving"],
+  related: ["machine-learning-system-architecture", "feature-store", "mlops-model-registry", "ml-model-monitoring", "llm-inference-serving", "model-compression", "ml-platform-architecture"],
   practice: ["model-serving", "online-fraud-model", "recommendation-engine"],
   reading: [
     { title: "NVIDIA Triton Inference Server: Dynamic batching", publisher: "NVIDIA documentation", url: "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html" },

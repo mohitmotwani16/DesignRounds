@@ -62,7 +62,7 @@ export default {
     "Deploy with shadow or canary and make rollback a registry alias switch.",
     "Close the loop: monitoring triggers retraining through the same gates.",
   ],
-  related: ["model-serving", "ml-model-monitoring", "distributed-training", "ci-cd-pipelines", "machine-learning-system-architecture"],
+  related: ["model-serving", "ml-model-monitoring", "distributed-training", "ci-cd-pipelines", "machine-learning-system-architecture", "continual-learning", "ml-platform-architecture", "llmops-observability"],
   practice: ["training-platform", "model-serving", "model-monitoring"],
   reading: [
     { title: "MLOps: Continuous delivery and automation pipelines in machine learning", publisher: "Google Cloud Architecture Center", url: "https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning" },

@@ -1,0 +1,576 @@
+{
+  "opening": "Lots of teams in our company now call LLMs directly, each in their own way. Design an LLM gateway they can all use instead.",
+  "clarifications": [
+    {
+      "id": "scale.services",
+      "topics": [
+        "services",
+        "teams",
+        "callers",
+        "how many"
+      ],
+      "answer": "About 40 internal services from 15 teams."
+    },
+    {
+      "id": "scale.qps",
+      "topics": [
+        "qps",
+        "traffic",
+        "requests per second",
+        "peak",
+        "volume"
+      ],
+      "answer": "About 3,000 requests a second at peak; many responses stream for several seconds."
+    },
+    {
+      "id": "req.providers",
+      "topics": [
+        "providers",
+        "models",
+        "vendors",
+        "self-hosted"
+      ],
+      "answer": "We use three hosted providers plus one self-hosted model."
+    },
+    {
+      "id": "req.outage",
+      "topics": [
+        "outage",
+        "availability",
+        "failover",
+        "provider down"
+      ],
+      "answer": "A single provider's outage must not take our AI features down."
+    },
+    {
+      "id": "req.budget",
+      "topics": [
+        "budget",
+        "cost",
+        "spend",
+        "limits",
+        "chargeback"
+      ],
+      "answer": "Each team has a monthly spend budget, and finance wants cost attributed to team and feature."
+    },
+    {
+      "id": "req.keys",
+      "topics": [
+        "keys",
+        "credentials",
+        "security",
+        "secrets"
+      ],
+      "answer": "Provider API keys must not live in application code or configs."
+    },
+    {
+      "id": "req.observability",
+      "topics": [
+        "logging",
+        "tracing",
+        "observability",
+        "audit"
+      ],
+      "answer": "Every call must be traceable, but prompts may contain personal data."
+    }
+  ],
+  "clarificationPolicy": "Answer as the platform team lead. Keep it a central, highly available gateway with failover, budgets and streaming; decide unlisted details so routing, limits and reliability stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "user"
+        ],
+        "keywords": [
+          "teams",
+          "traffic",
+          "providers",
+          "outage",
+          "budgets",
+          "keys"
+        ]
+      },
+      "goal": "Establish callers, traffic, providers, availability, budgets, security and observability needs.",
+      "opener": "What do you need to know before designing the gateway?",
+      "evidence": {
+        "strong": "Asks about callers and traffic, streaming, providers, failover expectations, budgets and attribution, credential handling and logging with personal data.",
+        "adequate": "Gets traffic and providers but not budgets or streaming.",
+        "weak": "Treats it as a simple proxy."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.proxy",
+          "pattern": "Thinks a reverse proxy is enough.",
+          "challenge": "A proxy forwards requests. Who enforces a team's monthly budget?"
+        }
+      ],
+      "probes": [
+        "How long do responses take, and do they stream?",
+        "What should happen when a provider fails?"
+      ],
+      "hints": [
+        "LLM traffic is long-lived and expensive.",
+        "Ask who pays for what."
+      ],
+      "moveOnSummary": "Dozens of services at thousands of mostly streaming requests a second, several providers, failover, budgets with attribution, central keys and traceable calls.",
+      "learnTopics": [
+        "llm-gateway",
+        "api-gateway"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "llm",
+          "secrets"
+        ],
+        "keywords": [
+          "unified api",
+          "model aliases",
+          "credentials",
+          "router",
+          "stateless gateway",
+          "providers"
+        ]
+      },
+      "goal": "Lay out the gateway's components and request path.",
+      "opener": "Walk me through a request going through the gateway.",
+      "evidence": {
+        "strong": "A stateless, horizontally scaled gateway with a unified API and model aliases; authenticates internal keys per team; checks quotas; looks up caches; routes to a provider or self-hosted model using centrally stored credentials; proxies streaming; records usage asynchronously.",
+        "adequate": "A gateway that forwards to providers with keys but no aliases or limits.",
+        "weak": "A shared library in each service."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.library",
+          "pattern": "Uses a shared client library instead of a service.",
+          "challenge": "How do you rotate a provider key or change routing without redeploying forty services?"
+        }
+      ],
+      "probes": [
+        "Why aliases instead of model names?",
+        "Where do provider keys live?"
+      ],
+      "hints": [
+        "Centralise what changes often.",
+        "Callers should name capabilities."
+      ],
+      "moveOnSummary": "A stateless gateway with a unified aliased API, internal keys, quota checks, caching, routing with central credentials, streaming and async metering.",
+      "learnTopics": [
+        "llm-gateway",
+        "secrets-management"
+      ]
+    },
+    {
+      "id": "hl.routing",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "config",
+          "feature-flags"
+        ],
+        "keywords": [
+          "routing rules",
+          "cost routing",
+          "cascade",
+          "canary",
+          "region routing",
+          "model alias"
+        ]
+      },
+      "goal": "Decide how each request picks a model.",
+      "opener": "How does the gateway decide which model handles a request?",
+      "evidence": {
+        "strong": "Alias-based rules with per-tenant and region overrides, cost-based cascades or a classifier router for easy versus hard requests, latency-aware routing away from degraded providers, and percentage canaries for new models or prompts, all in versioned config.",
+        "adequate": "Static mapping only.",
+        "weak": "Callers pick models directly."
+      },
+      "misconceptions": [
+        {
+          "id": "route.static",
+          "pattern": "Hardcodes one model per caller.",
+          "challenge": "A cheaper model is good enough for most requests. How would you move traffic without code changes?"
+        }
+      ],
+      "probes": [
+        "How would you try a new model on five percent of traffic?",
+        "Which requests could go to a smaller model?"
+      ],
+      "hints": [
+        "Routing belongs in config.",
+        "Not every request needs the strongest model."
+      ],
+      "moveOnSummary": "Versioned alias routing with tenant and region overrides, cost cascades or classifier routing, latency awareness and canaries.",
+      "learnTopics": [
+        "llm-cost-optimization",
+        "feature-flags"
+      ]
+    },
+    {
+      "id": "deep.fallback",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "load-balancer",
+          "health-check"
+        ],
+        "keywords": [
+          "fallback chain",
+          "retry policy",
+          "circuit breaker",
+          "provider outage",
+          "backoff",
+          "per-model prompts"
+        ]
+      },
+      "goal": "Survive provider failures without making them worse.",
+      "opener": "Provider A starts failing half its requests. Walk me through what the gateway does.",
+      "evidence": {
+        "strong": "Retries only retryable errors (timeouts, rate limits, server errors) with backoff and jitter, opens a circuit breaker for the failing provider, falls back along an ordered chain with prompt variants tuned per model, alerts when primary and fallback both fail, and evaluates fallback paths like releases.",
+        "adequate": "Retries and falls back without breakers or per-model prompts.",
+        "weak": "Returns errors."
+      },
+      "misconceptions": [
+        {
+          "id": "fb.retry_all",
+          "pattern": "Retries every failed request.",
+          "challenge": "The request has an invalid parameter. What do retries achieve?"
+        }
+      ],
+      "probes": [
+        "Which errors are worth retrying?",
+        "Does the same prompt work on the fallback model?"
+      ],
+      "hints": [
+        "Some failures will never succeed.",
+        "Different models need different prompts."
+      ],
+      "moveOnSummary": "Retries on retryable errors with backoff, circuit breakers, ordered fallbacks with per-model prompts, and alerts on cascading failure.",
+      "learnTopics": [
+        "circuit-breaker",
+        "retries-and-timeouts"
+      ]
+    },
+    {
+      "id": "deep.limits",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "t-redis"
+        ],
+        "keywords": [
+          "token rate limit",
+          "spend budget",
+          "token bucket",
+          "reserve tokens",
+          "per team quota",
+          "reconcile usage"
+        ]
+      },
+      "goal": "Enforce token rate limits and spend budgets.",
+      "opener": "How do you enforce a team's budget when a request's cost isn't known until it finishes?",
+      "evidence": {
+        "strong": "Limits by tokens and spend, not request counts, at organisation, team, tenant and user levels; estimates and reserves input tokens before the call, reconciles actual input and output afterwards; counters in a shared fast store with atomic updates; alerts at thresholds; reserved capacity for critical traffic; smooths bursts against provider limits.",
+        "adequate": "Request-count limits per team.",
+        "weak": "No limits."
+      },
+      "misconceptions": [
+        {
+          "id": "lim.requests",
+          "pattern": "Rate-limits by number of requests.",
+          "challenge": "One request uses a hundred tokens, another a hundred thousand. Are they equal?"
+        }
+      ],
+      "probes": [
+        "When do you charge for output tokens?",
+        "What happens at a hundred percent of budget?"
+      ],
+      "hints": [
+        "Reserve, then reconcile.",
+        "Tokens are the real unit."
+      ],
+      "moveOnSummary": "Token and spend limits at several levels, reserve-then-reconcile, atomic shared counters, threshold alerts and reserved capacity.",
+      "learnTopics": [
+        "rate-limiting",
+        "llm-cost-optimization"
+      ]
+    },
+    {
+      "id": "deep.streaming",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "websocket",
+          "t-envoy"
+        ],
+        "keywords": [
+          "streaming proxy",
+          "concurrent connections",
+          "first token",
+          "mid-stream failure",
+          "async io",
+          "backpressure"
+        ]
+      },
+      "goal": "Proxy long streaming responses reliably at scale.",
+      "opener": "Most responses stream for several seconds. What does that mean for the gateway?",
+      "evidence": {
+        "strong": "Estimates concurrent open streams from request rate times duration, uses async I/O, falls back only before the first token reaches the client, restarts visibly if a stream fails later, propagates client cancellations upstream, and handles backpressure.",
+        "adequate": "Supports streaming without failure handling.",
+        "weak": "Buffers whole responses."
+      },
+      "misconceptions": [
+        {
+          "id": "str.switch",
+          "pattern": "Plans to switch providers silently mid-stream.",
+          "challenge": "The user has seen half an answer from model A. What does continuing with model B look like?"
+        }
+      ],
+      "probes": [
+        "How many open connections at peak?",
+        "What happens when the client disconnects?"
+      ],
+      "hints": [
+        "Streams are long-lived.",
+        "Once tokens are delivered, you can't take them back."
+      ],
+      "moveOnSummary": "Async streaming sized for concurrent connections, fallback only before the first token, visible restarts, cancellation propagation and backpressure.",
+      "learnTopics": [
+        "real-time-communication",
+        "backpressure"
+      ]
+    },
+    {
+      "id": "deep.observability",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "tracing",
+          "logging"
+        ],
+        "keywords": [
+          "usage metering",
+          "cost attribution",
+          "pii redaction",
+          "traces",
+          "dashboards",
+          "async metering"
+        ]
+      },
+      "goal": "Make every call traceable and attributable without leaking data.",
+      "opener": "How do finance and engineers see what's happening, without logging personal data everywhere?",
+      "evidence": {
+        "strong": "Usage events (team, feature, model, tokens, cost, latency, cache hit) written to a queue and aggregated asynchronously; traces with redacted prompts and restricted access; retention limits; dashboards for cost, latency percentiles, errors and fallback rates by provider.",
+        "adequate": "Logs everything synchronously.",
+        "weak": "No metering."
+      },
+      "misconceptions": [
+        {
+          "id": "obs.sync",
+          "pattern": "Writes usage records synchronously on every request.",
+          "challenge": "The metering database slows down. What happens to every AI feature?"
+        }
+      ],
+      "probes": [
+        "How does a team see its spend?",
+        "What do you store from prompts?"
+      ],
+      "hints": [
+        "Metering shouldn't block requests.",
+        "Redact before you store."
+      ],
+      "moveOnSummary": "Async usage events for attribution, redacted access-controlled traces, retention limits, and dashboards per provider and team.",
+      "learnTopics": [
+        "llmops-observability",
+        "observability"
+      ]
+    },
+    {
+      "id": "deep.caching",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "vector-db"
+        ],
+        "keywords": [
+          "exact cache",
+          "semantic cache",
+          "prompt caching",
+          "cache key",
+          "versioned keys",
+          "false hits"
+        ]
+      },
+      "goal": "Cache safely to save cost and latency.",
+      "opener": "Which requests could the gateway answer from a cache?",
+      "evidence": {
+        "strong": "Exact caches keyed by model, prompt version, parameters and input for deterministic requests; semantic caching only for opted-in, non-personal intents with high thresholds and false-hit measurement; ordering prompts to benefit from provider prompt caching; per-tenant isolation.",
+        "adequate": "Caches all responses by prompt text.",
+        "weak": "No caching."
+      },
+      "misconceptions": [
+        {
+          "id": "cache.semantic",
+          "pattern": "Applies semantic caching to everything.",
+          "challenge": "'Cancel my order' and 'don't cancel my order' look similar. What could a semantic cache return?"
+        }
+      ],
+      "probes": [
+        "What goes into the cache key?",
+        "Which teams should opt in to semantic caching?"
+      ],
+      "hints": [
+        "Versions belong in the key.",
+        "Similar isn't the same."
+      ],
+      "moveOnSummary": "Versioned exact caches, opt-in semantic caching with thresholds, prompt-cache-friendly ordering, and tenant isolation.",
+      "learnTopics": [
+        "llm-caching",
+        "cache-key-design"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "single point of failure",
+          "fail open",
+          "latency overhead",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs, including the gateway as a dependency.",
+      "opener": "The gateway is now in front of every AI feature. What trade-offs and risks come with that?",
+      "evidence": {
+        "strong": "The gateway becomes critical: multi-zone stateless deployment, fail-open or fail-closed decided per check, an emergency bypass; small added latency versus central control; standardisation versus team flexibility.",
+        "adequate": "Mentions it could be a single point of failure.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "If the quota store is down, do you block requests?",
+        "How much latency does the gateway add?"
+      ],
+      "hints": [
+        "Decide failure behaviour ahead of time.",
+        "Central control has a price."
+      ],
+      "moveOnSummary": "A critical dependency needing high availability and defined failure modes, small latency cost for central control, and standardisation versus flexibility.",
+      "learnTopics": [
+        "fallbacks-graceful-degradation",
+        "api-gateway"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.midstream",
+      "after": "deep.fallback",
+      "prompt": "A provider drops connections halfway through long streamed answers. Users see answers cut off. What can the gateway do, and what can't it?",
+      "agendaItemId": "deep.streaming"
+    },
+    {
+      "id": "cb.finance",
+      "after": "deep.limits",
+      "prompt": "Finance asks which product feature caused last month's cost spike, and you can only see totals per provider. What should the gateway have recorded?",
+      "agendaItemId": "deep.observability"
+    }
+  ],
+  "vocabulary": [
+    "LLM gateway",
+    "AI gateway",
+    "model alias",
+    "routing",
+    "fallback",
+    "circuit breaker",
+    "retry",
+    "backoff",
+    "jitter",
+    "rate limit",
+    "token bucket",
+    "spend budget",
+    "streaming",
+    "server-sent events",
+    "semantic cache",
+    "prompt caching",
+    "metering",
+    "cost attribution",
+    "PII redaction",
+    "canary"
+  ],
+  "alternatives": [
+    {
+      "choice": "An open-source or managed AI gateway product",
+      "whenBetter": "When standard features suffice and the team doesn't want to own the service."
+    },
+    {
+      "choice": "A shared client SDK instead of a network gateway",
+      "whenBetter": "For a few services where adding a network hop isn't worth it, accepting harder central control."
+    },
+    {
+      "choice": "Per-team gateways",
+      "whenBetter": "When teams have very different compliance needs and central budgets aren't required."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Central, resilient, accountable",
+      "outline": "Clarifies callers, streaming traffic, providers, failover, budgets, key handling and logging. A stateless multi-zone gateway exposes aliases, holds provider credentials, authenticates team keys, enforces token and spend limits with reserve-then-reconcile counters, checks versioned exact caches, routes by config with cascades and canaries, retries only retryable errors behind circuit breakers with per-model prompt fallbacks, proxies streams with fallback only before the first token, and meters usage asynchronously with redacted traces and per-team cost dashboards."
+    },
+    {
+      "band": "adequate",
+      "label": "Proxy with keys",
+      "outline": "Centralises keys and forwards requests to providers with retries and a fallback provider, plus request-count limits and synchronous logging; no aliases, token budgets or streaming failure handling."
+    },
+    {
+      "band": "weak",
+      "label": "Shared config file",
+      "outline": "Puts provider keys in a shared config and asks teams to follow guidelines; no service, limits or failover."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}
