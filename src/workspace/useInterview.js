@@ -9,6 +9,16 @@ const MIN_CHECK_GAP_MS = 45_000;
 // How often a visible v3 round ticks (the server rate-limits ticks on its own).
 const VISIBLE_TICK_MS = 15_000;
 
+// Inspector "Ask the interviewer" uses the same gate as InterviewerPanel, plus an
+// optimistic path while the interview payload is still loading for Plus members.
+export function inspectorAskMode(interview, sessionStatus, user) {
+  if (sessionStatus !== "in_progress") return "finished";
+  if (interview.status === "ready") return interview.access === "full" ? "available" : "plus";
+  if (interview.status === "loading" && user?.plan === "plus") return "available";
+  if (interview.status === "loading") return "loading";
+  return "plus";
+}
+
 // Interview state for a round. Lives in the workspace (not the panel) so the
 // conversation survives hiding the panel or switching to the Review tab.
 export function useInterview({ sessionId, plan, roundActive, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose }) {
