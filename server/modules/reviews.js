@@ -17,6 +17,8 @@ import { debrief, reviewLedger } from "./conductor/index.js";
 import { hasFullFeedback, limitsFor, onTrial, planFor } from "./plans.js";
 import { referencePoolFor } from "./answers/store.js";
 import { ownedSession, promptById } from "./practice.js";
+import { learnAllowlistSlugs } from "../../src/learn/linkify.js";
+import { getPack, publishedVersion } from "./pks/index.js";
 
 const MIN_COMPONENTS = 3;
 const MIN_CONNECTIONS = 2;
@@ -163,6 +165,19 @@ function present(row, full) {
   };
 }
 
+async function packLearnTopics(sessionId, promptId) {
+  const state = await queryOne("select pack_version from interview_state where session_id = $1", [sessionId]);
+  let version = state?.pack_version;
+  if (!version) version = await publishedVersion(promptId);
+  if (!version) return [];
+  try {
+    const { pack } = await getPack(promptId, version);
+    return [...new Set((pack.agenda ?? []).flatMap((item) => item.learnTopics ?? []))];
+  } catch {
+    return [];
+  }
+}
+
 function limitMessage(kind, allowance) {
   if (kind === "round") {
     return allowance.plan === "plus"
@@ -192,12 +207,18 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
        from interview_state s where s.session_id = $1`,
     [session.id]
   );
+  const prompt = promptById.get(session.prompt_id);
+  const packTopics = prompt ? await packLearnTopics(session.id, prompt.id) : [];
+  const learnAllowlist = prompt
+    ? learnAllowlistSlugs({ track: prompt.track, packLearnTopics: packTopics })
+    : [];
   res.json({
     reviews: rows.map((row) => present(row, full)),
     allowance: await readAllowance(db, req.user, session),
     aiAvailable: aiConfig.enabled,
     debrief: roundDebrief,
     interview: interview?.spoke ? { engine: interview.engine, rated: interview.rated } : null,
+    learnAllowlist,
   });
 }));
 

@@ -8,7 +8,7 @@ import { InterviewerPanel } from "./InterviewerPanel.jsx";
 import { ReviewPanel } from "./ReviewPanel.jsx";
 
 // Right-hand panel: the interviewer conversation and the round's final review.
-export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor }) {
+export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack }) {
   const tabs = [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
   // On free plans the interviewer is a Plus feature (or the one free round), and the tab says so.
   const interviewerLocked = interview.status === "ready" && interview.access !== "full";
@@ -27,7 +27,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
         <button className="panel-close" onClick={onClose} title="Hide panel (I)" aria-label="Hide panel"><X size={17} /></button>
       </div>
       {tab === "review"
-        ? <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} />
+        ? <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />
         : <InterviewerPanel interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} />}
     </aside>
   );

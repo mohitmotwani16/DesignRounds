@@ -333,6 +333,17 @@ body.dragging-edge, body.dragging-edge * { cursor: move !important; user-select:
 .review-point + .review-point { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--bd-f0f1f4); }
 .review-point strong { color: var(--fg-2f3b51); }
 .review-point p { margin: 4px 0 0; color: var(--fg-5a6578); }
+.review-improve { margin: 4px 0 0; color: var(--fg-5a6578); }
+.review-learn-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--fg-5a6578) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.review-learn-link:hover {
+  color: var(--accent-text);
+  text-decoration-color: currentColor;
+}
 .review-severity { margin-right: 8px; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
 .severity-high { color: var(--fg-a83c3c); background: var(--bg-fbeaea); }
 .severity-medium { color: var(--fg-a36a14); background: var(--bg-fbf1e1); }
