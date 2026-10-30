@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchBox, ShortcutHint, useSearchShortcut } from "../components/SearchBox.jsx";
-import { ArrowLeft, ArrowRight, Blocks, BookOpen, Bot, Boxes, Braces, Brain, ChevronDown, ChevronRight, Clock3, Database, ExternalLink, Gauge, ListOrdered, LoaderCircle, Lock, Map as MapIcon, Menu, MessageSquare, Network, PenLine, Search, Server, Share2, ShieldCheck, Smartphone, Users, Workflow, X, Zap } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, Blocks, BookOpen, Bot, Boxes, Braces, Brain, ChevronDown, ChevronRight, Clock3, Database, ExternalLink, Gauge, ListOrdered, LoaderCircle, Lock, Map as MapIcon, Menu, MessageSquare, Network, PenLine, Search, Server, Share2, ShieldCheck, Smartphone, Sparkles, Target, Users, Workflow, X, Zap } from "lucide-react";
 import { getTrack, prompts, tracks } from "../data/prompts.js";
 import { CATEGORIES, DISCIPLINES, GROUPS, LEARN_PATH, LEARN_UPDATED, categoryById, neighbours, topicMeta, topicPath } from "../learn/catalog.js";
 import { Diagram } from "../learn/Diagram.jsx";
@@ -394,7 +394,7 @@ const CATEGORY_ICONS = {
   foundations: Gauge, networking: Network, databases: Database, caching: Zap, messaging: ListOrdered,
   distributed: Share2, reliability: ShieldCheck, architecture: Boxes, security: Lock,
   "building-blocks": Blocks, "low-level-design": Braces, "data-engineering": Workflow, "machine-learning": Brain,
-  "ai-architecture": Bot, operations: Server, "frontend-mobile": Smartphone, interview: MessageSquare, roadmaps: MapIcon,
+  "ai-architecture": Bot, "ml-case-studies": Target, "llm-production": Activity, "genai-case-studies": Sparkles, operations: Server, "frontend-mobile": Smartphone, interview: MessageSquare, roadmaps: MapIcon,
 };
 const TILE_SHOWN = 5;
 const PREP = ["system-design-interview", "system-design-interview-questions", "how-to-practice-system-design"];

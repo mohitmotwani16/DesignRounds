@@ -65,7 +65,7 @@ export default {
     "Ground answers with citations and allow the model to abstain.",
     "Evaluate retrieval recall separately from answer faithfulness.",
   ],
-  related: ["vector-databases", "ai-application-architecture", "llm-inference-serving", "search-and-inverted-index", "ml-evaluation-metrics"],
+  related: ["vector-databases", "ai-application-architecture", "llm-inference-serving", "search-and-inverted-index", "ml-evaluation-metrics", "rag-chunking-strategies", "hybrid-search-reranking", "advanced-rag", "design-rag-chatbot", "llm-evaluation"],
   practice: ["rag-search"],
   reading: [
     { title: "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks", publisher: "Lewis et al., arXiv", url: "https://arxiv.org/abs/2005.11401" },

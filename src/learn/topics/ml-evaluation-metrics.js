@@ -47,7 +47,7 @@ export default {
     "Split data by time and guard against leakage.",
     "Name online primary and guardrail metrics and confirm with an A/B test.",
   ],
-  related: ["ab-testing-experimentation", "ml-model-monitoring", "recommendation-system-design", "machine-learning-system-architecture", "feature-store"],
+  related: ["ab-testing-experimentation", "ml-model-monitoring", "recommendation-system-design", "machine-learning-system-architecture", "feature-store", "learning-to-rank", "llm-evaluation", "multi-armed-bandits"],
   practice: ["recommendation-engine", "online-fraud-model", "model-monitoring"],
   reading: [
     { title: "Classification: precision and recall", publisher: "Google Machine Learning Crash Course", url: "https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall" },

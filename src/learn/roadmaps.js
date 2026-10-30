@@ -3,7 +3,8 @@
 // There is one core roadmap ("system-design") that every role starts with; it is also
 // most of what a backend interview tests. Each role roadmap builds on it (basedOn) and
 // lists what that role goes deeper on; core topics appear there at most as optional
-// review, except in distributed systems, which deepens them. Frontend and
+// review, except in distributed systems, which deepens them. AI engineering (products on
+// foundation models) has its own roadmap next to machine learning. Frontend and
 // mobile is a different interview, so its roadmap stands alone.
 //
 // A roadmap page's body places one with { type: "roadmap", id }. Every `topics` entry is
@@ -69,13 +70,36 @@ export const ROADMAPS = {
     title: "Machine learning systems",
     basedOn: "system-design",
     stages: [
-      stage("The end-to-end ML system", "How data, training, serving and feedback connect.", ["machine-learning-system-architecture", "?data-engineering-architecture", "?batch-vs-stream-processing"]),
-      stage("Data and features", "Consistent features for training and serving.", ["feature-store", "data-quality", "?stream-processing-windows-watermarks"], ["feature-store"]),
-      stage("Training at scale", "Turning data into models reproducibly.", ["distributed-training", "mlops-model-registry"], ["training-platform"]),
-      stage("Serving predictions", "Meeting latency and cost budgets in production.", ["model-serving", "?caching", "?autoscaling"], ["model-serving"]),
-      stage("Ranking and recommendations", "The most common ML design question.", ["recommendation-system-design", "vector-databases", "?search-and-inverted-index"], ["recommendation-engine"]),
-      stage("Measuring and monitoring", "Knowing whether a model actually helps.", ["ml-evaluation-metrics", "ab-testing-experimentation", "ml-model-monitoring"], ["model-monitoring", "online-fraud-model"]),
-      stage("LLM and AI applications", "Building products on foundation models.", ["ai-application-architecture", "retrieval-augmented-generation", "llm-inference-serving"], ["rag-search"]),
+      stage("The ML system design round", "What the round tests, the seven steps every answer follows, and how to frame the problem before any model.", ["ml-system-design-interview", "ml-problem-framing", "ml-system-design-interview-questions", "?back-of-the-envelope-estimation", "?non-functional-requirements"]),
+      stage("The end-to-end ML system", "How data, training, serving and feedback connect, and which parts are ordinary systems work.", ["machine-learning-system-architecture", "?data-engineering-architecture", "?batch-vs-stream-processing"]),
+      stage("Training data and labels", "Where examples and labels come from, how to sample and split them, and the leaks that fake good results.", ["ml-training-data", "data-labeling", "?data-quality", "?data-pipeline-orchestration"]),
+      stage("Features and embeddings", "Turning raw data into consistent model inputs for training and serving.", ["feature-engineering", "feature-store", "embeddings", "?stream-processing-windows-watermarks", "?change-data-capture"], ["feature-store"]),
+      stage("Models and training", "Choosing a model, training it at scale, retraining it, and keeping every version reproducible.", ["ml-model-selection", "distributed-training", "continual-learning", "mlops-model-registry"], ["training-platform"]),
+      stage("Serving predictions", "Meeting latency and cost budgets in production, and rolling models out safely.", ["model-serving", "model-compression", "?caching", "?autoscaling", "?deployment-strategies"], ["model-serving"]),
+      stage("Evaluation and experiments", "Proving a model helps: offline metrics, online tests and exploration.", ["ml-evaluation-metrics", "ab-testing-experimentation", "multi-armed-bandits"], ["experimentation-analytics", "notification-ranking"]),
+      stage("Monitoring and feedback loops", "Noticing when a model degrades, and stopping it from biasing its own training data.", ["ml-model-monitoring", "ml-feedback-loops", "?observability"], ["model-monitoring"]),
+      stage("Ranking, search and recommendations", "The most common family of ML design questions: retrieve, rank, re-rank.", ["recommendation-system-design", "learning-to-rank", "cold-start-problem", "two-stage-processing", "?vector-databases", "?search-and-inverted-index"], ["recommendation-engine", "search-ranking", "feed-ranking"]),
+      stage("ML platforms at scale", "The shared platform that lets many teams train, ship and watch models.", ["ml-platform-architecture", "?kubernetes-architecture", "?multi-tenancy"], ["training-platform", "feature-store"]),
+      stage("Practise classic ML designs", "Full worked answers to the questions interviewers ask most, then timed practice.", ["design-video-recommendation-system", "design-ad-click-prediction", "design-news-feed-ranking", "design-search-ranking", "design-fraud-detection-system", "?design-harmful-content-detection", "?design-people-you-may-know", "?design-visual-search", "?design-eta-prediction"], ["ad-click-prediction", "video-recommendations", "feed-ranking", "search-ranking", "content-moderation", "people-you-may-know", "visual-search", "eta-prediction", "dynamic-pricing", "notification-ranking", "online-fraud-model"]),
+      stage("Beyond classic ML: generative AI", "LLM products are designed differently; the AI engineer roadmap covers them in depth.", ["ai-engineering-roadmap", "?retrieval-augmented-generation", "?llm-inference-serving"], ["rag-search"]),
+    ],
+  },
+  "ai-engineering": {
+    page: "ai-engineering-roadmap",
+    title: "AI engineering",
+    basedOn: "system-design",
+    stages: [
+      stage("The AI engineering design round", "How LLM system design rounds differ from backend and ML ones, and the framework to answer them.", ["ai-engineer-system-design-interview", "genai-system-design-interview-questions", "ai-application-architecture", "?back-of-the-envelope-estimation"], ["chatgpt-assistant"]),
+      stage("How LLMs work", "Tokens, context windows, sampling and pricing, and how to pick a model for a job.", ["how-llms-work", "choosing-an-llm", "?embeddings"]),
+      stage("Prompting and structured output", "Prompts as versioned code, and model output your services can trust.", ["prompt-engineering", "llm-structured-outputs", "?api-design"]),
+      stage("Retrieval-augmented generation", "Grounding answers in your own data: ingest, chunk, retrieve, rerank, cite.", ["retrieval-augmented-generation", "rag-chunking-strategies", "vector-databases", "hybrid-search-reranking", "advanced-rag", "?search-and-inverted-index"], ["rag-search", "document-ingestion", "ai-answer-engine"]),
+      stage("Agents and tools", "Letting a model take actions: the agent loop, tool contracts, memory and multi-agent designs.", ["ai-agent-architecture", "llm-tool-calling-mcp", "agent-memory", "multi-agent-systems", "?idempotency", "?saga-pattern"], ["support-ai-agent", "voice-ai-agent"]),
+      stage("Evaluating LLM systems", "Golden datasets, graders and regression gates: the step most designs skip.", ["llm-evaluation", "?ml-evaluation-metrics", "?ab-testing-experimentation"], ["llm-eval-platform"]),
+      stage("Safety and security", "Guardrails, prompt injection and least-privilege tools.", ["llm-guardrails", "prompt-injection", "?authorization-rbac-abac-oauth", "?rate-limiting"]),
+      stage("Serving, latency and cost", "Running models fast and affordably: inference, gateways, caching and routing.", ["llm-inference-serving", "llm-gateway", "llm-caching", "llm-cost-optimization", "?model-compression", "?fallbacks-graceful-degradation"], ["llm-gateway", "llm-inference-platform", "text-to-image"]),
+      stage("Adapting models", "When prompting and RAG aren't enough: fine-tuning, preference tuning and distillation.", ["llm-fine-tuning", "?data-labeling", "?distributed-training"], ["training-platform"]),
+      stage("LLMOps in production", "Tracing, versioning, releases, feedback and incident response for AI features.", ["llmops-observability", "?observability", "?feature-flags", "?ml-model-monitoring"], ["model-monitoring"]),
+      stage("Practise GenAI designs", "Full worked answers to the AI engineering questions asked most, then timed practice.", ["design-chatgpt", "design-rag-chatbot", "design-customer-support-ai-agent", "design-ai-code-assistant", "?design-ai-voice-agent", "?design-text-to-image-service", "?design-document-ingestion-pipeline", "?design-ai-answer-engine"], ["chatgpt-assistant", "support-ai-agent", "code-assistant", "voice-ai-agent", "text-to-image", "document-ingestion", "ai-answer-engine", "rag-search"]),
     ],
   },
   platform: {

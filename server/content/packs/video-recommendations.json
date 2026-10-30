@@ -1,0 +1,629 @@
+{
+  "opening": "We're a video platform and want to improve the recommendations on the home page. Design the system that decides which videos each person sees there.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "daily",
+        "viewers",
+        "scale",
+        "traffic"
+      ],
+      "answer": "About 500 million daily viewers, each opening the home page around 10 times a day."
+    },
+    {
+      "id": "scale.catalogue",
+      "topics": [
+        "videos",
+        "catalogue",
+        "catalog",
+        "items",
+        "uploads",
+        "how many"
+      ],
+      "answer": "Billions of videos in total, with hundreds of thousands uploaded every hour."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "milliseconds",
+        "page load"
+      ],
+      "answer": "Each home page load returns about 20 videos within 200 ms at p99."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "metric",
+        "success",
+        "optimise",
+        "objective",
+        "business"
+      ],
+      "answer": "Leadership cares about long-term satisfaction and daily return visits; clicks alone have produced clickbait before."
+    },
+    {
+      "id": "data.signals",
+      "topics": [
+        "signals",
+        "logs",
+        "data",
+        "feedback",
+        "interactions"
+      ],
+      "answer": "We log impressions with position, clicks, watch time, likes, shares, 'not interested', subscriptions and searches."
+    },
+    {
+      "id": "req.policy",
+      "topics": [
+        "policy",
+        "safety",
+        "borderline",
+        "age",
+        "restrictions"
+      ],
+      "answer": "Policy-violating and borderline videos must never be recommended, and age settings must be respected."
+    },
+    {
+      "id": "req.creators",
+      "topics": [
+        "creators",
+        "new uploads",
+        "fairness",
+        "new videos",
+        "cold start"
+      ],
+      "answer": "New uploads and smaller creators should get a fair chance to be discovered."
+    }
+  ],
+  "clarificationPolicy": "Answer as the recommendations product lead. Keep it a very large, latency-bound recommender focused on long-term satisfaction; decide unlisted details so retrieval, ranking objectives and cold start stay in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "daily users",
+          "catalogue size",
+          "latency",
+          "watch time",
+          "satisfaction",
+          "objective"
+        ]
+      },
+      "goal": "Establish scale, latency and what success means beyond clicks.",
+      "opener": "What do you need to know before you start designing this?",
+      "evidence": {
+        "strong": "Asks for users and request rate, catalogue size and upload rate, the latency budget, available signals, and the business goal; pushes back on clicks as the objective and proposes satisfied watch time or long-term engagement.",
+        "adequate": "Gets scale and latency but accepts clicks or watch time without questioning it.",
+        "weak": "Starts drawing models without any requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.clicks",
+          "pattern": "Assumes maximising clicks is the right goal.",
+          "challenge": "If thumbnails that mislead people get more clicks, does the platform win?"
+        }
+      ],
+      "probes": [
+        "How would you know recommendations got better?",
+        "What happens to a video uploaded an hour ago?"
+      ],
+      "hints": [
+        "Ask what the company is really trying to grow.",
+        "The catalogue size decides whether you can score everything."
+      ],
+      "moveOnSummary": "Hundreds of millions of viewers, billions of videos, a tight latency budget, and an objective of satisfied watch time rather than clicks.",
+      "learnTopics": [
+        "ml-system-design-interview",
+        "ml-problem-framing"
+      ]
+    },
+    {
+      "id": "req.objective",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "multi-task",
+          "watch time",
+          "weighted score",
+          "label",
+          "multiple objectives",
+          "dismiss"
+        ]
+      },
+      "goal": "Turn the goal into learnable targets combined into one score.",
+      "opener": "How would you turn that goal into something a model can be trained on?",
+      "evidence": {
+        "strong": "Predicts several outcomes (click, watch time or completion, like, share, dismiss) and combines them in a weighted score tuned by experiments, explaining why each signal is there.",
+        "adequate": "Picks watch time as a single target without discussing its downsides.",
+        "weak": "Uses clicks as the only label."
+      },
+      "misconceptions": [
+        {
+          "id": "obj.watch_only",
+          "pattern": "Thinks raw watch time alone is a safe target.",
+          "challenge": "Long videos rack up watch time even when people half-watch them. How does that bias the feed?"
+        }
+      ],
+      "probes": [
+        "How are the weights between objectives chosen?",
+        "Which signal tells you someone disliked a recommendation?"
+      ],
+      "hints": [
+        "Several predictions can be combined into one score.",
+        "Negative feedback deserves a negative weight."
+      ],
+      "moveOnSummary": "Multi-task predictions of click, watch time, likes, shares and dismissals combined with weights tuned by online experiments.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-model-selection"
+      ]
+    },
+    {
+      "id": "hl.funnel",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "recommender",
+          "retriever",
+          "model-serving",
+          "vector-db"
+        ],
+        "keywords": [
+          "candidate generation",
+          "ranking",
+          "funnel",
+          "stages",
+          "retrieval",
+          "re-ranking"
+        ]
+      },
+      "goal": "Lay out a multi-stage funnel that fits the latency budget.",
+      "opener": "You can't score billions of videos per request. What does the serving path look like?",
+      "evidence": {
+        "strong": "Several candidate sources produce a few thousand videos, a light ranker trims to hundreds, a heavy multi-task ranker scores them, and re-ranking applies policy, diversity and freshness; gives counts and latency per stage and a fallback.",
+        "adequate": "Retrieval then ranking but no counts, budgets or re-ranking.",
+        "weak": "One model scoring the whole catalogue."
+      },
+      "misconceptions": [
+        {
+          "id": "funnel.score_all",
+          "pattern": "Believes a fast model can score every video per request.",
+          "challenge": "How many scores per second is that across all requests?"
+        }
+      ],
+      "probes": [
+        "How many videos survive each stage, and how long does each take?",
+        "What do you show if the ranker times out?"
+      ],
+      "hints": [
+        "Cheap stages narrow, expensive stages decide.",
+        "Give each stage a slice of the time budget."
+      ],
+      "moveOnSummary": "Candidate sources to a few thousand, a light ranker to hundreds, a heavy multi-task ranker, then policy and diversity re-ranking, with per-stage budgets.",
+      "learnTopics": [
+        "recommendation-system-design",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "hl.data",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "clickstream",
+          "feature-store",
+          "training"
+        ],
+        "keywords": [
+          "impression logs",
+          "training data",
+          "features",
+          "feature store",
+          "time split",
+          "logging"
+        ]
+      },
+      "goal": "Describe training data and features for the models.",
+      "opener": "What data do the models learn from, and which features would you use?",
+      "evidence": {
+        "strong": "Builds examples from impression logs joined to outcomes with position and model version logged, uses time-based splits, and lists user, video, context, user-video and session features served from a feature store.",
+        "adequate": "Lists features but is vague on how training rows are built.",
+        "weak": "No clear training data or features."
+      },
+      "misconceptions": [
+        {
+          "id": "data.only_clicks",
+          "pattern": "Trains only on clicked videos.",
+          "challenge": "Without the videos people saw and skipped, what does the model learn about what not to show?"
+        }
+      ],
+      "probes": [
+        "What exactly is one training row?",
+        "Which features change within a session?"
+      ],
+      "hints": [
+        "Impressions are the rows; outcomes are labels.",
+        "Recent behaviour is a strong signal."
+      ],
+      "moveOnSummary": "Impression logs joined to outcomes with positions logged, time splits, and user, video, context, interaction and session features from a feature store.",
+      "learnTopics": [
+        "ml-training-data",
+        "feature-engineering"
+      ]
+    },
+    {
+      "id": "deep.retrieval",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "vector-db",
+          "embedding"
+        ],
+        "keywords": [
+          "two-tower",
+          "ann index",
+          "nearest neighbour",
+          "user embedding",
+          "item embedding",
+          "candidate sources"
+        ]
+      },
+      "goal": "Retrieve good candidates from a huge catalogue in milliseconds.",
+      "opener": "How exactly does candidate generation find a thousand good videos for one person among billions?",
+      "evidence": {
+        "strong": "A two-tower model with precomputed video vectors in an ANN index, a user vector from recent history computed per request, plus subscriptions, co-watch and trending sources merged; indexes only eligible videos and sizes the index; rebuilds on new towers.",
+        "adequate": "Mentions embeddings and nearest neighbours but no index sizing or other sources.",
+        "weak": "Filters by category or popularity only."
+      },
+      "misconceptions": [
+        {
+          "id": "ret.cf_only",
+          "pattern": "Relies only on collaborative filtering co-occurrence.",
+          "challenge": "What does co-occurrence say about a video nobody has watched yet?"
+        }
+      ],
+      "probes": [
+        "How big is the index and where does it live?",
+        "Why do item vectors not need to be computed per request?"
+      ],
+      "hints": [
+        "Two separate encoders meet only at a dot product.",
+        "Several sources cover different needs."
+      ],
+      "moveOnSummary": "Two-tower retrieval with precomputed video vectors in an ANN index plus subscription, co-watch and trending sources.",
+      "learnTopics": [
+        "embeddings",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "deep.ranking",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "gpu"
+        ],
+        "keywords": [
+          "multi-task ranker",
+          "heavy ranker",
+          "position bias",
+          "calibrated heads",
+          "ranking features",
+          "light ranker"
+        ]
+      },
+      "goal": "Rank candidates accurately and correct for the system's own biases.",
+      "opener": "Tell me about the ranking model: what it predicts, what it sees, and how you train it fairly.",
+      "evidence": {
+        "strong": "A multi-task deep ranker with heads per outcome sharing layers, rich features, position as a training feature fixed at serving to remove position bias, calibrated heads before combining, and GPU batching to meet the budget.",
+        "adequate": "A deep model with features but no bias correction or calibration.",
+        "weak": "A single click model with few features."
+      },
+      "misconceptions": [
+        {
+          "id": "rank.position",
+          "pattern": "Ignores that top positions get more clicks regardless of quality.",
+          "challenge": "A mediocre video always shown first gets many clicks. What does the next model learn?"
+        }
+      ],
+      "probes": [
+        "How do you stop the model learning that position one is just good?",
+        "Why calibrate heads before adding them up?"
+      ],
+      "hints": [
+        "Position can be a feature during training only.",
+        "Probabilities from different heads need a common scale."
+      ],
+      "moveOnSummary": "A multi-task ranker with shared layers, position as a training-only feature, calibrated heads combined by weights, served with GPU batching.",
+      "learnTopics": [
+        "learning-to-rank",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.coldstart",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "vision"
+        ],
+        "keywords": [
+          "cold start",
+          "new upload",
+          "exploration",
+          "content embedding",
+          "small creators",
+          "freshness boost"
+        ]
+      },
+      "goal": "Give new uploads and new viewers reasonable recommendations.",
+      "opener": "A creator uploads a video right now. How does it reach its first viewers?",
+      "evidence": {
+        "strong": "Content features (title, thumbnail, audio, channel) in the video tower so new videos get vectors immediately, channel priors, exploration slots and freshness boosts, early engagement streamed into features; for new viewers, context, onboarding and session signals.",
+        "adequate": "Some exploration or popularity fallback but no content features.",
+        "weak": "No plan: new videos wait until they're popular."
+      },
+      "misconceptions": [
+        {
+          "id": "cold.popular",
+          "pattern": "Thinks trending lists solve cold start.",
+          "challenge": "Trending only contains videos that already have views. How does a new one get in?"
+        }
+      ],
+      "probes": [
+        "What do you know about a video before anyone has watched it?",
+        "How much of the feed would you spend exploring?"
+      ],
+      "hints": [
+        "The content itself can be embedded.",
+        "A small reserved share of slots buys data."
+      ],
+      "moveOnSummary": "Content-based video tower features, channel priors, exploration slots, freshness boosts and streamed early engagement; context and session signals for new viewers.",
+      "learnTopics": [
+        "cold-start-problem",
+        "multi-armed-bandits"
+      ]
+    },
+    {
+      "id": "deep.feedback",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "drift-monitor",
+          "guardrails"
+        ],
+        "keywords": [
+          "feedback loop",
+          "diversity",
+          "filter bubble",
+          "popularity bias",
+          "holdout",
+          "concentration"
+        ]
+      },
+      "goal": "Prevent the feed narrowing and harmful content being amplified.",
+      "opener": "Over months, what could go wrong with a system that learns from its own recommendations?",
+      "evidence": {
+        "strong": "Names degenerate feedback loops and popularity bias, adds diversity rules and exploration, tracks catalogue coverage and impression concentration, keeps a long-term holdout, and filters borderline content in re-ranking.",
+        "adequate": "Mentions diversity rules but no measurement.",
+        "weak": "Doesn't see the loop."
+      },
+      "misconceptions": [
+        {
+          "id": "fb.offline_up",
+          "pattern": "Assumes improving offline metrics means the feed is healthier.",
+          "challenge": "Offline metrics rise every week but users report the feed feels the same. What could be happening?"
+        }
+      ],
+      "probes": [
+        "How would you detect the feed narrowing?",
+        "How do you measure the cumulative effect of the recommender?"
+      ],
+      "hints": [
+        "Look at how impressions are spread across videos and creators.",
+        "A group that never gets the new system shows the true effect."
+      ],
+      "moveOnSummary": "Diversity and exploration in re-ranking, coverage and concentration tracking, a long-term holdout, and borderline-content filtering.",
+      "learnTopics": [
+        "ml-feedback-loops",
+        "ml-model-monitoring"
+      ]
+    },
+    {
+      "id": "deep.evaluation",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "dashboard"
+        ],
+        "keywords": [
+          "recall@k",
+          "ndcg",
+          "a/b test",
+          "online metrics",
+          "guardrail metrics",
+          "offline evaluation"
+        ]
+      },
+      "goal": "Evaluate each stage offline and the system online.",
+      "opener": "How would you decide whether a new version of this system is better?",
+      "evidence": {
+        "strong": "Recall@k for retrieval, NDCG and per-head metrics for ranking, then A/B tests on long-term engagement and satisfaction with guardrails (dismiss rate, surveys, creator diversity, policy violations), run long enough for novelty to fade.",
+        "adequate": "Offline and online metrics but no per-stage split or guardrails.",
+        "weak": "Only offline accuracy."
+      },
+      "misconceptions": [
+        {
+          "id": "eval.ctr",
+          "pattern": "Uses click-through rate as the launch metric.",
+          "challenge": "A change raises CTR but people leave the app sooner. Does it ship?"
+        }
+      ],
+      "probes": [
+        "Which metric would you check for retrieval specifically?",
+        "How long would you run the experiment, and why?"
+      ],
+      "hints": [
+        "Each stage has its own job and metric.",
+        "Guardrails catch wins that hurt users."
+      ],
+      "moveOnSummary": "Recall@k for retrieval, NDCG and head metrics for ranking, and long-running A/B tests on satisfaction and return visits with guardrails.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "ab-testing-experimentation"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "retraining",
+          "freshness",
+          "cost",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise key trade-offs, retraining and what to improve next.",
+      "opener": "What are the main trade-offs in your design, and what would you improve first?",
+      "evidence": {
+        "strong": "Discusses freshness versus cost (ranker retrained daily, towers weekly with index rebuilds), precompute versus online, objective weights, and names the biggest risks and next steps.",
+        "adequate": "Names a couple of trade-offs.",
+        "weak": "No trade-offs beyond adding servers."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How often does each model retrain?",
+        "What would you precompute for inactive users?"
+      ],
+      "hints": [
+        "Think about what changes fastest.",
+        "Not every viewer needs fresh computation on every load."
+      ],
+      "moveOnSummary": "Freshness versus cost in retraining and precomputation, objective weights, and monitoring as the main trade-offs.",
+      "learnTopics": [
+        "continual-learning",
+        "model-serving"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.newcreator",
+      "after": "deep.retrieval",
+      "prompt": "A small creator complains their new videos never get any views from recommendations. Is that your system's fault, and what would you change?",
+      "agendaItemId": "deep.coldstart"
+    },
+    {
+      "id": "cb.sameness",
+      "after": "deep.ranking",
+      "prompt": "Six months after launch, users say their home page shows the same three channels every day. What's happening?",
+      "agendaItemId": "deep.feedback"
+    }
+  ],
+  "vocabulary": [
+    "two-tower",
+    "ANN",
+    "HNSW",
+    "candidate generation",
+    "multi-task ranking",
+    "watch time",
+    "NDCG",
+    "recall at k",
+    "position bias",
+    "cold start",
+    "exploration",
+    "re-ranking",
+    "diversity",
+    "feature store",
+    "embedding",
+    "calibration",
+    "A/B test",
+    "holdout",
+    "clickbait",
+    "dismiss"
+  ],
+  "alternatives": [
+    {
+      "choice": "Collaborative filtering (matrix factorisation) for candidate generation",
+      "whenBetter": "For smaller catalogues or as one of several sources; simpler, but weak for new videos."
+    },
+    {
+      "choice": "Precomputing recommendations offline for every user",
+      "whenBetter": "For inactive users or tight compute budgets, accepting less freshness within a session."
+    },
+    {
+      "choice": "A sequence model over recent watches as the main retriever",
+      "whenBetter": "When session context dominates, as in short-form video."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Satisfaction-first funnel",
+      "outline": "Clarifies scale, latency and the satisfaction goal, rejecting clicks as the objective. Defines multi-task targets combined by experiment-tuned weights. Draws candidate sources (two-tower ANN over eligible videos, subscriptions, co-watch, trending and fresh), a light ranker and a multi-task heavy ranker with position handled as a training-only feature and calibrated heads, then re-ranking for policy, diversity and freshness, with counts and budgets per stage and a fallback. Handles new uploads with content features and exploration, watches for feedback loops with coverage metrics and a holdout, evaluates retrieval and ranking separately and launches on long-term metrics with guardrails."
+    },
+    {
+      "band": "adequate",
+      "label": "Funnel without the loop",
+      "outline": "Builds two-tower retrieval and a deep ranker on impression data with sensible features and an A/B test, but optimises watch time alone, ignores position bias, has little for new uploads and doesn't consider feedback loops."
+    },
+    {
+      "band": "weak",
+      "label": "Popularity plus categories",
+      "outline": "Shows popular videos from categories the user watched, scored by a click model, refreshed nightly; no funnel, no cold start, no evaluation beyond click rate."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

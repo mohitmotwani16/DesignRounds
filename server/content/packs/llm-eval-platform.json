@@ -1,0 +1,575 @@
+{
+  "opening": "Our teams keep shipping prompt and model changes that break things in production. Design a platform for evaluating LLM features before they ship.",
+  "clarifications": [
+    {
+      "id": "scale.teams",
+      "topics": [
+        "teams",
+        "users",
+        "how many",
+        "scale"
+      ],
+      "answer": "About 20 product teams with LLM features and agents."
+    },
+    {
+      "id": "req.changes",
+      "topics": [
+        "changes",
+        "what changes",
+        "prompts",
+        "models",
+        "releases"
+      ],
+      "answer": "Changes to prompts, models, retrieval settings and tools all need testing; teams ship several changes a week."
+    },
+    {
+      "id": "data.datasets",
+      "topics": [
+        "datasets",
+        "test cases",
+        "golden set",
+        "how many cases"
+      ],
+      "answer": "Each team has or can build a dataset of a few hundred to a few thousand cases."
+    },
+    {
+      "id": "req.gate",
+      "topics": [
+        "gate",
+        "block release",
+        "trust",
+        "ci"
+      ],
+      "answer": "Results must be trustworthy enough to block a release in CI."
+    },
+    {
+      "id": "req.agents",
+      "topics": [
+        "agents",
+        "tools",
+        "actions",
+        "side effects"
+      ],
+      "answer": "Several teams run agents that call tools such as refunds and ticket updates."
+    },
+    {
+      "id": "req.budget",
+      "topics": [
+        "cost",
+        "budget",
+        "tokens",
+        "run cost"
+      ],
+      "answer": "Evaluation runs cost real money in model calls; there's a monthly evaluation budget."
+    },
+    {
+      "id": "req.production",
+      "topics": [
+        "production",
+        "failures",
+        "feedback",
+        "incidents"
+      ],
+      "answer": "Teams want production failures to turn into new test cases."
+    }
+  ],
+  "clarificationPolicy": "Answer as the AI platform lead. Keep it a shared evaluation platform that must be trustworthy enough to gate releases, including agents; decide unlisted details so graders, repeated trials and CI gates stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "service"
+        ],
+        "keywords": [
+          "teams",
+          "changes",
+          "datasets",
+          "release gate",
+          "agents",
+          "budget"
+        ]
+      },
+      "goal": "Establish users, what changes are tested, datasets, gating, agents, budget and feedback.",
+      "opener": "What do you want to know before designing this?",
+      "evidence": {
+        "strong": "Asks who uses it, which kinds of changes need testing, dataset sizes, whether results gate releases, agent and tool testing, run costs, and how production failures feed back.",
+        "adequate": "Gets teams and datasets but not gating or agents.",
+        "weak": "Assumes a single benchmark score."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.benchmark",
+          "pattern": "Thinks a public benchmark score is enough.",
+          "challenge": "A model scores higher on a public benchmark but breaks your refund flow. Which number matters?"
+        }
+      ],
+      "probes": [
+        "What decisions will these results drive?",
+        "Do any features take actions in other systems?"
+      ],
+      "hints": [
+        "Ask what the platform must be trusted for.",
+        "Agents need more than text grading."
+      ],
+      "moveOnSummary": "Twenty teams testing prompts, models, retrieval and tools weekly, datasets of hundreds to thousands of cases, results that gate CI, agents with side effects, a budget and production feedback.",
+      "learnTopics": [
+        "llm-evaluation",
+        "ai-engineer-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "orchestrator",
+          "evaluation",
+          "database"
+        ],
+        "keywords": [
+          "datasets",
+          "run orchestrator",
+          "graders",
+          "results store",
+          "comparison report",
+          "configurations"
+        ]
+      },
+      "goal": "Lay out the platform's components.",
+      "opener": "Walk me through the components and what happens in one evaluation run.",
+      "evidence": {
+        "strong": "Versioned datasets and system configurations, a run orchestrator executing cases through the gateway with concurrency and budget limits, graders, a results store, comparison reports against the baseline by slice, CI integration and an ingestion path from production traces.",
+        "adequate": "A script that runs a dataset and computes a score.",
+        "weak": "Manual spot checks."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.script",
+          "pattern": "Treats evaluation as a one-off script.",
+          "challenge": "Two months later, can you reproduce exactly which prompt, model and dataset produced last release's score?"
+        }
+      ],
+      "probes": [
+        "What's versioned?",
+        "What does a team see at the end of a run?"
+      ],
+      "hints": [
+        "Results only mean something with their inputs.",
+        "Compare against what's live now."
+      ],
+      "moveOnSummary": "Versioned datasets and configs, an orchestrator with limits, graders, a results store, baseline comparison reports, CI hooks and production ingestion.",
+      "learnTopics": [
+        "llm-evaluation",
+        "llmops-observability"
+      ]
+    },
+    {
+      "id": "hl.datasets",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "data-catalog",
+          "storage"
+        ],
+        "keywords": [
+          "golden dataset",
+          "slices",
+          "versioning",
+          "reference answers",
+          "rubrics",
+          "synthetic cases"
+        ]
+      },
+      "goal": "Design how datasets are built, labelled and versioned.",
+      "opener": "What does a good evaluation dataset look like, and how is it maintained?",
+      "evidence": {
+        "strong": "Real or realistic inputs with slices (common, hard, adversarial, by customer type or language), reference answers, key facts or rubrics, expected tool calls for agents, versioning with held-out portions, synthetic expansion reviewed by humans, and growth from production failures.",
+        "adequate": "A list of prompts with expected outputs.",
+        "weak": "No dataset design."
+      },
+      "misconceptions": [
+        {
+          "id": "ds.synthetic",
+          "pattern": "Relies entirely on model-generated test cases.",
+          "challenge": "The generated cases are easy and similar to each other. What real failures do they miss?"
+        }
+      ],
+      "probes": [
+        "How do you stop teams tuning prompts to the test set?",
+        "What metadata does each case need?"
+      ],
+      "hints": [
+        "Slices reveal hidden regressions.",
+        "Keep some cases unseen."
+      ],
+      "moveOnSummary": "Sliced, versioned datasets of realistic cases with references or rubrics, held-out portions, reviewed synthetic cases and production-sourced additions.",
+      "learnTopics": [
+        "data-labeling",
+        "llm-evaluation"
+      ]
+    },
+    {
+      "id": "deep.graders",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "llm",
+          "labeling"
+        ],
+        "keywords": [
+          "llm as a judge",
+          "calibration",
+          "rubric",
+          "code checks",
+          "human labels",
+          "judge bias"
+        ]
+      },
+      "goal": "Grade outputs reliably.",
+      "opener": "How do you grade open-ended outputs, and how do you know your grader is right?",
+      "evidence": {
+        "strong": "Code checks wherever possible (schema, required facts, tool calls), reference comparisons, LLM judges with specific rubrics and binary or few-level scales, calibrated against a few hundred human labels per dimension and slice, controlled for position, length and self-preference bias, versioned and re-calibrated on change; humans for high-stakes slices.",
+        "adequate": "An LLM judge with a general quality score.",
+        "weak": "Exact string match only."
+      },
+      "misconceptions": [
+        {
+          "id": "gr.trust",
+          "pattern": "Trusts an LLM judge out of the box.",
+          "challenge": "The judge prefers longer answers. What happens to teams' prompts over time?"
+        }
+      ],
+      "probes": [
+        "How do you measure judge agreement with people?",
+        "Which checks don't need a model at all?"
+      ],
+      "hints": [
+        "Cheap, exact checks first.",
+        "Compare judges with human labels."
+      ],
+      "moveOnSummary": "Code checks first, rubric-based judges calibrated on human labels with bias controls, versioned judges, humans for high stakes.",
+      "learnTopics": [
+        "llm-evaluation",
+        "data-labeling"
+      ]
+    },
+    {
+      "id": "deep.trials",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "dashboard"
+        ],
+        "keywords": [
+          "repeated trials",
+          "confidence intervals",
+          "variance",
+          "pass rate",
+          "statistical significance",
+          "slice comparison"
+        ]
+      },
+      "goal": "Make comparisons trustworthy despite variable outputs.",
+      "opener": "The same case passes on one run and fails on the next. How do you decide whether a change is better?",
+      "evidence": {
+        "strong": "Runs each case several times, reports pass rates with confidence intervals, compares candidate and baseline on the same cases (paired comparison), breaks results down by slice, and sets minimum detectable differences before declaring wins.",
+        "adequate": "Averages scores from one run.",
+        "weak": "Eyeballs results."
+      },
+      "misconceptions": [
+        {
+          "id": "tr.once",
+          "pattern": "Runs each case once.",
+          "challenge": "A change improves the score by one point on a single run. Is that real?"
+        }
+      ],
+      "probes": [
+        "How many runs per case are enough?",
+        "How do you compare two versions fairly?"
+      ],
+      "hints": [
+        "Variance needs repetition.",
+        "Same cases, both versions."
+      ],
+      "moveOnSummary": "Repeated trials, pass rates with confidence intervals, paired comparisons with the baseline and slice breakdowns.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "ml-evaluation-metrics"
+      ]
+    },
+    {
+      "id": "deep.agents",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ai-agent",
+          "container"
+        ],
+        "keywords": [
+          "sandbox",
+          "agent evaluation",
+          "trajectory",
+          "outcome check",
+          "mock tools",
+          "side effects"
+        ]
+      },
+      "goal": "Evaluate agents without touching real systems.",
+      "opener": "How do you evaluate an agent that issues refunds, without refunding anyone?",
+      "evidence": {
+        "strong": "Sandboxed copies or mocks of tools and data, simulated users, outcome checks in the sandbox (correct refund, nothing unauthorised), trajectory checks (right tools, valid arguments, no forbidden actions, reasonable steps and cost), repeated runs and resettable environments.",
+        "adequate": "Grades the agent's final message.",
+        "weak": "Tests in production."
+      },
+      "misconceptions": [
+        {
+          "id": "ag.text",
+          "pattern": "Grades only what the agent says.",
+          "challenge": "The agent says 'refund issued' but issued it to the wrong order. Does a text grader notice?"
+        }
+      ],
+      "probes": [
+        "How do you reset the environment between runs?",
+        "What makes a trajectory bad even if the outcome is right?"
+      ],
+      "hints": [
+        "Check the system, not the words.",
+        "How it got there matters too."
+      ],
+      "moveOnSummary": "Sandboxed tools and data, simulated users, outcome and trajectory checks, repeated runs and resettable environments.",
+      "learnTopics": [
+        "ai-agent-architecture",
+        "llm-evaluation"
+      ]
+    },
+    {
+      "id": "deep.ci",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ci-cd",
+          "feature-flags"
+        ],
+        "keywords": [
+          "release gate",
+          "ci integration",
+          "slice thresholds",
+          "blocking",
+          "canary",
+          "override"
+        ]
+      },
+      "goal": "Gate releases on evaluation results.",
+      "opener": "How do evaluation results actually stop a bad change from shipping?",
+      "evidence": {
+        "strong": "CI runs the relevant suites on every change to prompts, models, retrieval or tools; gates per slice (critical slices such as safety must not regress at all) plus overall thresholds and cost and latency limits; clear reports in the pull request; documented overrides with approval; canaries after passing.",
+        "adequate": "A single overall threshold.",
+        "weak": "Reports that nobody has to read."
+      },
+      "misconceptions": [
+        {
+          "id": "ci.average",
+          "pattern": "Gates on the overall average only.",
+          "challenge": "The average improves while refunds for one customer type break. Does the gate stop it?"
+        }
+      ],
+      "probes": [
+        "Which slices have zero tolerance?",
+        "Who can override a failing gate?"
+      ],
+      "hints": [
+        "Averages hide regressions.",
+        "Make the failure visible where people work."
+      ],
+      "moveOnSummary": "CI suites on every relevant change, per-slice and cost and latency gates, reports in pull requests, approved overrides, then canaries.",
+      "learnTopics": [
+        "ci-cd-pipelines",
+        "llmops-observability"
+      ]
+    },
+    {
+      "id": "deep.cost",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "cache"
+        ],
+        "keywords": [
+          "eval budget",
+          "sampling",
+          "cached outputs",
+          "concurrency limits",
+          "judge cost",
+          "run scheduling"
+        ]
+      },
+      "goal": "Keep evaluation fast and within budget.",
+      "opener": "Twenty teams running thousands of cases several times, with model judges: what does that cost, and how do you control it?",
+      "evidence": {
+        "strong": "Estimates calls per run (cases times trials times system plus judge calls), budgets per team, smaller quick suites on every commit and full suites before release, caching outputs for unchanged configurations, cheaper judges where calibrated, concurrency limits to respect provider rate limits, and off-peak scheduling.",
+        "adequate": "Limits runs per day.",
+        "weak": "No cost view."
+      },
+      "misconceptions": [
+        {
+          "id": "cost.full",
+          "pattern": "Runs the full suite on every commit.",
+          "challenge": "Each full run costs a few hundred dollars and teams commit dozens of times a day. What's the monthly bill?"
+        }
+      ],
+      "probes": [
+        "What runs on every commit versus before release?",
+        "What can be reused between runs?"
+      ],
+      "hints": [
+        "Tier the suites.",
+        "Unchanged inputs give cacheable outputs."
+      ],
+      "moveOnSummary": "Per-run cost estimates, team budgets, tiered suites, cached outputs, calibrated cheaper judges, concurrency limits and scheduling.",
+      "learnTopics": [
+        "llm-cost-optimization",
+        "llm-caching"
+      ]
+    },
+    {
+      "id": "wrap.feedback",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "production feedback",
+          "new test cases",
+          "trade-offs",
+          "coverage",
+          "next steps"
+        ]
+      },
+      "goal": "Close the loop from production and summarise trade-offs.",
+      "opener": "How do production failures make the platform better, and what trade-offs did you make?",
+      "evidence": {
+        "strong": "Ingests traces with negative feedback or incidents, triages them into new labelled cases, tracks coverage of known failure types, and trades rigour (more trials, human review) against speed and cost.",
+        "adequate": "Mentions adding failures manually.",
+        "weak": "No feedback loop."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How does a failure become a test case?",
+        "Where would you accept less rigour?"
+      ],
+      "hints": [
+        "Every incident is a future test.",
+        "Rigour costs time and money."
+      ],
+      "moveOnSummary": "Production failures triaged into new cases, coverage tracking, and rigour traded against speed and cost.",
+      "learnTopics": [
+        "llmops-observability",
+        "llm-evaluation"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.bill",
+      "after": "deep.graders",
+      "prompt": "Finance flags that evaluation spend tripled this month because every team now runs the full suite with model judges on every commit. What do you change?",
+      "agendaItemId": "deep.cost"
+    },
+    {
+      "id": "cb.refund",
+      "after": "deep.trials",
+      "prompt": "An agent passed every evaluation, then issued a refund to the wrong customer in production. What was your platform missing?",
+      "agendaItemId": "deep.agents"
+    }
+  ],
+  "vocabulary": [
+    "evaluation",
+    "golden dataset",
+    "slice",
+    "LLM-as-a-judge",
+    "rubric",
+    "calibration",
+    "inter-annotator agreement",
+    "position bias",
+    "verbosity bias",
+    "pass rate",
+    "confidence interval",
+    "paired comparison",
+    "regression gate",
+    "CI",
+    "sandbox",
+    "trajectory",
+    "outcome check",
+    "trace",
+    "held-out set",
+    "red teaming"
+  ],
+  "alternatives": [
+    {
+      "choice": "An off-the-shelf evaluation product",
+      "whenBetter": "When standard graders and dashboards suffice and the team doesn't want to build a platform."
+    },
+    {
+      "choice": "Human review only",
+      "whenBetter": "For low-volume, high-stakes features where automated graders can't be trusted yet."
+    },
+    {
+      "choice": "Online A/B testing instead of offline gates",
+      "whenBetter": "For changes where offline evaluation can't capture user value, after safety gates pass."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Trustworthy gates",
+      "outline": "Clarifies teams, change types, dataset sizes, gating, agents, budget and production feedback. Versioned, sliced datasets and system configs feed an orchestrator that runs each case several times through the gateway within budgets. Graders start with code checks, then rubric judges calibrated against human labels with bias controls; agents run in sandboxes with outcome and trajectory checks. Reports compare candidate and baseline per slice with confidence intervals; CI gates block regressions in critical slices with approved overrides. Tiered suites and caching control cost, and production failures become new cases."
+    },
+    {
+      "band": "adequate",
+      "label": "Scored test runs",
+      "outline": "Runs each team's dataset once through the system with an LLM judge giving a quality score and an overall threshold in CI; no calibration, repeated trials, slice gates or agent sandboxes."
+    },
+    {
+      "band": "weak",
+      "label": "Spot checks",
+      "outline": "Engineers try a few prompts by hand before releasing and look at user complaints afterwards."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

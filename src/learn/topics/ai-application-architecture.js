@@ -72,6 +72,6 @@ export default {
     "Bound token usage, provider concurrency, retries, and tool permissions.",
     "Describe an evaluation set and a staged rollout instead of relying on a single model benchmark.",
   ],
-  related: ["machine-learning-system-architecture", "data-engineering-architecture", "authentication-authorization", "api-gateway", "caching", "observability"],
+  related: ["machine-learning-system-architecture", "data-engineering-architecture", "authentication-authorization", "api-gateway", "caching", "observability", "ai-agent-architecture", "llm-guardrails", "llm-gateway", "llm-evaluation", "ai-engineering-roadmap"],
   practice: ["model-serving"],
 };

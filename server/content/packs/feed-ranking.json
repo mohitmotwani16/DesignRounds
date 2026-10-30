@@ -1,0 +1,580 @@
+{
+  "opening": "Our social network's feed is ranked by a few hand-tuned rules and people say it's stale. Design a machine learning system that ranks the news feed.",
+  "clarifications": [
+    {
+      "id": "scale.users",
+      "topics": [
+        "users",
+        "daily",
+        "scale",
+        "sessions",
+        "traffic"
+      ],
+      "answer": "About 2 billion daily users, opening the feed around 8 times a day."
+    },
+    {
+      "id": "scale.inventory",
+      "topics": [
+        "posts",
+        "inventory",
+        "candidates",
+        "eligible",
+        "how many posts"
+      ],
+      "answer": "A typical person has about 1,500 eligible posts since their last visit from friends, followed pages and groups."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "load time",
+        "milliseconds"
+      ],
+      "answer": "The first screen must render within 300 ms; more posts load as they scroll."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "metric",
+        "success",
+        "objective",
+        "engagement"
+      ],
+      "answer": "The goal is meaningful interactions between people and daily return visits, not time spent at any cost."
+    },
+    {
+      "id": "req.integrity",
+      "topics": [
+        "spam",
+        "misinformation",
+        "clickbait",
+        "integrity",
+        "harmful",
+        "quality"
+      ],
+      "answer": "Spam, clickbait and misinformation must be demoted or removed; integrity rules change often."
+    },
+    {
+      "id": "req.recommended",
+      "topics": [
+        "recommended",
+        "unconnected",
+        "discovery",
+        "pages you don't follow"
+      ],
+      "answer": "Some posts come from accounts the person doesn't follow; they should appear only when clearly valuable."
+    },
+    {
+      "id": "data.signals",
+      "topics": [
+        "signals",
+        "feedback",
+        "logs",
+        "actions",
+        "data"
+      ],
+      "answer": "We log impressions, dwell time, likes, comments, shares, hides, reports and occasional 'is this worth your time' survey answers."
+    }
+  ],
+  "clarificationPolicy": "Answer as the feed product lead. Keep it a very large, multi-objective ranking problem with integrity constraints; decide unlisted details so the value model, integrity and freshness stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "eligible posts",
+          "latency",
+          "meaningful interactions",
+          "integrity",
+          "daily users",
+          "goal"
+        ]
+      },
+      "goal": "Establish scale, candidates per request, latency and the real objective.",
+      "opener": "What would you like to understand about the feed and its goals before designing?",
+      "evidence": {
+        "strong": "Asks about users and loads per day, eligible posts per viewer, latency, the objective, integrity rules and available feedback signals; recognises engagement alone can reward harmful content.",
+        "adequate": "Gets scale and latency but takes engagement as the only goal.",
+        "weak": "Designs without asking about scale or goals."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.time_spent",
+          "pattern": "Assumes maximising time spent is the goal.",
+          "challenge": "Outrage keeps people scrolling. Is that the feed the company wants?"
+        }
+      ],
+      "probes": [
+        "What does a good feed mean for the person and for the company?",
+        "How many posts compete for the first screen?"
+      ],
+      "hints": [
+        "Ask how success is defined.",
+        "The size of the candidate set shapes the architecture."
+      ],
+      "moveOnSummary": "Billions of feed loads, around 1,500 candidates each, a tight first-screen budget, and an objective of meaningful interactions with integrity constraints.",
+      "learnTopics": [
+        "ml-system-design-interview",
+        "ml-problem-framing"
+      ]
+    },
+    {
+      "id": "hl.value",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "recommender"
+        ],
+        "keywords": [
+          "value model",
+          "weighted sum",
+          "predicted actions",
+          "multi-task",
+          "p(comment)",
+          "negative feedback"
+        ]
+      },
+      "goal": "Define how predictions become one ranking score.",
+      "opener": "What exactly would the model predict, and how would you turn that into a ranking?",
+      "evidence": {
+        "strong": "Predicts probabilities of several actions (like, comment, share, long dwell, hide, report) and ranks by a weighted value function with negative weights for hides and reports; weights are tuned by experiments on long-term outcomes; heads are calibrated.",
+        "adequate": "Predicts engagement but combines signals vaguely.",
+        "weak": "Ranks by predicted clicks or recency only."
+      },
+      "misconceptions": [
+        {
+          "id": "value.equal",
+          "pattern": "Treats all actions as equally valuable.",
+          "challenge": "Is a like worth the same as a thoughtful comment from a close friend?"
+        }
+      ],
+      "probes": [
+        "How are the weights between actions chosen?",
+        "Why must the predicted probabilities be calibrated?"
+      ],
+      "hints": [
+        "Several predictions can feed one formula.",
+        "Negative actions should subtract."
+      ],
+      "moveOnSummary": "Calibrated predictions for several positive and negative actions combined in a weighted value function tuned by experiments.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-model-selection"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "database",
+          "guardrails"
+        ],
+        "keywords": [
+          "inventory",
+          "candidates",
+          "light ranker",
+          "heavy ranker",
+          "final pass",
+          "pipeline"
+        ]
+      },
+      "goal": "Lay out the ranking pipeline within the latency budget.",
+      "opener": "Walk me through what happens when someone opens the feed.",
+      "evidence": {
+        "strong": "Gathers inventory from friends, pages and groups plus recommended posts, applies integrity filters, a light ranker trims to hundreds, a heavy multi-task ranker scores them, a final pass enforces diversity and freshness; ranks more than one page and returns the first, with per-stage budgets.",
+        "adequate": "Retrieval and ranking but no integrity step or budgets.",
+        "weak": "Sorts all posts with one model per request."
+      },
+      "misconceptions": [
+        {
+          "id": "pipe.one_model",
+          "pattern": "Uses one heavy model on all eligible posts.",
+          "challenge": "Thousands of posts times hundreds of thousands of loads a second: what's the bill?"
+        }
+      ],
+      "probes": [
+        "Where do integrity checks run?",
+        "What do you do when they scroll to the next page?"
+      ],
+      "hints": [
+        "Filter and narrow before the expensive model.",
+        "Later pages can use fresher signals."
+      ],
+      "moveOnSummary": "Inventory plus recommended candidates, integrity filtering, a light then heavy ranker, a final diversity and freshness pass, ranking ahead of scrolling.",
+      "learnTopics": [
+        "recommendation-system-design",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "deep.features",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "feature-store",
+          "stream-processor"
+        ],
+        "keywords": [
+          "affinity",
+          "relationship strength",
+          "engagement velocity",
+          "real-time features",
+          "post age",
+          "author features"
+        ]
+      },
+      "goal": "Choose and serve the features that matter most for feed ranking.",
+      "opener": "Which features would carry the most signal, and how fresh do they need to be?",
+      "evidence": {
+        "strong": "Viewer-author affinity from past interactions, post type and age, early engagement velocity from a stream, viewer's history with similar posts, friends' engagement on the post, context; served from a feature store with stream-updated counters.",
+        "adequate": "Lists reasonable features but not freshness or how they're computed.",
+        "weak": "Only post popularity."
+      },
+      "misconceptions": [
+        {
+          "id": "feat.popularity",
+          "pattern": "Thinks global popularity is the strongest signal.",
+          "challenge": "A viral post from a stranger versus a close friend's update: which does the person care about?"
+        }
+      ],
+      "probes": [
+        "How would you compute how close two people are?",
+        "How quickly must engagement counts update?"
+      ],
+      "hints": [
+        "Relationships matter in a social feed.",
+        "Early reactions predict later ones."
+      ],
+      "moveOnSummary": "Affinity, post type and age, stream-updated engagement velocity, viewer history and friends' engagement served from a feature store.",
+      "learnTopics": [
+        "feature-engineering",
+        "feature-store"
+      ]
+    },
+    {
+      "id": "deep.integrity",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "fraud-check"
+        ],
+        "keywords": [
+          "integrity model",
+          "demotion",
+          "misinformation",
+          "clickbait classifier",
+          "spam filter",
+          "policy"
+        ]
+      },
+      "goal": "Keep harmful and low-quality posts down without retraining the ranker for every policy change.",
+      "opener": "How do spam, clickbait and misinformation stay out of the top of the feed?",
+      "evidence": {
+        "strong": "Separate integrity classifiers per issue, applied as hard filters for violations and multiplicative demotions for borderline content, so policy changes don't require retraining the engagement model; outrage-bait counteracted with quality signals and surveys.",
+        "adequate": "Adds a filter for bad content but folds everything into the ranker.",
+        "weak": "Assumes engagement ranking will handle it."
+      },
+      "misconceptions": [
+        {
+          "id": "int.ranker_learns",
+          "pattern": "Believes the engagement model will learn to avoid harmful posts.",
+          "challenge": "If misleading posts get more comments, what does an engagement model learn?"
+        }
+      ],
+      "probes": [
+        "Why keep integrity models separate from the ranker?",
+        "What's the difference between removing and demoting?"
+      ],
+      "hints": [
+        "Policy changes faster than ranking models retrain.",
+        "Not everything borderline needs removal."
+      ],
+      "moveOnSummary": "Separate per-issue integrity classifiers applied as filters or demotions, independent of the engagement ranker.",
+      "learnTopics": [
+        "design-harmful-content-detection",
+        "llm-guardrails"
+      ]
+    },
+    {
+      "id": "deep.freshness",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "distributed-cache"
+        ],
+        "keywords": [
+          "freshness",
+          "seen posts",
+          "re-rank on scroll",
+          "pre-rank",
+          "diversity rules",
+          "ranking cache"
+        ]
+      },
+      "goal": "Keep the feed fresh and varied across repeated visits.",
+      "opener": "Someone opens the feed, closes it, and opens it again ten minutes later. What do they see?",
+      "evidence": {
+        "strong": "Tracks seen posts and demotes them unless there's new activity, caches the ranked list briefly for navigation, re-ranks on new sessions with fresh signals, pre-ranks when a session is likely, and applies author and type diversity rules.",
+        "adequate": "Removes seen posts but no caching or diversity plan.",
+        "weak": "Shows the same ranking again."
+      },
+      "misconceptions": [
+        {
+          "id": "fresh.recompute",
+          "pattern": "Recomputes the full ranking on every scroll event.",
+          "challenge": "What does that cost, and do people notice the difference between scrolls?"
+        }
+      ],
+      "probes": [
+        "How do you avoid ten posts from one page in a row?",
+        "When would you rank ahead of time?"
+      ],
+      "hints": [
+        "Remember what was shown.",
+        "Rules in a final pass control repetition."
+      ],
+      "moveOnSummary": "Seen-post tracking, brief caching, fresh re-ranking per session, opportunistic pre-ranking and diversity rules.",
+      "learnTopics": [
+        "recommendation-system-design",
+        "caching"
+      ]
+    },
+    {
+      "id": "deep.experiments",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "evaluation"
+        ],
+        "keywords": [
+          "a/b test",
+          "long-term holdout",
+          "surveys",
+          "guardrail metric",
+          "novelty effect",
+          "weights tuning"
+        ]
+      },
+      "goal": "Prove changes help in the long run.",
+      "opener": "How would you know a new ranking change is good for people over months, not days?",
+      "evidence": {
+        "strong": "A/B tests on meaningful interactions and return visits with guardrails (hide and report rates, integrity prevalence, survey satisfaction), long-running holdouts to catch long-term harm, and care with novelty effects.",
+        "adequate": "An A/B test on engagement with no long-term view.",
+        "weak": "Ships on offline metrics."
+      },
+      "misconceptions": [
+        {
+          "id": "exp.short",
+          "pattern": "Trusts a one-week engagement lift.",
+          "challenge": "A change lifts comments for a week and then retention falls slowly. How would you have seen it?"
+        }
+      ],
+      "probes": [
+        "Which metric would stop a launch even if engagement rose?",
+        "Why keep a group on the old system for months?"
+      ],
+      "hints": [
+        "Short-term and long-term effects can disagree.",
+        "Survey answers measure satisfaction directly."
+      ],
+      "moveOnSummary": "A/B tests with integrity and satisfaction guardrails plus long-running holdouts to catch slow harm.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.serving",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "load-balancer"
+        ],
+        "keywords": [
+          "gpu inference",
+          "batching",
+          "latency budget",
+          "light ranker distillation",
+          "peak traffic",
+          "fallback ranking"
+        ]
+      },
+      "goal": "Meet the latency budget at peak load and degrade gracefully.",
+      "opener": "How does ranking stay within the time budget at peak traffic?",
+      "evidence": {
+        "strong": "Estimates predictions per second, batches the heavy ranker on GPUs, distils a light ranker, budgets each stage, and falls back to the light ranker's order or a cached ranking when the heavy model is slow.",
+        "adequate": "Mentions caching or scaling but no estimates or fallback.",
+        "weak": "Assumes it will be fast enough."
+      },
+      "misconceptions": [
+        {
+          "id": "serve.scale_out",
+          "pattern": "Believes adding servers alone fixes latency.",
+          "challenge": "If one request's model call is slow, do more servers make that request faster?"
+        }
+      ],
+      "probes": [
+        "Roughly how many scores per second at peak?",
+        "What does the user see when the heavy model times out?"
+      ],
+      "hints": [
+        "Estimate before choosing hardware.",
+        "Have a cheaper answer ready."
+      ],
+      "moveOnSummary": "Per-second prediction estimates, GPU batching, a distilled light ranker, per-stage budgets and a fallback ranking.",
+      "learnTopics": [
+        "model-serving",
+        "model-compression"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "friends vs recommended",
+          "engagement vs wellbeing",
+          "next steps",
+          "risks"
+        ]
+      },
+      "goal": "Summarise the main trade-offs and risks.",
+      "opener": "What trade-offs did you make, and what worries you most about this design?",
+      "evidence": {
+        "strong": "Discusses engagement versus wellbeing, friends versus recommended content, freshness versus cost, weight tuning, and monitoring of integrity and satisfaction.",
+        "adequate": "Mentions a couple of trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "How do you balance friends' posts with recommendations?",
+        "What metric would you never let drop?"
+      ],
+      "hints": [
+        "Think about what the company could lose by optimising the wrong thing.",
+        "Blending policies are product decisions too."
+      ],
+      "moveOnSummary": "Engagement versus wellbeing, friends versus recommendations, and freshness versus cost, watched through integrity and satisfaction metrics.",
+      "learnTopics": [
+        "ml-feedback-loops",
+        "design-news-feed-ranking"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.outrage",
+      "after": "deep.features",
+      "prompt": "Your new model lifted comments by a lot, but a review finds the extra comments are mostly angry arguments under misleading posts. What do you change?",
+      "agendaItemId": "deep.experiments"
+    },
+    {
+      "id": "cb.repeat",
+      "after": "deep.integrity",
+      "prompt": "People who open the app several times an hour complain they keep seeing the same posts. Where does your design fall short?",
+      "agendaItemId": "deep.freshness"
+    }
+  ],
+  "vocabulary": [
+    "value model",
+    "multi-task",
+    "affinity",
+    "engagement velocity",
+    "dwell time",
+    "integrity",
+    "demotion",
+    "clickbait",
+    "misinformation",
+    "calibration",
+    "holdout",
+    "novelty effect",
+    "light ranker",
+    "heavy ranker",
+    "feature store",
+    "meaningful interactions",
+    "survey",
+    "diversity",
+    "re-ranking",
+    "DLRM"
+  ],
+  "alternatives": [
+    {
+      "choice": "Separate models per action instead of one multi-task model",
+      "whenBetter": "When teams own different objectives or tasks conflict strongly; simpler to debug, more to serve."
+    },
+    {
+      "choice": "Gradient-boosted trees as the heavy ranker",
+      "whenBetter": "With mostly dense engineered features and a smaller team; less suited to sparse ids and embeddings."
+    },
+    {
+      "choice": "Chronological feed with light ML re-ranking",
+      "whenBetter": "For products where recency and user control matter more than engagement, such as messaging-like feeds."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Value model with integrity",
+      "outline": "Clarifies scale, about 1,500 candidates per load, the latency budget and the meaningful-interactions goal. Defines a value function over calibrated predictions of positive and negative actions with experiment-tuned weights. Builds inventory and recommended candidates, separate integrity filters and demotions, a light and a multi-task heavy ranker with affinity and engagement-velocity features from a feature store, and a final diversity and freshness pass, ranking ahead of scrolling. Sizes GPU inference with fallbacks, and launches through A/B tests with satisfaction and integrity guardrails and long-term holdouts."
+    },
+    {
+      "band": "adequate",
+      "label": "Engagement ranker",
+      "outline": "Builds a two-stage ranker predicting likes and comments with sensible features and an A/B test, but treats integrity as part of the same model, sums uncalibrated predictions and measures only short-term engagement."
+    },
+    {
+      "band": "weak",
+      "label": "Popularity sort",
+      "outline": "Sorts posts by total likes and recency with a single model refreshed nightly; no value model, integrity, freshness or evaluation plan."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

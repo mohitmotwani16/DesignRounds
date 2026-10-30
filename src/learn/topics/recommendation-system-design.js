@@ -69,7 +69,7 @@ export default {
     "Name the ranking objectives and why pure click optimisation is risky.",
     "Address position bias and feedback loops in the training data.",
   ],
-  related: ["vector-databases", "feature-store", "ml-evaluation-metrics", "ab-testing-experimentation", "model-serving"],
+  related: ["vector-databases", "feature-store", "ml-evaluation-metrics", "ab-testing-experimentation", "model-serving", "learning-to-rank", "cold-start-problem", "design-video-recommendation-system", "ml-feedback-loops"],
   practice: ["recommendation-engine", "news-feed"],
   reading: [
     { title: "Deep Neural Networks for YouTube Recommendations", publisher: "Covington et al., RecSys 2016", url: "https://research.google/pubs/deep-neural-networks-for-youtube-recommendations/" },
