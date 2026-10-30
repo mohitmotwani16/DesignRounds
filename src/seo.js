@@ -42,11 +42,20 @@ export const TRACK_SEO = {
   },
   "machine-learning": {
     h1: "ML system design interview questions",
-    title: "ML System Design Interview Questions (Machine Learning & AI)",
-    description: "Practice ML system design interviews: recommendation systems, feature stores, model training and serving, fraud scoring and RAG systems, with an AI review.",
+    title: "ML System Design Interview Questions (Machine Learning)",
+    description: "Practice ML system design: recommendations, ad click prediction, feed and search ranking, fraud, content moderation, ETA and ML platforms, with an AI review.",
     intro: [
-      "ML system design interviews go beyond the model. These rounds ask you to design recommendation systems, feature stores, distributed training platforms, low-latency model serving, real-time fraud scoring and retrieval-augmented generation.",
-      "Practice the parts interviewers probe: training and serving skew, feature freshness, offline and online evaluation, latency budgets, and how the system degrades when a model or data source fails.",
+      "ML system design interviews go beyond the model. These rounds ask you to design YouTube-style recommendations, ad click prediction, news feed and search ranking, People You May Know, visual search, harmful content detection, fraud scoring, ETA prediction, dynamic pricing and notification ranking, plus the feature stores, training platforms, model serving and monitoring behind them.",
+      "Practice the parts interviewers probe: framing the label, training data and leakage, features and training-serving skew, multi-stage retrieval and ranking, calibration, offline and online evaluation, latency budgets, feedback loops, and how the system degrades when a model or data source fails.",
+    ],
+  },
+  "ai-engineering": {
+    h1: "AI engineer system design interview questions",
+    title: "AI Engineer and LLM System Design Interview Questions",
+    description: "Practice LLM system design: ChatGPT, RAG, AI agents, code assistants, voice agents, LLM gateways, inference and evaluation platforms, with an AI review.",
+    intro: [
+      "AI engineering interviews ask you to design products on large language models. These rounds cover ChatGPT, retrieval-augmented generation (RAG) over company documents, a customer support AI agent, an AI code assistant, a real-time voice agent, text-to-image generation, document ingestion for RAG, an AI answer engine, an LLM gateway, an LLM inference platform and an LLM evaluation platform.",
+      "Practice what interviewers probe: estimating in tokens, context and retrieval design, tool contracts and approvals for agents, evaluation with golden datasets and calibrated judges, guardrails and prompt injection, streaming and GPU capacity, and cost per task.",
     ],
   },
   "platform-infrastructure": {

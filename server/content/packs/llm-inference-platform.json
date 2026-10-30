@@ -1,0 +1,577 @@
+{
+  "opening": "We've decided to self-host open-weight LLMs instead of paying per token. Design the inference platform that serves them.",
+  "clarifications": [
+    {
+      "id": "req.models",
+      "topics": [
+        "models",
+        "sizes",
+        "which models",
+        "parameters"
+      ],
+      "answer": "Three model sizes, roughly 8, 70 and 400 billion parameters, plus fine-tuned variants of the smaller ones."
+    },
+    {
+      "id": "req.traffic",
+      "topics": [
+        "traffic",
+        "workloads",
+        "interactive",
+        "batch",
+        "usage"
+      ],
+      "answer": "Interactive chat and agent traffic from our products, plus large batch jobs like summarisation and extraction."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "first token",
+        "time to first token",
+        "streaming speed"
+      ],
+      "answer": "Interactive requests need the first token within about 500 ms and steady streaming; batch jobs only care about throughput."
+    },
+    {
+      "id": "req.contexts",
+      "topics": [
+        "context length",
+        "prompt size",
+        "tokens",
+        "long prompts"
+      ],
+      "answer": "Typical prompts are a few thousand tokens; some agent requests use tens of thousands."
+    },
+    {
+      "id": "req.finetunes",
+      "topics": [
+        "fine-tunes",
+        "adapters",
+        "variants",
+        "lora",
+        "custom models"
+      ],
+      "answer": "Teams want to deploy their own fine-tuned variants, around 30 today and growing."
+    },
+    {
+      "id": "req.growth",
+      "topics": [
+        "growth",
+        "scale",
+        "capacity",
+        "cost",
+        "budget"
+      ],
+      "answer": "Traffic is expected to double within a year, and GPU spend must stay predictable."
+    },
+    {
+      "id": "req.hardware",
+      "topics": [
+        "hardware",
+        "gpus",
+        "memory",
+        "fleet"
+      ],
+      "answer": "We have a fleet of modern 80 GB GPUs in two regions."
+    }
+  ],
+  "clarificationPolicy": "Answer as the ML infrastructure lead. Keep it a GPU-memory and token-throughput problem with mixed interactive and batch traffic; decide unlisted details so batching, KV cache, traffic separation and adapters stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "service",
+          "gpu"
+        ],
+        "keywords": [
+          "model sizes",
+          "interactive",
+          "batch",
+          "first token",
+          "context length",
+          "fine-tunes"
+        ]
+      },
+      "goal": "Establish models, workloads, latency targets, context lengths, variants and growth.",
+      "opener": "What do you need to know before designing this platform?",
+      "evidence": {
+        "strong": "Asks about model sizes, interactive versus batch traffic, latency targets, context lengths, fine-tuned variants, growth, budget and hardware; recognises GPU memory and tokens as the key units.",
+        "adequate": "Gets models and traffic but not context lengths or variants.",
+        "weak": "Treats it like serving a web API."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.rps",
+          "pattern": "Plans capacity in requests per second.",
+          "challenge": "A request with a long prompt and a long answer versus a short one: do they use the same GPU time and memory?"
+        }
+      ],
+      "probes": [
+        "How long are prompts and outputs?",
+        "How many fine-tuned variants must run?"
+      ],
+      "hints": [
+        "Memory and tokens decide capacity.",
+        "Different workloads want different things."
+      ],
+      "moveOnSummary": "Several model sizes plus many fine-tunes, interactive and batch traffic with different targets, long contexts, doubling growth and a fixed GPU fleet.",
+      "learnTopics": [
+        "llm-inference-serving",
+        "how-llms-work"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "queue",
+          "load-balancer"
+        ],
+        "keywords": [
+          "router",
+          "admission control",
+          "inference servers",
+          "interactive queue",
+          "batch queue",
+          "serving engine"
+        ]
+      },
+      "goal": "Lay out the serving architecture.",
+      "opener": "Walk me through how a request reaches a GPU and how tokens come back.",
+      "evidence": {
+        "strong": "A router with admission control, separate queues for interactive and batch, inference servers running an engine with continuous batching and a paged KV cache, model weights pinned per replica (tensor parallel for the large model), streaming responses, a registry and rollout controller, and an autoscaler.",
+        "adequate": "A load balancer in front of model servers.",
+        "weak": "One server per model."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.lb",
+          "pattern": "Uses a plain round-robin load balancer.",
+          "challenge": "One replica's KV cache is full and another is idle. Does round-robin know?"
+        }
+      ],
+      "probes": [
+        "How does the router pick a replica?",
+        "Where do batch jobs go?"
+      ],
+      "hints": [
+        "Route on load signals, not turns.",
+        "Keep interactive and batch apart."
+      ],
+      "moveOnSummary": "A load-aware router with admission control, interactive and batch queues, continuous-batching servers with paged KV cache, a rollout controller and autoscaling.",
+      "learnTopics": [
+        "llm-inference-serving",
+        "load-balancing"
+      ]
+    },
+    {
+      "id": "hl.capacity",
+      "stage": "high_level",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "cluster"
+        ],
+        "keywords": [
+          "gpu memory",
+          "model weights",
+          "kv cache size",
+          "tensor parallelism",
+          "tokens per second",
+          "quantization"
+        ]
+      },
+      "goal": "Plan GPU memory and throughput.",
+      "opener": "How do you work out how many GPUs each model needs?",
+      "evidence": {
+        "strong": "Weights memory from parameters times bytes (for example the large model needs several GPUs with tensor parallelism; quantization shrinks it), KV cache memory per token and sequence bounding concurrency, prefill and decode throughput per replica, then replicas from peak tokens per second plus headroom.",
+        "adequate": "Rough GPU counts without memory reasoning.",
+        "weak": "No capacity plan."
+      },
+      "misconceptions": [
+        {
+          "id": "cap.weights",
+          "pattern": "Thinks fitting the weights is all that matters.",
+          "challenge": "The weights fit, but each long conversation needs gigabytes of cache. How many fit at once?"
+        }
+      ],
+      "probes": [
+        "Does the largest model fit on one GPU?",
+        "What limits how many sequences run at once?"
+      ],
+      "hints": [
+        "Parameters times bytes per parameter.",
+        "The KV cache grows with context length."
+      ],
+      "moveOnSummary": "Weights memory decides parallelism and quantization, KV cache memory bounds concurrency, and throughput per replica sets replica counts.",
+      "learnTopics": [
+        "model-compression",
+        "capacity-planning"
+      ]
+    },
+    {
+      "id": "deep.batching",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "scheduler"
+        ],
+        "keywords": [
+          "continuous batching",
+          "paged attention",
+          "kv cache",
+          "prefill decode",
+          "batch size",
+          "chunked prefill"
+        ]
+      },
+      "goal": "Maximise throughput while protecting latency.",
+      "opener": "How do you keep GPUs busy without making interactive users wait?",
+      "evidence": {
+        "strong": "Continuous batching that adds and removes sequences each step, a paged KV cache to avoid fragmentation, chunked prefill so long prompts don't stall decoding, batch size and admission limits tuned for time to first token, and prefix caching for shared system prompts.",
+        "adequate": "Dynamic batching with a wait window.",
+        "weak": "One request at a time or static batches."
+      },
+      "misconceptions": [
+        {
+          "id": "bat.static",
+          "pattern": "Waits to fill a fixed batch before running.",
+          "challenge": "A batch of sequences finishes at different lengths. What do the GPU slots of finished sequences do?"
+        }
+      ],
+      "probes": [
+        "What does a long prompt do to everyone else's decoding?",
+        "How do you trade throughput for latency?"
+      ],
+      "hints": [
+        "Join and leave the batch every step.",
+        "Split big prefills."
+      ],
+      "moveOnSummary": "Continuous batching, paged KV cache, chunked prefill, tuned admission and batch limits, and prefix caching.",
+      "learnTopics": [
+        "llm-inference-serving",
+        "llm-caching"
+      ]
+    },
+    {
+      "id": "deep.isolation",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "rate-limiter"
+        ],
+        "keywords": [
+          "interactive vs batch",
+          "priority",
+          "preemption",
+          "spare capacity",
+          "admission control",
+          "slo"
+        ]
+      },
+      "goal": "Keep batch work from hurting interactive latency.",
+      "opener": "A large batch job starts and interactive latency spikes. What do you change?",
+      "evidence": {
+        "strong": "Separate pools or priority classes, batch jobs filling idle capacity and preempted or throttled first, admission control based on queue and KV cache pressure, per-team quotas, and latency SLO monitoring per class.",
+        "adequate": "Runs batch at night.",
+        "weak": "No separation."
+      },
+      "misconceptions": [
+        {
+          "id": "iso.night",
+          "pattern": "Relies on running batch jobs at night.",
+          "challenge": "Your users are in many time zones and batch jobs are urgent sometimes. What happens then?"
+        }
+      ],
+      "probes": [
+        "Which work gets preempted?",
+        "How do you know interactive users are suffering?"
+      ],
+      "hints": [
+        "Priorities, not schedules.",
+        "Watch per-class latency."
+      ],
+      "moveOnSummary": "Priority classes or separate pools, preemptible batch on idle capacity, pressure-based admission control, quotas and per-class SLOs.",
+      "learnTopics": [
+        "load-shedding",
+        "multi-tenancy"
+      ]
+    },
+    {
+      "id": "deep.adapters",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "model-registry",
+          "storage"
+        ],
+        "keywords": [
+          "lora adapters",
+          "multi-adapter serving",
+          "base model sharing",
+          "adapter loading",
+          "fine-tuned variants",
+          "hot swap"
+        ]
+      },
+      "goal": "Serve many fine-tuned variants without a copy each.",
+      "opener": "How do you serve thirty fine-tuned variants without thirty copies of the model?",
+      "evidence": {
+        "strong": "Fine-tunes as LoRA adapters on shared base models, an engine that batches requests for different adapters together, adapters loaded on demand from storage with an in-memory cache, routing requests with adapter ids, and a registry tracking adapter versions and their base model.",
+        "adequate": "Merges each fine-tune into a full model.",
+        "weak": "A dedicated GPU per variant."
+      },
+      "misconceptions": [
+        {
+          "id": "ad.copy",
+          "pattern": "Deploys each fine-tune as a separate full model.",
+          "challenge": "Thirty copies of a large model, mostly idle. What does that cost?"
+        }
+      ],
+      "probes": [
+        "What happens when a rarely used adapter gets a request?",
+        "What breaks when the base model is upgraded?"
+      ],
+      "hints": [
+        "Adapters are small.",
+        "Variants depend on their base."
+      ],
+      "moveOnSummary": "LoRA adapters on shared bases, multi-adapter batching, on-demand loading with caching, adapter-aware routing and versioned registry.",
+      "learnTopics": [
+        "llm-fine-tuning",
+        "mlops-model-registry"
+      ]
+    },
+    {
+      "id": "deep.autoscaling",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "t-kubernetes",
+          "monitoring-dashboard"
+        ],
+        "keywords": [
+          "autoscaling",
+          "model load time",
+          "warm pool",
+          "queue depth",
+          "kv utilisation",
+          "leading signals"
+        ]
+      },
+      "goal": "Scale GPUs ahead of demand despite slow startup.",
+      "opener": "Loading a large model takes several minutes. How does that shape autoscaling?",
+      "evidence": {
+        "strong": "Scales on leading signals (queue depth, KV cache utilisation, time to first token) rather than CPU, keeps warm spare replicas, pre-scales for known daily peaks, caches weights on local disks to speed loading, and scales batch capacity down first.",
+        "adequate": "Scales on GPU utilisation.",
+        "weak": "Scales on CPU."
+      },
+      "misconceptions": [
+        {
+          "id": "as.cpu",
+          "pattern": "Uses CPU utilisation as the scaling signal.",
+          "challenge": "GPUs are saturated and CPUs are idle. What does a CPU-based autoscaler do?"
+        }
+      ],
+      "probes": [
+        "Which metric tells you to scale before users notice?",
+        "How do you make new replicas start faster?"
+      ],
+      "hints": [
+        "Watch queues and cache pressure.",
+        "Keep some capacity warm."
+      ],
+      "moveOnSummary": "Leading-signal autoscaling, warm spares, scheduled pre-scaling, local weight caches, and shrinking batch capacity first.",
+      "learnTopics": [
+        "autoscaling",
+        "kubernetes-architecture"
+      ]
+    },
+    {
+      "id": "deep.rollout",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "deployer",
+          "evaluation"
+        ],
+        "keywords": [
+          "canary",
+          "model version",
+          "rollback",
+          "eval gate",
+          "shadow traffic",
+          "quantized model check"
+        ]
+      },
+      "goal": "Release new models and engine versions safely.",
+      "opener": "How do you roll out a new model version or a quantized variant?",
+      "evidence": {
+        "strong": "Offline eval suite and latency benchmarks on target hardware, shadow traffic, canary percentages with automatic rollback on quality, error or latency thresholds, pinned versions, and keeping the old version warm during rollout.",
+        "adequate": "Blue-green deploys without evals.",
+        "weak": "Replaces models in place."
+      },
+      "misconceptions": [
+        {
+          "id": "ro.same",
+          "pattern": "Assumes a quantized model behaves the same.",
+          "challenge": "The quantized model is faster but subtly worse at code. Where would that show?"
+        }
+      ],
+      "probes": [
+        "What would trigger an automatic rollback?",
+        "How do you test quality before serving users?"
+      ],
+      "hints": [
+        "Benchmarks and evals before traffic.",
+        "Small slices first."
+      ],
+      "moveOnSummary": "Evals and hardware benchmarks, shadow and canary rollouts with automatic rollback, pinned versions and a warm old version.",
+      "learnTopics": [
+        "deployment-strategies",
+        "llm-evaluation"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "throughput vs latency",
+          "cost per token",
+          "quantization",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs and cost tracking.",
+      "opener": "What trade-offs did you make, and how do you keep GPU spend predictable?",
+      "evidence": {
+        "strong": "Throughput versus latency in batching, quantization versus quality, headroom versus utilisation, self-hosting versus API cost; tracks cost per million tokens, utilisation and quotas per team.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What utilisation would you aim for?",
+        "When would an API be cheaper?"
+      ],
+      "hints": [
+        "Idle GPUs are the hidden cost.",
+        "Every optimisation has a quality risk."
+      ],
+      "moveOnSummary": "Throughput versus latency, quantization versus quality, headroom versus utilisation, and cost per token tracking.",
+      "learnTopics": [
+        "llm-cost-optimization",
+        "capacity-planning"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.finetunes",
+      "after": "deep.batching",
+      "prompt": "Twenty more teams want their own fine-tuned variants next quarter. Your GPUs are already busy. What's your plan?",
+      "agendaItemId": "deep.adapters"
+    },
+    {
+      "id": "cb.morning",
+      "after": "deep.isolation",
+      "prompt": "Every weekday morning, time to first token triples for about fifteen minutes before things settle. What's going on?",
+      "agendaItemId": "deep.autoscaling"
+    }
+  ],
+  "vocabulary": [
+    "inference",
+    "prefill",
+    "decode",
+    "KV cache",
+    "PagedAttention",
+    "continuous batching",
+    "chunked prefill",
+    "time to first token",
+    "tokens per second",
+    "tensor parallelism",
+    "quantization",
+    "FP8",
+    "INT4",
+    "LoRA",
+    "adapter",
+    "vLLM",
+    "TensorRT-LLM",
+    "speculative decoding",
+    "admission control",
+    "autoscaling"
+  ],
+  "alternatives": [
+    {
+      "choice": "Keep using hosted APIs for the largest model",
+      "whenBetter": "When its traffic is low or spiky and GPU utilisation for it would be poor."
+    },
+    {
+      "choice": "Disaggregated prefill and decode on separate GPU pools",
+      "whenBetter": "At large scale with long prompts, to tune each phase's hardware and batching separately."
+    },
+    {
+      "choice": "Merge fine-tunes into full models",
+      "whenBetter": "For a few very high-traffic variants where adapter overhead matters."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Memory-aware, traffic-separated serving",
+      "outline": "Clarifies models, workloads, latency targets, context lengths, variants, growth and hardware. Plans GPU memory for weights (quantization and tensor parallelism for the largest) and KV cache to bound concurrency, and sizes replicas from token throughput. A load-aware router with admission control separates interactive and preemptible batch traffic; servers use continuous batching, paged KV cache, chunked prefill and prefix caching; fine-tunes run as LoRA adapters on shared bases. Autoscaling uses queue and cache pressure with warm spares; rollouts use evals, benchmarks and canaries; cost per million tokens and utilisation are tracked."
+    },
+    {
+      "band": "adequate",
+      "label": "Model servers behind a balancer",
+      "outline": "Runs each model on a serving engine with batching behind a load balancer and autoscales on GPU utilisation; batch jobs run at night, fine-tunes are separate deployments, and there's no memory planning."
+    },
+    {
+      "band": "weak",
+      "label": "One model per box",
+      "outline": "Puts each model on its own GPU server with request-at-a-time inference; no batching, capacity math or traffic separation."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

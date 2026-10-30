@@ -66,6 +66,6 @@ print(search("distributed systems", index, lambda d, t: popularity.get(d, 0), k=
     "Give numbers: 10M → 50K → top 10, with the latency of each stage.",
     "Tune the filter for recall, pass IDs between stages, and scale the stages separately.",
   ],
-  related: ["search-and-inverted-index", "recommendation-system-design", "vector-databases", "precomputation-pattern", "probabilistic-data-structures"],
+  related: ["search-and-inverted-index", "recommendation-system-design", "vector-databases", "precomputation-pattern", "probabilistic-data-structures", "learning-to-rank", "design-search-ranking"],
   practice: ["autocomplete", "recommendation-engine", "rag-search"],
 };

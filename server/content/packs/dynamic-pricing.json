@@ -1,0 +1,578 @@
+{
+  "opening": "When lots of people want rides at once, riders wait a long time and drivers are somewhere else. Design a dynamic pricing system for our ride-hailing app.",
+  "clarifications": [
+    {
+      "id": "scale.cities",
+      "topics": [
+        "cities",
+        "scale",
+        "markets",
+        "how big"
+      ],
+      "answer": "We operate in about 400 cities, from huge metros to small towns."
+    },
+    {
+      "id": "req.granularity",
+      "topics": [
+        "granularity",
+        "area",
+        "how often",
+        "per minute",
+        "zones"
+      ],
+      "answer": "Prices should be set per small area, roughly a few hundred metres across, and recomputed every minute."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "objective",
+        "success",
+        "metric",
+        "why surge"
+      ],
+      "answer": "The goal is reliability: riders get a car within a few minutes and drivers stay busy, while keeping long-term rider trust."
+    },
+    {
+      "id": "req.limits",
+      "topics": [
+        "cap",
+        "regulation",
+        "fairness",
+        "limits",
+        "maximum price"
+      ],
+      "answer": "Some cities cap multipliers by law, and during emergencies prices must not spike."
+    },
+    {
+      "id": "data.signals",
+      "topics": [
+        "data",
+        "signals",
+        "app opens",
+        "requests",
+        "driver locations"
+      ],
+      "answer": "We see app opens, price checks, ride requests, cancellations, driver locations every few seconds and trip states."
+    },
+    {
+      "id": "req.quote",
+      "topics": [
+        "quote",
+        "price shown",
+        "upfront price",
+        "price changes"
+      ],
+      "answer": "Riders see an upfront price before requesting; the price they accept must be honoured."
+    },
+    {
+      "id": "req.testing",
+      "topics": [
+        "testing",
+        "experiments",
+        "a/b",
+        "evaluate a change"
+      ],
+      "answer": "The pricing team wants to test policy changes before rolling them out, but riders and drivers share the same market."
+    }
+  ],
+  "clarificationPolicy": "Answer as the marketplace pricing lead. Keep it a real-time, per-area pricing problem with supply response, caps and experiment interference; decide unlisted details so forecasting, elasticity and safeguards stay in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "cities",
+          "area",
+          "every minute",
+          "goal",
+          "caps",
+          "upfront price"
+        ]
+      },
+      "goal": "Establish granularity, the objective, constraints and how prices reach riders.",
+      "opener": "What do you want to understand about the market and what pricing is supposed to achieve?",
+      "evidence": {
+        "strong": "Asks about cities, area size and update frequency, the objective (reliability versus revenue), legal caps and emergencies, available signals, upfront quotes, and how changes are tested.",
+        "adequate": "Gets granularity but treats revenue as the only goal or skips caps.",
+        "weak": "No requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.revenue",
+          "pattern": "Assumes pricing exists to maximise revenue.",
+          "challenge": "If prices double whenever possible, what happens to riders' trust and to regulators?"
+        }
+      ],
+      "probes": [
+        "What does success look like for riders and for drivers?",
+        "What limits apply to prices?"
+      ],
+      "hints": [
+        "Ask why surge exists in the first place.",
+        "Some constraints are legal."
+      ],
+      "moveOnSummary": "Per-area prices updated every minute across hundreds of cities, aimed at reliability and trust, within caps, quoted upfront, and tested before rollout.",
+      "learnTopics": [
+        "ml-problem-framing",
+        "ml-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "stream-processor",
+          "location-service",
+          "t-kafka"
+        ],
+        "keywords": [
+          "demand and supply",
+          "per area",
+          "streaming",
+          "geospatial",
+          "pricing service",
+          "quote"
+        ]
+      },
+      "goal": "Lay out the real-time pipeline from signals to quoted prices.",
+      "opener": "Walk me through how a price for one area gets computed and shown to a rider.",
+      "evidence": {
+        "strong": "Event streams of app opens, requests and driver locations aggregated per area and minute by stream jobs with a geospatial index, forecasts and a policy service computing multipliers with caps and smoothing, stored in a fast store, read by a quote service that locks the price for the rider.",
+        "adequate": "A pricing service reading recent counts but no geospatial aggregation or quote locking.",
+        "weak": "A static time-of-day price table."
+      },
+      "misconceptions": [
+        {
+          "id": "pipe.static",
+          "pattern": "Uses fixed peak-hour prices.",
+          "challenge": "A concert ends at an unusual time. Does a time-of-day table help?"
+        }
+      ],
+      "probes": [
+        "How do you map drivers and riders to areas?",
+        "What does the rider's quoted price depend on?"
+      ],
+      "hints": [
+        "Aggregate live events by area.",
+        "A quote is a promise to the rider."
+      ],
+      "moveOnSummary": "Streams aggregated per area and minute via a geospatial index feed forecasts and a capped, smoothed pricing policy; a quote service locks prices.",
+      "learnTopics": [
+        "stream-processing",
+        "geospatial-indexing"
+      ]
+    },
+    {
+      "id": "hl.forecast",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "training",
+          "model-serving"
+        ],
+        "keywords": [
+          "demand forecast",
+          "supply forecast",
+          "time series",
+          "short horizon",
+          "neighbouring areas",
+          "features"
+        ]
+      },
+      "goal": "Forecast near-term demand and supply per area.",
+      "opener": "What would you predict to decide prices, and how?",
+      "evidence": {
+        "strong": "Short-horizon forecasts (minutes ahead) of requests and available drivers per area using recent counts, time, weather, events, and neighbouring areas, trained on history with time-based splits.",
+        "adequate": "Forecasts demand only.",
+        "weak": "No forecasting; reacts only to current counts."
+      },
+      "misconceptions": [
+        {
+          "id": "fc.demand_only",
+          "pattern": "Forecasts demand but ignores supply.",
+          "challenge": "Demand is normal but half the drivers just went offline. Is there a shortage?"
+        }
+      ],
+      "probes": [
+        "How far ahead do you need to look?",
+        "How do neighbouring areas help a sparse area's forecast?"
+      ],
+      "hints": [
+        "Shortage is demand relative to supply.",
+        "Small areas are noisy on their own."
+      ],
+      "moveOnSummary": "Minutes-ahead forecasts of demand and supply per area using recent counts, context and neighbouring areas.",
+      "learnTopics": [
+        "feature-engineering",
+        "ml-training-data"
+      ]
+    },
+    {
+      "id": "deep.elasticity",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "evaluation"
+        ],
+        "keywords": [
+          "elasticity",
+          "price response",
+          "intervention",
+          "causal",
+          "randomised prices",
+          "counterfactual"
+        ]
+      },
+      "goal": "Treat price as an intervention whose effect must be estimated.",
+      "opener": "Forecasts tell you there will be a shortage. How do you decide how high the price should go?",
+      "evidence": {
+        "strong": "Estimates how demand falls and supply rises with price (elasticity) using randomised or quasi-experimental price variation, not just correlations, and picks the multiplier that closes the gap under caps; notes that observational data is biased because surge happens when demand is high anyway.",
+        "adequate": "Sets price from the forecasted gap with a hand-tuned formula.",
+        "weak": "Price equals predicted demand."
+      },
+      "misconceptions": [
+        {
+          "id": "el.correlation",
+          "pattern": "Learns price response from historical data directly.",
+          "challenge": "Surge always happens when demand is highest. Does history show high prices causing high demand?"
+        }
+      ],
+      "probes": [
+        "Why is historical data misleading here?",
+        "How would you measure riders' sensitivity to price?"
+      ],
+      "hints": [
+        "Prices and demand move together for a reason.",
+        "Small randomised variations reveal causal effects."
+      ],
+      "moveOnSummary": "Estimate price elasticity of demand and supply from randomised variation and choose the capped multiplier that closes the forecast gap.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "ml-feedback-loops"
+      ]
+    },
+    {
+      "id": "deep.experiments",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "experiment",
+          "dashboard"
+        ],
+        "keywords": [
+          "switchback",
+          "interference",
+          "marketplace experiment",
+          "geo test",
+          "time-area randomisation",
+          "spillover"
+        ]
+      },
+      "goal": "Test pricing changes despite a shared market.",
+      "opener": "How would you test a new pricing policy fairly?",
+      "evidence": {
+        "strong": "Explains that rider-level A/B tests leak through shared drivers, uses switchback experiments randomising by area and time window (or geo tests), measures wait times, completion, cancellations, driver earnings and rider retention, and accounts for carry-over between windows.",
+        "adequate": "A standard A/B test by rider.",
+        "weak": "No testing plan."
+      },
+      "misconceptions": [
+        {
+          "id": "exp.userab",
+          "pattern": "Splits riders into treatment and control.",
+          "challenge": "Treatment riders get cheaper rides and take more drivers. What happens to control riders' wait times?"
+        }
+      ],
+      "probes": [
+        "Why can't you split riders randomly?",
+        "What would you measure besides revenue?"
+      ],
+      "hints": [
+        "Riders compete for the same drivers.",
+        "Randomise something larger than a person."
+      ],
+      "moveOnSummary": "Switchback or geo experiments by area and time window, measuring waits, completion, cancellations, earnings and retention.",
+      "learnTopics": [
+        "ab-testing-experimentation",
+        "multi-armed-bandits"
+      ]
+    },
+    {
+      "id": "deep.smoothing",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "kv-store"
+        ],
+        "keywords": [
+          "smoothing",
+          "boundaries",
+          "flickering prices",
+          "spatial smoothing",
+          "hysteresis",
+          "price stability"
+        ]
+      },
+      "goal": "Keep prices stable across time and neighbouring areas.",
+      "opener": "Prices recompute every minute per small area. What problems could riders and drivers notice?",
+      "evidence": {
+        "strong": "Identifies flickering prices and sharp differences at area boundaries (riders walking across, drivers chasing), applies temporal smoothing with hysteresis, spatial smoothing across neighbours, rate limits on changes, and quote locking.",
+        "adequate": "Mentions smoothing without boundaries.",
+        "weak": "Doesn't see a problem."
+      },
+      "misconceptions": [
+        {
+          "id": "sm.precise",
+          "pattern": "Believes the most responsive price is always best.",
+          "challenge": "The price jumps up and down every minute. How do riders feel opening the app twice?"
+        }
+      ],
+      "probes": [
+        "What happens at the edge between a cheap and an expensive area?",
+        "How do you stop prices jumping each minute?"
+      ],
+      "hints": [
+        "Neighbouring areas should look similar.",
+        "Change slowly unless something big happens."
+      ],
+      "moveOnSummary": "Temporal smoothing with hysteresis, spatial smoothing across neighbours, rate limits on changes, and locked quotes.",
+      "learnTopics": [
+        "geospatial-indexing",
+        "stream-processing-windows-watermarks"
+      ]
+    },
+    {
+      "id": "deep.safeguards",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "alerting"
+        ],
+        "keywords": [
+          "caps",
+          "emergency override",
+          "fairness",
+          "regulation",
+          "kill switch",
+          "anomaly"
+        ]
+      },
+      "goal": "Prevent harmful or unlawful prices.",
+      "opener": "What stops the system from setting a price you'd regret?",
+      "evidence": {
+        "strong": "Hard caps per city, emergency overrides that freeze or cap prices during disasters, fairness checks across neighbourhoods, anomaly alerts on extreme multipliers, a manual kill switch and audit logs.",
+        "adequate": "Caps only.",
+        "weak": "No safeguards."
+      },
+      "misconceptions": [
+        {
+          "id": "sg.model",
+          "pattern": "Trusts the model to stay reasonable on its own.",
+          "challenge": "A data bug reports zero drivers in a city. What price does the model choose?"
+        }
+      ],
+      "probes": [
+        "What happens during a natural disaster?",
+        "How would you spot a data bug driving prices?"
+      ],
+      "hints": [
+        "Some limits must be absolute.",
+        "People need a way to override quickly."
+      ],
+      "moveOnSummary": "City caps, emergency overrides, fairness checks, anomaly alerts, a kill switch and audit logs.",
+      "learnTopics": [
+        "llm-guardrails",
+        "fallbacks-graceful-degradation"
+      ]
+    },
+    {
+      "id": "deep.drivers",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "notification-service",
+          "push"
+        ],
+        "keywords": [
+          "driver incentives",
+          "heatmap",
+          "repositioning",
+          "supply response",
+          "driver app",
+          "earnings"
+        ]
+      },
+      "goal": "Use pricing to move supply, not only to cut demand.",
+      "opener": "How do drivers find out where demand is high, and does that change your design?",
+      "evidence": {
+        "strong": "Shows demand heatmaps or area bonuses in the driver app, predicts driver repositioning, avoids sending too many drivers to one area, and measures driver earnings and idle time.",
+        "adequate": "Mentions a heatmap only.",
+        "weak": "Ignores drivers."
+      },
+      "misconceptions": [
+        {
+          "id": "dr.ignore",
+          "pattern": "Thinks pricing only works by reducing rider demand.",
+          "challenge": "If no extra drivers ever come, what does a higher price do except turn riders away?"
+        }
+      ],
+      "probes": [
+        "How do you stop every nearby driver rushing to the same area?",
+        "What would you measure for drivers?"
+      ],
+      "hints": [
+        "Supply responds to visible incentives.",
+        "Overcorrection creates a new shortage elsewhere."
+      ],
+      "moveOnSummary": "Driver-facing heatmaps or bonuses, modelled repositioning, avoiding overcorrection, and driver earnings metrics.",
+      "learnTopics": [
+        "push-notifications",
+        "multi-armed-bandits"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "reliability vs trust",
+          "responsiveness vs stability",
+          "fairness",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs did you make?",
+      "evidence": {
+        "strong": "Responsiveness versus price stability, short-term reliability versus long-term rider trust, granular areas versus noisy data, and experimentation cost versus learning.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where would you accept a less responsive price?",
+        "What would you build next?"
+      ],
+      "hints": [
+        "Every precise price is also a noisier one.",
+        "Riders remember bad surprises."
+      ],
+      "moveOnSummary": "Responsiveness versus stability, reliability versus trust, granularity versus noise, and the cost of experimentation.",
+      "learnTopics": [
+        "ml-feedback-loops",
+        "ab-testing-experimentation"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.boundary",
+      "after": "deep.elasticity",
+      "prompt": "Riders discover that walking one block west cuts their price in half, and drivers keep circling the boundary. What's wrong with your design?",
+      "agendaItemId": "deep.smoothing"
+    },
+    {
+      "id": "cb.disaster",
+      "after": "deep.experiments",
+      "prompt": "A major storm hits a city and your system triples prices in the affected area. The press calls it price gouging. What should have happened?",
+      "agendaItemId": "deep.safeguards"
+    }
+  ],
+  "vocabulary": [
+    "surge pricing",
+    "multiplier",
+    "elasticity",
+    "demand forecast",
+    "supply forecast",
+    "H3",
+    "hexagon",
+    "geospatial index",
+    "switchback experiment",
+    "interference",
+    "spillover",
+    "hysteresis",
+    "smoothing",
+    "upfront price",
+    "quote lock",
+    "cap",
+    "kill switch",
+    "marketplace",
+    "repositioning",
+    "heatmap"
+  ],
+  "alternatives": [
+    {
+      "choice": "Reinforcement learning or optimisation over the whole city's prices jointly",
+      "whenBetter": "For mature teams with strong simulators; captures spillovers between areas but is hard to validate."
+    },
+    {
+      "choice": "Rule-based surge from the current request-to-driver ratio",
+      "whenBetter": "To launch in a new market quickly before enough data and experiments exist."
+    },
+    {
+      "choice": "Driver bonuses instead of rider surge",
+      "whenBetter": "Where regulation limits rider prices or trust is fragile."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Forecast, elasticity, safeguards",
+      "outline": "Clarifies cities, per-area per-minute pricing, the reliability goal, caps, upfront quotes and the need to test in a shared market. Streams requests and driver locations into per-area aggregates, forecasts short-horizon demand and supply using neighbouring areas, and sets capped multipliers from elasticity estimated with randomised price variation. Smooths across time and space, locks quotes, adds caps, emergency overrides, anomaly alerts and a kill switch, shows drivers where demand is, and tests policies with switchback experiments measuring waits, completion, earnings and retention."
+    },
+    {
+      "band": "adequate",
+      "label": "Ratio-based surge",
+      "outline": "Computes the request-to-driver ratio per area each minute and maps it to a multiplier with caps, A/B testing by rider; no forecasting, elasticity estimate, smoothing or interference handling."
+    },
+    {
+      "band": "weak",
+      "label": "Peak-hour table",
+      "outline": "Applies a fixed multiplier during morning and evening peaks in every city; no real-time data, model or safeguards."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

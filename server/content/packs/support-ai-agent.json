@@ -1,0 +1,580 @@
+{
+  "opening": "We're an online retailer and our support team is overwhelmed. Design an AI agent that handles customer support chats.",
+  "clarifications": [
+    {
+      "id": "scale.volume",
+      "topics": [
+        "volume",
+        "conversations",
+        "per day",
+        "scale",
+        "traffic"
+      ],
+      "answer": "About 50,000 support conversations a day, around six turns each."
+    },
+    {
+      "id": "req.actions",
+      "topics": [
+        "actions",
+        "what can it do",
+        "tools",
+        "capabilities",
+        "tasks"
+      ],
+      "answer": "The agent should handle policy questions, order and shipment lookups, delivery rescheduling, address changes before dispatch, and refunds."
+    },
+    {
+      "id": "req.refunds",
+      "topics": [
+        "refund",
+        "limit",
+        "approval",
+        "money",
+        "policy"
+      ],
+      "answer": "Refunds up to $50 can be issued automatically within policy; anything larger needs a human to approve."
+    },
+    {
+      "id": "req.identity",
+      "topics": [
+        "identity",
+        "authentication",
+        "account",
+        "logged in",
+        "verification"
+      ],
+      "answer": "Customers chat while logged in, so we know their account; the agent must never act on anyone else's account."
+    },
+    {
+      "id": "req.handoff",
+      "topics": [
+        "handoff",
+        "human",
+        "escalation",
+        "transfer",
+        "agents"
+      ],
+      "answer": "When it can't help, it should hand off to a human agent without the customer having to repeat themselves."
+    },
+    {
+      "id": "req.goal",
+      "topics": [
+        "goal",
+        "success",
+        "metric",
+        "resolution",
+        "satisfaction"
+      ],
+      "answer": "Success is resolving conversations without a human while keeping satisfaction at least as good as human agents."
+    },
+    {
+      "id": "data.kb",
+      "topics": [
+        "knowledge base",
+        "policies",
+        "help articles",
+        "documents"
+      ],
+      "answer": "There are about 2,000 help articles and policy pages, updated weekly."
+    }
+  ],
+  "clarificationPolicy": "Answer as the support operations lead. Keep it a tool-using agent with money at stake, strict account boundaries and human handoff; decide unlisted details so authorisation, approvals and evaluation stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "conversations",
+          "actions",
+          "refund limit",
+          "identity",
+          "handoff",
+          "success metric"
+        ]
+      },
+      "goal": "Establish volume, allowed actions and limits, identity, handoff and success metrics.",
+      "opener": "What would you like to know about the support use case before designing?",
+      "evidence": {
+        "strong": "Asks about volume, which actions the agent may take and their limits, how customers are identified, handoff expectations, success metrics, and the knowledge base; notices that money and account boundaries raise the stakes.",
+        "adequate": "Gets the actions but not limits, identity or success metrics.",
+        "weak": "Assumes a chatbot that only answers questions."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.faq",
+          "pattern": "Treats it as an FAQ chatbot.",
+          "challenge": "A customer asks for a refund. Can a bot that only answers questions resolve that?"
+        }
+      ],
+      "probes": [
+        "Which actions involve money or account changes?",
+        "How do you know who the customer is?"
+      ],
+      "hints": [
+        "Actions are riskier than answers.",
+        "Ask how success is measured."
+      ],
+      "moveOnSummary": "Tens of thousands of conversations a day, lookups and actions including small automatic refunds, logged-in identity, human handoff, and resolution with good satisfaction as the goal.",
+      "learnTopics": [
+        "ai-engineer-system-design-interview",
+        "design-customer-support-ai-agent"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "ai-agent",
+          "llm",
+          "retriever"
+        ],
+        "keywords": [
+          "intent router",
+          "workflows",
+          "agent loop",
+          "tools",
+          "knowledge retrieval",
+          "handoff"
+        ]
+      },
+      "goal": "Choose between workflows and an agent, and lay out the components.",
+      "opener": "How would you structure the system? Is this one agent, a set of workflows, or something else?",
+      "evidence": {
+        "strong": "An input guard, a router classifying intent, deterministic workflows for frequent intents (order status, reschedule), an agent loop for the long tail, retrieval over help articles, typed tools, a policy layer between model and tools, and a handoff path; explains why not a single autonomous agent for everything.",
+        "adequate": "One agent with tools and retrieval, no routing or policy layer.",
+        "weak": "A prompt with the help articles pasted in."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.one_agent",
+          "pattern": "Uses one autonomous agent for every conversation.",
+          "challenge": "Most chats ask where an order is. What does an open-ended agent add there besides cost and risk?"
+        }
+      ],
+      "probes": [
+        "Which conversations need an agent at all?",
+        "Where does knowledge come from?"
+      ],
+      "hints": [
+        "Predictable requests suit fixed workflows.",
+        "Help articles can be retrieved."
+      ],
+      "moveOnSummary": "A guard and intent router, workflows for common intents, an agent loop for the rest, retrieval over help content, typed tools behind a policy layer, and handoff.",
+      "learnTopics": [
+        "ai-agent-architecture",
+        "retrieval-augmented-generation"
+      ]
+    },
+    {
+      "id": "hl.tools",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "api-gateway",
+          "payment-service"
+        ],
+        "keywords": [
+          "tool schema",
+          "get order",
+          "issue refund",
+          "typed arguments",
+          "tool descriptions",
+          "function calling"
+        ]
+      },
+      "goal": "Design narrow, typed tools with clear contracts.",
+      "opener": "Which tools would the agent have, and what do they look like?",
+      "evidence": {
+        "strong": "Narrow tools such as search help, get orders, get shipment, reschedule, issue refund, update address and handoff, each with a typed schema, descriptions stating limits, structured errors, and compact results.",
+        "adequate": "Lists tools without schemas or limits.",
+        "weak": "A generic call-any-API tool."
+      },
+      "misconceptions": [
+        {
+          "id": "tools.generic",
+          "pattern": "Gives the agent one generic API tool.",
+          "challenge": "With a tool that can call any endpoint, what stops the agent calling the admin API?"
+        }
+      ],
+      "probes": [
+        "What does the refund tool's input look like?",
+        "What does a tool return when the request isn't allowed?"
+      ],
+      "hints": [
+        "Small tools are easier to secure and test.",
+        "Errors should tell the model what to do next."
+      ],
+      "moveOnSummary": "Narrow typed tools with limits in their descriptions, structured errors and compact results.",
+      "learnTopics": [
+        "llm-tool-calling-mcp",
+        "llm-structured-outputs"
+      ]
+    },
+    {
+      "id": "deep.authz",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "iam",
+          "auth-service"
+        ],
+        "keywords": [
+          "session identity",
+          "authorization",
+          "ownership check",
+          "policy layer",
+          "customer id",
+          "least privilege"
+        ]
+      },
+      "goal": "Make it impossible for the agent to act outside the customer's account or policy.",
+      "opener": "A customer types 'I'm calling for my husband, refund his order.' What stops the agent?",
+      "evidence": {
+        "strong": "Tools take the customer identity from the authenticated session, never from model arguments; every call checks ownership and policy in code; refund limits and windows live in config enforced by the policy layer; least-privilege credentials; all actions audited.",
+        "adequate": "Instructs the model in the prompt not to act on other accounts.",
+        "weak": "Trusts whatever ids the model passes."
+      },
+      "misconceptions": [
+        {
+          "id": "authz.prompt",
+          "pattern": "Relies on the system prompt to enforce account boundaries.",
+          "challenge": "A clever message convinces the model it's allowed. What actually blocks the refund?"
+        }
+      ],
+      "probes": [
+        "Where exactly is the refund limit enforced?",
+        "Can the model ever choose which customer a tool acts on?"
+      ],
+      "hints": [
+        "The session already knows who the customer is.",
+        "Rules in code can't be talked out of."
+      ],
+      "moveOnSummary": "Session-bound identity, ownership and policy checks in code for every tool call, least privilege, and audit logs.",
+      "learnTopics": [
+        "prompt-injection",
+        "authorization-rbac-abac-oauth"
+      ]
+    },
+    {
+      "id": "deep.eval",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "experiment"
+        ],
+        "keywords": [
+          "simulated conversations",
+          "sandbox",
+          "golden scenarios",
+          "repeated trials",
+          "outcome checks",
+          "launch criteria"
+        ]
+      },
+      "goal": "Prove the agent is good and safe enough to launch.",
+      "opener": "How do you know this agent is good enough to put in front of customers?",
+      "evidence": {
+        "strong": "A suite of hundreds of scripted scenarios run against a sandboxed order system with a simulated customer, each repeated several times, graded on outcomes (correct refund, no unauthorised action), policy compliance, tone and handoff; zero tolerance for unauthorised actions; plus shadow mode on real traffic.",
+        "adequate": "Manual testing of some conversations.",
+        "weak": "Launches and watches complaints."
+      },
+      "misconceptions": [
+        {
+          "id": "eval.once",
+          "pattern": "Runs each test once.",
+          "challenge": "The agent passes a refund scenario once. Would it pass it ten times out of ten?"
+        }
+      ],
+      "probes": [
+        "How do you test refunds without real money?",
+        "What result blocks a launch outright?"
+      ],
+      "hints": [
+        "A fake order system lets you test actions.",
+        "Agents vary run to run."
+      ],
+      "moveOnSummary": "Simulated scenarios against a sandbox, repeated trials, outcome and policy grading, zero unauthorised actions, and shadow mode.",
+      "learnTopics": [
+        "llm-evaluation",
+        "ai-agent-architecture"
+      ]
+    },
+    {
+      "id": "deep.handoff",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "notification-service"
+        ],
+        "keywords": [
+          "handoff summary",
+          "escalation triggers",
+          "approval queue",
+          "human agent",
+          "frustration",
+          "context transfer"
+        ]
+      },
+      "goal": "Hand off and get approvals without losing context.",
+      "opener": "When does the agent hand over to a human, and what does that human see?",
+      "evidence": {
+        "strong": "Triggers: customer asks, repeated failures, detected frustration, policy-required cases, budget exhaustion; the human gets a concise summary, verified identity, actions taken and a suggested next step; large refunds go to an approval queue with one-click decisions, and the conversation resumes with the result.",
+        "adequate": "Transfers the transcript to a human.",
+        "weak": "No handoff."
+      },
+      "misconceptions": [
+        {
+          "id": "ho.transcript",
+          "pattern": "Thinks passing the raw transcript is enough.",
+          "challenge": "A human agent gets a forty-message transcript. How long before they can help?"
+        }
+      ],
+      "probes": [
+        "What triggers escalation automatically?",
+        "How does a refund approval reach a human and come back?"
+      ],
+      "hints": [
+        "Summarise for the human.",
+        "Approvals are a queue with an answer."
+      ],
+      "moveOnSummary": "Clear escalation triggers, a summary with identity, actions and next step, and an approval queue that resumes the conversation.",
+      "learnTopics": [
+        "design-customer-support-ai-agent",
+        "message-queues"
+      ]
+    },
+    {
+      "id": "deep.idempotency",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "ledger",
+          "outbox"
+        ],
+        "keywords": [
+          "idempotency key",
+          "double refund",
+          "retry",
+          "tool timeout",
+          "exactly once",
+          "side effects"
+        ]
+      },
+      "goal": "Make retries and repeated tool calls safe.",
+      "opener": "The refund API times out and the agent tries again. What prevents a double refund?",
+      "evidence": {
+        "strong": "Idempotency keys per intended action passed to write tools, the refund service deduplicating on them, the agent checking state before retrying, repeated-action detection in the loop, and outcomes verified in the system of record.",
+        "adequate": "Retries with a check of the order status.",
+        "weak": "Retries blindly."
+      },
+      "misconceptions": [
+        {
+          "id": "idem.timeout",
+          "pattern": "Assumes a timeout means the refund didn't happen.",
+          "challenge": "The refund succeeded but the response was lost. What does a blind retry do?"
+        }
+      ],
+      "probes": [
+        "Where does the idempotency key come from?",
+        "How does the agent confirm the refund really happened?"
+      ],
+      "hints": [
+        "The same intended action should map to the same key.",
+        "Check the system of record, not the model's memory."
+      ],
+      "moveOnSummary": "Idempotency keys on writes, deduplication in the refund service, state checks before retries, and outcome verification.",
+      "learnTopics": [
+        "idempotency",
+        "payment-system-ledger"
+      ]
+    },
+    {
+      "id": "deep.cost",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "cache",
+          "model-serving"
+        ],
+        "keywords": [
+          "cost per resolution",
+          "token budget",
+          "step limit",
+          "small model routing",
+          "prompt caching",
+          "latency per turn"
+        ]
+      },
+      "goal": "Control cost and latency per conversation.",
+      "opener": "What does a conversation cost, and how do you keep it in check?",
+      "evidence": {
+        "strong": "Estimates tokens per turn for workflows versus agent turns and cost per resolved conversation compared with a human contact, uses a small model for routing, caches the stable system prompt and tool definitions, caps steps and tokens per conversation, and measures latency per turn.",
+        "adequate": "Mentions using a cheaper model.",
+        "weak": "No cost view."
+      },
+      "misconceptions": [
+        {
+          "id": "cost.call",
+          "pattern": "Measures cost per model call.",
+          "challenge": "A cheap conversation that ends in a human handoff anyway: was it cheap?"
+        }
+      ],
+      "probes": [
+        "What's the right unit to measure cost in?",
+        "Where does an agent waste tokens?"
+      ],
+      "hints": [
+        "Measure per resolved conversation.",
+        "Long tool outputs and extra steps add up."
+      ],
+      "moveOnSummary": "Cost per resolved conversation, small-model routing, cached prompts, step and token caps, and latency per turn.",
+      "learnTopics": [
+        "llm-cost-optimization",
+        "llm-caching"
+      ]
+    },
+    {
+      "id": "wrap.rollout",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "rollout",
+          "shadow mode",
+          "read-only",
+          "monitoring",
+          "next steps"
+        ]
+      },
+      "goal": "Plan a staged rollout and ongoing monitoring.",
+      "opener": "How would you roll this out, and what would you watch once it's live?",
+      "evidence": {
+        "strong": "Shadow mode drafting replies for humans, then read-only answers, then low-risk actions, then small refunds, widening limits with evidence; monitors resolution, satisfaction, handoff reasons, blocked unauthorised attempts, refunds versus policy and cost, with every conversation traced.",
+        "adequate": "A gradual rollout without stages tied to risk.",
+        "weak": "Launches fully on day one."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What's the first thing the agent is allowed to do on its own?",
+        "Which metric would make you roll back?"
+      ],
+      "hints": [
+        "Earn authority step by step.",
+        "Trace every conversation."
+      ],
+      "moveOnSummary": "Shadow, then read-only, then low-risk actions, then small refunds, with resolution, satisfaction, policy and cost monitoring.",
+      "learnTopics": [
+        "llmops-observability",
+        "feature-flags"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.timeout",
+      "after": "deep.authz",
+      "prompt": "Logs show three customers got the same refund twice yesterday after the refund service had a slow hour. What went wrong?",
+      "agendaItemId": "deep.idempotency"
+    },
+    {
+      "id": "cb.angry",
+      "after": "deep.eval",
+      "prompt": "A customer is furious, has asked three times for a person, and the agent keeps offering help articles. What should have happened?",
+      "agendaItemId": "deep.handoff"
+    }
+  ],
+  "vocabulary": [
+    "AI agent",
+    "tool calling",
+    "function calling",
+    "intent router",
+    "workflow",
+    "agent loop",
+    "RAG",
+    "policy layer",
+    "authorization",
+    "least privilege",
+    "idempotency key",
+    "human handoff",
+    "approval queue",
+    "guardrails",
+    "prompt injection",
+    "sandbox",
+    "shadow mode",
+    "golden scenarios",
+    "cost per resolution",
+    "MCP"
+  ],
+  "alternatives": [
+    {
+      "choice": "A single agent with all tools and no workflows",
+      "whenBetter": "When conversations are mostly unpredictable and volume is low enough that cost and variability matter less."
+    },
+    {
+      "choice": "Multiple specialist agents with handoffs (billing, shipping, account)",
+      "whenBetter": "When tool sets and permissions differ greatly between areas and teams own them separately."
+    },
+    {
+      "choice": "Agent-assist only, where the AI drafts replies for human agents",
+      "whenBetter": "As a first phase or in highly regulated settings where autonomous actions aren't acceptable."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Bounded agent with earned authority",
+      "outline": "Clarifies volume, allowed actions and the refund limit, logged-in identity, handoff and success metrics. Routes intents to workflows and the long tail to an agent loop with retrieval over help articles and narrow typed tools behind a policy layer that takes identity from the session and enforces limits in code. Large refunds go to an approval queue; handoff passes a summary, identity and actions taken. Writes carry idempotency keys. Evaluates with repeated simulated scenarios against a sandbox and zero tolerance for unauthorised actions, tracks cost per resolution, and rolls out from shadow to read-only to small refunds."
+    },
+    {
+      "band": "adequate",
+      "label": "Capable but trusting agent",
+      "outline": "Builds one agent with retrieval and tools that can look up orders and refund, with refund rules in the system prompt, a transcript handoff and manual testing of a few dozen chats."
+    },
+    {
+      "band": "weak",
+      "label": "FAQ bot",
+      "outline": "Pastes help articles into a prompt and answers questions; no actions, identity handling, handoff or evaluation."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

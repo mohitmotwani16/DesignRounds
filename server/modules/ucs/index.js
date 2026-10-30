@@ -101,6 +101,7 @@ const TRACK_NAMES = {
   "software-engineering": "software engineering",
   "data-engineering": "data engineering",
   "machine-learning": "machine learning",
+  "ai-engineering": "AI engineering (LLM applications)",
   "platform-infrastructure": "platform and infrastructure",
   "distributed-systems": "distributed systems",
   "frontend-mobile": "frontend and mobile",

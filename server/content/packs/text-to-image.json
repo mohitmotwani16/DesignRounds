@@ -1,0 +1,580 @@
+{
+  "opening": "We're building an image generation product: people type a prompt and get images back. Design the service behind it.",
+  "clarifications": [
+    {
+      "id": "scale.jobs",
+      "topics": [
+        "volume",
+        "jobs",
+        "generations",
+        "per day",
+        "scale"
+      ],
+      "answer": "About 20 million generation jobs a day; each produces a grid of four images."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "wait time",
+        "seconds"
+      ],
+      "answer": "The fast tier should return results in under 20 seconds; a cheaper relaxed tier can wait several minutes."
+    },
+    {
+      "id": "req.gpu",
+      "topics": [
+        "gpu",
+        "compute",
+        "cost",
+        "hardware",
+        "per job"
+      ],
+      "answer": "One grid takes a few GPU-seconds on our current GPUs with an optimised model; GPUs are by far the biggest cost."
+    },
+    {
+      "id": "req.features",
+      "topics": [
+        "features",
+        "upscale",
+        "variations",
+        "edit",
+        "gallery"
+      ],
+      "answer": "Users can upscale, make variations of, or edit a result, and browse their past images in a gallery; some images are public."
+    },
+    {
+      "id": "req.safety",
+      "topics": [
+        "safety",
+        "policy",
+        "nsfw",
+        "abuse",
+        "illegal"
+      ],
+      "answer": "Prompts and images that break content policy must be blocked, including sexual content involving minors and abusive images of real people."
+    },
+    {
+      "id": "req.plans",
+      "topics": [
+        "plans",
+        "quota",
+        "tiers",
+        "pricing",
+        "limits"
+      ],
+      "answer": "Paid plans include a monthly quota of fast GPU time; relaxed generation is unlimited but lower priority."
+    },
+    {
+      "id": "req.models",
+      "topics": [
+        "models",
+        "styles",
+        "versions",
+        "adapters"
+      ],
+      "answer": "We run a few model versions and many style adapters; loading a model onto a GPU takes about a minute."
+    }
+  ],
+  "clarificationPolicy": "Answer as the generative product lead. Keep it GPU-bound, queue-driven and safety-sensitive at large scale; decide unlisted details so scheduling, warm models and safety stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "jobs per day",
+          "latency tiers",
+          "gpu seconds",
+          "quota",
+          "safety",
+          "gallery"
+        ]
+      },
+      "goal": "Establish volume, latency tiers, GPU cost per job, plans and safety.",
+      "opener": "What do you need to know before designing this?",
+      "evidence": {
+        "strong": "Asks about job volume, latency per tier, GPU time per job, plans and quotas, features like upscale and variations, model and adapter variety, and safety policy.",
+        "adequate": "Gets volume and latency but not GPU cost or quotas.",
+        "weak": "No requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.web",
+          "pattern": "Treats it like a normal web request.",
+          "challenge": "A request takes several seconds of a scarce GPU. Can you serve it like a page view?"
+        }
+      ],
+      "probes": [
+        "How long does one generation take on a GPU?",
+        "What do different plans get?"
+      ],
+      "hints": [
+        "GPU time is the unit of cost.",
+        "Not every user needs the same speed."
+      ],
+      "moveOnSummary": "Tens of millions of jobs a day at a few GPU-seconds each, fast and relaxed tiers, quotas, many models and adapters, and strict safety.",
+      "learnTopics": [
+        "ai-engineer-system-design-interview",
+        "design-text-to-image-service"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "gpu",
+          "scheduler"
+        ],
+        "keywords": [
+          "async job",
+          "job queue",
+          "gpu workers",
+          "job id",
+          "notify",
+          "priority"
+        ]
+      },
+      "goal": "Design an asynchronous job pipeline.",
+      "opener": "Walk me through what happens from submitting a prompt to seeing the images.",
+      "evidence": {
+        "strong": "The API checks auth, quota and prompt safety, returns a job id, enqueues by tier, a scheduler assigns jobs to GPU workers, workers generate, images are safety-checked and stored, metadata saved, and the client is notified over a WebSocket or polling.",
+        "adequate": "A queue and workers but no tiers or notification.",
+        "weak": "A synchronous HTTP request that waits for the GPU."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.sync",
+          "pattern": "Holds the HTTP request open until images are ready.",
+          "challenge": "Twenty seconds per request, hundreds of requests a second: how many open connections, and what if a GPU fails mid-job?"
+        }
+      ],
+      "probes": [
+        "What does the client get back immediately?",
+        "How does it learn the result is ready?"
+      ],
+      "hints": [
+        "Return a job id and work in the background.",
+        "Push or poll for completion."
+      ],
+      "moveOnSummary": "API with quota and prompt checks returns a job id, tiered queues, a scheduler and GPU workers, safety checks, storage and client notification.",
+      "learnTopics": [
+        "message-queues",
+        "design-text-to-image-service"
+      ]
+    },
+    {
+      "id": "hl.storage",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "image-store",
+          "cdn",
+          "database"
+        ],
+        "keywords": [
+          "object storage",
+          "cdn",
+          "thumbnails",
+          "metadata",
+          "seed",
+          "gallery"
+        ]
+      },
+      "goal": "Store and serve images and their metadata.",
+      "opener": "Where do the images and their details live, and how are they served?",
+      "evidence": {
+        "strong": "Originals in object storage, thumbnails in a compact format, served through a CDN; metadata (prompt, seed, parameters, model and adapter version, user, visibility) in a database so variations are reproducible; lifecycle rules move old originals to cheaper tiers.",
+        "adequate": "Object storage and a CDN without metadata for reproducibility.",
+        "weak": "Images in the database."
+      },
+      "misconceptions": [
+        {
+          "id": "store.db",
+          "pattern": "Stores image bytes in the main database.",
+          "challenge": "Eighty million images a day at over a megabyte each: what happens to the database?"
+        }
+      ],
+      "probes": [
+        "What do you need to store to recreate a variation?",
+        "How is the gallery kept fast?"
+      ],
+      "hints": [
+        "Blobs belong in object storage.",
+        "Seeds make generation repeatable."
+      ],
+      "moveOnSummary": "Object storage with thumbnails behind a CDN, metadata with seeds and versions for reproducibility, and lifecycle tiering.",
+      "learnTopics": [
+        "object-storage",
+        "cdn"
+      ]
+    },
+    {
+      "id": "deep.scheduling",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "scheduler",
+          "cluster"
+        ],
+        "keywords": [
+          "warm models",
+          "model routing",
+          "batching",
+          "bin packing",
+          "gpu utilisation",
+          "adapter loading"
+        ]
+      },
+      "goal": "Keep GPUs busy and avoid slow model loads.",
+      "opener": "Loading a model takes about a minute. How does that shape how you assign jobs to GPUs?",
+      "evidence": {
+        "strong": "Workers keep models and popular adapters warm, the scheduler routes jobs to workers already holding the right model, batches compatible jobs (same model, resolution, steps), keeps a pool per popular model sized by demand, and loads rare adapters on dedicated workers.",
+        "adequate": "Assigns jobs to any free GPU.",
+        "weak": "Loads the model per job."
+      },
+      "misconceptions": [
+        {
+          "id": "sched.any",
+          "pattern": "Sends each job to whichever GPU is free.",
+          "challenge": "The free GPU has a different model loaded. What does that job cost now?"
+        }
+      ],
+      "probes": [
+        "How do you handle a style adapter only a few people use?",
+        "What can be batched together?"
+      ],
+      "hints": [
+        "Match jobs to what's already in memory.",
+        "Similar jobs can share a forward pass."
+      ],
+      "moveOnSummary": "Warm models and adapters, model-aware routing, batching compatible jobs, demand-sized pools and dedicated workers for rare adapters.",
+      "learnTopics": [
+        "distributed-task-scheduler",
+        "llm-inference-serving"
+      ]
+    },
+    {
+      "id": "deep.safety",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "guardrails",
+          "vision"
+        ],
+        "keywords": [
+          "prompt classifier",
+          "image classifier",
+          "hash matching",
+          "watermark",
+          "provenance",
+          "blocked prompts"
+        ]
+      },
+      "goal": "Block policy-violating prompts and images.",
+      "opener": "How do you stop the service producing images that break your policy?",
+      "evidence": {
+        "strong": "Prompt classifiers and blocklists before generation, safety-tuned models, image classifiers and hash matching on outputs before storage or display, provenance metadata or watermarks, account-level enforcement for repeat offenders, and review of reported images.",
+        "adequate": "Checks prompts only.",
+        "weak": "No safety design."
+      },
+      "misconceptions": [
+        {
+          "id": "safe.prompt",
+          "pattern": "Believes checking prompts is enough.",
+          "challenge": "An innocent-sounding prompt produces a policy-violating image. What catches it?"
+        }
+      ],
+      "probes": [
+        "Where in the pipeline are outputs checked?",
+        "How can others tell an image is AI-generated?"
+      ],
+      "hints": [
+        "Check both what's asked and what's made.",
+        "Mark generated images."
+      ],
+      "moveOnSummary": "Prompt checks, safety-tuned models, output classifiers and hash matching before storage, provenance marks, and account enforcement.",
+      "learnTopics": [
+        "llm-guardrails",
+        "design-harmful-content-detection"
+      ]
+    },
+    {
+      "id": "deep.capacity",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "t-kubernetes"
+        ],
+        "keywords": [
+          "gpu count",
+          "peak jobs",
+          "autoscaling gpus",
+          "spot instances",
+          "headroom",
+          "forecast"
+        ]
+      },
+      "goal": "Size the GPU fleet and handle peaks.",
+      "opener": "How many GPUs do you need at peak, and how do you handle spikes?",
+      "evidence": {
+        "strong": "Peak jobs per second times GPU-seconds per job plus headroom, forecasting daily peaks because GPUs take minutes to add, interruptible capacity for the relaxed tier with retries on preemption, and autoscaling on queue wait.",
+        "adequate": "Autoscaling without arithmetic.",
+        "weak": "No capacity plan."
+      },
+      "misconceptions": [
+        {
+          "id": "cap.instant",
+          "pattern": "Assumes GPUs can be added instantly.",
+          "challenge": "A trend goes viral and jobs double in ten minutes. How long until new GPUs are serving?"
+        }
+      ],
+      "probes": [
+        "Show me the arithmetic.",
+        "Which work can run on cheaper, interruptible GPUs?"
+      ],
+      "hints": [
+        "Multiply rate by GPU time per job.",
+        "Relaxed jobs tolerate interruptions."
+      ],
+      "moveOnSummary": "Fleet size from peak jobs times GPU-seconds plus headroom, forecasted scaling, and interruptible capacity for the relaxed tier.",
+      "learnTopics": [
+        "capacity-planning",
+        "autoscaling"
+      ]
+    },
+    {
+      "id": "deep.priority",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "rate-limiter",
+          "queue"
+        ],
+        "keywords": [
+          "priority queues",
+          "quota",
+          "fairness",
+          "relaxed tier",
+          "starvation",
+          "gpu seconds"
+        ]
+      },
+      "goal": "Share GPUs fairly across tiers and users.",
+      "opener": "Fast-tier and relaxed users submit at the same time and GPUs are full. What happens?",
+      "evidence": {
+        "strong": "Separate queues with weighted priority, quotas in GPU-seconds deducted at job start and refunded on failure, per-user concurrency limits so one user can't flood the queue, and relaxed work using spare capacity without starving forever.",
+        "adequate": "Paid users first, no quotas or starvation control.",
+        "weak": "One FIFO queue."
+      },
+      "misconceptions": [
+        {
+          "id": "prio.strict",
+          "pattern": "Gives paid jobs strict priority forever.",
+          "challenge": "During a long busy period, does a relaxed job ever run?"
+        }
+      ],
+      "probes": [
+        "How do you stop one user submitting thousands of jobs?",
+        "How is a failed job charged?"
+      ],
+      "hints": [
+        "Weighted queues avoid starvation.",
+        "Charge for what was actually used."
+      ],
+      "moveOnSummary": "Weighted tier queues, GPU-second quotas with refunds on failure, per-user concurrency limits and starvation protection.",
+      "learnTopics": [
+        "rate-limiting",
+        "load-shedding"
+      ]
+    },
+    {
+      "id": "deep.speed",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "training",
+          "model-registry"
+        ],
+        "keywords": [
+          "fewer steps",
+          "distilled model",
+          "lower precision",
+          "resolution",
+          "compiled kernels",
+          "quality trade-off"
+        ]
+      },
+      "goal": "Cut GPU time per image without hurting quality.",
+      "opener": "How would you make each generation cheaper?",
+      "evidence": {
+        "strong": "Distilled models needing fewer diffusion steps, lower-precision inference, compiled kernels, generating at lower resolution then upscaling on request, and checking quality with human preference tests before switching.",
+        "adequate": "Mentions a faster GPU.",
+        "weak": "No ideas."
+      },
+      "misconceptions": [
+        {
+          "id": "speed.free",
+          "pattern": "Assumes speed-ups never affect quality.",
+          "challenge": "Halving the steps doubles throughput. How do you know images didn't get worse?"
+        }
+      ],
+      "probes": [
+        "Where does the GPU time go in one generation?",
+        "How do you check quality after an optimisation?"
+      ],
+      "hints": [
+        "Cost grows with steps and resolution.",
+        "People's preferences are the real quality test."
+      ],
+      "moveOnSummary": "Fewer steps via distillation, lower precision, compiled kernels, generate small then upscale, validated by preference tests.",
+      "learnTopics": [
+        "model-compression",
+        "llm-cost-optimization"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "speed vs cost",
+          "quality",
+          "safety strictness",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs did you make?",
+      "evidence": {
+        "strong": "Latency versus GPU cost, quality versus speed-ups, safety strictness versus false blocks, warm-model memory versus variety of adapters, and metrics such as queue wait and cost per image.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "What would you measure daily?",
+        "What would you build next?"
+      ],
+      "hints": [
+        "GPU memory is shared by models and jobs.",
+        "Over-blocking frustrates real artists."
+      ],
+      "moveOnSummary": "Latency versus cost, quality versus speed, safety versus false blocks, and warm-model memory versus adapter variety.",
+      "learnTopics": [
+        "capacity-planning",
+        "llm-guardrails"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.viral",
+      "after": "deep.scheduling",
+      "prompt": "A new style goes viral and fast-tier queue wait climbs past two minutes. What do you do in the next hour and next week?",
+      "agendaItemId": "deep.capacity"
+    },
+    {
+      "id": "cb.flood",
+      "after": "deep.safety",
+      "prompt": "One account submits tens of thousands of relaxed jobs overnight and everyone else's relaxed jobs barely move. What went wrong?",
+      "agendaItemId": "deep.priority"
+    }
+  ],
+  "vocabulary": [
+    "diffusion model",
+    "latent diffusion",
+    "denoising steps",
+    "classifier-free guidance",
+    "LoRA",
+    "adapter",
+    "GPU",
+    "job queue",
+    "scheduler",
+    "batching",
+    "warm model",
+    "spot instance",
+    "preemption",
+    "quota",
+    "GPU-seconds",
+    "object storage",
+    "CDN",
+    "seed",
+    "watermark",
+    "C2PA"
+  ],
+  "alternatives": [
+    {
+      "choice": "Use a hosted image generation API",
+      "whenBetter": "For a small product or early stage where operating GPUs isn't justified."
+    },
+    {
+      "choice": "Serverless GPU functions per job",
+      "whenBetter": "At low or bursty volume where idle GPUs would dominate cost, accepting cold starts."
+    },
+    {
+      "choice": "Dedicated GPU pools per customer",
+      "whenBetter": "For enterprise customers needing isolation or custom models."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Queued, warm, safe",
+      "outline": "Clarifies job volume, latency tiers, GPU-seconds per job, quotas, model and adapter variety and safety. The API checks quota and prompt safety and returns a job id; weighted tier queues feed a scheduler that routes to workers with the right model warm and batches compatible jobs; outputs are safety-checked and watermarked before going to object storage behind a CDN with reproducible metadata; clients are notified over WebSockets. Fleet size comes from peak jobs times GPU-seconds with headroom and forecasting; relaxed jobs use interruptible GPUs; per-user limits prevent flooding; distilled models cut steps."
+    },
+    {
+      "band": "adequate",
+      "label": "Queue and workers",
+      "outline": "Uses a job queue and GPU workers with object storage and prompt filtering, paid users first, autoscaling on queue length; no warm-model routing, output checks, quotas or capacity arithmetic."
+    },
+    {
+      "band": "weak",
+      "label": "Synchronous generation",
+      "outline": "An HTTP endpoint loads the model and generates images while the client waits, storing results in the database; no queue, safety or capacity plan."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

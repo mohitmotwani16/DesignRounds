@@ -1,0 +1,579 @@
+{
+  "opening": "We'd like people to take a photo of something, like a lamp or a jacket, and find similar images and products on our platform. How would you build that?",
+  "clarifications": [
+    {
+      "id": "scale.index",
+      "topics": [
+        "images",
+        "index size",
+        "catalogue",
+        "how many images",
+        "corpus"
+      ],
+      "answer": "About 5 billion images are searchable."
+    },
+    {
+      "id": "scale.new",
+      "topics": [
+        "new images",
+        "uploads",
+        "growth",
+        "per day",
+        "freshness"
+      ],
+      "answer": "About 2 million new images a day, which should be searchable within an hour."
+    },
+    {
+      "id": "scale.qps",
+      "topics": [
+        "qps",
+        "queries",
+        "traffic",
+        "searches per second",
+        "peak"
+      ],
+      "answer": "About 5,000 visual searches a second at peak."
+    },
+    {
+      "id": "req.latency",
+      "topics": [
+        "latency",
+        "how fast",
+        "response time",
+        "milliseconds"
+      ],
+      "answer": "Results within 500 ms, including processing the uploaded photo."
+    },
+    {
+      "id": "req.results",
+      "topics": [
+        "results",
+        "what to return",
+        "products",
+        "shopping",
+        "similar"
+      ],
+      "answer": "Return visually similar images, and for shopping, similar products that are in stock in the user's region."
+    },
+    {
+      "id": "data.signals",
+      "topics": [
+        "labels",
+        "data",
+        "engagement",
+        "training data",
+        "clicks"
+      ],
+      "answer": "We have no labelled similar pairs, but we log which results people click and save after a search, and images have captions and product attributes."
+    },
+    {
+      "id": "req.crop",
+      "topics": [
+        "crop",
+        "part of image",
+        "multiple objects",
+        "region"
+      ],
+      "answer": "Photos often contain several objects; users can tap or crop the one they care about."
+    }
+  ],
+  "clarificationPolicy": "Answer as the visual discovery product lead. Keep it billion-scale embedding retrieval with freshness and latency targets; decide unlisted details so representation learning, index sizing and re-embedding stay in play.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "mobile"
+        ],
+        "keywords": [
+          "index size",
+          "qps",
+          "latency",
+          "freshness",
+          "similar",
+          "products"
+        ]
+      },
+      "goal": "Establish index size, traffic, latency, freshness and what results mean.",
+      "opener": "What do you want to clarify before designing?",
+      "evidence": {
+        "strong": "Asks about corpus size, growth and freshness, query rate, latency, result types, available training signals and multi-object photos.",
+        "adequate": "Gets size and latency but not freshness or training signals.",
+        "weak": "No requirements."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.pixels",
+          "pattern": "Assumes similarity can be judged from raw pixels.",
+          "challenge": "The same jacket photographed in daylight and in a dim room: how similar are the pixels?"
+        }
+      ],
+      "probes": [
+        "How would you know two images are similar for our users?",
+        "How quickly must new images be found?"
+      ],
+      "hints": [
+        "Ask what data exists to learn similarity from.",
+        "Corpus size drives the index design."
+      ],
+      "moveOnSummary": "Billions of images, millions new per day searchable within an hour, thousands of queries a second, sub-second latency, and engagement data but no labelled pairs.",
+      "learnTopics": [
+        "ml-system-design-interview",
+        "ml-problem-framing"
+      ]
+    },
+    {
+      "id": "hl.architecture",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "vision",
+          "vector-db",
+          "embedding"
+        ],
+        "keywords": [
+          "image encoder",
+          "embeddings",
+          "nearest neighbour",
+          "indexing pipeline",
+          "query path",
+          "re-rank"
+        ]
+      },
+      "goal": "Lay out the query path and the indexing path.",
+      "opener": "Walk me through the system: what happens to a query photo, and what happens to a newly uploaded image?",
+      "evidence": {
+        "strong": "Query path: detect objects and pick the region, embed it, search an ANN index, re-rank and filter. Indexing path: embed new images in batch on GPUs and insert into the index, with metadata stored separately.",
+        "adequate": "Embeddings and search but no indexing path or region detection.",
+        "weak": "Compares the query image against every image."
+      },
+      "misconceptions": [
+        {
+          "id": "arch.bruteforce",
+          "pattern": "Plans brute-force comparison against every image.",
+          "challenge": "Five billion comparisons per query, thousands of queries a second: what does that cost?"
+        }
+      ],
+      "probes": [
+        "Which part of a busy photo do you search for?",
+        "How does a new image become searchable?"
+      ],
+      "hints": [
+        "Two paths share one encoder.",
+        "Approximate search trades a little recall for huge speed."
+      ],
+      "moveOnSummary": "Query: detect region, embed, ANN search, re-rank. Indexing: batch embed new images and insert into the index.",
+      "learnTopics": [
+        "design-visual-search",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "hl.training",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "training",
+          "gpu"
+        ],
+        "keywords": [
+          "contrastive learning",
+          "positive pairs",
+          "augmentation",
+          "engagement pairs",
+          "pretrained backbone",
+          "hard negatives"
+        ]
+      },
+      "goal": "Train an encoder whose distances match what users consider similar.",
+      "opener": "How do you train a model to know which images are similar, without labelled pairs?",
+      "evidence": {
+        "strong": "Starts from a pretrained backbone, trains contrastively with augmented views of the same image as positives and in-batch negatives, adds engagement pairs (query image and the result saved), optionally image-caption pairs, and mines hard negatives.",
+        "adequate": "Uses a pretrained model as is, or contrastive training with no engagement signal.",
+        "weak": "Trains a classifier on categories and uses its labels."
+      },
+      "misconceptions": [
+        {
+          "id": "train.classifier",
+          "pattern": "Uses category labels as the notion of similarity.",
+          "challenge": "Two lamps in the same category look completely different. Are they similar results?"
+        }
+      ],
+      "probes": [
+        "What counts as a positive pair?",
+        "How do you teach the model what our users find similar?"
+      ],
+      "hints": [
+        "Two views of the same image should match.",
+        "Saves after a search reveal useful pairs."
+      ],
+      "moveOnSummary": "Contrastive training from a pretrained backbone on augmented pairs plus engagement pairs, with hard negatives.",
+      "learnTopics": [
+        "embeddings",
+        "model-compression"
+      ]
+    },
+    {
+      "id": "deep.index",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "vector-db",
+          "shard"
+        ],
+        "keywords": [
+          "product quantization",
+          "ivf",
+          "hnsw",
+          "index memory",
+          "sharded index",
+          "recall vs latency"
+        ]
+      },
+      "goal": "Make a billion-scale index fit memory and latency budgets.",
+      "opener": "How big is your index, and how do you make it fit and stay fast?",
+      "evidence": {
+        "strong": "Computes full-precision size (billions times dimensions times bytes is terabytes), compresses with product quantization or IVF-PQ, shards across machines with replicas, queries all shards in parallel and re-ranks top results with full vectors from SSD, and tunes recall against latency.",
+        "adequate": "Picks an ANN index without sizing or sharding.",
+        "weak": "Stores vectors in a regular database."
+      },
+      "misconceptions": [
+        {
+          "id": "idx.fits",
+          "pattern": "Assumes the vectors fit on one machine.",
+          "challenge": "Five billion vectors of a few hundred floats each: how many bytes is that?"
+        }
+      ],
+      "probes": [
+        "Show me the memory arithmetic.",
+        "What do you lose by compressing vectors, and how do you win it back?"
+      ],
+      "hints": [
+        "Multiply count, dimensions and bytes per number.",
+        "Re-ranking a short list can use full precision."
+      ],
+      "moveOnSummary": "Terabytes at full precision, so product quantization, sharding with replicas, parallel shard queries and full-precision re-ranking.",
+      "learnTopics": [
+        "vector-databases",
+        "sharding"
+      ]
+    },
+    {
+      "id": "deep.freshness",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "batch-processor"
+        ],
+        "keywords": [
+          "incremental index",
+          "new uploads",
+          "fresh index",
+          "merge",
+          "nightly rebuild",
+          "indexing lag"
+        ]
+      },
+      "goal": "Make new images searchable quickly without rebuilding the whole index.",
+      "opener": "How does an image uploaded a few minutes ago become searchable within the hour?",
+      "evidence": {
+        "strong": "New images are queued, embedded by GPU workers and inserted into a small fresh index that is queried alongside the main one, then merged during periodic rebuilds; deletions are filtered immediately and purged at rebuild; indexing lag is monitored.",
+        "adequate": "Rebuilds nightly or inserts directly without discussing index structure.",
+        "weak": "No plan for new images."
+      },
+      "misconceptions": [
+        {
+          "id": "fresh.rebuild",
+          "pattern": "Rebuilds the entire index whenever images are added.",
+          "challenge": "How long does it take to rebuild an index of billions of vectors, and how often do new images arrive?"
+        }
+      ],
+      "probes": [
+        "What happens to deleted images?",
+        "How do you know indexing is falling behind?"
+      ],
+      "hints": [
+        "A small index for recent items is cheap to update.",
+        "Merge in the background."
+      ],
+      "moveOnSummary": "Queue and embed new images into a small fresh index queried with the main one, merged in periodic rebuilds, with deletes filtered immediately.",
+      "learnTopics": [
+        "message-queues",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "deep.reembed",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "model-registry",
+          "data-lake"
+        ],
+        "keywords": [
+          "re-embed",
+          "model version",
+          "embedding version",
+          "backfill",
+          "blue green index",
+          "incompatible vectors"
+        ]
+      },
+      "goal": "Upgrade the encoder safely.",
+      "opener": "You train a better encoder. What has to happen before users get its results?",
+      "evidence": {
+        "strong": "Notes that embeddings from two model versions live in different spaces, so the whole corpus is re-embedded in a large batch job into a new index, the query encoder and index switch together blue-green after offline and online checks, and the old index is kept for rollback; estimates the GPU hours.",
+        "adequate": "Re-embeds but switches gradually and mixes versions.",
+        "weak": "Just deploys the new encoder for queries."
+      },
+      "misconceptions": [
+        {
+          "id": "re.mix",
+          "pattern": "Uses the new encoder for queries against the old index.",
+          "challenge": "Two models learned different spaces. What does a distance between them mean?"
+        }
+      ],
+      "probes": [
+        "How long would re-embedding everything take?",
+        "How do you roll back?"
+      ],
+      "hints": [
+        "Query and index must come from the same model.",
+        "Build the new index alongside the old one."
+      ],
+      "moveOnSummary": "Re-embed the full corpus into a new index, switch query encoder and index together after checks, keep the old index for rollback.",
+      "learnTopics": [
+        "embeddings",
+        "mlops-model-registry"
+      ]
+    },
+    {
+      "id": "deep.rerank",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "model-serving",
+          "recommender"
+        ],
+        "keywords": [
+          "re-ranking",
+          "near duplicates",
+          "quality score",
+          "in stock",
+          "diversity",
+          "perceptual hash"
+        ]
+      },
+      "goal": "Turn similar-looking neighbours into useful results.",
+      "opener": "The nearest neighbours come back. What do you do before showing them?",
+      "evidence": {
+        "strong": "Removes near-duplicates by tight similarity or perceptual hashes, combines similarity with quality and engagement in a learned re-ranker, filters by safety, stock and region for shopping, and adds diversity.",
+        "adequate": "Filters out-of-stock products only.",
+        "weak": "Shows raw neighbours."
+      },
+      "misconceptions": [
+        {
+          "id": "rr.raw",
+          "pattern": "Assumes the closest vectors are the best results.",
+          "challenge": "The top ten neighbours are the same photo reposted ten times. Is that a good result page?"
+        }
+      ],
+      "probes": [
+        "How do you handle the same image uploaded many times?",
+        "What else besides similarity decides the order?"
+      ],
+      "hints": [
+        "Duplicates waste result slots.",
+        "Quality and availability matter for shoppers."
+      ],
+      "moveOnSummary": "Dedupe near-identical images, re-rank with quality and engagement, filter safety and availability, add diversity.",
+      "learnTopics": [
+        "learning-to-rank",
+        "two-stage-processing"
+      ]
+    },
+    {
+      "id": "deep.eval",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "evaluation",
+          "labeling"
+        ],
+        "keywords": [
+          "recall@k",
+          "labelled pairs",
+          "map",
+          "save rate",
+          "human evaluation",
+          "category slices"
+        ]
+      },
+      "goal": "Measure retrieval quality offline and online.",
+      "opener": "How do you know your visual search is good, and getting better?",
+      "evidence": {
+        "strong": "A human-labelled set of query and relevant images for recall@k and mAP, exact-product match rate for shopping, slices by category, then online click, save and purchase rates and reformulation in A/B tests.",
+        "adequate": "Online engagement only.",
+        "weak": "Eyeballing a few examples."
+      },
+      "misconceptions": [
+        {
+          "id": "eval.eyeball",
+          "pattern": "Relies on looking at a few queries.",
+          "challenge": "Your favourite examples look better but furniture searches got worse. Would you notice?"
+        }
+      ],
+      "probes": [
+        "Where do evaluation labels come from?",
+        "Which online metric matters most for shopping?"
+      ],
+      "hints": [
+        "A small labelled set goes a long way.",
+        "Break results down by category."
+      ],
+      "moveOnSummary": "Labelled pairs for recall@k and mAP with category slices, plus online save and purchase rates in A/B tests.",
+      "learnTopics": [
+        "ml-evaluation-metrics",
+        "data-labeling"
+      ]
+    },
+    {
+      "id": "wrap.tradeoffs",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "trade-off",
+          "recall vs latency",
+          "memory cost",
+          "freshness",
+          "next steps"
+        ]
+      },
+      "goal": "Summarise trade-offs.",
+      "opener": "What trade-offs did you make, and what would you improve next?",
+      "evidence": {
+        "strong": "Recall versus latency and memory in the index, compression versus quality, freshness versus rebuild cost, and the cost of re-embedding versus model improvements.",
+        "adequate": "One or two trade-offs.",
+        "weak": "None."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Where would you spend more memory?",
+        "How often would you upgrade the encoder?"
+      ],
+      "hints": [
+        "Every compression step costs some recall.",
+        "Model upgrades have a re-indexing bill."
+      ],
+      "moveOnSummary": "Recall versus latency and memory, compression versus quality, freshness versus rebuild cost, and re-embedding cost.",
+      "learnTopics": [
+        "vector-databases",
+        "embeddings"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.newmodel",
+      "after": "deep.index",
+      "prompt": "The research team has a new encoder that's clearly better offline. Product wants it live next week. What's your plan?",
+      "agendaItemId": "deep.reembed"
+    },
+    {
+      "id": "cb.duplicates",
+      "after": "deep.freshness",
+      "prompt": "Users complain that results are full of the same viral photo reposted by different accounts. What changes?",
+      "agendaItemId": "deep.rerank"
+    }
+  ],
+  "vocabulary": [
+    "embedding",
+    "contrastive learning",
+    "CLIP",
+    "SimCLR",
+    "positive pair",
+    "hard negative",
+    "ANN",
+    "HNSW",
+    "IVF",
+    "product quantization",
+    "FAISS",
+    "recall at k",
+    "mAP",
+    "object detection",
+    "bounding box",
+    "re-ranking",
+    "perceptual hash",
+    "blue-green",
+    "re-embedding",
+    "GPU"
+  ],
+  "alternatives": [
+    {
+      "choice": "An off-the-shelf pretrained image-text model without fine-tuning",
+      "whenBetter": "To launch quickly or with little engagement data; fine-tune later."
+    },
+    {
+      "choice": "A managed vector database instead of a self-built sharded index",
+      "whenBetter": "When the team is small and scale is within the service's limits."
+    },
+    {
+      "choice": "Category-specific encoders",
+      "whenBetter": "When categories like fashion and furniture need different notions of similarity and have enough data each."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Contrastive embeddings at billion scale",
+      "outline": "Clarifies corpus size, growth, freshness, query rate, latency and the lack of labelled pairs. Detects the object, embeds it with an encoder fine-tuned contrastively on augmented and engagement pairs, searches a sharded product-quantized index with full-precision re-ranking, then dedupes and re-ranks with quality and availability. New images go through a queue into a fresh index merged in rebuilds; encoder upgrades re-embed everything into a new index switched with the query model. Evaluates with labelled recall@k by category and online saves and purchases."
+    },
+    {
+      "band": "adequate",
+      "label": "Pretrained embeddings plus ANN",
+      "outline": "Embeds images with a pretrained model into an off-the-shelf ANN index and returns neighbours with stock filtering; rebuilds nightly and evaluates with clicks, without sizing, dedupe or a re-embedding plan."
+    },
+    {
+      "band": "weak",
+      "label": "Tags and colours",
+      "outline": "Matches images by category tags and dominant colour stored in a database; no embeddings, index design or evaluation."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}

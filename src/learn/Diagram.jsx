@@ -13,6 +13,8 @@
 //
 // tone: accent | store | cache | queue | ok | danger | muted
 
+import { MOBILE_MEDIA, useMediaQuery } from "../useMediaQuery.js";
+
 const COL = 180;
 const ROW = 100;
 const PAD = 24;
@@ -62,11 +64,31 @@ function EdgeLabel({ x, y, text }) {
 
 // ---------------------------------------------------------------- flow
 
+function flowForViewport(spec, mobile) {
+  if (!mobile || spec.mobileLayout === "keep") return spec;
+  const maxCol = Math.max(...spec.nodes.map((node) => node.col));
+  const maxRow = Math.max(...spec.nodes.map((node) => node.row));
+  const minCol = Math.min(...spec.nodes.map((node) => node.col));
+  const minRow = Math.min(...spec.nodes.map((node) => node.row));
+  const colSpan = maxCol - minCol;
+  const rowSpan = maxRow - minRow;
+  const widerThanTall = colSpan > rowSpan || (colSpan === rowSpan && colSpan > 0.5);
+  if (!widerThanTall) return spec;
+  const flip = (pair) => [pair[1], pair[0]];
+  return {
+    ...spec,
+    nodes: spec.nodes.map((node) => ({ ...node, col: node.row, row: node.col })),
+    zones: spec.zones?.map((zone) => ({ ...zone, from: flip(zone.from), to: flip(zone.to) })),
+  };
+}
+
 function Flow({ spec }) {
-  const id = markerId(spec);
+  const mobile = useMediaQuery(MOBILE_MEDIA);
+  const layout = flowForViewport(spec, mobile);
+  const id = markerId(layout);
   const zoneSpace = spec.zones?.length ? 16 : 0;
   // Boxes grow to fit their text, so a long label never spills over the border.
-  const sized = new Map(spec.nodes.map((node) => {
+  const sized = new Map(layout.nodes.map((node) => {
     const padding = node.shape === "queue" ? 40 : node.shape === "pill" ? 30 : 24;
     const w = Math.max(node.w ?? NODE_W, textWidth(node.label, 13.5) + padding, node.sub ? textWidth(node.sub, 11) + padding : 0);
     return [node.id, { ...node, w, h: node.h ?? NODE_H }];
@@ -74,7 +96,7 @@ function Flow({ spec }) {
   // Columns widen until every near-horizontal edge label fits between its two boxes
   // (labels on diagonal or vertical edges sit in open space between rows).
   let colW = COL;
-  for (const edge of spec.edges ?? []) {
+  for (const edge of layout.edges ?? []) {
     const a = sized.get(edge.from);
     const b = sized.get(edge.to);
     if (!edge.label || edge.bend || !a || !b) continue;
@@ -85,19 +107,22 @@ function Flow({ spec }) {
   // Wide boxes in the first column (and the zones around them) can reach past the left
   // edge, so shift everything right until the leftmost box clears the padding.
   const leftmost = Math.min(...[...sized.values()].map((node) => PAD + node.col * colW + colW / 2 - node.w / 2));
-  const shift = Math.max(0, PAD + (spec.zones?.length ? 18 : 0) - leftmost);
+  const shift = Math.max(0, PAD + (layout.zones?.length ? 18 : 0) - leftmost);
   const nodes = new Map([...sized.values()].map((node) => [node.id, { ...node, x: shift + PAD + node.col * colW + colW / 2, y: PAD + zoneSpace + node.row * ROW + ROW / 2 }]));
-  const cols = Math.max(...spec.nodes.map((node) => node.col)) + 1;
-  const rows = Math.max(...spec.nodes.map((node) => node.row)) + 1;
+  const cols = Math.max(...layout.nodes.map((node) => node.col)) + 1;
+  const rows = Math.max(...layout.nodes.map((node) => node.row)) + 1;
   const rightmost = Math.max(...[...nodes.values()].map((node) => node.x + node.w / 2));
-  const width = spec.width ?? Math.max(PAD * 2 + shift + cols * colW, rightmost + PAD + 18);
-  const height = spec.height ?? PAD * 2 + zoneSpace + rows * ROW;
+  const width = layout.width ?? Math.max(PAD * 2 + shift + cols * colW, rightmost + PAD + 18);
+  const height = layout.height ?? PAD * 2 + zoneSpace + rows * ROW;
+  const svgStyle = mobile
+    ? { width: "100%", maxWidth: "100%", minWidth: 0 }
+    : { minWidth: Math.min(width, 560), maxWidth: width };
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ minWidth: Math.min(width, 560), maxWidth: width }} role="img" aria-label={spec.alt ?? spec.caption}>
+    <svg viewBox={`0 0 ${width} ${height}`} style={svgStyle} role="img" aria-label={layout.alt ?? layout.caption}>
       <Markers id={id} />
-      {spec.zones?.map((zone) => <Zone key={zone.label} zone={zone} zoneSpace={zoneSpace} nodes={[...nodes.values()]} />)}
-      {spec.edges?.map((edge, index) => <FlowEdge key={index} edge={edge} from={nodes.get(edge.from)} to={nodes.get(edge.to)} id={id} />)}
+      {layout.zones?.map((zone) => <Zone key={zone.label} zone={zone} zoneSpace={zoneSpace} nodes={[...nodes.values()]} />)}
+      {layout.edges?.map((edge, index) => <FlowEdge key={index} edge={edge} from={nodes.get(edge.from)} to={nodes.get(edge.to)} id={id} />)}
       {[...nodes.values()].map((node) => <Node key={node.id} node={node} />)}
     </svg>
   );

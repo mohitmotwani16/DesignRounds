@@ -8,12 +8,18 @@ export default {
     {
       "type": "p",
       "text": "New to the format? Read [how to prepare for a system design interview](/learn/system-design-interview) first, then start with the beginner questions."
+    },
+    {
+      "type": "p",
+      "text": "Preparing for an ML or AI role? See the dedicated lists of [ML system design interview questions](/learn/ml-system-design-interview-questions) (recommendations, search, ads, fraud, integrity) and [generative AI and LLM system design interview questions](/learn/genai-system-design-interview-questions) (RAG, agents, LLM serving), each with worked answers."
     }
   ],
   "generated": "questions",
   "related": [
     "system-design-interview",
     "how-to-practice-system-design",
-    "caching"
+    "caching",
+    "ml-system-design-interview-questions",
+    "genai-system-design-interview-questions"
   ]
 };

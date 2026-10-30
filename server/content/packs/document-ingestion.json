@@ -1,0 +1,581 @@
+{
+  "opening": "Our platform lets companies build AI assistants over their own documents. Design the pipeline that takes their documents in and makes them searchable.",
+  "clarifications": [
+    {
+      "id": "scale.backfill",
+      "topics": [
+        "backfill",
+        "existing documents",
+        "initial import",
+        "how many documents",
+        "volume"
+      ],
+      "answer": "About 50 million existing documents to import, roughly 500 million pages."
+    },
+    {
+      "id": "scale.changes",
+      "topics": [
+        "changes",
+        "updates",
+        "new documents",
+        "per day",
+        "churn"
+      ],
+      "answer": "After the import, about 500,000 documents are added or changed every day."
+    },
+    {
+      "id": "req.formats",
+      "topics": [
+        "formats",
+        "pdf",
+        "scans",
+        "file types",
+        "office"
+      ],
+      "answer": "Born-digital PDFs, scanned PDFs and images, Word, slides, spreadsheets, web pages and emails with attachments."
+    },
+    {
+      "id": "req.freshness",
+      "topics": [
+        "freshness",
+        "how fast",
+        "latency",
+        "searchable",
+        "sla"
+      ],
+      "answer": "New or changed documents should be searchable within 15 minutes."
+    },
+    {
+      "id": "req.deletes",
+      "topics": [
+        "delete",
+        "permissions",
+        "access",
+        "revoke",
+        "removal"
+      ],
+      "answer": "Deleted documents, or ones a user loses access to, must disappear from search within 5 minutes."
+    },
+    {
+      "id": "req.tenants",
+      "topics": [
+        "tenants",
+        "customers",
+        "isolation",
+        "multi-tenant"
+      ],
+      "answer": "Many customer tenants share the platform; their data must stay isolated, and one tenant's big import shouldn't slow others."
+    },
+    {
+      "id": "req.outputs",
+      "topics": [
+        "output",
+        "what is produced",
+        "chunks",
+        "embeddings",
+        "index"
+      ],
+      "answer": "The output is chunks with metadata and permissions, embeddings in a vector index and a keyword index, used by RAG assistants."
+    }
+  ],
+  "clarificationPolicy": "Answer as the platform engineering lead. Keep it a large, multi-tenant ingestion pipeline with messy formats, tight freshness and deletion targets; decide unlisted details so parsing, versioning and backfills stay central.",
+  "agenda": [
+    {
+      "id": "req.scope",
+      "stage": "requirements",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "user",
+          "data-lake"
+        ],
+        "keywords": [
+          "backfill",
+          "daily changes",
+          "formats",
+          "freshness",
+          "deletes",
+          "tenants"
+        ]
+      },
+      "goal": "Establish volumes, formats, freshness and deletion targets, and tenancy.",
+      "opener": "What do you want to know before designing the pipeline?",
+      "evidence": {
+        "strong": "Asks about the backfill size, daily change rate, formats including scans, freshness and deletion targets, tenancy and isolation, and what downstream needs; separates the one-off import from steady-state updates.",
+        "adequate": "Gets volume and formats but not deletes or tenancy.",
+        "weak": "Assumes clean text files."
+      },
+      "misconceptions": [
+        {
+          "id": "scope.text",
+          "pattern": "Assumes documents are clean text.",
+          "challenge": "A scanned contract is just an image of text. What does a plain text extractor return?"
+        }
+      ],
+      "probes": [
+        "How different is the initial import from daily updates?",
+        "How fast must a deletion take effect?"
+      ],
+      "hints": [
+        "Formats decide most of the work.",
+        "Removal deadlines are often stricter than additions."
+      ],
+      "moveOnSummary": "Tens of millions of documents to import, hundreds of thousands of daily changes, messy formats, minutes-level freshness and faster deletes, across isolated tenants.",
+      "learnTopics": [
+        "design-document-ingestion-pipeline",
+        "ai-engineer-system-design-interview"
+      ]
+    },
+    {
+      "id": "hl.pipeline",
+      "stage": "high_level",
+      "dimension": "architecture",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "queue",
+          "worker",
+          "storage"
+        ],
+        "keywords": [
+          "stages",
+          "queues",
+          "workers",
+          "raw storage",
+          "document registry",
+          "pipeline"
+        ]
+      },
+      "goal": "Lay out a staged, queue-connected pipeline.",
+      "opener": "Walk me through the stages a document goes through, and how they connect.",
+      "evidence": {
+        "strong": "Raw files to object storage, a document registry tracking version and per-stage status, queues between detect, parse, enrich, chunk, embed and index stages, each idempotent by document id and version and independently scalable, with dead-letter queues.",
+        "adequate": "A sequence of steps in one job per document.",
+        "weak": "A script that processes files one by one."
+      },
+      "misconceptions": [
+        {
+          "id": "pipe.mono",
+          "pattern": "Processes each document in one big job.",
+          "challenge": "Embedding fails for one document after a slow OCR step. What has to be redone?"
+        }
+      ],
+      "probes": [
+        "What does the registry track?",
+        "What happens to a document that keeps failing?"
+      ],
+      "hints": [
+        "Queues between stages isolate failures.",
+        "Keep a record of each document's progress."
+      ],
+      "moveOnSummary": "Raw storage, a registry of versions and stage status, queue-connected idempotent stages, and dead-letter handling.",
+      "learnTopics": [
+        "message-queues",
+        "pipeline-error-handling"
+      ]
+    },
+    {
+      "id": "hl.indexing",
+      "stage": "high_level",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "vector-db",
+          "search-index",
+          "embedding"
+        ],
+        "keywords": [
+          "chunking",
+          "metadata",
+          "permissions",
+          "embeddings",
+          "keyword index",
+          "vector index"
+        ]
+      },
+      "goal": "Produce chunks with metadata and permissions, embedded and indexed.",
+      "opener": "What exactly does the pipeline produce for the assistants to search?",
+      "evidence": {
+        "strong": "Structural chunks with section paths, document id and version, tenant, ACLs, page numbers and timestamps; embeddings from a batch GPU pool with content hashes to skip unchanged chunks; both a vector index and a keyword index, partitioned by tenant group.",
+        "adequate": "Chunks and embeddings without permissions or versions.",
+        "weak": "Whole documents embedded as one vector."
+      },
+      "misconceptions": [
+        {
+          "id": "idx.whole",
+          "pattern": "Embeds each whole document as one vector.",
+          "challenge": "A two-hundred-page manual is one vector. What does a question about page 143 match?"
+        }
+      ],
+      "probes": [
+        "Which metadata travels with each chunk?",
+        "How do permissions reach the index?"
+      ],
+      "hints": [
+        "Retrieval works on passages, not files.",
+        "Every chunk needs to know who may see it."
+      ],
+      "moveOnSummary": "Structural chunks with tenant, version, ACL and page metadata, batch embeddings with hash skipping, and vector plus keyword indexes per tenant group.",
+      "learnTopics": [
+        "rag-chunking-strategies",
+        "vector-databases"
+      ]
+    },
+    {
+      "id": "deep.parsing",
+      "stage": "deep_dive",
+      "dimension": "data",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "vision",
+          "batch-processor"
+        ],
+        "keywords": [
+          "layout parsing",
+          "ocr",
+          "tables",
+          "scanned pages",
+          "escalation",
+          "parse quality"
+        ]
+      },
+      "goal": "Parse messy formats well without paying OCR prices for everything.",
+      "opener": "How do you get good text out of PDFs, scans and spreadsheets?",
+      "evidence": {
+        "strong": "Detects type and routes to layout-aware parsers; keeps headings, reading order and tables (rows with headers); escalates only scanned or complex pages to OCR or vision models; captions figures where needed; strips repeated headers and footers; stores parsed intermediate output; tracks parse-quality signals.",
+        "adequate": "OCR for everything or a single generic extractor.",
+        "weak": "Raw text extraction only."
+      },
+      "misconceptions": [
+        {
+          "id": "parse.ocr_all",
+          "pattern": "Runs OCR on every page to be safe.",
+          "challenge": "Most pages already contain text. What does OCR on five hundred million pages cost?"
+        }
+      ],
+      "probes": [
+        "How do you keep a table usable after parsing?",
+        "How would you notice a parser producing garbage?"
+      ],
+      "hints": [
+        "Use expensive tools only where needed.",
+        "Structure matters as much as words."
+      ],
+      "moveOnSummary": "Type-aware layout parsing, escalation to OCR or vision only for hard pages, table and heading preservation, stored intermediates and quality signals.",
+      "learnTopics": [
+        "design-document-ingestion-pipeline",
+        "rag-chunking-strategies"
+      ]
+    },
+    {
+      "id": "deep.versions",
+      "stage": "deep_dive",
+      "dimension": "reliability",
+      "weight": 3,
+      "required": true,
+      "triggers": {
+        "componentKinds": [
+          "database",
+          "kv-store"
+        ],
+        "keywords": [
+          "versioning",
+          "out of order",
+          "upsert",
+          "old chunks",
+          "document version",
+          "consistency"
+        ]
+      },
+      "goal": "Apply updates correctly and consistently.",
+      "opener": "A document is edited twice within a minute and the events arrive out of order. What ends up indexed?",
+      "evidence": {
+        "strong": "Every event carries a version; stages reject versions older than the registry's current one; the new version is fully indexed, then marked current, then old chunks deleted, so search never shows a half-indexed document; reconciliation compares sources, registry and indexes.",
+        "adequate": "Overwrites on each event without ordering.",
+        "weak": "Appends chunks for every edit."
+      },
+      "misconceptions": [
+        {
+          "id": "ver.delete_first",
+          "pattern": "Deletes old chunks before indexing the new version.",
+          "challenge": "Someone searches during the gap. What do they find?"
+        }
+      ],
+      "probes": [
+        "In what order do you add new chunks and remove old ones?",
+        "How do you catch updates whose events were lost?"
+      ],
+      "hints": [
+        "Compare versions before acting.",
+        "Swap only once the new version is ready."
+      ],
+      "moveOnSummary": "Versioned events, stale-version rejection, index-then-switch-then-delete, and periodic reconciliation.",
+      "learnTopics": [
+        "idempotency",
+        "change-data-capture"
+      ]
+    },
+    {
+      "id": "deep.deletes",
+      "stage": "deep_dive",
+      "dimension": "requirements",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "iam",
+          "cache"
+        ],
+        "keywords": [
+          "fast delete",
+          "permission revoke",
+          "tombstone",
+          "hide filter",
+          "purge",
+          "acl update"
+        ]
+      },
+      "goal": "Meet the strict deletion and revocation deadline.",
+      "opener": "A user loses access to a folder. How quickly does it disappear from their search results, and how?",
+      "evidence": {
+        "strong": "Deletes and permission changes take a priority path: mark documents hidden or update ACL metadata immediately (a filter applied at query time), then purge chunks and vectors asynchronously; permission changes are metadata updates without re-embedding; deletion latency is monitored.",
+        "adequate": "Deletes through the normal pipeline.",
+        "weak": "Waits for a nightly cleanup."
+      },
+      "misconceptions": [
+        {
+          "id": "del.normal",
+          "pattern": "Sends deletes through the same queue as new documents.",
+          "challenge": "A huge import is queued ahead of the delete. When does the deleted file stop appearing?"
+        }
+      ],
+      "probes": [
+        "Does a permission change require re-embedding?",
+        "How do you prove deletes meet the deadline?"
+      ],
+      "hints": [
+        "Hide first, clean up later.",
+        "Permissions are metadata."
+      ],
+      "moveOnSummary": "A priority path that hides or re-tags immediately and purges asynchronously, with deletion latency monitored.",
+      "learnTopics": [
+        "design-rag-chatbot",
+        "hybrid-search-reranking"
+      ]
+    },
+    {
+      "id": "deep.backfill",
+      "stage": "deep_dive",
+      "dimension": "scalability",
+      "weight": 3,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "gpu",
+          "orchestrator"
+        ],
+        "keywords": [
+          "backfill",
+          "throughput",
+          "fair scheduling",
+          "per-tenant quota",
+          "embedding throughput",
+          "import time"
+        ]
+      },
+      "goal": "Run large imports quickly without hurting live traffic or other tenants.",
+      "opener": "How long will the initial import take, and how do you keep it from slowing everyone else?",
+      "evidence": {
+        "strong": "Estimates parsing core-hours and embedding GPU-hours from page and chunk counts, runs backfills in separate lower-priority queues, applies per-tenant fair scheduling and quotas, scales workers for the import, and reports progress per tenant.",
+        "adequate": "Adds more workers without estimates or isolation.",
+        "weak": "Imports through the live queue."
+      },
+      "misconceptions": [
+        {
+          "id": "bf.shared",
+          "pattern": "Uses the same queue for imports and live updates.",
+          "challenge": "A new tenant imports ten million documents. What happens to another tenant's edit made a minute later?"
+        }
+      ],
+      "probes": [
+        "Show me rough numbers for parsing and embedding.",
+        "How do you keep tenants from starving each other?"
+      ],
+      "hints": [
+        "Separate bulk work from interactive work.",
+        "Pages and chunks drive the bill."
+      ],
+      "moveOnSummary": "Throughput estimates, separate low-priority backfill queues, per-tenant fair scheduling and quotas, and progress reporting.",
+      "learnTopics": [
+        "backfill-and-reprocessing",
+        "multi-tenancy"
+      ]
+    },
+    {
+      "id": "deep.security",
+      "stage": "deep_dive",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": false,
+      "triggers": {
+        "componentKinds": [
+          "firewall",
+          "dlq"
+        ],
+        "keywords": [
+          "sandboxed parsers",
+          "malicious files",
+          "zip bomb",
+          "poison document",
+          "tenant isolation",
+          "pii"
+        ]
+      },
+      "goal": "Handle untrusted files and protect tenant data.",
+      "opener": "Customers upload files you've never seen before. What could go wrong, and how do you protect the system?",
+      "evidence": {
+        "strong": "Parsers run sandboxed with CPU, memory and time limits; malformed files, zip bombs and macros are contained; repeated failures go to a dead-letter queue with alerts; tenants isolated in storage and indexes; PII detection per tenant policy; documents treated as untrusted content for downstream LLMs.",
+        "adequate": "Retries failures without sandboxing.",
+        "weak": "No consideration."
+      },
+      "misconceptions": [
+        {
+          "id": "sec.trust",
+          "pattern": "Trusts that customer files are well-formed.",
+          "challenge": "A file decompresses to terabytes. What happens to the parser host?"
+        }
+      ],
+      "probes": [
+        "What happens to a file that crashes the parser every time?",
+        "Could text in a document affect the assistants later?"
+      ],
+      "hints": [
+        "Treat uploads like untrusted input.",
+        "Isolate both execution and data."
+      ],
+      "moveOnSummary": "Sandboxed, resource-limited parsers, dead-letter handling, tenant isolation, PII handling, and treating content as untrusted downstream.",
+      "learnTopics": [
+        "pipeline-error-handling",
+        "prompt-injection"
+      ]
+    },
+    {
+      "id": "wrap.quality",
+      "stage": "wrap_up",
+      "dimension": "tradeoffs",
+      "weight": 2,
+      "required": true,
+      "triggers": {
+        "componentKinds": [],
+        "keywords": [
+          "parse quality",
+          "freshness lag",
+          "retrieval recall",
+          "monitoring",
+          "trade-offs"
+        ]
+      },
+      "goal": "Monitor quality and summarise trade-offs.",
+      "opener": "How would you know the pipeline is doing a good job, and what trade-offs did you make?",
+      "evidence": {
+        "strong": "Monitors ingestion lag per connector, delete latency, parse-quality signals (empty or garbled text, OCR confidence), failure rates, and retrieval recall on a golden question set after parser or chunker changes; trade-offs include parse quality versus cost and freshness versus throughput.",
+        "adequate": "Monitors failures only.",
+        "weak": "No monitoring."
+      },
+      "misconceptions": [],
+      "probes": [
+        "Which metric tells you parsing got worse?",
+        "How do you test a new chunker?"
+      ],
+      "hints": [
+        "Quality shows up in retrieval.",
+        "Lag and delete times are promises."
+      ],
+      "moveOnSummary": "Lag, delete latency, parse quality, failures and retrieval recall monitored; quality versus cost and freshness versus throughput traded.",
+      "learnTopics": [
+        "llm-evaluation",
+        "data-quality"
+      ]
+    }
+  ],
+  "curveballs": [
+    {
+      "id": "cb.import",
+      "after": "deep.parsing",
+      "prompt": "A new customer uploads twelve million files on their first day and other customers' edits now take an hour to show up. What went wrong?",
+      "agendaItemId": "deep.backfill"
+    },
+    {
+      "id": "cb.legal",
+      "after": "deep.versions",
+      "prompt": "A customer's legal team deletes a confidential document, but an assistant quotes it twenty minutes later. Walk me through why.",
+      "agendaItemId": "deep.deletes"
+    }
+  ],
+  "vocabulary": [
+    "ingestion",
+    "OCR",
+    "layout parsing",
+    "reading order",
+    "table extraction",
+    "chunking",
+    "embedding",
+    "vector index",
+    "keyword index",
+    "BM25",
+    "document registry",
+    "idempotent",
+    "dead-letter queue",
+    "backfill",
+    "tombstone",
+    "ACL",
+    "multi-tenant",
+    "sandbox",
+    "zip bomb",
+    "reconciliation"
+  ],
+  "alternatives": [
+    {
+      "choice": "A managed document parsing service for hard formats",
+      "whenBetter": "When accuracy on scans and tables matters more than per-page cost and data can leave your environment."
+    },
+    {
+      "choice": "A single workflow engine run per document instead of queues",
+      "whenBetter": "At lower volume, where per-document orchestration and visibility outweigh independent stage scaling."
+    },
+    {
+      "choice": "Separate indexes per tenant",
+      "whenBetter": "For large or regulated tenants that need hard isolation and independent scaling."
+    }
+  ],
+  "exemplars": [
+    {
+      "band": "strong",
+      "label": "Staged, versioned, fair",
+      "outline": "Clarifies backfill size, daily changes, formats, freshness and delete targets and tenancy. Raw files land in object storage with a registry of versions and stage status; queue-connected idempotent stages detect, parse with escalation to OCR only for hard pages, enrich, chunk with tenant, version, page and ACL metadata, embed in GPU batches with hash skipping, and index into vector and keyword stores. Updates are versioned with index-then-switch-then-delete; deletes and revocations hide immediately and purge later. Backfills run in separate fair-scheduled queues with throughput estimates; parsers are sandboxed with dead letters. Monitors lag, delete latency, parse quality and retrieval recall."
+    },
+    {
+      "band": "adequate",
+      "label": "Working batch pipeline",
+      "outline": "Parses documents, chunks and embeds them into a vector index with retries, processing updates by overwriting; uses one queue for everything and deletes through the normal path."
+    },
+    {
+      "band": "weak",
+      "label": "Text dump",
+      "outline": "Extracts raw text from each file, embeds whole documents and reprocesses everything nightly; no permissions, versions, scans or deletes."
+    }
+  ],
+  "pacing": {
+    "requirements": 0.15,
+    "high_level": 0.25,
+    "deep_dive": 0.5,
+    "wrap_up": 0.1
+  }
+}
