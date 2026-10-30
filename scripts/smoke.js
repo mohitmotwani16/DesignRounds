@@ -214,6 +214,8 @@ try {
       const expired = await call("GET", "/api/v1/me", undefined, launch);
       assert.equal(expired.status, 403);
       assert.equal(expired.body.error.code, "HUMAN_CHECK_REQUIRED");
+      const [askedAgain] = await query("select action, detail from human_check_events where outcome = 'pass-required' order by id desc limit 1");
+      assert.deepEqual([askedAgain.action, askedAgain.detail.reason, askedAgain.detail.route], ["continue", "expired", "GET /v1/me"], "each new check is recorded with its reason");
       // Renewing from the same browser keeps its launch id, so its other tabs stay valid.
       const renewed = await call("POST", "/api/v1/auth/human-check", { turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" }, launch);
       assert.equal(renewed.status, 200, JSON.stringify(renewed.body));
@@ -477,6 +479,7 @@ try {
     const run = await call("GET", "/api/v1/internal/maintenance", undefined, { Authorization: "Bearer smoke-secret" });
     assert.equal(run.status, 200);
     assert.equal(typeof run.body.deleted.rateLimits, "number");
+    assert.equal(typeof run.body.deleted.humanCheckEvents, "number");
   });
 
   await step("community articles: write, review, request changes, publish", async () => {
@@ -749,6 +752,61 @@ try {
     await signInAs("reporter-member@example.com");
     assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "reporter-member@example.com" })).status, 200);
     assert.equal((await query("select 1 from problem_reports where email = 'reporter-member@example.com'")).length, 0);
+    cookie = previousCookie;
+  });
+
+  await step("human-check events are recorded and admins can search them", async () => {
+    const previousCookie = cookie;
+    cookie = "";
+    const reference = { "X-Diagnostic-Id": "smoke2345k" };
+    process.env.TURNSTILE_SITE_KEY = "3x00000000000000000000FF";
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    try {
+      assert.equal((await call("POST", "/api/v1/auth/request-code", { email: "Human-Log@example.com" }, reference)).status, 403);
+      assert.equal((await call("POST", "/api/v1/auth/request-code", { email: "human-log@example.com", turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" }, reference)).status, 200);
+    } finally {
+      process.env.TURNSTILE_SITE_KEY = " ";
+      process.env.TURNSTILE_SECRET_KEY = " ";
+    }
+    const serverEvents = await query("select outcome, email, client_id from human_check_events where client_id = 'SMOKE2345K' order by id");
+    assert.deepEqual(serverEvents.map((row) => row.outcome), ["missing-token", "passed"]);
+    assert.equal(serverEvents[0].email, "human-log@example.com", "a failed sign-in can be found by email");
+
+    // The page reports widget failures Cloudflare never tells the server about.
+    const beacon = (body, headers = reference) => call("POST", "/api/v1/diagnostics/human-check", body, headers);
+    assert.equal((await beacon({ action: "sign-in", outcome: "widget-error", errorCode: "600010", page: "/signin", detail: { invisible: false, elapsedMs: 900 } })).status, 204);
+    assert.equal((await beacon({ action: "sign-in", outcome: "made-up" })).status, 400);
+    assert.equal((await beacon({ action: "sign-in", outcome: "load-failed", page: "https://example.com/signin?token=x" })).status, 400, "only a path is stored");
+    assert.equal((await beacon({ action: "sign-in", outcome: "stalled", detail: { anything: "else" } })).status, 400);
+    assert.equal((await beacon({ action: "continue", outcome: "stalled" }, { "X-Diagnostic-Id": "not a reference!" })).status, 204, "a malformed reference is dropped, not trusted");
+    assert.equal((await query("select client_id from human_check_events where source = 'client' and outcome = 'stalled'"))[0].client_id, null);
+
+    const signInAs = async (address) => {
+      cookie = "";
+      // By now the run has used up the per-IP code limit; this step isn't about limits.
+      await query("delete from rate_limits where key like 'ip-code:%'");
+      await query("delete from login_codes where email = $1", [address]);
+      const { body } = await call("POST", "/api/v1/auth/request-code", { email: address });
+      assert.equal((await call("POST", "/api/v1/auth/verify-code", { email: address, code: body.devCode })).status, 200);
+    };
+    await signInAs("human-log@example.com");
+    assert.equal((await call("GET", "/api/v1/admin/human-checks")).status, 403, "only admins can list human-check events");
+
+    await signInAs("admin@example.com");
+    const found = await call("GET", "/api/v1/admin/human-checks?q=Smoke2345K");
+    assert.equal(found.status, 200);
+    assert.deepEqual(found.body.events.map((event) => event.outcome), ["widget-error", "missing-token"], "problems only, newest first, by reference");
+    const widget = found.body.events[0];
+    assert.deepEqual([widget.source, widget.errorCodes, widget.page, widget.reference, widget.detail.elapsedMs], ["client", ["600010"], "/signin", "SMOKE2345K", 900]);
+    assert.equal((await call("GET", "/api/v1/admin/human-checks?q=SMOKE2345K&problems=0")).body.events.length, 3, "passes on request");
+    assert.equal((await call("GET", "/api/v1/admin/human-checks?q=600010")).body.events[0].reference, "SMOKE2345K", "by Cloudflare error code");
+    assert.ok((await call("GET", "/api/v1/admin/human-checks?q=human-log@example.com")).body.events.some((event) => event.outcome === "missing-token"), "by email");
+    assert.ok(found.body.summary.some((row) => row.source === "client" && row.outcome === "widget-error"));
+
+    // Deleting the account removes the sign-in attempts recorded under its email.
+    await signInAs("human-log@example.com");
+    assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "human-log@example.com" })).status, 200);
+    assert.equal((await query("select 1 from human_check_events where email = 'human-log@example.com'")).length, 0);
     cookie = previousCookie;
   });
 

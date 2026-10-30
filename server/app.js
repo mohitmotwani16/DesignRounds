@@ -16,6 +16,7 @@ import { catalogRouter } from "./modules/catalog.js";
 import { roundsRouter } from "./modules/rounds.js";
 import { waitlistRouter } from "./modules/waitlist.js";
 import { reportsRouter } from "./modules/reports.js";
+import { humanChecksRouter } from "./modules/human-checks.js";
 import { devRouter, devToolsEnabled } from "./modules/dev.js";
 import { guideFor } from "./modules/ai/guides.js";
 import { syncAnswerPools } from "./modules/answers/store.js";
@@ -81,6 +82,8 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use("/v1", waitlistRouter);
   // Anyone can report a problem, signed in or not.
   api.use("/v1", reportsRouter);
+  // Human-check diagnostics from the page, sent even before a check has passed.
+  api.use("/v1", humanChecksRouter);
   api.use("/v1", identityRouter);
   api.use("/v1", practiceRouter);
   api.use("/v1", reviewsRouter);

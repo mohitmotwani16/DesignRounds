@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { reportHumanCheck } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { TurnstileWidget } from "./Turnstile.jsx";
 
@@ -14,7 +15,10 @@ export function BackgroundHumanCheck() {
 
   useEffect(() => {
     if (!humanBackgroundCheck) return undefined;
-    const timer = window.setTimeout(escalateHuman, ESCALATE_AFTER_MS);
+    const timer = window.setTimeout(() => {
+      reportHumanCheck({ action: "continue", outcome: "stalled", detail: { invisible: true, elapsedMs: ESCALATE_AFTER_MS } });
+      escalateHuman();
+    }, ESCALATE_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, [humanBackgroundCheck, escalateHuman]);
 

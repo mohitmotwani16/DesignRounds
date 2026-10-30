@@ -40,7 +40,7 @@ reportsRouter.post("/reports", route(async (req, res) => {
   // A signed-in learner always reports with the account email, whatever the form sent.
   const email = signedIn ? req.user.email : body.email;
   if (!email) throw new HttpError(400, "INVALID_REQUEST", "email: Required");
-  if (!signedIn) await assertHuman(req, body.turnstileToken, TURNSTILE_ACTION);
+  if (!signedIn) await assertHuman(req, body.turnstileToken, TURNSTILE_ACTION, { email });
 
   const report = await queryOne(
     `insert into problem_reports (email, user_id, message, page, user_agent)
