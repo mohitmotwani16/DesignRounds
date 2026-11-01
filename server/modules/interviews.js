@@ -14,7 +14,7 @@ import { guideFor } from "./ai/guides.js";
 import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
-import { changeMode, conductorPackVersion, handleLearnerTurn, handleTick, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
+import { changeMode, conductorPackVersion, handleLearnerTurn, handleTick, nuggetInterviewNeedsBootstrap, nuggetOpeningText, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
 import { requireUser } from "./identity.js";
 import { needsDataModel } from "./pks/index.js";
 import { hasInterviewer, isPlus, limitsFor } from "./plans.js";
@@ -314,15 +314,25 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
       await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
       const stateRow = await ensureState(conn, session);
       const hasTurns = Boolean(await conn.queryOne("select 1 from interview_turns where session_id = $1 limit 1", [session.id]));
-      const needsNuggetV3 = session.session_kind === "nugget" && packVersion && (
-        !hasTurns
-        || stateRow.engine !== "v3"
-        || stateRow.stage === "requirements"
-        || stateRow.stage === "high_level"
-      );
-      if (needsNuggetV3) {
-        if (hasTurns) await clearInterviewRound(conn, session.id);
-        await startNuggetRound(conn, { session, user: req.user });
+      const firstTurn = hasTurns
+        ? await conn.queryOne("select content, move from interview_turns where session_id = $1 order by seq asc limit 1", [session.id])
+        : null;
+
+      if (session.session_kind === "nugget" && session.nugget_id) {
+        const needsBootstrap = nuggetInterviewNeedsBootstrap({ stateRow, hasTurns, firstTurn, packVersion });
+        if (needsBootstrap) {
+          if (hasTurns) await clearInterviewRound(conn, session.id);
+          if (packVersion) {
+            await startNuggetRound(conn, { session, user: req.user });
+          } else {
+            const opening = nuggetOpeningText(session.nugget_id);
+            if (!opening) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
+            await conn.query(
+              "insert into interview_turns (session_id, user_id, seq, role, kind, trigger, content) values ($1, $2, 1, 'interviewer', 'opening', 'opening', $3)",
+              [session.id, session.user_id, opening]
+            );
+          }
+        }
       } else if (!hasTurns) {
         if (packVersion) {
           await startRound(conn, { session, user: req.user, packVersion });
