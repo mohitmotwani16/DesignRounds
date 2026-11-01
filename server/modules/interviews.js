@@ -15,6 +15,7 @@ import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
 import { changeMode, conductorPackVersion, handleLearnerTurn, handleTick, nuggetInterviewNeedsBootstrap, nuggetOpeningText, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
+import { nuggetDebriefSent } from "./conductor/nugget.js";
 import { requireUser } from "./identity.js";
 import { needsDataModel } from "./pks/index.js";
 import { hasInterviewer, isPlus, limitsFor } from "./plans.js";
@@ -385,11 +386,22 @@ async function reserveLearnerTurn({ session, user, kind, content, requestId, hin
       const freshSession = await conn.queryOne("select status from practice_sessions where id = $1", [session.id]);
       if (freshSession.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", ROUND_FINISHED);
       const state = await ensureState(conn, session);
+      if (session.session_kind === "nugget") {
+        const turns = await recentTurns(session.id, state.summarized_through);
+        if (nuggetDebriefSent(turns)) {
+          throw new HttpError(409, "NUGGET_DEBRIEF", "This drill is in debrief. Use Finish round to complete the session.");
+        }
+      }
       if (state.pending_since && Date.now() - new Date(state.pending_since).getTime() < PENDING_MS) {
         throw new HttpError(409, "INTERVIEWER_BUSY", "The interviewer is still replying to your last message.");
       }
       const allowance = await readAllowance(conn, user, session, state);
-      if (allowance.turns.used >= allowance.turns.limit) throw new HttpError(403, "INTERVIEW_LIMIT_ROUND", `You've used all ${allowance.turns.limit} interviewer replies for this round. Finish the round to get your review.`);
+      if (allowance.turns.used >= allowance.turns.limit) {
+        const limitMsg = session.session_kind === "nugget"
+          ? `You've used all ${allowance.turns.limit} interviewer replies for this drill. Finish the round when you're ready.`
+          : `You've used all ${allowance.turns.limit} interviewer replies for this round. Finish the round to get your review.`;
+        throw new HttpError(403, "INTERVIEW_LIMIT_ROUND", limitMsg);
+      }
       if (allowance.month.used >= allowance.month.limit) throw new HttpError(403, "INTERVIEW_LIMIT_MONTH", "You've used this month's interviewer replies. They reset at the start of next month.");
       if (hint && allowance.hints.used >= allowance.hints.limit) throw new HttpError(403, "HINT_LIMIT", `You've used all ${allowance.hints.limit} hints for this round.`);
       const learner = await conn.queryOne(

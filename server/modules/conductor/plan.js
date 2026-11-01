@@ -1,5 +1,6 @@
 import { seededJitter } from "./canvas.js";
 import { CLOSED, STAGES } from "./moves.js";
+import { nuggetIncidentResolved } from "./nugget.js";
 
 // PLAN (docs/design/interview-conductor.md, section 5.1): pure code, no model. From the
 // ledger, the state, the clock and the conventions it decides what the interviewer may
@@ -91,7 +92,7 @@ function awaitingDrawing(item, canvas, conventions) {
 
 // `conversation` is { lastMove, questionStreak }: the interviewer's last move and how
 // many of its latest messages in a row asked something.
-export function plan({ items, state, conventions, agenda, curveballs = [], pacing, minutes, turn = {}, trigger = "reply", addedKinds = [], canvas = null, conversation = null }) {
+export function plan({ items, state, conventions, agenda, curveballs = [], pacing, minutes, turn = {}, trigger = "reply", addedKinds = [], canvas = null, conversation = null, incidentDrill = false }) {
   const clock = clockOf({ state, pacing, minutes });
   const focus = focusItem(items, state, canvas);
   const next = nextPendingItem(items, state.stage, focus?.itemId, canvas);
@@ -113,6 +114,8 @@ export function plan({ items, state, conventions, agenda, curveballs = [], pacin
 
   if (trigger === "hint" || turn.kind === "hint_request") {
     allowed = ["hint"];
+  } else if (incidentDrill && focus && nuggetIncidentResolved(focus)) {
+    allowed = ["wrap_up", "explain"];
   } else if (roundShare >= conventions.wrapUpAt) {
     allowed = ["wrap_up", "clarify", "explain"];
   } else if (!focus) {
@@ -154,16 +157,24 @@ export function plan({ items, state, conventions, agenda, curveballs = [], pacin
   // Letting them keep going is one beat, not a habit: never twice in a row.
   if (conversation?.lastMove === "listen") allowed = allowed.filter((move) => move !== "listen");
 
+  if (incidentDrill) {
+    curveball = null;
+    allowed = allowed.filter((move) => move !== "curveball" && move !== "move_on");
+    if (focus && nuggetIncidentResolved(focus) && !allowed.includes("wrap_up")) {
+      allowed = ["wrap_up", ...allowed.filter((move) => move === "explain" || move === "clarify")];
+    }
+  }
+
   if (canvas && trigger !== "hint" && !allowed.includes("hint")) {
     const thin = canvas.components < conventions.minCanvasComponents || canvas.connections < conventions.minCanvasConnections;
     // No wrap-up on a canvas too thin to review: ask them to draw their design instead.
-    if (thin && allowed.includes("wrap_up")) allowed = [...allowed.filter((move) => move !== "wrap_up" && move !== "ask_to_draw"), "ask_to_draw"];
+    if (thin && allowed.includes("wrap_up") && !incidentDrill) allowed = [...allowed.filter((move) => move !== "wrap_up" && move !== "ask_to_draw"), "ask_to_draw"];
     // Talking without drawing: past the requirements, a canvas that hasn't caught up gets
     // a request to draw every few turns, waiting twice as long if they've added something
     // since the last request.
     const progressed = state.componentsAtDrawAsk !== null && state.componentsAtDrawAsk !== undefined && canvas.components > state.componentsAtDrawAsk;
     const gap = conventions.drawCooldownTurns * (progressed ? 2 : 1);
-    if (thin && state.stage !== "requirements" && canvas.learnerTurnsSinceAsk >= gap) {
+    if (thin && !incidentDrill && state.stage !== "requirements" && canvas.learnerTurnsSinceAsk >= gap) {
       allowed = ["ask_to_draw", "clarify", "explain"];
       drawTarget = null;
     }
