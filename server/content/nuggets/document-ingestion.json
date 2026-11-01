@@ -1,0 +1,692 @@
+{
+  "promptId": "document-ingestion",
+  "packVersion": "pack-b3f331ed",
+  "inputsFingerprint": "b66f7017e7d66de211a84d5c282f4168bf42993e31f77b00988ffa9603ff9bcd",
+  "nuggets": [
+    {
+      "id": "document-ingestion/parser-oom-on-scanned-pdf",
+      "title": "Scanned PDF upload OOMs parser workers",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.parsing",
+      "scenario": {
+        "symptoms": "Ingestion queue depth hit 200k after customers bulk-uploaded 400-page scanned PDFs. Parser pods OOMKilled looping retries on the same files.",
+        "interviewerSetup": "Parser loads entire PDF into memory with OCR on main thread; no size limits or streaming page pipeline."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-up",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "client",
+              "label": "Upload client"
+            }
+          },
+          {
+            "id": "n-q",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Ingest queue"
+            }
+          },
+          {
+            "id": "n-parse",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Parser workers"
+            }
+          },
+          {
+            "id": "n-blob",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 280
+            },
+            "data": {
+              "kind": "storage",
+              "label": "Object storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-up",
+            "target": "n-q",
+            "label": "Large PDFs"
+          },
+          {
+            "id": "e2",
+            "source": "n-q",
+            "target": "n-parse",
+            "label": "Unbounded"
+          },
+          {
+            "id": "e3",
+            "source": "n-parse",
+            "target": "n-blob",
+            "label": "Load whole file"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-parse"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Memory-unbounded parsing on huge scanned PDFs"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Parse messy formats well without paying OCR prices for everything.",
+            "opener": "Bulk scans killed parser pods—the parsing pipeline is highlighted. How do you make ingestion safe?",
+            "evidence": {
+              "strong": "Detects type and routes to layout-aware parsers; keeps headings, reading order and tables (rows with headers); escalates only scanned or complex pages to OCR or vision models; captions figures where needed; strips repeated headers and footers; stores parsed intermediate output; tracks parse-quality signals.",
+              "adequate": "OCR for everything or a single generic extractor.",
+              "weak": "Raw text extraction only."
+            },
+            "misconceptions": [
+              {
+                "id": "parse.ocr_all",
+                "pattern": "Runs OCR on every page to be safe.",
+                "challenge": "Most pages already contain text. What does OCR on five hundred million pages cost?"
+              }
+            ],
+            "probes": [
+              "How do you keep a table usable after parsing?",
+              "How would you notice a parser producing garbage?"
+            ],
+            "hints": [
+              "Use expensive tools only where needed.",
+              "Structure matters as much as words."
+            ],
+            "referenceFix": "Page-streaming OCR, file size and page caps, sandboxed workers with memory limits, dead-letter toxic docs, and async progress to users."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "document-ingestion/version-fork-lost-updates",
+      "title": "Concurrent edits create conflicting document versions",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.versions",
+      "scenario": {
+        "symptoms": "Legal team sees two 'latest' versions of the same contract after parallel uploads. Search index shows both as current without merge.",
+        "interviewerSetup": "Version ids are client-generated timestamps; server accepts last write without vector clock or content hash dedupe."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-a",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 80
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Client A"
+            }
+          },
+          {
+            "id": "n-b",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 200
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Client B"
+            }
+          },
+          {
+            "id": "n-api",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Doc API"
+            }
+          },
+          {
+            "id": "n-meta",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Version metadata"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-a",
+            "target": "n-api",
+            "label": "Upload v3"
+          },
+          {
+            "id": "e2",
+            "source": "n-b",
+            "target": "n-api",
+            "label": "Upload v3"
+          },
+          {
+            "id": "e3",
+            "source": "n-api",
+            "target": "n-meta",
+            "label": "Both latest"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-meta"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "LWW versioning without conflict detection"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Apply updates correctly and consistently.",
+            "opener": "Two versions both marked latest—the versioning path is highlighted. How do you linearize history?",
+            "evidence": {
+              "strong": "Every event carries a version; stages reject versions older than the registry's current one; the new version is fully indexed, then marked current, then old chunks deleted, so search never shows a half-indexed document; reconciliation compares sources, registry and indexes.",
+              "adequate": "Overwrites on each event without ordering.",
+              "weak": "Appends chunks for every edit."
+            },
+            "misconceptions": [
+              {
+                "id": "ver.delete_first",
+                "pattern": "Deletes old chunks before indexing the new version.",
+                "challenge": "Someone searches during the gap. What do they find?"
+              }
+            ],
+            "probes": [
+              "In what order do you add new chunks and remove old ones?",
+              "How do you catch updates whose events were lost?"
+            ],
+            "hints": [
+              "Compare versions before acting.",
+              "Swap only once the new version is ready."
+            ],
+            "referenceFix": "Server-assigned monotonic version, optimistic concurrency tokens, branch conflicts for human merge, content-hash dedupe, and single latest pointer per doc."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "document-ingestion/tombstone-never-compacted",
+      "title": "Deletes not propagated to search index",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.deletes",
+      "scenario": {
+        "symptoms": "GDPR erasure requests completed in primary store but documents still appear in search results weeks later. Tombstone stream consumer lagging 14 days.",
+        "interviewerSetup": "Delete writes tombstone to OLTP but search indexer on separate backlog without SLA; compactor job disabled."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-api",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Doc API"
+            }
+          },
+          {
+            "id": "n-oltp",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Primary store"
+            }
+          },
+          {
+            "id": "n-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 280
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Change stream"
+            }
+          },
+          {
+            "id": "n-search",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-elasticsearch",
+              "label": "Search index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-api",
+            "target": "n-oltp",
+            "label": "Tombstone write"
+          },
+          {
+            "id": "e2",
+            "source": "n-oltp",
+            "target": "n-stream",
+            "label": "CDC event"
+          },
+          {
+            "id": "e3",
+            "source": "n-stream",
+            "target": "n-search",
+            "label": "Lag 14d"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-stream",
+          "n-search"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Search indexer lag left deleted docs discoverable"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "requirements",
+            "weight": 3,
+            "required": true,
+            "goal": "Meet the strict deletion and revocation deadline.",
+            "opener": "Users deleted data but search still finds it—the delete propagation path is highlighted. What's broken?",
+            "evidence": {
+              "strong": "Deletes and permission changes take a priority path: mark documents hidden or update ACL metadata immediately (a filter applied at query time), then purge chunks and vectors asynchronously; permission changes are metadata updates without re-embedding; deletion latency is monitored.",
+              "adequate": "Deletes through the normal pipeline.",
+              "weak": "Waits for a nightly cleanup."
+            },
+            "misconceptions": [
+              {
+                "id": "del.normal",
+                "pattern": "Sends deletes through the same queue as new documents.",
+                "challenge": "A huge import is queued ahead of the delete. When does the deleted file stop appearing?"
+              }
+            ],
+            "probes": [
+              "Does a permission change require re-embedding?",
+              "How do you prove deletes meet the deadline?"
+            ],
+            "hints": [
+              "Hide first, clean up later.",
+              "Permissions are metadata."
+            ],
+            "referenceFix": "SLA on delete propagation, priority consumer for tombstones, periodic reconcile job, block erasure completion until index confirms, and monitor lag alerts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "document-ingestion/backfill-overwrites-live-index",
+      "title": "Historical backfill clobbered live search index",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.backfill",
+      "scenario": {
+        "symptoms": "Night backfill job rewrote entire Elasticsearch index using old snapshot, dropping a day of new documents from search.",
+        "interviewerSetup": "Backfill pipeline uses same index alias as live writer without isolated rebuild and alias swap."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-live",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Live indexer"
+            }
+          },
+          {
+            "id": "n-back",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 240
+            },
+            "data": {
+              "kind": "service",
+              "label": "Backfill job"
+            }
+          },
+          {
+            "id": "n-es",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-elasticsearch",
+              "label": "Search cluster"
+            }
+          },
+          {
+            "id": "n-alias",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Index alias"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-live",
+            "target": "n-es",
+            "label": "Live writes"
+          },
+          {
+            "id": "e2",
+            "source": "n-back",
+            "target": "n-es",
+            "label": "Bulk overwrite"
+          },
+          {
+            "id": "e3",
+            "source": "n-es",
+            "target": "n-alias",
+            "label": "Users query"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-back",
+          "n-es"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Backfill wrote directly to live index alias"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Run large imports quickly without hurting live traffic or other tenants.",
+            "opener": "Search lost a day of docs after backfill—the indexing path is highlighted. How should backfill run safely?",
+            "evidence": {
+              "strong": "Estimates parsing core-hours and embedding GPU-hours from page and chunk counts, runs backfills in separate lower-priority queues, applies per-tenant fair scheduling and quotas, scales workers for the import, and reports progress per tenant.",
+              "adequate": "Adds more workers without estimates or isolation.",
+              "weak": "Imports through the live queue."
+            },
+            "misconceptions": [
+              {
+                "id": "bf.shared",
+                "pattern": "Uses the same queue for imports and live updates.",
+                "challenge": "A new tenant imports ten million documents. What happens to another tenant's edit made a minute later?"
+              }
+            ],
+            "probes": [
+              "Show me rough numbers for parsing and embedding.",
+              "How do you keep tenants from starving each other?"
+            ],
+            "hints": [
+              "Separate bulk work from interactive work.",
+              "Pages and chunks drive the bill."
+            ],
+            "referenceFix": "Build new index offline, dual-write or catch-up delta, atomic alias swap, freeze backfill from touching production alias, and validate doc counts before cutover."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "document-ingestion/malware-in-zip-bypass",
+      "title": "Zip bomb slipped through ingestion sandbox",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.security",
+      "scenario": {
+        "symptoms": "Parser cluster outage after nested zip expanded to 800 GB logical size. Antivirus scan skipped for 'trusted' enterprise uploads.",
+        "interviewerSetup": "Sandbox trusts tenant flag bypassing depth and compression ratio checks."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-up",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "client",
+              "label": "Enterprise uploader"
+            }
+          },
+          {
+            "id": "n-ing",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Ingest gateway"
+            }
+          },
+          {
+            "id": "n-av",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "AV scanner"
+            }
+          },
+          {
+            "id": "n-parse",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "container",
+              "label": "Parser sandbox"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-up",
+            "target": "n-ing",
+            "label": "Trusted zip"
+          },
+          {
+            "id": "e2",
+            "source": "n-ing",
+            "target": "n-av",
+            "label": "Bypassed"
+          },
+          {
+            "id": "e3",
+            "source": "n-ing",
+            "target": "n-parse",
+            "label": "Expand bomb"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-ing",
+          "n-parse"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Trusted bypass skipped compression bomb checks"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle untrusted files and protect tenant data.",
+            "opener": "One upload expanded to hundreds of GB—the security scan path is highlighted. How do you contain it?",
+            "evidence": {
+              "strong": "Parsers run sandboxed with CPU, memory and time limits; malformed files, zip bombs and macros are contained; repeated failures go to a dead-letter queue with alerts; tenants isolated in storage and indexes; PII detection per tenant policy; documents treated as untrusted content for downstream LLMs.",
+              "adequate": "Retries failures without sandboxing.",
+              "weak": "No consideration."
+            },
+            "misconceptions": [
+              {
+                "id": "sec.trust",
+                "pattern": "Trusts that customer files are well-formed.",
+                "challenge": "A file decompresses to terabytes. What happens to the parser host?"
+              }
+            ],
+            "probes": [
+              "What happens to a file that crashes the parser every time?",
+              "Could text in a document affect the assistants later?"
+            ],
+            "hints": [
+              "Treat uploads like untrusted input.",
+              "Isolate both execution and data."
+            ],
+            "referenceFix": "Always enforce max depth, ratio, and extracted bytes limits, run AV in isolated workers, quota per tenant, and kill switches on anomalous expansion."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

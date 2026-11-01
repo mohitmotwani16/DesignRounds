@@ -11,7 +11,22 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         // Keep the browser's Host header so the API's same-origin check sees localhost:5173.
-        "/api": { target: "http://localhost:8787", changeOrigin: false },
+        "/api": {
+          target: "http://localhost:8787",
+          changeOrigin: false,
+          configure: (proxy) => {
+            proxy.on("error", (_err, _req, res) => {
+              if (res.headersSent) return;
+              res.writeHead(502, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({
+                error: {
+                  code: "API_UNREACHABLE",
+                  message: "Can't reach the API server. Run npm run dev and wait until you see [api] listening on http://localhost:8787.",
+                },
+              }));
+            });
+          },
+        },
         "/ingest/static": { target: posthogAssets, changeOrigin: true, rewrite: (path) => path.replace(/^\/ingest/, "") },
         "/ingest": { target: posthogHost, changeOrigin: true, rewrite: (path) => path.replace(/^\/ingest/, "") },
       },

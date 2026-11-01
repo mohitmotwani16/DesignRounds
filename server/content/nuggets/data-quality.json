@@ -1,0 +1,692 @@
+{
+  "promptId": "data-quality",
+  "packVersion": "pack-80d4cfaa",
+  "inputsFingerprint": "a8ccd4570b37240ffcea19737bf9eb1fa99c7f3f583223b4459c0b26af9e891b",
+  "nuggets": [
+    {
+      "id": "data-quality/bad-partition-poisons-warehouse",
+      "title": "Bad upstream partition blocked entire nightly load",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.circuit_breaker",
+      "scenario": {
+        "symptoms": "Warehouse load failed at 2 a.m. because one Kafka partition had corrupt JSON for three hours. Downstream marts empty for morning dashboards.",
+        "interviewerSetup": "ETL aborts whole batch on first poison message without quarantine or circuit breaker per partition."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Kafka topic"
+            }
+          },
+          {
+            "id": "n-etl",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Load job"
+            }
+          },
+          {
+            "id": "n-quar",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Quarantine"
+            }
+          },
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-kafka",
+            "target": "n-etl",
+            "label": "All partitions"
+          },
+          {
+            "id": "e2",
+            "source": "n-etl",
+            "target": "n-wh",
+            "label": "Abort"
+          },
+          {
+            "id": "e3",
+            "source": "n-etl",
+            "target": "n-quar",
+            "label": "Unused"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-etl"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "All-or-nothing batch fails on single poison record"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Explain how the system physically prevents bad data from reaching downstream consumers.",
+            "opener": "One bad partition stopped the whole pipeline—the ingest path is highlighted. How do you isolate failure?",
+            "evidence": {
+              "strong": "Integrates directly with the pipeline orchestrator using a circuit-breaker pattern, failing the DAG run based on block-level severity rules.",
+              "adequate": "Mentions stopping the pipeline but relies on polling or manual intervention to halt downstream tasks.",
+              "weak": "Runs checks on a schedule after data is written, relying on alerts rather than prevention."
+            },
+            "misconceptions": [
+              {
+                "id": "cb.async_checks",
+                "pattern": "Running checks asynchronously after the publish step completes.",
+                "challenge": "If a dashboard queries the table exactly one minute after your pipeline finishes, how did your asynchronous check protect it?"
+              }
+            ],
+            "probes": [
+              "How do we distinguish between a check that should halt the pipeline and one that just warns the owner?",
+              "If the check takes 20 minutes to run, how does that impact the upstream pipeline?"
+            ],
+            "hints": [
+              "Think about intermediate tables or staging areas.",
+              "How can the framework signal the orchestrator to fail the current job?"
+            ],
+            "referenceFix": "Per-partition circuit breakers, quarantine bad records with alerts, continue healthy partitions, replay quarantine after fix, and SLAs on loaded row counts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-quality/unknown-column-breaks-executive-report",
+      "title": "Renamed column broke report with no lineage alert",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.lineage",
+      "scenario": {
+        "symptoms": "CEO dashboard showed blank revenue for a day after an engineer renamed a field in the raw layer. No alert fired because downstream job silently null-filled.",
+        "interviewerSetup": "Lineage graph exists but breaking schema changes don't trigger consumers; jobs coerce missing fields to null."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-src",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Raw table"
+            }
+          },
+          {
+            "id": "n-line",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Lineage registry"
+            }
+          },
+          {
+            "id": "n-dbt",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Transform job"
+            }
+          },
+          {
+            "id": "n-bi",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "CEO dashboard"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-src",
+            "target": "n-dbt",
+            "label": "Schema change"
+          },
+          {
+            "id": "e2",
+            "source": "n-src",
+            "target": "n-line",
+            "label": "Untriggered"
+          },
+          {
+            "id": "e3",
+            "source": "n-dbt",
+            "target": "n-bi",
+            "label": "Null revenue"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-src",
+          "n-dbt"
+        ],
+        "edgeIds": [
+          "e1",
+          "e3"
+        ],
+        "headline": "Schema change without consumer contract notification"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a lineage data model and collection strategy to trace incident impact.",
+            "opener": "A rename blanked revenue—the lineage and contract path is highlighted. How do you catch this pre-deploy?",
+            "evidence": {
+              "strong": "Uses a graph model for datasets, jobs, and dashboards. Discusses parsing query logs vs. explicit API emission for lineage metadata.",
+              "adequate": "Mentions a database table tracking source-to-destination pairs and recursively querying it.",
+              "weak": "Assumes lineage is magically known or relies entirely on manual documentation by developers."
+            },
+            "misconceptions": [
+              {
+                "id": "lineage.manual",
+                "pattern": "Relying on teams to manually declare all downstream consumers.",
+                "challenge": "If a new team builds a dashboard on top of our table without telling us, how does our system know they exist?"
+              }
+            ],
+            "probes": [
+              "What kind of database is best suited for traversing multiple levels of downstream dependencies?",
+              "How do we capture lineage from a complex SQL transformation?"
+            ],
+            "hints": [
+              "SQL queries contain `FROM` and `INSERT INTO` statements that can be parsed.",
+              "Consider graph databases for fast traversal of dependency chains."
+            ],
+            "referenceFix": "Contract tests on producers, block deploy breaking dependents, lineage-driven notifications, and non-null assertions on critical metrics."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-quality/silent-null-spike",
+      "title": "Null rate spike unnoticed for a week",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.anomaly",
+      "scenario": {
+        "symptoms": "Customer age field became 90% null after a mobile bug but quality checks only ran monthly. Segmentation models degraded silently.",
+        "interviewerSetup": "Profiling job weekly; no streaming checks on null rate or distribution drift."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-mobile",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile app"
+            }
+          },
+          {
+            "id": "n-ing",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Ingest stream"
+            }
+          },
+          {
+            "id": "n-prof",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Profiler"
+            }
+          },
+          {
+            "id": "n-alert",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Quality alerts"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-mobile",
+            "target": "n-ing",
+            "label": "Events"
+          },
+          {
+            "id": "e2",
+            "source": "n-ing",
+            "target": "n-prof",
+            "label": "Weekly only"
+          },
+          {
+            "id": "e3",
+            "source": "n-prof",
+            "target": "n-alert",
+            "label": "Late detect"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-prof"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Infrequent profiling missed null spike"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle statistical anomaly detection and alert fatigue for metrics like row count or null rates.",
+            "opener": "A mobile bug nulled a column for days—the profiling path is highlighted. How do you detect faster?",
+            "evidence": {
+              "strong": "Stores time-series metrics and uses statistical methods (like z-scores or moving averages) that account for seasonality and trend.",
+              "adequate": "Uses a time-series database and static thresholds or simple percentage-based rules.",
+              "weak": "Hardcodes expected row counts or ignores historical trends entirely."
+            },
+            "misconceptions": [
+              {
+                "id": "anomaly.static",
+                "pattern": "Using static rules for all anomaly detection.",
+                "challenge": "If our business grows 10% every month, won't a static volume rule break constantly?"
+              }
+            ],
+            "probes": [
+              "Where are you storing the historical check results to calculate these trends?",
+              "If a team gets too many false positives, what mechanism allows them to tune the alerts?"
+            ],
+            "hints": [
+              "We need to look at what the metric was last week or last month, not just yesterday.",
+              "Consider using a time-series database to track metric history."
+            ],
+            "referenceFix": "Streaming expectations on null rate and cardinality, anomaly detection on profiles, block releases when checks fail, tie to owner dashboards."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-quality/producer-breaks-consumer-contract",
+      "title": "Producer shipped extra enum value crashing consumer",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.contracts",
+      "scenario": {
+        "symptoms": "Payments pipeline stalled because a new status enum value appeared without consumer update. Spark job threw enum parse exceptions for 6 hours.",
+        "interviewerSetup": "Avro schema marked compatible but semantic enum extension not coordinated; consumers use strict pattern match."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Payments svc"
+            }
+          },
+          {
+            "id": "n-reg",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Schema registry"
+            }
+          },
+          {
+            "id": "n-cons",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Spark consumer"
+            }
+          },
+          {
+            "id": "n-dlq",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Dead letter"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-prod",
+            "target": "n-reg",
+            "label": "Publish schema"
+          },
+          {
+            "id": "e2",
+            "source": "n-reg",
+            "target": "n-cons",
+            "label": "New enum"
+          },
+          {
+            "id": "e3",
+            "source": "n-cons",
+            "target": "n-dlq",
+            "label": "Fail batch"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-reg",
+          "n-cons"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Backward incompatible semantic change passed registry"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Define how schema expectations are managed between data producers and consumers.",
+            "opener": "A new enum value stopped Spark—the contract path is highlighted. How do you evolve safely?",
+            "evidence": {
+              "strong": "Proposes declarative data contracts stored in a registry, enforced at deployment or ingestion time before data enters the warehouse.",
+              "adequate": "Detects the schema change after the fact and alerts the downstream owner.",
+              "weak": "Relies purely on the data warehouse throwing an error when the query is run."
+            },
+            "misconceptions": [
+              {
+                "id": "contracts.post_facto",
+                "pattern": "Treating schema drift only as a data check rather than a CI/CD or registry problem.",
+                "challenge": "If we wait until the pipeline runs to catch the dropped column, haven't we already broken the contract?"
+              }
+            ],
+            "probes": [
+              "Where are these contracts defined, and who owns them?",
+              "Can we catch a schema violation before the pipeline even executes?"
+            ],
+            "hints": [
+              "Think about integrating schema checks into the CI/CD pipeline of the upstream service.",
+              "A central schema registry can hold the agreed-upon structure."
+            ],
+            "referenceFix": "Consumer-driven contracts, semantic compatibility tests, default unknown handling, coordinated rollout with feature flags, and DLQ replay after fix."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-quality/hot-partition-skews-quality-scan",
+      "title": "Quality scan times out on skewed partition",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.storage",
+      "scenario": {
+        "symptoms": "Daily quality scan missed SLA because one huge tenant partition dominated scan time; other partitions finished in minutes.",
+        "interviewerSetup": "Scan job uses single thread per table without salting or parallel split on tenant key."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Fact table"
+            }
+          },
+          {
+            "id": "n-scan",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Quality scan"
+            }
+          },
+          {
+            "id": "n-split",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Partition planner"
+            }
+          },
+          {
+            "id": "n-metrics",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Scan metrics"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-wh",
+            "target": "n-scan",
+            "label": "Full table"
+          },
+          {
+            "id": "e2",
+            "source": "n-scan",
+            "target": "n-split",
+            "label": "Skipped"
+          },
+          {
+            "id": "e3",
+            "source": "n-scan",
+            "target": "n-metrics",
+            "label": "Timeout"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-scan"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Unpartitioned scan skewed on hot tenant"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Design the storage layer for framework metadata, historical metrics, and lineage data.",
+            "opener": "Quality job timed out on one giant tenant—the scan path is highlighted. How do you scale checks?",
+            "evidence": {
+              "strong": "Splits storage appropriately: relational/document for configurations, time-series for metrics history, and graph for lineage.",
+              "adequate": "Puts everything into a single relational database but correctly identifies indexing strategies.",
+              "weak": "Stores framework configuration inside the analytical data warehouse directly, mixing data plane and control plane."
+            },
+            "misconceptions": [
+              {
+                "id": "storage.everything_rdbms",
+                "pattern": "Using a relational DB for complex lineage traversal at scale.",
+                "challenge": "If we have a lineage chain 15 levels deep, how does a standard SQL database perform on that query?"
+              }
+            ],
+            "probes": [
+              "What is the write-per-second volume for the metrics database during peak ETL hours?",
+              "How do you ensure fast reads for the incident dashboards?"
+            ],
+            "hints": [
+              "Lineage is inherently a network of connected nodes.",
+              "Millions of check results daily behave like metrics."
+            ],
+            "referenceFix": "Split scans by partition key ranges, sample heavy tenants separately, adaptive parallelism, track per-partition duration, and incremental checks on deltas."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

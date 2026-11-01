@@ -1,0 +1,459 @@
+{
+  "promptId": "ad-click-aggregator",
+  "packVersion": "pack-51c2ebab",
+  "inputsFingerprint": "6332031c814e5bf741317f23d7b2606f751915c8796cf5ae50dcae987fecce34",
+  "nuggets": [
+    {
+      "id": "ad-click-aggregator/ad-click-hotkey-skew",
+      "title": "Viral Super Bowl Ad Pushes Aggregator Partition to 100% CPU",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.hotkeys",
+      "scenario": {
+        "symptoms": "During a marquee sports event, click tracking latencies surge to over 10 seconds. Ingestion gateways report HTTP 503 backpressure errors, while total system throughput drops despite low cluster-wide memory usage.",
+        "interviewerSetup": "Monitoring shows that 1 out of 32 Flink subtasks and Kafka partitions is stuck at 100% CPU utilization while the other 31 subtasks are under 10% load. A single viral campaign represents 45% of all incoming clicks."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Click Ingestion Service"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Clickstream Kafka Topic"
+            }
+          },
+          {
+            "id": "node-flink",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-flink",
+              "label": "Flink Window Aggregator"
+            }
+          },
+          {
+            "id": "node-redis",
+            "type": "systemNode",
+            "position": {
+              "x": 740,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Real-Time Counter Store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-ingest-kafka",
+            "source": "node-ingest",
+            "target": "node-kafka",
+            "label": "Keyed Produce (ad_id)"
+          },
+          {
+            "id": "edge-kafka-flink",
+            "source": "node-kafka",
+            "target": "node-flink",
+            "label": "Partition Consumer"
+          },
+          {
+            "id": "edge-flink-redis",
+            "source": "node-flink",
+            "target": "node-redis",
+            "label": "Sink Minute Aggregates"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-flink"
+        ],
+        "edgeIds": [
+          "edge-kafka-flink"
+        ],
+        "headline": "Hot key partition skew stalls processing pipeline during single-advertiser click spike"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "goal": "Mitigate single-key CPU bottleneck by introducing key salting and two-stage aggregation.",
+            "opener": "One hot ad key is pinning single-partition worker CPU to 100% and stalling ingestion. How do you re-architect stream partitioning to eliminate this hot spot?",
+            "evidence": {
+              "strong": "Identifies key skew on ad_id, introduces key salting (e.g., ad_id + random_salt_1..N) to distribute the hot key across multiple stream task instances for stage-1 partial counts, followed by a non-salted stage-2 aggregation step to compute total window counts.",
+              "adequate": "Suggests dynamic re-keying or local pre-aggregation, but misses two-stage pipeline architecture or how to recombine salted keys.",
+              "weak": "Suggests simply scaling up Kafka partition count or scaling out worker nodes without changing the keying scheme."
+            },
+            "misconceptions": [
+              {
+                "id": "hot.more_partitions",
+                "pattern": "Believes increasing Kafka partitions or Flink cluster size solves hot key CPU saturation.",
+                "challenge": "All clicks for a single ad_id produce the exact same partition key hash. How does adding more partitions change where that single key lands?"
+              }
+            ],
+            "probes": [
+              "How do you determine the optimal salt range N for high-volume keys without inflating state overhead for long-tail quiet ads?",
+              "How do stateful window triggers change when merging partial salted counts in stage two?"
+            ],
+            "hints": [
+              "Keying directly by ad_id routes all traffic for that ad to a single task slot.",
+              "Consider splitting the workload into two phases: partial local counting using an augmented key, then global merging."
+            ],
+            "referenceFix": "Apply key salting at ingestion by suffixing the partition key with a random integer (ad_id_salt). Stage 1 aggregators summarize counts per salted key per 1-minute window. Stage 2 consumes stage 1 outputs grouped by raw ad_id to produce the unified final count.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "ad-click-aggregator/ad-click-sink-double-count",
+      "title": "Aggregator Restart Causes Over-Counting in Counter Database",
+      "minutes": 5,
+      "parentAgendaItemId": "deep.exactly_once",
+      "scenario": {
+        "symptoms": "Advertiser dashboards display sudden 2x-3x spikes in aggregate clicks during a 10-minute window, resulting in false budget exhaustion alerts and billing complaints.",
+        "interviewerSetup": "A worker node hosting the stream processor crashed and recovered from its latest checkpoint. Upon resumption, offset replay caused previously computed minute counts to be sent to the counter store again."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Kafka Event Stream"
+            }
+          },
+          {
+            "id": "node-flink",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Stream Processor Engine"
+            }
+          },
+          {
+            "id": "node-s3",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "State Checkpoint Storage"
+            }
+          },
+          {
+            "id": "node-db",
+            "type": "systemNode",
+            "position": {
+              "x": 540,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Aggregated Counts DB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-kafka-flink",
+            "source": "node-kafka",
+            "target": "node-flink",
+            "label": "Stream Read"
+          },
+          {
+            "id": "edge-flink-s3",
+            "source": "node-flink",
+            "target": "node-s3",
+            "label": "Async Checkpoint"
+          },
+          {
+            "id": "edge-flink-db",
+            "source": "node-flink",
+            "target": "node-db",
+            "label": "INCRBY ad_id:window"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-flink",
+          "node-db"
+        ],
+        "edgeIds": [
+          "edge-flink-db"
+        ],
+        "headline": "Replayed stream windows invoke additive INCR mutations on downstream counter store"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Ensure sink updates are idempotent to prevent counter inflation when processing offset replays.",
+            "opener": "The stream processor restarted from a checkpoint and replayed uncommitted messages, but counter DB values doubled. Why did checkpointing fail to prevent double counting, and how do you fix it?",
+            "evidence": {
+              "strong": "Explains that stream checkpointing guarantees at-least-once processing at the operator level unless downstream storage writes are idempotent or transactional. Replaces additive INCR updates with absolute window overwrite key-value upserts (e.g., SET ad_id:window_start_time = total_count) or two-phase commit sinks.",
+              "adequate": "Recognizes that replayed messages invoked non-idempotent operations, suggesting key deduplication or window upserts.",
+              "weak": "Claims Kafka exactly-once semantics alone automatically protect external database counter increments."
+            },
+            "misconceptions": [
+              {
+                "id": "eo.kafka_magic",
+                "pattern": "Believes stream engine exactly-once config guarantees end-to-end correctness regardless of sink write design.",
+                "challenge": "If your stream app re-writes count increments to Redis via INCRBY after a crash, what happens to the previously written increment in Redis when the offset is replayed?"
+              }
+            ],
+            "probes": [
+              "What key design allows an external KV store to support deterministic, overwrite-based window updates?",
+              "How would you handle out-of-order late click arrivals if you switch from incremental counter additions to full window overwrites?"
+            ],
+            "hints": [
+              "Incremental updates (INCRBY) are non-idempotent; executing them twice produces wrong state.",
+              "Structure sink keys around fixed window bounds so repeated writes replace existing values rather than adding to them."
+            ],
+            "referenceFix": "Change storage operations from atomic increments to idempotent upserts keyed by exact window boundaries (key: ad_id:window_timestamp). During replay, the worker calculates the total accumulated window count from state and overwrites the exact aggregate value in the database.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "ad-click-aggregator/ad-click-billing-reconcile-drift",
+      "title": "Real-time Metrics Diverge from Advertiser Invoices",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.reconcile",
+      "scenario": {
+        "symptoms": "Finance reports a persistent 5% discrepancy between daily customer billing statements and live dashboard telemetry, leading to publisher payment disputes.",
+        "interviewerSetup": "The real-time streaming aggregator calculates click totals using short-lived duplicate deduplication state (5-minute TTL). Delayed mobile clicks arriving hours later and delayed click-fraud flags are not reflected in real-time counts."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Click Ingestion API"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "topic",
+              "label": "Kafka Click Stream"
+            }
+          },
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 80
+            },
+            "data": {
+              "kind": "t-flink",
+              "label": "Realtime Stream Aggregator"
+            }
+          },
+          {
+            "id": "node-datalake",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 240
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Raw Clicks Data Lake (S3)"
+            }
+          },
+          {
+            "id": "node-spark",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 240
+            },
+            "data": {
+              "kind": "t-spark",
+              "label": "Daily Reconciliation Job"
+            }
+          },
+          {
+            "id": "node-billing",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 80
+            },
+            "data": {
+              "kind": "database",
+              "label": "Billing Ledger DB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-ingest-kafka",
+            "source": "node-ingest",
+            "target": "node-kafka",
+            "label": "Produce Event"
+          },
+          {
+            "id": "edge-kafka-stream",
+            "source": "node-kafka",
+            "target": "node-stream",
+            "label": "Real-Time Pipeline"
+          },
+          {
+            "id": "edge-kafka-lake",
+            "source": "node-kafka",
+            "target": "node-datalake",
+            "label": "Raw Event Archival"
+          },
+          {
+            "id": "edge-stream-billing",
+            "source": "node-stream",
+            "target": "node-billing",
+            "label": "Direct Billing Writes (Broken)"
+          },
+          {
+            "id": "edge-lake-spark",
+            "source": "node-datalake",
+            "target": "node-spark",
+            "label": "Batch Processing"
+          },
+          {
+            "id": "edge-spark-billing",
+            "source": "node-spark",
+            "target": "node-billing",
+            "label": "Final Invoice Ledger"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-stream",
+          "node-billing"
+        ],
+        "edgeIds": [
+          "edge-stream-billing"
+        ],
+        "headline": "Invoices generated directly from low-latency stream count estimates without batch reconciliation"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "goal": "Establish a dual-path (Lambda/Kappa) reconciliation mechanism where stream counts drive fast estimates and batch jobs generate official invoices.",
+            "opener": "The system relies directly on real-time stream totals to bill clients, missing late clicks and invalid click corrections. How should the architecture be modified for financial correctness?",
+            "evidence": {
+              "strong": "Decouples low-latency dashboard counts from financial settlement. Uses raw append-only click logs in object storage to run an offline daily batch reconciliation (e.g. Spark) with full 24-hour deduplication and fraud model scoring as the authoritative billing source of truth.",
+              "adequate": "Proposes running a batch job to recalculate numbers, but doesn't explain how dashboard data and billing invoices are isolated or reconciled.",
+              "weak": "Suggests increasing streaming TTL deduplication windows indefinitely or running real-time fraud models on streaming instances directly."
+            },
+            "misconceptions": [
+              {
+                "id": "rec.stream_bills",
+                "pattern": "Believes stream aggregation results are complete and accurate enough to directly issue financial invoices.",
+                "challenge": "What happens when a mobile client syncs 2 hours of offline clicks, or an offline bot detector flags 10,000 invalid clicks overnight? How can a 5-minute stream window handle that?"
+              }
+            ],
+            "probes": [
+              "How do you handle audit trails and telemetry when reconciliation updates previously reported counts?",
+              "What SLA thresholds should trigger an engineer alert if batch and streaming counts diverge beyond expected error margins?"
+            ],
+            "hints": [
+              "Real-time streaming prioritizes speed; batch processing prioritizes completeness and accuracy.",
+              "Treat streaming counts as provisional estimates and batch recomputations as immutable source of truth."
+            ],
+            "referenceFix": "Designate real-time stream outputs as fast, estimated metrics for advertiser operational dashboards. Archive immutable raw click events into object storage. Run a daily batch job to compute precise daily billing tables with full window deduplication and fraud scrubbing, writing final invoice numbers to the billing ledger.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

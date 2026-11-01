@@ -1,0 +1,691 @@
+{
+  "promptId": "feed-ranking",
+  "packVersion": "pack-22c70b49",
+  "inputsFingerprint": "a8292ce37d24da3476d747017f8254828e6fab0f5f23379809f4431e878fc92d",
+  "nuggets": [
+    {
+      "id": "feed-ranking/deep-features",
+      "title": "Ranker Serves Stale Social Graph Features at Peak",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.features",
+      "scenario": {
+        "symptoms": "Feed relevance scores flatline during prime time; feature fetch timeouts cause the ranker to fall back to popularity-only ordering.",
+        "interviewerSetup": "High-cardinality social graph features are computed in batch nightly while the ranker expects sub-100ms online lookups."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Feed API"
+            }
+          },
+          {
+            "id": "node-rank",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Ranking Service"
+            }
+          },
+          {
+            "id": "node-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Feature Store"
+            }
+          },
+          {
+            "id": "node-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Nightly Graph Job"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-feed",
+            "target": "node-rank",
+            "label": "Rank candidates"
+          },
+          {
+            "id": "e2",
+            "source": "node-rank",
+            "target": "node-fs",
+            "label": "Feature lookup"
+          },
+          {
+            "id": "e3",
+            "source": "node-batch",
+            "target": "node-fs",
+            "label": "Daily refresh"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-fs",
+          "node-rank"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stale batch-only features cause ranker timeouts and generic fallback ranking"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_features",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Choose and serve the features that matter most for feed ranking.",
+            "opener": "Which features would carry the most signal, and how fresh do they need to be?",
+            "evidence": {
+              "strong": "Viewer-author affinity from past interactions, post type and age, early engagement velocity from a stream, viewer's history with similar posts, friends' engagement on the post, context; served from a feature store with stream-updated counters.",
+              "adequate": "Lists reasonable features but not freshness or how they're computed.",
+              "weak": "Only post popularity."
+            },
+            "misconceptions": [
+              {
+                "id": "feat.popularity",
+                "pattern": "Thinks global popularity is the strongest signal.",
+                "challenge": "A viral post from a stranger versus a close friend's update: which does the person care about?"
+              }
+            ],
+            "probes": [
+              "How would you compute how close two people are?",
+              "How quickly must engagement counts update?"
+            ],
+            "hints": [
+              "Relationships matter in a social feed.",
+              "Early reactions predict later ones."
+            ],
+            "referenceFix": "Affinity, post type and age, stream-updated engagement velocity, viewer history and friends' engagement served from a feature store."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feed-ranking/deep-integrity",
+      "title": "Clickbait Surge Bypasses Static Ranker Weights",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.integrity",
+      "scenario": {
+        "symptoms": "Policy team reports a 5x spike in low-quality clickbait in top feed slots despite unchanged model weights.",
+        "interviewerSetup": "Integrity rules live in a separate config service but the ranker only applies a static downrank multiplier baked into model features."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-rank",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Ranker"
+            }
+          },
+          {
+            "id": "node-policy",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Policy Rules"
+            }
+          },
+          {
+            "id": "node-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Feed API"
+            }
+          },
+          {
+            "id": "node-mod",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 300
+            },
+            "data": {
+              "kind": "content-moderation",
+              "label": "Safety Scores"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-feed",
+            "target": "node-rank",
+            "label": "Score posts"
+          },
+          {
+            "id": "e2",
+            "source": "node-mod",
+            "target": "node-rank",
+            "label": "Safety features"
+          },
+          {
+            "id": "e3",
+            "source": "node-policy",
+            "target": "node-feed",
+            "label": "Post-filter (unused)"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-policy",
+          "node-rank"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Policy downrank rules not applied on hot ranking path"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_integrity",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep harmful and low-quality posts down without retraining the ranker for every policy change.",
+            "opener": "How do spam, clickbait and misinformation stay out of the top of the feed?",
+            "evidence": {
+              "strong": "Separate integrity classifiers per issue, applied as hard filters for violations and multiplicative demotions for borderline content, so policy changes don't require retraining the engagement model; outrage-bait counteracted with quality signals and surveys.",
+              "adequate": "Adds a filter for bad content but folds everything into the ranker.",
+              "weak": "Assumes engagement ranking will handle it."
+            },
+            "misconceptions": [
+              {
+                "id": "int.ranker_learns",
+                "pattern": "Believes the engagement model will learn to avoid harmful posts.",
+                "challenge": "If misleading posts get more comments, what does an engagement model learn?"
+              }
+            ],
+            "probes": [
+              "Why keep integrity models separate from the ranker?",
+              "What's the difference between removing and demoting?"
+            ],
+            "hints": [
+              "Policy changes faster than ranking models retrain.",
+              "Not everything borderline needs removal."
+            ],
+            "referenceFix": "Separate per-issue integrity classifiers applied as filters or demotions, independent of the engagement ranker."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feed-ranking/deep-freshness",
+      "title": "Repeat Visits Show Identical Feed for Hours",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.freshness",
+      "scenario": {
+        "symptoms": "Users report seeing the same posts after reopening the app; session dedupe cache never expires and blocks new candidates.",
+        "interviewerSetup": "The feed service caches the entire ranked page keyed only by user_id without session or time bucketing."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile App"
+            }
+          },
+          {
+            "id": "node-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Feed Service"
+            }
+          },
+          {
+            "id": "node-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Seen-Post Cache"
+            }
+          },
+          {
+            "id": "node-rank",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Ranker"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-feed",
+            "label": "Fetch feed"
+          },
+          {
+            "id": "e2",
+            "source": "node-feed",
+            "target": "node-cache",
+            "label": "Filter seen"
+          },
+          {
+            "id": "e3",
+            "source": "node-feed",
+            "target": "node-rank",
+            "label": "Rank page"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-cache"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unbounded seen-post cache prevents feed refresh between sessions"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_freshness",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep the feed fresh and varied across repeated visits.",
+            "opener": "Someone opens the feed, closes it, and opens it again ten minutes later. What do they see?",
+            "evidence": {
+              "strong": "Tracks seen posts and demotes them unless there's new activity, caches the ranked list briefly for navigation, re-ranks on new sessions with fresh signals, pre-ranks when a session is likely, and applies author and type diversity rules.",
+              "adequate": "Removes seen posts but no caching or diversity plan.",
+              "weak": "Shows the same ranking again."
+            },
+            "misconceptions": [
+              {
+                "id": "fresh.recompute",
+                "pattern": "Recomputes the full ranking on every scroll event.",
+                "challenge": "What does that cost, and do people notice the difference between scrolls?"
+              }
+            ],
+            "probes": [
+              "How do you avoid ten posts from one page in a row?",
+              "When would you rank ahead of time?"
+            ],
+            "hints": [
+              "Remember what was shown.",
+              "Rules in a final pass control repetition."
+            ],
+            "referenceFix": "Seen-post tracking, brief caching, fresh re-ranking per session, opportunistic pre-ranking and diversity rules."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feed-ranking/deep-experiments",
+      "title": "Short-Term Lift Masks Long-Term Engagement Regression",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.experiments",
+      "scenario": {
+        "symptoms": "An experiment shows +4% clicks for 3 days but 30-day retention drops 2%; experiment analysis only aggregates daily metrics.",
+        "interviewerSetup": "Experiment exposure is logged but cohort analysis pipelines join on device_id inconsistently across mobile and web."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Feed Service"
+            }
+          },
+          {
+            "id": "node-exp",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "experimentation",
+              "label": "Experiment SDK"
+            }
+          },
+          {
+            "id": "node-events",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Event Pipeline"
+            }
+          },
+          {
+            "id": "node-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Metrics Warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-feed",
+            "target": "node-exp",
+            "label": "Assign variant"
+          },
+          {
+            "id": "e2",
+            "source": "node-feed",
+            "target": "node-events",
+            "label": "Log impressions"
+          },
+          {
+            "id": "e3",
+            "source": "node-events",
+            "target": "node-wh",
+            "label": "Load metrics"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-wh",
+          "node-exp"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Broken exposure join invalidates long-horizon experiment conclusions"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_experiments",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Prove changes help in the long run.",
+            "opener": "How would you know a new ranking change is good for people over months, not days?",
+            "evidence": {
+              "strong": "A/B tests on meaningful interactions and return visits with guardrails (hide and report rates, integrity prevalence, survey satisfaction), long-running holdouts to catch long-term harm, and care with novelty effects.",
+              "adequate": "An A/B test on engagement with no long-term view.",
+              "weak": "Ships on offline metrics."
+            },
+            "misconceptions": [
+              {
+                "id": "exp.short",
+                "pattern": "Trusts a one-week engagement lift.",
+                "challenge": "A change lifts comments for a week and then retention falls slowly. How would you have seen it?"
+              }
+            ],
+            "probes": [
+              "Which metric would stop a launch even if engagement rose?",
+              "Why keep a group on the old system for months?"
+            ],
+            "hints": [
+              "Short-term and long-term effects can disagree.",
+              "Survey answers measure satisfaction directly."
+            ],
+            "referenceFix": "A/B tests with integrity and satisfaction guardrails plus long-running holdouts to catch slow harm."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feed-ranking/deep-serving",
+      "title": "Peak Traffic Exhausts Ranker Thread Pool",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.serving",
+      "scenario": {
+        "symptoms": "During evening peak, feed API P99 exceeds 2s; ranker queue depth grows unbounded and clients receive HTTP 503.",
+        "interviewerSetup": "The feed API synchronously calls the ranker for 500 candidates per request with no deadline or partial fallback."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Feed API"
+            }
+          },
+          {
+            "id": "node-rank",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Ranker Pool"
+            }
+          },
+          {
+            "id": "node-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 300
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Hot Post Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-feed",
+            "label": "Scroll requests"
+          },
+          {
+            "id": "e2",
+            "source": "node-feed",
+            "target": "node-rank",
+            "label": "Score 500 items"
+          },
+          {
+            "id": "e3",
+            "source": "node-feed",
+            "target": "node-cache",
+            "label": "Optional fallback"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-rank",
+          "node-feed"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Synchronous full-candidate ranking exceeds latency budget at peak load"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_serving",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Meet the latency budget at peak load and degrade gracefully.",
+            "opener": "How does ranking stay within the time budget at peak traffic?",
+            "evidence": {
+              "strong": "Estimates predictions per second, batches the heavy ranker on GPUs, distils a light ranker, budgets each stage, and falls back to the light ranker's order or a cached ranking when the heavy model is slow.",
+              "adequate": "Mentions caching or scaling but no estimates or fallback.",
+              "weak": "Assumes it will be fast enough."
+            },
+            "misconceptions": [
+              {
+                "id": "serve.scale_out",
+                "pattern": "Believes adding servers alone fixes latency.",
+                "challenge": "If one request's model call is slow, do more servers make that request faster?"
+              }
+            ],
+            "probes": [
+              "Roughly how many scores per second at peak?",
+              "What does the user see when the heavy model times out?"
+            ],
+            "hints": [
+              "Estimate before choosing hardware.",
+              "Have a cheaper answer ready."
+            ],
+            "referenceFix": "Per-second prediction estimates, GPU batching, a distilled light ranker, per-stage budgets and a fallback ranking."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

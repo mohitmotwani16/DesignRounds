@@ -1,0 +1,267 @@
+{
+  "promptId": "video-recommendations",
+  "packVersion": "pack-bccd1ebd",
+  "inputsFingerprint": "8dfd129a01c3128d608e8154cf73ee29db347c09c317a4e98eb25ac3fb56f66b",
+  "nuggets": [
+    {
+      "id": "video-recommendations/retrieval_latency_timeout",
+      "title": "ANN Retrieval Timeout Empties the Candidate Pool",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.retrieval",
+      "scenario": {
+        "symptoms": "Home feed shows generic trending only for 20% of users during peak. p99 retrieval stage exceeds 120ms budget and ranker receives zero candidates.",
+        "interviewerSetup": "Two-stage recommenders treat ANN timeout as empty result without fallback to inverted index or cached candidates."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-user", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Viewer" } },
+          { "id": "node-retrieval", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "search-service", "label": "ANN Retrieval" } },
+          { "id": "node-index", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "shard", "label": "Fallback Index (unused)" } },
+          { "id": "node-rank", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "ml-serving", "label": "Ranker" } }
+        ],
+        "edges": [
+          { "id": "e-user-ret", "source": "node-user", "target": "node-retrieval", "label": "Request feed" },
+          { "id": "e-ret-rank", "source": "node-retrieval", "target": "node-rank", "label": "Empty on timeout" },
+          { "id": "e-index-skip", "source": "node-index", "target": "node-retrieval", "label": "Not wired" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-retrieval", "node-index"],
+        "edgeIds": ["e-ret-rank"],
+        "headline": "Hard dependency on slow ANN retrieval yields blank feeds instead of degraded candidates"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_retrieval_fallback",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Retrieve candidates within budget using sharded ANN, timeouts, and fallback retrieval paths.",
+          "opener": "When vector search timed out, users saw only trending. How do you retrieve hundreds of candidates fast enough to rank?",
+          "evidence": {
+            "strong": "Sharded ANN with per-shard top-k and timeout, approximate then refine, fallback to co-occurrence or subscription index, cache recent candidates per user.",
+            "adequate": "Single ANN index without timeout handling.",
+            "weak": "Scan all videos."
+          },
+          "misconceptions": [{ "id": "ret.one", "pattern": "Single global ANN query at billion scale.", "challenge": "What happens at p99 when one shard is hot?" }],
+          "probes": ["What candidates do you show if ANN fails?", "How many candidates does ranker need?"],
+          "hints": ["Degrade gracefully, not empty.", "Parallel shard queries with timeout."],
+          "referenceFix": "ANN with shard timeouts plus inverted-index fallback and cached personal candidates."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-recommendations/feedback_loop_spam",
+      "title": "Clickbait Feedback Loop Dominates Ranker Training",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.feedback",
+      "scenario": {
+        "symptoms": "Average watch time drops 15% while click-through rises. Model amplifies misleading thumbnails because training labels are click-only.",
+        "interviewerSetup": "Daily retrain uses logistic loss on clicks without watch-time or satisfaction labels; creators gamify titles."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-logs", "type": "systemNode", "position": { "x": 80, "y": 200 }, "data": { "kind": "clickstream", "label": "Click Logs" } },
+          { "id": "node-train", "type": "systemNode", "position": { "x": 280, "y": 200 }, "data": { "kind": "ml-training", "label": "Ranker Trainer" } },
+          { "id": "node-serve", "type": "systemNode", "position": { "x": 480, "y": 200 }, "data": { "kind": "ml-serving", "label": "Feed Ranker" } },
+          { "id": "node-watch", "type": "systemNode", "position": { "x": 280, "y": 40 }, "data": { "kind": "metrics", "label": "Watch Time (ignored)" } }
+        ],
+        "edges": [
+          { "id": "e-logs-train", "source": "node-logs", "target": "node-train", "label": "Click labels" },
+          { "id": "e-train-serve", "source": "node-train", "target": "node-serve", "label": "Deploy" },
+          { "id": "e-watch-skip", "source": "node-watch", "target": "node-train", "label": "Not in loss" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-train", "node-logs"],
+        "edgeIds": ["e-logs-train"],
+        "headline": "Click-only training feedback creates exploitative recommendation feedback loop"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_feedback_signals",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Train on watch-time, satisfaction, and debiased implicit feedback rather than clicks alone.",
+          "opener": "CTR went up but viewers watch less. What signals do you learn from and how do you avoid clickbait loops?",
+          "evidence": {
+            "strong": "Multi-objective labels with watch time and completion, position debiasing, creator quality penalties, explore/exploit, human eval on holdout.",
+            "adequate": "Adds watch time feature without changing primary loss.",
+            "weak": "Optimize clicks only."
+          },
+          "misconceptions": [{ "id": "fb.click", "pattern": "Equates click with user satisfaction.", "challenge": "Does a click on a misleading thumbnail help the user?" }],
+          "probes": ["How do you measure satisfaction?", "What stops creators gaming the objective?"],
+          "hints": ["Watch time often beats click.", "Debias logged bandit feedback."],
+          "referenceFix": "Train on expected watch time with debiasing; guardrails on misleading content features."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-recommendations/new_creator_cold_start",
+      "title": "New Creator Videos Never Leave Explore Pool",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.coldstart",
+      "scenario": {
+        "symptoms": "Uploads from new channels get under 50 impressions unless creator is manually featured. Ranker scores rely on channel historical watch hours unavailable for new accounts.",
+        "interviewerSetup": "No exploration bucket or content-based retrieval boost; model defaults cold items to global prior near zero."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-upload", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "ingestion", "label": "New Upload" } },
+          { "id": "node-ret", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "embedding", "label": "Content Retrieval" } },
+          { "id": "node-rank", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "ml-serving", "label": "Ranker (cold prior)" } },
+          { "id": "node-explore", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "experiment", "label": "Explore Slot (0%)" } }
+        ],
+        "edges": [
+          { "id": "e-up-ret", "source": "node-upload", "target": "node-ret", "label": "Indexed" },
+          { "id": "e-ret-rank", "source": "node-ret", "target": "node-rank", "label": "Low score" },
+          { "id": "e-explore-skip", "source": "node-explore", "target": "node-rank", "label": "Disabled" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-rank", "node-explore"],
+        "edgeIds": ["e-explore-skip"],
+        "headline": "Cold-start ranker scores trap new creator content without exploration impressions"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_creator_coldstart",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Give new videos impressions via content features, exploration slots, and smoothed priors.",
+          "opener": "A new creator's first video never gets recommended. How does it get initial impressions?",
+          "evidence": {
+            "strong": "Content embedding similarity, small guaranteed explore traffic, smoothed channel priors, separate cold-start ranker, cap spam uploads.",
+            "adequate": "Manual editorial featuring only.",
+            "weak": "Pure collaborative filtering."
+          },
+          "misconceptions": [{ "id": "cold.cf", "pattern": "Requires history before any recommendation.", "challenge": "How does a brand-new video get its first 100 views?" }],
+          "probes": ["What content signals exist on upload day?", "How much explore traffic is safe?"],
+          "hints": ["Exploration buys learning signal.", "Content features work without history."],
+          "referenceFix": "Explore bucket plus content-based retrieval boost for fresh uploads."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-recommendations/ranking_feature_staleness",
+      "title": "Stale User Features Recommend Yesterday's Interests",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.ranking",
+      "scenario": {
+        "symptoms": "Users binge a new topic but feed keeps pushing old genre for 6 hours. Real-time clicks not reflected in ranker feature store refresh lag.",
+        "interviewerSetup": "User embedding updated batch every 4 hours in offline store; online serving reads cached features without streaming updates."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-clicks", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "clickstream", "label": "Real-Time Clicks" } },
+          { "id": "node-batch", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "feature-store", "label": "Batch Feature Store (4h)" } },
+          { "id": "node-rank", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "ml-serving", "label": "Feed Ranker" } },
+          { "id": "node-stream", "type": "systemNode", "position": { "x": 260, "y": 80 }, "data": { "kind": "t-kafka", "label": "Event Stream (unused)" } }
+        ],
+        "edges": [
+          { "id": "e-clicks-stream", "source": "node-clicks", "target": "node-stream", "label": "Events" },
+          { "id": "e-batch-rank", "source": "node-batch", "target": "node-rank", "label": "Stale embedding" },
+          { "id": "e-stream-skip", "source": "node-stream", "target": "node-rank", "label": "Not connected" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-batch", "node-stream"],
+        "edgeIds": ["e-batch-rank"],
+        "headline": "Batch-only user features lag behind session intent during ranking"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_ranking_freshness",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Blend near-line feature updates with batch embeddings for responsive ranking.",
+          "opener": "User watched cooking videos all morning but still sees gaming clips. How fresh are ranking features at serve time?",
+          "evidence": {
+            "strong": "Lambda architecture: batch base features plus real-time delta from stream, session-level features in ranker, TTL cache invalidation on events.",
+            "adequate": "Hourly batch refresh only.",
+            "weak": "Daily batch features only."
+          },
+          "misconceptions": [{ "id": "rank.batch", "pattern": "Assumes daily batch is enough for feed.", "challenge": "How quickly should a click change the next page?" }],
+          "probes": ["Which features must be real-time?", "Where is session state stored?"],
+          "hints": ["Session features capture immediate intent.", "Stream deltas atop batch base."],
+          "referenceFix": "Online feature store updates from click stream; ranker combines session + user embedding."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-recommendations/offline_online_metric_mismatch",
+      "title": "Offline Lift Does Not Match Online Experiment",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.evaluation",
+      "scenario": {
+        "symptoms": "New ranker shows +5% offline AUC but online A/B is flat and long-session users churn. Offline eval uses random negatives not matching production candidate generator.",
+        "interviewerSetup": "Offline pipeline scores held-out clicks against uniform random videos instead of hard negatives from retrieval stage."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-offline", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "evaluation", "label": "Offline Eval" } },
+          { "id": "node-prod", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "ml-serving", "label": "Production Ranker" } },
+          { "id": "node-ab", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "experiment", "label": "Online A/B" } },
+          { "id": "node-neg", "type": "systemNode", "position": { "x": 80, "y": 300 }, "data": { "kind": "metrics", "label": "Random Negatives" } }
+        ],
+        "edges": [
+          { "id": "e-neg-offline", "source": "node-neg", "target": "node-offline", "label": "Easy negatives" },
+          { "id": "e-offline-prod", "source": "node-offline", "target": "node-prod", "label": "Ship decision" },
+          { "id": "e-prod-ab", "source": "node-prod", "target": "node-ab", "label": "Flat metrics" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-offline", "node-neg"],
+        "edgeIds": ["e-neg-offline"],
+        "headline": "Misaligned offline evaluation overestimates ranker quality versus production candidate distribution"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_rec_eval",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Evaluate rankers with production-like negatives, interleaving, and online guardrail metrics.",
+          "opener": "Offline metrics loved the model but online experiment showed nothing. How do you evaluate recommendation changes?",
+          "evidence": {
+            "strong": "Sampled negatives from retrieval, counterfactual eval where possible, interleaving tests, online watch-time and churn guardrails, segment metrics.",
+            "adequate": "Offline AUC only.",
+            "weak": "Manual spot check of feed."
+          },
+          "misconceptions": [{ "id": "eval.auc", "pattern": "Trusts AUC with easy negatives.", "challenge": "Are random negatives as hard as retrieval candidates?" }],
+          "probes": ["Where do offline negatives come from?", "What online metric is primary?"],
+          "hints": ["Match eval to serving candidate set.", "Online test beats offline alone."],
+          "referenceFix": "Hard negatives from logged retrieval sets; interleaving before full A/B."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

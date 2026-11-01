@@ -1,0 +1,267 @@
+{
+  "promptId": "text-to-image",
+  "packVersion": "pack-6282b86e",
+  "inputsFingerprint": "675523414c10c11e967bd8663f56a28f911d1104d91ef29ccca34cbc86f14efa",
+  "nuggets": [
+    {
+      "id": "text-to-image/gpu_queue_starvation",
+      "title": "FIFO GPU Queue Blocks Premium Users During Viral Trend",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.scheduling",
+      "scenario": {
+        "symptoms": "Paid tier p99 time-to-first-pixel exceeds 8 minutes during a viral prompt trend. Free tier jobs dominate the single FIFO GPU queue.",
+        "interviewerSetup": "All diffusion jobs share one global queue processed strictly first-in-first-out without priority classes or preemption."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-free", "type": "systemNode", "position": { "x": 60, "y": 120 }, "data": { "kind": "client", "label": "Free Tier Requests" } },
+          { "id": "node-paid", "type": "systemNode", "position": { "x": 60, "y": 220 }, "data": { "kind": "client", "label": "Paid Tier Requests" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 280, "y": 170 }, "data": { "kind": "queue", "label": "Global FIFO GPU Queue" } },
+          { "id": "node-gpu", "type": "systemNode", "position": { "x": 480, "y": 170 }, "data": { "kind": "gpu", "label": "Diffusion Workers" } }
+        ],
+        "edges": [
+          { "id": "e-free-q", "source": "node-free", "target": "node-queue", "label": "Viral flood" },
+          { "id": "e-paid-q", "source": "node-paid", "target": "node-queue", "label": "Blocked behind free" },
+          { "id": "e-q-gpu", "source": "node-queue", "target": "node-gpu", "label": "Strict FIFO" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-queue", "node-paid"],
+        "edgeIds": ["e-paid-q"],
+        "headline": "Single FIFO scheduler starves paid users when free-tier demand spikes"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_gpu_scheduling",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Schedule GPU jobs with priority queues, reserved capacity, and fair sharing across tiers.",
+          "opener": "Paying customers waited eight minutes for images while free traffic spiked. How do you schedule diffusion jobs on limited GPUs?",
+          "evidence": {
+            "strong": "Multi-level priority queues, reserved GPU pools per tier, weighted fair queuing, autoscale GPU nodes, deadline-aware scheduling.",
+            "adequate": "Separate queue for paid without reserved GPUs.",
+            "weak": "One FIFO for all users."
+          },
+          "misconceptions": [{ "id": "sched.gpu", "pattern": "Assumes adding GPUs alone fixes fairness.", "challenge": "If free jobs fill the queue first, when does paid work start?" }],
+          "probes": ["How much GPU capacity is reserved for paid?", "Can long free jobs be preempted?"],
+          "hints": ["Priority without reserved capacity still starves.", "Scale workers separately from queue policy."],
+          "referenceFix": "Tiered queues with guaranteed paid capacity, WFQ across tenants."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "text-to-image/nsfw_filter_bypass",
+      "title": "Adversarial Prompts Bypass Image Safety Filter",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.safety",
+      "scenario": {
+        "symptoms": "Trust & safety flags 200 generated images in an hour containing disallowed content. Prompts use unicode homoglyphs and split banned tokens across languages.",
+        "interviewerSetup": "Safety runs only on raw user prompt string before diffusion; no post-generation vision classifier on outputs."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-user", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "User Prompt" } },
+          { "id": "node-text-filter", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "moderation", "label": "Text Safety Filter" } },
+          { "id": "node-model", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "gpu", "label": "Diffusion Model" } },
+          { "id": "node-vision", "type": "systemNode", "position": { "x": 460, "y": 300 }, "data": { "kind": "vision", "label": "Output Classifier (off)" } }
+        ],
+        "edges": [
+          { "id": "e-user-text", "source": "node-user", "target": "node-text-filter", "label": "Obfuscated prompt" },
+          { "id": "e-text-model", "source": "node-text-filter", "target": "node-model", "label": "Allowed" },
+          { "id": "e-model-vision", "source": "node-model", "target": "node-vision", "label": "No scan" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-text-filter", "node-vision"],
+        "edgeIds": ["e-model-vision"],
+        "headline": "Prompt-only moderation misses adversarial inputs and unsafe generated pixels"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_safety_pipeline",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Layer text and image safety with normalization, blocklists, classifier on output, and human review queue.",
+          "opener": "Users bypassed our filter with typo prompts and still got banned imagery. How do you keep text-to-image generation safe?",
+          "evidence": {
+            "strong": "Prompt normalization, multi-model text safety, post-gen vision classifier, block known unsafe embeddings, rate limits, audit trail, human escalation.",
+            "adequate": "Text filter only with static blocklist.",
+            "weak": "No safety checks."
+          },
+          "misconceptions": [{ "id": "safe.prompt", "pattern": "Believes checking the prompt text is sufficient.", "challenge": "Can diffusion produce unsafe content from an innocent-looking prompt?" }],
+          "probes": ["What runs after the image is generated?", "How do you handle adversarial unicode?"],
+          "hints": ["Defense in depth: input and output.", "Normalize prompts before rules."],
+          "referenceFix": "Text + image classifiers, homoglyph normalization, quarantine pipeline."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "text-to-image/gpu_autoscale_lag",
+      "title": "GPU Autoscale Lag Leaves Queue Depth Exploding",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.capacity",
+      "scenario": {
+        "symptoms": "Queue depth hits 400k jobs during marketing launch. New GPU nodes take 12 minutes to provision while users see multi-hour waits.",
+        "interviewerSetup": "Autoscaler watches queue depth but cloud GPU capacity is limited in region; scale-up is slow and there is no admission control."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-api", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "api-gateway", "label": "Generation API" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "queue", "label": "Job Queue (400k)" } },
+          { "id": "node-autoscale", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "metrics", "label": "Autoscaler" } },
+          { "id": "node-gpu", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "gpu", "label": "GPU Pool (slow add)" } }
+        ],
+        "edges": [
+          { "id": "e-api-queue", "source": "node-api", "target": "node-queue", "label": "Unlimited accept" },
+          { "id": "e-autoscale-gpu", "source": "node-autoscale", "target": "node-gpu", "label": "12m provision" },
+          { "id": "e-queue-gpu", "source": "node-queue", "target": "node-gpu", "label": "Fixed drain rate" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-queue", "node-autoscale"],
+        "edgeIds": ["e-api-queue"],
+        "headline": "Unbounded enqueue with slow GPU scale-up collapses user-visible capacity"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_capacity",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Match ingress to GPU capacity with admission control, pre-warmed pools, and cross-region overflow.",
+          "opener": "Marketing sent traffic faster than we could add GPUs and the queue never recovered. How do you plan capacity for spiky image generation?",
+          "evidence": {
+            "strong": "Queue depth limits with 429/backpressure, pre-warmed GPU baseline, multi-region pools, estimated wait time, tier-based admission, cache popular prompts.",
+            "adequate": "Autoscaler without ingress limits.",
+            "weak": "Accept all jobs regardless of queue."
+          },
+          "misconceptions": [{ "id": "cap.autoscale", "pattern": "Assumes autoscaling is instantaneous.", "challenge": "What happens in minute 1-10 of a spike while GPUs boot?" }],
+          "probes": ["When do you reject new jobs?", "How do users see ETA?"],
+          "hints": ["Backpressure protects the queue.", "Pre-warm before known events."],
+          "referenceFix": "Admission when queue > threshold, pre-scaled pools for launches, regional failover."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "text-to-image/starvation_low_priority",
+      "title": "Strict Priority Inverts So Low-Priority Jobs Never Run",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.priority",
+      "scenario": {
+        "symptoms": "Background thumbnail jobs age over 24 hours while interactive requests keep arriving. Batch SLA missed for a week during sustained traffic.",
+        "interviewerSetup": "Scheduler always picks highest priority queue; continuous interactive load prevents draining lower queues entirely."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-interactive", "type": "systemNode", "position": { "x": 80, "y": 100 }, "data": { "kind": "queue", "label": "Interactive Queue" } },
+          { "id": "node-batch", "type": "systemNode", "position": { "x": 80, "y": 240 }, "data": { "kind": "queue", "label": "Batch Queue" } },
+          { "id": "node-sched", "type": "systemNode", "position": { "x": 300, "y": 170 }, "data": { "kind": "service", "label": "Strict Priority Scheduler" } },
+          { "id": "node-gpu", "type": "systemNode", "position": { "x": 500, "y": 170 }, "data": { "kind": "gpu", "label": "GPU Workers" } }
+        ],
+        "edges": [
+          { "id": "e-int-sched", "source": "node-interactive", "target": "node-sched", "label": "Always non-empty" },
+          { "id": "e-batch-sched", "source": "node-batch", "target": "node-sched", "label": "Starved" },
+          { "id": "e-sched-gpu", "source": "node-sched", "target": "node-gpu", "label": "Only interactive" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-sched", "node-batch"],
+        "edgeIds": ["e-batch-sched"],
+        "headline": "Strict priority scheduling starves batch tier under continuous higher-priority load"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_priority_inversion",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Use weighted fair queuing or capped priority bands so lower tiers make progress.",
+          "opener": "Batch thumbnails haven't run in days because interactive traffic never stops. How do priority classes share GPUs?",
+          "evidence": {
+            "strong": "WFQ across classes, reserved minimum bandwidth for batch, aging boost for old jobs, separate pools for batch vs interactive.",
+            "adequate": "Two queues but strict priority always.",
+            "weak": "Single queue only."
+          },
+          "misconceptions": [{ "id": "pri.strict", "pattern": "Believes strict priority always matches business intent.", "challenge": "If interactive jobs arrive constantly, when does batch run?" }],
+          "probes": ["What minimum share should batch get?", "When does priority increase with wait time?"],
+          "hints": ["Aging prevents starvation.", "Reserved slices beat strict ordering."],
+          "referenceFix": "WFQ with batch minimum 20%, priority aging after 30m wait."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "text-to-image/slow_model_default_path",
+      "title": "Default Path Uses Largest Model for Simple Icons",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.speed",
+      "scenario": {
+        "symptoms": "Simple 256px icon requests take 45s and cost 12x more than necessary. Product analytics show 70% of prompts are short and low resolution.",
+        "interviewerSetup": "API routes all jobs to SDXL full pipeline with 50 steps regardless of requested size or complexity score."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-api", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "api-gateway", "label": "Generate API" } },
+          { "id": "node-router", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "service", "label": "Model Router (static)" } },
+          { "id": "node-sdxl", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "gpu", "label": "SDXL 50-step" } },
+          { "id": "node-fast", "type": "systemNode", "position": { "x": 480, "y": 300 }, "data": { "kind": "gpu", "label": "Fast Model (unused)" } }
+        ],
+        "edges": [
+          { "id": "e-api-router", "source": "node-api", "target": "node-router", "label": "All requests" },
+          { "id": "e-router-sdxl", "source": "node-router", "target": "node-sdxl", "label": "Always SDXL" },
+          { "id": "e-router-fast", "source": "node-router", "target": "node-fast", "label": "Never selected" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-router", "node-sdxl"],
+        "edgeIds": ["e-router-sdxl"],
+        "headline": "One-size-fits-all model path wastes GPU time on simple low-res generation requests"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_model_routing",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Route jobs to appropriate model, step count, and resolution based on request attributes and quality targets.",
+          "opener": "Small icon requests take as long as poster-sized art because everything hits SDXL. How do you make generation fast for simple jobs?",
+          "evidence": {
+            "strong": "Router using resolution, step budget, prompt complexity, distilled models for previews, progressive refinement optional, cache common sizes.",
+            "adequate": "Manual model picker in API only.",
+            "weak": "Single model for all workloads."
+          },
+          "misconceptions": [{ "id": "speed.gpu", "pattern": "Assumes only more GPUs improve latency.", "challenge": "Could a smaller model meet quality for 256px icons?" }],
+          "probes": ["When is full quality required?", "How do you validate router decisions?"],
+          "hints": ["Match pipeline to output size.", "Preview fast, refine on demand."],
+          "referenceFix": "Tiered models with automatic routing, lower steps for drafts, upscale optional."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "promptId": "recommendation-engine",
+  "nuggets": [
+    {
+      "id": "recommendation-engine/cold-start-empty-feed",
+      "title": "New users see blank home feed",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.coldstart",
+      "scenario": {
+        "symptoms": "Day-0 retention dropped after launch in a new country. Users with no click history received empty recommendation responses because the ranker returned 404 when collaborative features were missing.",
+        "interviewerSetup": "Serving path requires user embedding from training; no fallback to popular or content-based lists for cold users."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-user", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "user", "label": "New user" } },
+          { "id": "n-api", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "Rec API" } },
+          { "id": "n-fstore", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "cache", "label": "User embeddings" } },
+          { "id": "n-fallback", "type": "systemNode", "position": { "x": 480, "y": 240 }, "data": { "kind": "service", "label": "Popular items (unused)" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-api" },
+          { "id": "e2", "source": "n-api", "target": "n-fstore", "label": "Miss embedding" },
+          { "id": "e3", "source": "n-api", "target": "n-fallback", "label": "Not wired" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-api", "n-fstore"], "edgeIds": ["e2"], "headline": "Serving fails closed when collaborative features are absent" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Deliver relevant items for cold-start and sparse users.",
+          "opener": "New users got an empty feed—how should cold start work in this recommender?",
+          "evidence": {
+            "strong": "Layered fallback: geo/popular, content-based from signup prefs, explore/exploit, smooth transition as events arrive.",
+            "adequate": "Random items without personalization.",
+            "weak": "Require historical embedding or return empty."
+          },
+          "misconceptions": [],
+          "probes": ["How quickly should personalization kick in after first clicks?", "What signals exist at signup before any events?"],
+          "hints": ["Cold start is a product requirement, not edge case.", "Popular lists should be locale-aware."],
+          "referenceFix": "Serve locale/popular and content-based defaults on embedding miss, blend scores as interaction count grows, and monitor empty-response rate."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "recommendation-engine/retrieval-latency-timeout",
+      "title": "Two-stage rec misses latency SLO",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.retrieval",
+      "scenario": {
+        "symptoms": "Home feed p99 latency hit 800 ms after expanding candidate retrieval from 200 to 10,000 items. Ranker GPU queue backed up while ANN search stayed fast.",
+        "interviewerSetup": "Architecture retrieves huge candidate sets synchronously before ranking; no early termination or cascade."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-api", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Rec API" } },
+          { "id": "n-ann", "type": "systemNode", "position": { "x": 280, "y": 40 }, "data": { "kind": "service", "label": "ANN retrieval" } },
+          { "id": "n-rank", "type": "systemNode", "position": { "x": 280, "y": 200 }, "data": { "kind": "service", "label": "GPU ranker" } },
+          { "id": "n-user", "type": "systemNode", "position": { "x": 560, "y": 120 }, "data": { "kind": "client", "label": "App" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-api" },
+          { "id": "e2", "source": "n-api", "target": "n-ann", "label": "10k candidates" },
+          { "id": "e3", "source": "n-api", "target": "n-rank", "label": "Score all" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-rank"], "edgeIds": ["e3"], "headline": "Oversized candidate set overwhelms ranker on the critical path" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Meet feed latency while preserving recommendation quality.",
+          "opener": "Feed got slow after retrieval widened—how do you balance recall and latency?",
+          "evidence": {
+            "strong": "Multi-stage retrieval with tight top-N, lightweight pre-ranker, parallel ANN shards, caching, and dynamic candidate limits under load.",
+            "adequate": "Bigger GPU fleet without reducing candidates.",
+            "weak": "Rank entire catalog per request."
+          },
+          "misconceptions": [{ "id": "rec.more_candidates", "pattern": "Believing more candidates always improves quality without cost.", "challenge": "Who pays GPU time to score 10k items per request?" }],
+          "probes": ["What is the right N before heavy ranker?", "Can you precompute user-specific shortlists?"],
+          "hints": ["Cascade: cheap retrieval then expensive rank.", "Pre-rank with linear model."],
+          "referenceFix": "Retrieve hundreds not thousands via ANN + filters, pre-rank to ~200 with lightweight model, GPU-rank top slice, and degrade candidate count when queue latency rises."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "recommendation-engine/training-serving-skew",
+      "title": "New model ranking worse in production",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.training",
+      "scenario": {
+        "symptoms": "Offline AUC improved 8% but online CTR dropped after deploy. Training logs used imputed defaults for missing features while serving returned null and a different imputation path.",
+        "interviewerSetup": "Feature pipeline for batch training and online serving diverged after a refactor touched only the batch job."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-batch", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "worker", "label": "Training pipeline" } },
+          { "id": "n-serve", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "service", "label": "Online features" } },
+          { "id": "n-model", "type": "systemNode", "position": { "x": 320, "y": 140 }, "data": { "kind": "service", "label": "Ranker model" } },
+          { "id": "n-users", "type": "systemNode", "position": { "x": 560, "y": 140 }, "data": { "kind": "user", "label": "Users" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-batch", "target": "n-model", "label": "Train" },
+          { "id": "e2", "source": "n-serve", "target": "n-model", "label": "Skewed features" },
+          { "id": "e3", "source": "n-model", "target": "n-users", "label": "CTR drop" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-batch", "n-serve"], "edgeIds": ["e1", "e2"], "headline": "Training and serving feature logic diverge causing skew" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Keep training and serving features consistent.",
+          "opener": "Offline metrics improved but online CTR fell—what skew issue could cause that?",
+          "evidence": {
+            "strong": "Shared feature definitions, feature store with point-in-time correctness, training-serving validation tests, and shadow scoring.",
+            "adequate": "Manual spot checks before deploy.",
+            "weak": "Separate ad-hoc batch and serving code paths."
+          },
+          "misconceptions": [],
+          "probes": ["How do you test serving features against training snapshots?", "Where should imputation rules live?"],
+          "hints": ["One source of truth for transforms.", "Feature store reduces duplication."],
+          "referenceFix": "Centralize transforms in feature store, run parity tests between batch export and online fetch, and block deploy when distribution drift vs training set exceeds threshold."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

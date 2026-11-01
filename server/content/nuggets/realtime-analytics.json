@@ -1,0 +1,137 @@
+{
+  "promptId": "realtime-analytics",
+  "nuggets": [
+    {
+      "id": "realtime-analytics/duplicate-event-inflation",
+      "title": "At-least-once stream doubles metrics",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.deduplication",
+      "scenario": {
+        "symptoms": "Live dashboard showed 2x actual signups during a Kafka consumer rebalance. Unique user counts looked fine but event totals inflated.",
+        "interviewerSetup": "Counters increment on every consumed record without dedupe keys; consumers use at-least-once semantics."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-prod", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Event producers" } },
+          { "id": "n-kafka", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "t-kafka", "label": "Events topic" } },
+          { "id": "n-flink", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "stream-processor", "label": "Aggregator" } },
+          { "id": "n-dash", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "dashboard", "label": "Live metrics" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-prod", "target": "n-kafka" },
+          { "id": "e2", "source": "n-kafka", "target": "n-flink", "label": "Redelivery" },
+          { "id": "e3", "source": "n-flink", "target": "n-dash", "label": "Double count" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-flink"], "edgeIds": ["e2"], "headline": "Aggregator counts duplicate event deliveries as separate occurrences" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Produce accurate realtime counts under at-least-once delivery.",
+          "opener": "Metrics doubled during rebalance—how should deduplication work in the stream job?",
+          "evidence": {
+            "strong": "Event id dedupe with TTL state, idempotent sinks, upsert keyed aggregates, and distinct user metrics separate from raw events.",
+            "adequate": "Switch to exactly-once Kafka transactions without end-to-end idempotency.",
+            "weak": "Blind increment per message."
+          },
+          "misconceptions": [{ "id": "dedupe.kafka_eos", "pattern": "Assuming Kafka exactly-once fixes all duplicate metrics.", "challenge": "What about retries from upstream producers or multiple consumers writing the same sink?" }],
+          "probes": ["Where do you store seen event ids for a 5-minute window?", "Which metrics need uniqueness vs volume?"],
+          "hints": ["Dedupe keys belong in the aggregator.", "State TTL should exceed max redelivery horizon."],
+          "referenceFix": "Dedupe on event_id with RocksDB state and TTL, use keyed aggregation for sums, and expose both gross events and deduped counts for monitoring."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "realtime-analytics/window-late-data",
+      "title": "Late events fall outside tumbling windows",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.time_windows",
+      "scenario": {
+        "symptoms": "Hourly active user chart undercounted mobile traffic every evening. Offline clients burst-upload events that arrive 40 minutes late and were dropped by strict tumbling windows.",
+        "interviewerSetup": "Flink job closes windows at wall clock with zero allowed lateness."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-mobile", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Mobile clients" } },
+          { "id": "n-bus", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "t-kafka", "label": "Clickstream" } },
+          { "id": "n-job", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "stream-processor", "label": "1h tumbling windows" } },
+          { "id": "n-olap", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "warehouse", "label": "Realtime OLAP" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-mobile", "target": "n-bus", "label": "Late burst" },
+          { "id": "e2", "source": "n-bus", "target": "n-job", "label": "Event time ignored" },
+          { "id": "e3", "source": "n-job", "target": "n-olap", "label": "Undercount" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-job"], "edgeIds": ["e2"], "headline": "Closed windows drop late-arriving mobile events" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Include legitimately late events in the correct analytics windows.",
+          "opener": "Evening mobile traffic is undercounted—what windowing change fixes late data?",
+          "evidence": {
+            "strong": "Event-time windows, watermarks, allowed lateness with retractions or upserts, and side output for very late events.",
+            "adequate": "Processing-time windows only.",
+            "weak": "Drop all late records."
+          },
+          "misconceptions": [],
+          "probes": ["How long should allowed lateness be for your clients?", "Do dashboards need correction after window updates?"],
+          "hints": ["Use client timestamps with skew bounds.", "Watermarks trade latency vs completeness."],
+          "referenceFix": "Switch to event-time tumbling windows with watermarks, allow 45–60m lateness for mobile backlog, upsert OLAP rows for corrected hours, and monitor late-event rate."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "realtime-analytics/cross-region-double-write",
+      "title": "Cross-region failover duplicates aggregates",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.cross_region",
+      "scenario": {
+        "symptoms": "During region failover drill, global QPS metric spiked to 2x actual. Both us-east and eu-west aggregators wrote the same event ids to the global Redis counter for 10 minutes.",
+        "interviewerSetup": "Active/active ingestion with dual-publish for redundancy but no leader election on aggregate writers."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-us", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "stream-processor", "label": "US aggregator" } },
+          { "id": "n-eu", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "stream-processor", "label": "EU aggregator" } },
+          { "id": "n-redis", "type": "systemNode", "position": { "x": 320, "y": 140 }, "data": { "kind": "cache", "label": "Global counters" } },
+          { "id": "n-dash", "type": "systemNode", "position": { "x": 560, "y": 140 }, "data": { "kind": "dashboard", "label": "Exec dashboard" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-us", "target": "n-redis", "label": "INCR" },
+          { "id": "e2", "source": "n-eu", "target": "n-redis", "label": "Duplicate INCR" },
+          { "id": "e3", "source": "n-redis", "target": "n-dash" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-us", "n-eu"], "edgeIds": ["e1", "e2"], "headline": "Dual active aggregators double-count the same events globally" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Keep global realtime metrics correct during multi-region ingestion and failover.",
+          "opener": "Failover drill doubled QPS on the dashboard—what went wrong in cross-region aggregation?",
+          "evidence": {
+            "strong": "Single writer per metric shard, idempotent upserts keyed by event id, CRDT or merge in OLAP, or region-tagged counters merged deduped downstream.",
+            "adequate": "Stop one region manually during failover without automation.",
+            "weak": "Both regions increment same Redis keys."
+          },
+          "misconceptions": [],
+          "probes": ["Who owns global counter writes in steady state vs failover?", "Can you merge regional totals with dedupe in the warehouse?"],
+          "hints": ["Dual write needs dedupe at merge.", "Consider one active aggregator per time slice."],
+          "referenceFix": "Elect single aggregate writer per key space, dedupe event ids at global merge layer, or write region-scoped counters merged with idempotent sum job before exec dashboards."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

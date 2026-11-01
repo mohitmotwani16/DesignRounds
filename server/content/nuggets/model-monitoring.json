@@ -1,0 +1,163 @@
+{
+  "promptId": "model-monitoring",
+  "nuggets": [
+    {
+      "id": "model-monitoring/psi-drift-silent",
+      "title": "Silent feature drift before labels arrive",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.drift",
+      "scenario": {
+        "symptoms": "Checkout conversion looks stable in business dashboards, but fraud block rate dropped 18% over two weeks. Ground-truth chargeback labels lag 30 days, so model accuracy charts still show green.",
+        "interviewerSetup": "The team only monitors precision/recall after label joins complete. A mobile app release changed how device fingerprints are encoded, shifting live feature distributions without triggering infra alerts."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-serving", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Fraud model serving" } },
+          { "id": "n-log", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "ingestion", "label": "Prediction log stream" } },
+          { "id": "n-metrics", "type": "systemNode", "position": { "x": 480, "y": 40 }, "data": { "kind": "metrics-platform", "label": "Drift job (PSI)" } },
+          { "id": "n-wh", "type": "systemNode", "position": { "x": 480, "y": 200 }, "data": { "kind": "warehouse", "label": "Label join warehouse" } },
+          { "id": "n-dash", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "dashboard", "label": "Model dashboards" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-serving", "target": "n-log", "label": "Log features + score" },
+          { "id": "e2", "source": "n-log", "target": "n-metrics", "label": "Live traffic" },
+          { "id": "e3", "source": "n-log", "target": "n-wh", "label": "Delayed labels" },
+          { "id": "e4", "source": "n-wh", "target": "n-dash", "label": "Accuracy only" }
+        ]
+      },
+      "incident": {
+        "nodeIds": ["n-metrics", "n-dash"],
+        "edgeIds": ["e4"],
+        "headline": "Monitoring waits on delayed labels while live feature drift goes undetected"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Detect covariate shift on live inputs before ground-truth labels arrive.",
+          "opener": "Business metrics moved but model accuracy still looks fine—what broke in monitoring, and how would you catch this earlier?",
+          "evidence": {
+            "strong": "Compares live feature distributions to a training baseline with PSI/KL on prioritized features, alerts on drift, and ties to model version and cohort dimensions.",
+            "adequate": "Mentions watching input features but without baseline comparison or statistical tests.",
+            "weak": "Relies only on delayed label-based accuracy or generic latency/error metrics."
+          },
+          "misconceptions": [{ "id": "drift.day_over_day", "pattern": "Comparing today’s traffic only to yesterday’s traffic.", "challenge": "Gradual drift over weeks can look normal day-to-day—what is the stable reference?" }],
+          "probes": ["Which features would you monitor first given hundreds of columns?", "How do you separate a real drift from a holiday traffic mix shift?"],
+          "hints": ["Think about what the model was trained on.", "Population Stability Index compares distributions to a reference."],
+          "referenceFix": "Run scheduled PSI (or KL) against training baselines on top features and prediction score distributions; alert before label joins; slice by model version and app version to localize the bad release."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "model-monitoring/cohort-alert-storm",
+      "title": "Cohort alert storm overwhelms on-call",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.anomaly_detection",
+      "scenario": {
+        "symptoms": "PagerDuty fired 400 alerts in one hour after a minor deployment. Most cohorts have fewer than 50 events per day, and static thresholds were copied from the global dashboard.",
+        "interviewerSetup": "Each country × product × model version slice has its own threshold. Low-volume cohorts breach constantly on noise, while the global metric still looks healthy."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-olap", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "warehouse", "label": "Metrics OLAP" } },
+          { "id": "n-rules", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "Static threshold rules" } },
+          { "id": "n-pd", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "alerting", "label": "PagerDuty" } },
+          { "id": "n-ops", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "user", "label": "On-call" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-olap", "target": "n-rules", "label": "Per-cohort metrics" },
+          { "id": "e2", "source": "n-rules", "target": "n-pd", "label": "400 breaches/hr" },
+          { "id": "e3", "source": "n-pd", "target": "n-ops" }
+        ]
+      },
+      "incident": {
+        "nodeIds": ["n-rules", "n-pd"],
+        "edgeIds": ["e2"],
+        "headline": "Static per-cohort thresholds create alert fatigue on sparse slices"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Scale alerting across high-cardinality cohorts without drowning operators in false positives.",
+          "opener": "On-call got hundreds of pages after a small deploy—how would you redesign alerting for thousands of cohorts?",
+          "evidence": {
+            "strong": "Uses anomaly detection or dynamic baselines, minimum sample size gates, hierarchical rollups, and alert grouping/deduping.",
+            "adequate": "Suggests raising thresholds or muting low-traffic cohorts without a systematic policy.",
+            "weak": "Manually configures static thresholds for every cohort slice."
+          },
+          "misconceptions": [],
+          "probes": ["How do you alert on a cohort with 10 events per day?", "When should a child cohort roll up to a parent alert?"],
+          "hints": ["Sparse counts make fixed thresholds noisy.", "Seasonal baselines beat one global cutoff."],
+          "referenceFix": "Gate alerts on minimum volume, use automated baselines/anomaly detection per tier, rollup rare cohorts to parent dimensions, and dedupe correlated pages into one incident."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "model-monitoring/pii-in-prediction-logs",
+      "title": "Analysts query raw PII in prediction logs",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.privacy",
+      "scenario": {
+        "symptoms": "Security review flagged that model monitoring logs store full billing addresses and emails. A data analyst exported 2M rows for drift analysis without field-level restrictions.",
+        "interviewerSetup": "Logging was added quickly at inference time with the full request payload. RBAC exists on dashboards but the warehouse table is wide open to the analytics role."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-inf", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Inference API" } },
+          { "id": "n-ingest", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "ingestion", "label": "Log pipeline" } },
+          { "id": "n-wh", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "warehouse", "label": "Monitoring lake" } },
+          { "id": "n-analyst", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "user", "label": "Analyst" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-inf", "target": "n-ingest", "label": "Full payload" },
+          { "id": "e2", "source": "n-ingest", "target": "n-wh", "label": "No redaction" },
+          { "id": "e3", "source": "n-wh", "target": "n-analyst", "label": "SQL export" }
+        ]
+      },
+      "incident": {
+        "nodeIds": ["n-ingest", "n-wh"],
+        "edgeIds": ["e1", "e2"],
+        "headline": "Sensitive inference payloads land in analytics storage unredacted"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Minimize and protect sensitive fields in monitoring data while keeping drift signals.",
+          "opener": "Monitoring logs exposed PII to analysts—where should privacy controls live in this pipeline?",
+          "evidence": {
+            "strong": "Redacts or tokenizes PII at ingestion, logs only features needed for drift, applies column-level ACLs, retention limits, and sampling.",
+            "adequate": "Masks fields in the BI tool but leaves raw tables queryable.",
+            "weak": "Assumes all engineers and analysts may read full payloads."
+          },
+          "misconceptions": [{ "id": "privacy.dashboard_only", "pattern": "Masking only in the dashboard UI.", "challenge": "What stops someone from querying the warehouse directly?" }],
+          "probes": ["Do you need 100% of payloads to compute PSI on categorical features?", "Where is the earliest safe point to strip emails and addresses?"],
+          "hints": ["Clean at the source before durable storage.", "Hashing stable identifiers can preserve joins without exposing PII."],
+          "referenceFix": "Redact/tokenize PII in the inference logging agent, store hashed user keys and numeric features for drift, enforce warehouse column ACLs, shorten retention, and sample high-cardinality text fields."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

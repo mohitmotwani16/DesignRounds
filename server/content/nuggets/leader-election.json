@@ -1,0 +1,701 @@
+{
+  "promptId": "leader-election",
+  "packVersion": "pack-ab79821d",
+  "inputsFingerprint": "d77a99c3332da6fc568483d7b7d095d27da02ae4c20c4be0b5efea1bc65cab33",
+  "nuggets": [
+    {
+      "id": "leader-election/deep-election",
+      "title": "Flapping Leader Churns Every 30 Seconds",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.election",
+      "scenario": {
+        "symptoms": "Downstream job scheduler sees constant leader changes; duplicate cron triggers fire intermittently.",
+        "interviewerSetup": "Election timeouts are tighter than GC pauses; followers trigger elections on every long pause."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-a",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Node A"
+            }
+          },
+          {
+            "id": "node-b",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Node B"
+            }
+          },
+          {
+            "id": "node-c",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Node C"
+            }
+          },
+          {
+            "id": "node-zk",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Coordination Store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-a",
+            "target": "node-zk",
+            "label": "Campaign"
+          },
+          {
+            "id": "e2",
+            "source": "node-b",
+            "target": "node-zk",
+            "label": "Campaign"
+          },
+          {
+            "id": "e3",
+            "source": "node-c",
+            "target": "node-zk",
+            "label": "Watch leader"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-a",
+          "node-b",
+          "node-zk"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Over-sensitive election timeouts cause spurious leader churn"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_election",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Detail how nodes decide an election is needed and how one node wins it.",
+            "opener": "How does the cluster detect that the current leader has failed, and how is a new one chosen?",
+            "evidence": {
+              "strong": "Describes heartbeats, randomised election timeouts to prevent collisions, and gathering a majority of votes or acquiring a lease.",
+              "adequate": "Mentions timeouts and voting, but misses timeout randomisation, risking election ties.",
+              "weak": "Proposes a simple ping mechanism without a formal voting phase or lease expiration."
+            },
+            "misconceptions": [
+              {
+                "id": "ip_sort",
+                "pattern": "Nodes just pinging each other and assuming the lowest IP address among the alive ones is the leader.",
+                "challenge": "What if two nodes experience different network delays and have different views of who is currently alive?"
+              }
+            ],
+            "probes": [
+              "What happens if two followers notice the leader is dead at the exact same time?",
+              "How does a node constantly prove to the others that it is still alive?"
+            ],
+            "hints": [
+              "If nodes use the exact same timeout duration, they might tie in the election.",
+              "Think about using a randomised delay before a follower starts a new election."
+            ],
+            "referenceFix": "The design includes heartbeats and randomised timeouts to reliably elect a new leader."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "leader-election/deep-split_brain",
+      "title": "Network Partition Elects Two Leaders",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.split_brain",
+      "scenario": {
+        "symptoms": "Two scheduler leaders run simultaneously assigning conflicting shard ownership during WAN blip.",
+        "interviewerSetup": "Quorum requires majority but both halves believe they have majority without fencing tokens."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-p1",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Partition A"
+            }
+          },
+          {
+            "id": "node-p2",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Partition B"
+            }
+          },
+          {
+            "id": "node-zk",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Coordination"
+            }
+          },
+          {
+            "id": "node-workers",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Workers"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-p1",
+            "target": "node-zk",
+            "label": "Self-elect"
+          },
+          {
+            "id": "e2",
+            "source": "node-p2",
+            "target": "node-zk",
+            "label": "Self-elect"
+          },
+          {
+            "id": "e3",
+            "source": "node-p1",
+            "target": "node-workers",
+            "label": "Assign"
+          },
+          {
+            "id": "e4",
+            "source": "node-p2",
+            "target": "node-workers",
+            "label": "Assign"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-p1",
+          "node-p2"
+        ],
+        "edgeIds": [
+          "e3",
+          "e4"
+        ],
+        "headline": "Partitioned cluster elects dual leaders without quorum fencing"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_split_brain",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure the system cannot elect two leaders during a network partition.",
+            "opener": "Imagine a network partition splits our cluster into two halves. How do we ensure both halves don't simultaneously elect a leader?",
+            "evidence": {
+              "strong": "Explains majority quorum; ensures the minority side cannot gather enough votes and forces its leader to step down.",
+              "adequate": "Mentions needing more than half the nodes to win an election, but is unclear on what the old leader on the minority side does.",
+              "weak": "Suggests relying on a secondary ping or an external arbitrator without understanding quorum principles."
+            },
+            "misconceptions": [
+              {
+                "id": "even_nodes",
+                "pattern": "Designing a cluster with an even number of nodes without a tie-breaker mechanism.",
+                "challenge": "If we have 4 nodes and they are partitioned into two isolated pairs, which side wins the election?"
+              }
+            ],
+            "probes": [
+              "If the network splits exactly in half, how do we break the tie?",
+              "Why is it generally recommended to have an odd number of nodes in a consensus cluster?"
+            ],
+            "hints": [
+              "A candidate node needs to know it has the support of the majority of the total cluster.",
+              "If there are 5 nodes in total, how many votes are required to win an election?"
+            ],
+            "referenceFix": "The candidate correctly identified that a majority quorum prevents split-brain scenarios."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "leader-election/deep-fencing",
+      "title": "Zombie Leader Corrupts Shared State After Failover",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.fencing",
+      "scenario": {
+        "symptoms": "After failover, old leader resumes writing job checkpoints corrupting orchestration metadata.",
+        "interviewerSetup": "New leader elected but downstream storage accepts writes from old epoch without fencing tokens."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-old",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Deposed Leader"
+            }
+          },
+          {
+            "id": "node-new",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "New Leader"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "database",
+              "label": "Shared Metadata"
+            }
+          },
+          {
+            "id": "node-zk",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Epoch Registry"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-old",
+            "target": "node-store",
+            "label": "Stale write"
+          },
+          {
+            "id": "e2",
+            "source": "node-new",
+            "target": "node-store",
+            "label": "Valid write"
+          },
+          {
+            "id": "e3",
+            "source": "node-new",
+            "target": "node-zk",
+            "label": "Bump epoch"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-old",
+          "node-store"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Missing fencing allows deposed leader to corrupt shared state"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_fencing",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Prevent a deposed leader from successfully modifying downstream state after a new leader is elected.",
+            "opener": "What happens if a deposed leader, who was just delayed by a network pause, wakes up and tries to write to our downstream database?",
+            "evidence": {
+              "strong": "Attaches monotonically increasing term or epoch numbers to the leader; the database rejects writes with older epochs.",
+              "adequate": "Mentions epochs or versioning but relies on the leader checking its own status rather than enforcing fencing at the resource.",
+              "weak": "Assumes the new leader will politely tell the old leader to stop, or ignores downstream state corruption."
+            },
+            "misconceptions": [
+              {
+                "id": "polite_step_down",
+                "pattern": "Believing a deposed leader will always voluntarily stop what it is doing before the new leader takes action.",
+                "challenge": "What if the old leader issues a write just before it loses its lease, but the network delays the packet until after a new leader is elected?"
+              }
+            ],
+            "probes": [
+              "What if the old leader's network was just delayed, and its old write arrives at the database right now?",
+              "How does the downstream database objectively know which leader is the legitimate one?"
+            ],
+            "hints": [
+              "The new leader needs a way to announce that its authority is newer than the old leader's.",
+              "Think about attaching a version or term number to every write sent to the database."
+            ],
+            "referenceFix": "The candidate used epoch numbers as fencing tokens at the database level to reject stale writes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "leader-election/deep-tuning",
+      "title": "Aggressive Timeouts Cause Election Storm on Latency Blip",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.tuning",
+      "scenario": {
+        "symptoms": "Brief 200ms network jitter triggers cluster-wide re-elections and 5-minute orchestration freeze.",
+        "interviewerSetup": "Heartbeat interval and election timeout tuned for 1s failover, far below p99 network latency."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-followers",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Followers"
+            }
+          },
+          {
+            "id": "node-leader",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Leader"
+            }
+          },
+          {
+            "id": "node-zk",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Coordination"
+            }
+          },
+          {
+            "id": "node-mon",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "monitoring-dashboard",
+              "label": "Latency Metrics"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-leader",
+            "target": "node-followers",
+            "label": "Heartbeats"
+          },
+          {
+            "id": "e2",
+            "source": "node-followers",
+            "target": "node-zk",
+            "label": "Trigger election"
+          },
+          {
+            "id": "e3",
+            "source": "node-mon",
+            "target": "node-followers",
+            "label": "Ignored jitter"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-followers",
+          "node-leader"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Over-tuned election timers amplify transient latency into outages"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_tuning",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Balance the trade-off between fast failover and spurious elections caused by transient issues.",
+            "opener": "How would you tune the timeouts to achieve fast failover without triggering unnecessary elections?",
+            "evidence": {
+              "strong": "Identifies the trade-off between heartbeat frequency, election timeout, and the risk of false positives from GC pauses or network jitter.",
+              "adequate": "Knows that shorter timeouts mean faster failover but mentions high load as the only downside.",
+              "weak": "Suggests aggressive 1-millisecond timeouts without considering network latency or CPU overhead."
+            },
+            "misconceptions": [
+              {
+                "id": "zero_latency",
+                "pattern": "Making timeouts as tight as network latency allows.",
+                "challenge": "What happens to our cluster stability if the leader experiences a 50-millisecond garbage collection pause?"
+              }
+            ],
+            "probes": [
+              "What is the cost of setting the heartbeat timeout to 10 milliseconds?",
+              "How do garbage collection pauses on the node affect your timeout choice?"
+            ],
+            "hints": [
+              "A very short timeout means fast failover but a high risk of false alarms.",
+              "Consider the typical duration of a GC pause or a transient network blip."
+            ],
+            "referenceFix": "We discussed balancing failover speed against the risk of spurious elections."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "leader-election/deep-discovery",
+      "title": "Clients Keep Sending Work to Former Leader",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.discovery",
+      "scenario": {
+        "symptoms": "After leader change, 30% of client requests still hit old node returning HTTP 409 for two minutes.",
+        "interviewerSetup": "Clients cache leader address indefinitely without watching leadership change notifications."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-old",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Former Leader"
+            }
+          },
+          {
+            "id": "node-new",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 220
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "New Leader"
+            }
+          },
+          {
+            "id": "node-zk",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Leader Registry"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-old",
+            "label": "Cached leader"
+          },
+          {
+            "id": "e2",
+            "source": "node-new",
+            "target": "node-zk",
+            "label": "Register"
+          },
+          {
+            "id": "e3",
+            "source": "node-client",
+            "target": "node-zk",
+            "label": "No watch"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-client",
+          "node-old"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Stale client leader cache routes traffic to deposed node"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_discovery",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Explain how clients or followers route their requests to the active leader.",
+            "opener": "Once a new leader is elected, how do the other nodes and clients find out who to talk to?",
+            "evidence": {
+              "strong": "Explains whether followers watch a consensus key or the leader broadcasts its victory, and gracefully handles client redirects.",
+              "adequate": "Mentions reading the new leader's address from a store on every request.",
+              "weak": "Assumes a hardcoded configuration or a standard load balancer that magically knows who won."
+            },
+            "misconceptions": [
+              {
+                "id": "client_polling",
+                "pattern": "Clients polling every single node continuously to find out who the leader is.",
+                "challenge": "How does that discovery approach scale as we add hundreds of clients and more nodes?"
+              }
+            ],
+            "probes": [
+              "If a client contacts a follower by mistake, how does it find the leader?",
+              "Does the leader announce itself, or do the others poll for it?"
+            ],
+            "hints": [
+              "Followers could watch the consensus store for changes to the leader key.",
+              "A reverse proxy or API gateway could keep track of the current leader and route traffic."
+            ],
+            "referenceFix": "Clients and followers discover the leader by watching the consensus store or handling redirect responses."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

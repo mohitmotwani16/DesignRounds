@@ -1,0 +1,137 @@
+{
+  "promptId": "rag-search",
+  "nuggets": [
+    {
+      "id": "rag-search/acl-leak-retrieval",
+      "title": "Search returns docs user cannot access",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.permissions",
+      "scenario": {
+        "symptoms": "An employee asked the assistant about a confidential HR policy and received excerpts from executive-only docs. Vector search ranked by similarity only; ACL filter ran after top-k retrieval.",
+        "interviewerSetup": "Embeddings index lacks per-chunk permission metadata enforced at query time. Post-filter shrinks results below k without backfill from allowed docs."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-user", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "user", "label": "Employee" } },
+          { "id": "n-rag", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "RAG API" } },
+          { "id": "n-vec", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "service", "label": "Vector index" } },
+          { "id": "n-acl", "type": "systemNode", "position": { "x": 480, "y": 240 }, "data": { "kind": "service", "label": "ACL filter (late)" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-rag", "label": "Question" },
+          { "id": "e2", "source": "n-rag", "target": "n-vec", "label": "Top-k similar" },
+          { "id": "e3", "source": "n-rag", "target": "n-acl", "label": "Filter after fetch" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-vec", "n-acl"], "edgeIds": ["e2", "e3"], "headline": "Retrieval returns forbidden chunks before ACL filtering" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Never surface document content the caller is not authorized to read.",
+          "opener": "The bot quoted an executive-only doc—where should permissions be enforced in RAG?",
+          "evidence": {
+            "strong": "ACL-aware retrieval with filter at index query, over-fetch then filter with backfill, deny by default, audit logs.",
+            "adequate": "Strip text in UI but chunks still retrieved in logs.",
+            "weak": "Similarity-only vector search."
+          },
+          "misconceptions": [{ "id": "acl.post_llm", "pattern": "Asking the LLM not to mention secrets.", "challenge": "If forbidden text is already in the prompt context, is it truly protected?" }],
+          "probes": ["How do you index chunks for multi-tenant ACLs?", "What if fewer than k docs pass the filter?"],
+          "hints": ["Filter must happen before prompt assembly.", "Metadata filters in vector DBs are common."],
+          "referenceFix": "Store permission sets on each chunk, apply metadata filter during vector query, over-retrieve and backfill from allowed set, and block generation if insufficient authorized context."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "rag-search/stale-index-answer",
+      "title": "Assistant cites revoked policy",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.updates",
+      "scenario": {
+        "symptoms": "Support bot told customers an old refund policy after legal published an update. Search index refresh runs nightly; doc deletes are not tombstoned in the vector store.",
+        "interviewerSetup": "Ingestion upserts new chunks but never deletes embeddings for removed paragraphs, so stale vectors still match queries."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-cms", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Doc CMS" } },
+          { "id": "n-ingest", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "worker", "label": "Indexer" } },
+          { "id": "n-vec", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "service", "label": "Vector store" } },
+          { "id": "n-bot", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "service", "label": "RAG bot" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-cms", "target": "n-ingest", "label": "Policy update" },
+          { "id": "e2", "source": "n-ingest", "target": "n-vec", "label": "Upsert only" },
+          { "id": "e3", "source": "n-bot", "target": "n-vec", "label": "Stale chunk match" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-ingest", "n-vec"], "edgeIds": ["e2"], "headline": "Index updates without deletes leave obsolete embeddings searchable" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Keep retrieved knowledge in sync with source document lifecycle.",
+          "opener": "Bot cited an old policy—how should indexing handle edits and deletes?",
+          "evidence": {
+            "strong": "Versioned doc ids, delete vectors on tombstone events, near-real-time incremental index, and cite source updated_at in answers.",
+            "adequate": "Nightly full reindex without incremental deletes.",
+            "weak": "Append-only embedding inserts."
+          },
+          "misconceptions": [],
+          "probes": ["How do you chunk a doc that changed one paragraph?", "What SLA for legal policy updates?"],
+          "hints": ["Treat delete as first-class index operation.", "Chunk ids should include doc version."],
+          "referenceFix": "Emit delete events for removed chunks, re-embed on version bump with stable chunk keys, stream index updates within minutes, and surface source timestamp to users."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "rag-search/hallucination-no-grounding",
+      "title": "Model answers without supporting chunks",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.grounding",
+      "scenario": {
+        "symptoms": "Users received confident wrong answers about API rate limits. Retrieval returned weak matches but the LLM still generated specifics not present in any chunk.",
+        "interviewerSetup": "Prompt does not require citations or abstention when retrieval score is below threshold."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-user", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "user", "label": "Developer" } },
+          { "id": "n-rag", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "RAG orchestrator" } },
+          { "id": "n-vec", "type": "systemNode", "position": { "x": 480, "y": 40 }, "data": { "kind": "service", "label": "Retrieval" } },
+          { "id": "n-llm", "type": "systemNode", "position": { "x": 480, "y": 200 }, "data": { "kind": "service", "label": "LLM" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-rag" },
+          { "id": "e2", "source": "n-rag", "target": "n-vec", "label": "Low score hits" },
+          { "id": "e3", "source": "n-rag", "target": "n-llm", "label": "Ungrounded answer" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-rag", "n-llm"], "edgeIds": ["e3"], "headline": "LLM fills gaps when retrieval confidence is too low" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Ensure answers stay grounded in retrieved evidence or refuse safely.",
+          "opener": "Bot invented rate limits not in docs—how do you enforce grounding?",
+          "evidence": {
+            "strong": "Similarity threshold with abstain, cite-only prompting, answer validation against chunks, and logging retrieval scores.",
+            "adequate": "Ask model to cite but no enforcement.",
+            "weak": "Pure LLM completion after weak retrieval."
+          },
+          "misconceptions": [],
+          "probes": ["What should the bot say when no chunk matches?", "How do you detect hallucinations in eval?"],
+          "hints": ["Low retrieval score should trigger refuse/clarify.", "Force quotes from provided context."],
+          "referenceFix": "Reject generation below score threshold, require inline citations mapped to chunk ids, run post-check that claims appear in context, and return ‘I don’t know’ otherwise."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

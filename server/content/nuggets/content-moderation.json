@@ -1,0 +1,693 @@
+{
+  "promptId": "content-moderation",
+  "packVersion": "pack-75206fab",
+  "inputsFingerprint": "558b539b1e3b62a7cca04f78d72d28f1e9b56c0e98a2ef50fdcd20bda4fb2667",
+  "nuggets": [
+    {
+      "id": "content-moderation/threshold-shift-blocks-feed",
+      "title": "Aggressive threshold blocks 30% of benign posts",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.thresholds",
+      "scenario": {
+        "symptoms": "After tuning NSFW model threshold down, creator reach dropped sharply and appeals queue grew 10×. False positive rate jumped while recall barely improved.",
+        "interviewerSetup": "Single global threshold applied to all locales; no shadow mode before production cutover."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-post",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Upload client"
+            }
+          },
+          {
+            "id": "n-ing",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Ingest"
+            }
+          },
+          {
+            "id": "n-clf",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "NSFW classifier"
+            }
+          },
+          {
+            "id": "n-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Feed builder"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-post",
+            "target": "n-ing",
+            "label": "New post"
+          },
+          {
+            "id": "e2",
+            "source": "n-ing",
+            "target": "n-clf",
+            "label": "Score"
+          },
+          {
+            "id": "e3",
+            "source": "n-clf",
+            "target": "n-feed",
+            "label": "Hard block"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-clf",
+          "n-feed"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Global threshold change spiked false positives"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Set operating points per harm from the cost of each kind of error.",
+            "opener": "The feed suddenly empty for many creators—the classifier threshold path is highlighted. What went wrong?",
+            "evidence": {
+              "strong": "Per-harm thresholds from error costs: very high recall with human review for the most severe harms, high precision for automatic removal of spam, a middle band sent to review or reduced distribution; tunes thresholds on labelled samples and revisits them as models change.",
+              "adequate": "Talks about precision and recall but uses one threshold.",
+              "weak": "Uses a fixed 0.5 everywhere."
+            },
+            "misconceptions": [
+              {
+                "id": "thr.half",
+                "pattern": "Thinks 0.5 is the natural cut-off.",
+                "challenge": "A model is 40% sure an image shows child abuse. Do you ignore it?"
+              }
+            ],
+            "probes": [
+              "Which harms justify automatic removal, and which need people?",
+              "What happens in the uncertain middle band?"
+            ],
+            "hints": [
+              "Thresholds encode how costly mistakes are.",
+              "There's more than remove or allow."
+            ],
+            "referenceFix": "Shadow evaluate new thresholds, per-locale calibration, human review queue for borderline scores, rollback switches, and monitor precision/recall by segment."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "content-moderation/review-queue-sla-breach",
+      "title": "Human review backlog lets harmful content stay live",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.review",
+      "scenario": {
+        "symptoms": "Average time-to-decision in the review queue hit 18 hours during a protest event. Reported content stayed visible while moderators worked FIFO without risk scoring.",
+        "interviewerSetup": "Queue sorted by arrival time only; no priority by virality, reports, or model confidence."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "user",
+              "label": "Reporters"
+            }
+          },
+          {
+            "id": "n-q",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Review queue"
+            }
+          },
+          {
+            "id": "n-mod",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "admin",
+              "label": "Moderators"
+            }
+          },
+          {
+            "id": "n-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 640,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Public feed"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-user",
+            "target": "n-q",
+            "label": "Reports"
+          },
+          {
+            "id": "e2",
+            "source": "n-q",
+            "target": "n-mod",
+            "label": "FIFO"
+          },
+          {
+            "id": "e3",
+            "source": "n-feed",
+            "target": "n-q",
+            "label": "Live content"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-q"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "FIFO review queue ignores risk and velocity"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Use limited reviewer time where it prevents the most harm.",
+            "opener": "Harmful posts stayed up because review couldn't keep up—the queue path is highlighted. How do you prioritize?",
+            "evidence": {
+              "strong": "Orders queues by expected harm (severity x probability x predicted reach), re-scores and re-prioritises when items get reports or go viral, routes by language and specialty, reduces distribution while waiting, and protects reviewer wellbeing.",
+              "adequate": "Prioritises by score only.",
+              "weak": "First in, first out."
+            },
+            "misconceptions": [
+              {
+                "id": "rev.fifo",
+                "pattern": "Reviews items in arrival order.",
+                "challenge": "An account with millions of followers posts something borderline and it waits behind thousands of other items. What happens meanwhile?"
+              }
+            ],
+            "probes": [
+              "How does a post's audience change its priority?",
+              "What happens to a post while it waits in the queue?"
+            ],
+            "hints": [
+              "Reach multiplies harm.",
+              "Limiting distribution buys time."
+            ],
+            "referenceFix": "Priority by report count, model score, and spread velocity; temporary visibility limits for uncertain content; surge staffing hooks; SLA alerts on queue age."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "content-moderation/label-schema-breaks-training",
+      "title": "Label taxonomy change silently breaks retraining",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.labels",
+      "scenario": {
+        "symptoms": "Weekly retrain job accuracy collapsed after moderators started using a new 'borderline' label not mapped in the training pipeline. Production still serves old model unaware.",
+        "interviewerSetup": "Label enum extended in UI without versioning training data contract; ETL defaults unknown labels to negative class."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-mod",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "admin",
+              "label": "Moderators"
+            }
+          },
+          {
+            "id": "n-ui",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Label UI"
+            }
+          },
+          {
+            "id": "n-etl",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Label ETL"
+            }
+          },
+          {
+            "id": "n-train",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "training",
+              "label": "Retrain job"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-mod",
+            "target": "n-ui",
+            "label": "New label"
+          },
+          {
+            "id": "e2",
+            "source": "n-ui",
+            "target": "n-etl",
+            "label": "Export"
+          },
+          {
+            "id": "e3",
+            "source": "n-etl",
+            "target": "n-train",
+            "label": "Mis-mapped"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-etl",
+          "n-train"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Unversioned label schema corrupted training labels"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep a supply of accurate labels as policies and abuse change.",
+            "opener": "Moderators added labels but the model got worse—the label pipeline is highlighted. What broke?",
+            "evidence": {
+              "strong": "Policy-written guidelines, multiple labels and adjudication for hard cases, agreement tracking, active learning around thresholds and for rare harms and languages, appeals and reversals as labels, and labels versioned with the policy so old labels can be relabelled.",
+              "adequate": "Uses reviewer decisions as labels without versioning or active learning.",
+              "weak": "No label strategy."
+            },
+            "misconceptions": [
+              {
+                "id": "lab.static",
+                "pattern": "Assumes labelled data stays valid forever.",
+                "challenge": "The definition of a banned category widens. Are last year's 'allowed' labels still right?"
+              }
+            ],
+            "probes": [
+              "How do you get labels for a language with few reviewers?",
+              "Which reviewer decisions should you not trust?"
+            ],
+            "hints": [
+              "Policies have versions; so should labels.",
+              "Label where the model is least sure."
+            ],
+            "referenceFix": "Version label taxonomy, block export on unknown labels, mapping table with tests, notify ML on schema change, and monitor label distribution drift."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "content-moderation/adversarial-images-bypass-filter",
+      "title": "Adversarial padding fools image moderator",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.adversarial",
+      "scenario": {
+        "symptoms": "A coordinated spam campaign used thin noise borders to drop NSFW scores just below threshold. Automated removal rate fell 60% for two days.",
+        "interviewerSetup": "Classifier runs on downscaled center crop; attackers add border patterns outside crop region."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-up",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Uploader"
+            }
+          },
+          {
+            "id": "n-pre",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Preprocessor"
+            }
+          },
+          {
+            "id": "n-clf",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Vision model"
+            }
+          },
+          {
+            "id": "n-act",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Enforcement"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-up",
+            "target": "n-pre",
+            "label": "Image bytes"
+          },
+          {
+            "id": "e2",
+            "source": "n-pre",
+            "target": "n-clf",
+            "label": "Center crop only"
+          },
+          {
+            "id": "e3",
+            "source": "n-clf",
+            "target": "n-act",
+            "label": "Low score pass"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-pre",
+          "n-clf"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Crop-based preprocessing misses border adversarial patterns"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep up with people actively evading detection.",
+            "opener": "Spam images evaded the model—the inference preprocessing path is highlighted. How do you harden?",
+            "evidence": {
+              "strong": "Augments training with perturbations (misspellings, noise, crops), monitors report rates against model flags to spot new patterns, lets analysts add hashes, keywords and rules within minutes, retrains frequently, and uses account and network signals that are harder to evade.",
+              "adequate": "Retrains periodically.",
+              "weak": "No plan for evasion."
+            },
+            "misconceptions": [
+              {
+                "id": "adv.retrain",
+                "pattern": "Thinks retraining every month is enough.",
+                "challenge": "A new coded slur spreads in a weekend. What catches it before the next retrain?"
+              }
+            ],
+            "probes": [
+              "How would you notice a new evasion pattern?",
+              "Which signals are hardest to fake?"
+            ],
+            "hints": [
+              "User reports reveal what models miss.",
+              "Behaviour is harder to disguise than words."
+            ],
+            "referenceFix": "Multi-scale and full-frame scoring, ensemble models, hash blocklists, rate limits on similar uploads, and rapid adversarial retraining loop."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "content-moderation/metric-gap-hides-harm-spike",
+      "title": "Dashboards miss harm spike due to wrong denominator",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.measure",
+      "scenario": {
+        "symptoms": "Leadership dashboards show flat violation rate while user reports tripled. Denominator uses impressions instead of viewed posts, hiding surge in smaller creators.",
+        "interviewerSetup": "Metrics pipeline joins moderation decisions to ad impressions rather than content views; segment breakdown missing."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-mod",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Moderation svc"
+            }
+          },
+          {
+            "id": "n-metrics",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 120
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Metrics ETL"
+            }
+          },
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 120
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Warehouse"
+            }
+          },
+          {
+            "id": "n-dash",
+            "type": "systemNode",
+            "position": {
+              "x": 680,
+              "y": 120
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Exec dashboard"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-mod",
+            "target": "n-metrics",
+            "label": "Decisions"
+          },
+          {
+            "id": "e2",
+            "source": "n-metrics",
+            "target": "n-wh",
+            "label": "Wrong join"
+          },
+          {
+            "id": "e3",
+            "source": "n-wh",
+            "target": "n-dash",
+            "label": "Flat rate"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-metrics",
+          "n-wh"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Incorrect denominator masks rising harm"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "requirements",
+            "weight": 3,
+            "required": true,
+            "goal": "Measure what users actually experience, not just what models flag.",
+            "opener": "Reports say harm is up but dashboards disagree—the metrics join is highlighted. What's wrong?",
+            "evidence": {
+              "strong": "Prevalence from reviewed random samples of viewed content, proactive detection rate, precision and recall per harm, appeal overturn rates, and slices by language and region; warns that flag counts can fall because the model got worse.",
+              "adequate": "Counts removals.",
+              "weak": "No measurement plan."
+            },
+            "misconceptions": [
+              {
+                "id": "meas.removals",
+                "pattern": "Uses the number of removals as the success metric.",
+                "challenge": "Removals drop by half this month. Is that good news or a broken model?"
+              }
+            ],
+            "probes": [
+              "How do you measure what the models miss?",
+              "Which slice might be under-protected?"
+            ],
+            "hints": [
+              "Sample randomly from what people saw.",
+              "Averages can hide small languages."
+            ],
+            "referenceFix": "Define metrics on viewed content per segment, document denominators, add report-to-view ratio alerts, and validate dashboards against sampled audits."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

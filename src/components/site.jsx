@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, Crown, Layers2, LockKeyhole, LockKeyholeOpen, LogOut, Menu, X } from "lucide-react";
-import { getTrack, tracks } from "../data/prompts.js";
+import { findPrompt, getTrack, tracks } from "../data/prompts.js";
 import { CATEGORIES, LEARN_PATH, topicMeta, topicPath } from "../learn/catalog.js";
 import { isPlus, useAuth } from "../auth.jsx";
 import { Link, navigate, useRoute } from "../router.js";
@@ -80,6 +80,7 @@ export function SiteNav({ onStart }) {
   const navLinks = (profileLabel) => (
     <>
       <Link className="nav-link-btn" to={LEARN_PATH} onClick={close} aria-current={current(path === LEARN_PATH || path.startsWith(`${LEARN_PATH}/`))}>Learn</Link>
+      <Link className="nav-link-btn" to="/nuggets" onClick={close} aria-current={current(path.startsWith("/nuggets"))}>Nuggets</Link>
       <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
       {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>{profileLabel}</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
@@ -236,6 +237,75 @@ export function RoundCard({ round, onStart, status, index = 0 }) {
         <button className={`round-go ${playable ? "" : "locked"}`} onClick={() => onStart(round.id)} aria-label={`${playable ? (status === "in_progress" ? "Resume" : "Start") : "Plus round"}: ${round.title}`}>
           {playable ? (status === "in_progress" ? "Resume" : "Start") : <><LockKeyhole size={12} /> Plus</>}
           {playable && <ArrowRight size={13} className="nudge" />}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+// Parent design question with incident drills — compact card for the nuggets catalog.
+export function NuggetParentCard({ parent, to, index = 0 }) {
+  const prompt = findPrompt(parent.id);
+  const track = getTrack(parent.track || prompt?.track);
+  const Icon = promptIcon(prompt?.icon);
+  const access = parent.access ?? prompt?.access ?? "free";
+  const count = parent.nuggetCount ?? 0;
+
+  return (
+    <Link className={`nugget-parent round tone-${track.color}`} to={to} style={{ "--i": index % 12 }}>
+      <div className="round-top">
+        <span className="round-icon"><Icon size={19} strokeWidth={1.9} /></span>
+        <span className="round-badges">
+          {access === "paid" ? <span className="badge badge-plus"><Crown size={12} /> Plus</span> : <span className="badge badge-free">Free</span>}
+        </span>
+      </div>
+      <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>{count} drill{count === 1 ? "" : "s"}</span></div>
+      <h3>{parent.title}</h3>
+      <span className="nugget-parent-cta">
+        Browse drills <ArrowRight size={14} className="nudge" />
+      </span>
+    </Link>
+  );
+}
+
+// Incident drill card — same shell as RoundCard (tone outline, access badge, Plus lock).
+export function NuggetCard({ nugget, onStart, onLockRound, disabled = false, index = 0 }) {
+  const { user } = useAuth();
+  const parent = findPrompt(nugget.parentPromptId);
+  const track = getTrack(nugget.track || parent?.track);
+  const Icon = promptIcon(nugget.icon || parent?.icon);
+  const access = nugget.access ?? parent?.access ?? "free";
+  const round = { access };
+  const unlocked = access !== "free" && isPlus(user);
+  const playable = access === "free" || unlocked;
+
+  const go = () => {
+    if (disabled) return;
+    if (!playable) {
+      onLockRound?.(nugget.parentPromptId);
+      return;
+    }
+    onStart?.(nugget.id);
+  };
+
+  return (
+    <article className={`round tone-${track.color} ${unlocked ? "round-unlocked" : ""}`} style={{ "--i": index % 12 }}>
+      <div className="round-top">
+        <span className="round-icon"><Icon size={19} strokeWidth={1.9} /></span>
+        <span className="round-badges">
+          <AccessBadge round={round} user={user} />
+        </span>
+      </div>
+      <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>Incident drill</span></div>
+      <h3><Link to={roundPath(nugget.parentPromptId)}>{nugget.title}</Link></h3>
+      <p>{nugget.symptomsPreview}…</p>
+      <div className="round-foot">
+        <span className="round-facts">
+          <span><Clock3 size={13} /> {nugget.minutes} min</span>
+        </span>
+        <button type="button" className={`round-go ${playable && !disabled ? "" : "locked"}`} disabled={disabled && playable} onClick={go} aria-label={`${playable ? "Start" : "Plus round"}: ${nugget.title}`}>
+          {playable ? (disabled ? "…" : "Start") : <><LockKeyhole size={12} /> Plus</>}
+          {playable && !disabled && <ArrowRight size={13} className="nudge" />}
         </button>
       </div>
     </article>

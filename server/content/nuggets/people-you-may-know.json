@@ -1,0 +1,137 @@
+{
+  "promptId": "people-you-may-know",
+  "nuggets": [
+    {
+      "id": "people-you-may-know/stale-graph-batch",
+      "title": "PYMK shows deleted contacts",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.batch",
+      "scenario": {
+        "symptoms": "Users see friend suggestions for people they unfriended months ago. The daily graph feature batch finished 36 hours late and serving still reads yesterday’s precomputed lists.",
+        "interviewerSetup": "Online serving reads static batch outputs from object storage without versioning tied to graph snapshot time. Incremental friendship deletes are not applied until the next full batch."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-events", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "event-bus", "label": "Social graph events" } },
+          { "id": "n-batch", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "worker", "label": "Daily PYMK batch" } },
+          { "id": "n-store", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "object-store", "label": "Precomputed lists" } },
+          { "id": "n-api", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "service", "label": "PYMK API" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-events", "target": "n-batch", "label": "Delayed consume" },
+          { "id": "e2", "source": "n-batch", "target": "n-store", "label": "Stale snapshot" },
+          { "id": "e3", "source": "n-api", "target": "n-store", "label": "Serve old lists" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-batch", "n-store"], "edgeIds": ["e2", "e3"], "headline": "Serving stale batch recommendations after delayed graph pipeline" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Keep PYMK lists fresh despite heavy batch computation.",
+          "opener": "Suggestions include people users unfriended—how do batch and online paths stay consistent?",
+          "evidence": {
+            "strong": "Hybrid batch + incremental updates, snapshot versioning, filter deletes on read, SLA alerts on batch lag.",
+            "adequate": "Faster batch only without online corrections.",
+            "weak": "Daily batch as sole source with no invalidation."
+          },
+          "misconceptions": [],
+          "probes": ["Which signals must be real-time vs batch?", "How do you merge incremental deletes into cached lists?"],
+          "hints": ["Apply negative filters from a realtime blocklist.", "Expose snapshot timestamp to serving."],
+          "referenceFix": "Publish batch lists with version timestamps, maintain realtime unfriend/block filter at serve time, and fall back to on-demand small graph lookups when batch lag exceeds SLA."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "people-you-may-know/privacy-leak-suggestion",
+      "title": "Blocked user appears in PYMK",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.privacy",
+      "scenario": {
+        "symptoms": "A user who blocked their ex still received a ‘people you may know’ card with that person’s photo. Support escalations cite harassment concerns.",
+        "interviewerSetup": "Candidate generation uses mutual friends but does not subtract block/mute edges before ranking. Privacy filters run only in messaging, not recommendations."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-gen", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Candidate generator" } },
+          { "id": "n-rank", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Ranker" } },
+          { "id": "n-block", "type": "systemNode", "position": { "x": 280, "y": 240 }, "data": { "kind": "database", "label": "Block list (unused)" } },
+          { "id": "n-ui", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "client", "label": "App feed" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-gen", "target": "n-rank", "label": "Includes blocked ids" },
+          { "id": "e2", "source": "n-rank", "target": "n-ui" },
+          { "id": "e3", "source": "n-block", "target": "n-rank", "label": "Not applied" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-gen", "n-rank"], "edgeIds": ["e3"], "headline": "Block graph edges omitted from PYMK filtering" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Never recommend users across block or privacy boundaries.",
+          "opener": "A blocked person showed up in PYMK—where must privacy filters run?",
+          "evidence": {
+            "strong": "Filter blocked/muted/deleted accounts before rank and after batch merge, with tests and audit logs.",
+            "adequate": "Client-side hide only.",
+            "weak": "Ignore block graph in recommendations."
+          },
+          "misconceptions": [{ "id": "privacy.client", "pattern": "Hiding suggestions only in the UI.", "challenge": "Can a API client or notification still expose the blocked profile?" }],
+          "probes": ["Does block apply bidirectionally?", "How do you filter at batch scale efficiently?"],
+          "hints": ["Treat block list as hard constraint, not ranking feature.", "Join block bitmap early in candidate generation."],
+          "referenceFix": "Apply block/mute/deactivated filters in candidate generation and final rerank, store per-user deny sets in low-latency store, and add compliance tests for blocked pairs."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "people-you-may-know/graph-feature-skew",
+      "title": "Realtime graph features lag social actions",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.realtime",
+      "scenario": {
+        "symptoms": "New users see empty PYMK for 48 hours while veterans get instant suggestions. Realtime friend accept events queue behind a backlog, so online features miss fresh edges.",
+        "interviewerSetup": "Streaming feature updater shares Kafka consumer group with heavy batch backfill jobs that starve realtime partition consumption."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-kafka", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "t-kafka", "label": "Graph events" } },
+          { "id": "n-rt", "type": "systemNode", "position": { "x": 280, "y": 80 }, "data": { "kind": "stream-processor", "label": "Realtime updater" } },
+          { "id": "n-backfill", "type": "systemNode", "position": { "x": 280, "y": 200 }, "data": { "kind": "worker", "label": "Backfill job" } },
+          { "id": "n-fstore", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "cache", "label": "Online features" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-kafka", "target": "n-rt", "label": "Starved lag" },
+          { "id": "e2", "source": "n-kafka", "target": "n-backfill", "label": "Competing consumers" },
+          { "id": "e3", "source": "n-rt", "target": "n-fstore", "label": "Stale edges" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-rt", "n-backfill"], "edgeIds": ["e1", "e2"], "headline": "Backfill competes with realtime graph feature updates" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Update PYMK features within minutes of new social graph actions.",
+          "opener": "New friendships take days to affect PYMK—what pipeline issue causes that lag?",
+          "evidence": {
+            "strong": "Separate consumer groups/topics for backfill vs realtime, priority processing, lag alerts, and cold-start fallback heuristics.",
+            "adequate": "Scale consumers without isolating backfill.",
+            "weak": "Batch-only graph features for everyone."
+          },
+          "misconceptions": [],
+          "probes": ["How do you bootstrap features for brand-new users?", "What SLA do you target for accept-friend events?"],
+          "hints": ["Never share one consumer group between backfill and live.", "Cold-start can use profile/contact imports."],
+          "referenceFix": "Isolate realtime graph updater with dedicated partitions, throttle backfill separately, alert on consumer lag, and serve heuristic PYMK until features warm."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

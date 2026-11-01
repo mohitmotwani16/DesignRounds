@@ -1,0 +1,436 @@
+{
+  "promptId": "clickstream",
+  "packVersion": "pack-f73b96de",
+  "inputsFingerprint": "c259e913e46ad87b0aab111887e55c12c81b81d305c83b03d9241cd080c27d67",
+  "nuggets": [
+    {
+      "id": "clickstream/offline_sdk_oom",
+      "title": "Mobile SDK Disk & Memory Leak During Extended Offline Use",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.offline_sdk",
+      "scenario": {
+        "symptoms": "Users on long flights or in remote areas report mobile app crashes on launch. Crashes spike specifically for users who haven't reconnected to the internet for over 24 hours.",
+        "interviewerSetup": "Our analytics SDK buffers clickstream events locally when device connectivity is lost. Crash reports show OutOfMemory errors and disk quota exhaustion on the local SQLite DB."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-mobile",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile App SDK"
+            }
+          },
+          {
+            "id": "node-sqlite",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-sqlite",
+              "label": "Local Event Queue"
+            }
+          },
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 350,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Ingestion Gateway"
+            }
+          },
+          {
+            "id": "node-collector",
+            "type": "systemNode",
+            "position": {
+              "x": 600,
+              "y": 150
+            },
+            "data": {
+              "kind": "service",
+              "label": "Collector Service"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-mobile",
+            "target": "node-sqlite",
+            "label": "Buffer local events"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-mobile",
+            "target": "node-lb",
+            "label": "Batch POST on reconnect"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-lb",
+            "target": "node-collector",
+            "label": "Route batch"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-mobile",
+          "node-sqlite"
+        ],
+        "edgeIds": [
+          "edge-1"
+        ],
+        "headline": "Unbounded local SDK buffering causes client crash and disk exhaustion when users remain offline"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_offline_sdk",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Ensure the SDK durably buffers events when offline, caps local storage size safely, and efficiently batches backlogged events on reconnection.",
+            "opener": "How should the mobile SDK manage events when a user stays offline for two days, and how do we safely transmit them upon reconnect?",
+            "evidence": {
+              "strong": "Proposes a persistent bounded local queue with TTL/max-size eviction, preserves original client timestamps, and sends events in metered batches with exponential backoff on reconnection.",
+              "adequate": "Suggests persistent local storage like SQLite with capped batch size during sync, but omits eviction policy for extreme offline periods.",
+              "weak": "Suggests keeping events in an in-memory array or dumping all queued events in a single massive HTTP POST upon reconnect."
+            },
+            "misconceptions": [
+              {
+                "id": "server_timestamps",
+                "pattern": "We can rely on the server's arrival time for offline event sequencing",
+                "challenge": "If offline events arrive 48 hours late, server arrival timestamps will completely break user session order."
+              }
+            ],
+            "probes": [
+              "What happens to local storage if a user stays offline for a full month?",
+              "When the device reconnects, how do you prevent the sync batch from saturating cellular network bandwidth?"
+            ],
+            "hints": [
+              "In-memory storage is lost on app restart, so events must be written to local storage.",
+              "Consider what happens if local disk storage exceeds a maximum threshold like 50MB."
+            ],
+            "referenceFix": "Implement a disk-backed queue (e.g., SQLite/LevelDB) bounded by max size (e.g., 50MB or 10,000 events) and FIFO retention. Store client creation timestamps. On network reconnect, flush events in controlled batch windows (e.g., 100 events per request) using exponential backoff and jitter.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "clickstream/schema_quarantine_spike",
+      "title": "Unvalidated App Release Breaks Analytics Ingestion Pipeline",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.schema",
+      "scenario": {
+        "symptoms": "Data warehouse tables are missing 40% of clickstream events following the release of iOS App v4.2. Downstream analytics pipelines report schema mismatch exceptions.",
+        "interviewerSetup": "The iOS v4.2 update changed `user_id` from integer to string and added nested attributes. The ingest collector crashes when parsing the payload."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "iOS Client v4.2"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 350,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingestion Collector"
+            }
+          },
+          {
+            "id": "node-registry",
+            "type": "systemNode",
+            "position": {
+              "x": 350,
+              "y": 300
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Schema Registry"
+            }
+          },
+          {
+            "id": "node-dlq",
+            "type": "systemNode",
+            "position": {
+              "x": 600,
+              "y": 300
+            },
+            "data": {
+              "kind": "dlq",
+              "label": "Quarantine DLQ"
+            }
+          },
+          {
+            "id": "node-warehouse",
+            "type": "systemNode",
+            "position": {
+              "x": 600,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Data Warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-client-ingest",
+            "source": "node-client",
+            "target": "node-ingest",
+            "label": "POST v2 events"
+          },
+          {
+            "id": "edge-ingest-registry",
+            "source": "node-ingest",
+            "target": "node-registry",
+            "label": "Validate schema"
+          },
+          {
+            "id": "edge-ingest-wh",
+            "source": "node-ingest",
+            "target": "node-warehouse",
+            "label": "Load valid events"
+          },
+          {
+            "id": "edge-ingest-dlq",
+            "source": "node-ingest",
+            "target": "node-dlq",
+            "label": "Route malformed"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-ingest",
+          "node-registry"
+        ],
+        "edgeIds": [
+          "edge-ingest-registry"
+        ],
+        "headline": "Strict schema validation failure causes widespread ingestion drops after client update"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_schema_evolution",
+            "stage": "incident",
+            "dimension": "requirements",
+            "weight": 3,
+            "goal": "Handle evolving event schemas without crashing collectors or dropping telemetry data permanently.",
+            "opener": "iOS v4.2 is sending breaking payload changes causing server errors. How do we prevent this schema drift from breaking ingestion while keeping data recoverable?",
+            "evidence": {
+              "strong": "Proposes registering schemas in a central Schema Registry with backward-compatibility checks, validating schemas at ingestion, and routing non-conforming events to a quarantine stream for replay.",
+              "adequate": "Proposes sending malformed events to a dead-letter queue and updating the parser code.",
+              "weak": "Suggests silently dropping malformed fields or forcing all old app clients to update instantly."
+            },
+            "misconceptions": [
+              {
+                "id": "drop_bad_events",
+                "pattern": "We should immediately drop invalid payloads to keep the server running",
+                "challenge": "If a bug in a popular app version triggers invalid payloads, how will analytics recover that lost data after a patch?"
+              }
+            ],
+            "probes": [
+              "Where should payload validation occur in the pipeline?",
+              "How will you replay events out of quarantine once the schema is updated in the registry?"
+            ],
+            "hints": [
+              "Think about how to isolate corrupted records without dropping them on the floor.",
+              "How can a schema registry prevent clients from deploying incompatible changes?"
+            ],
+            "referenceFix": "Use a Schema Registry for strict backward/forward compatibility rules enforced at CI/CD time. Collectors validate payload schemas against the registry; valid events flow to primary storage while failing events are routed to a Dead Letter Queue (DLQ) / quarantine storage for backfilling after schema resolution.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "clickstream/burst_ingestion_backpressure",
+      "title": "Flash Campaign Causes 10x Spike and Ingestion Gateway Timeouts",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.bursts",
+      "scenario": {
+        "symptoms": "During a global push notification push, event ingestion latency increases from 40ms to over 15 seconds. HTTP 504 Gateway Timeouts peak at 65% for 10 minutes.",
+        "interviewerSetup": "The collector service synchronously parses and writes events directly into downstream relational tables. Under a 10x traffic spike, database connection pools are fully exhausted."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-clients",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Client Apps"
+            }
+          },
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Load Balancer"
+            }
+          },
+          {
+            "id": "node-collectors",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "service",
+              "label": "Collector Nodes"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 700,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Kafka Event Bus"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-c-lb",
+            "source": "node-clients",
+            "target": "node-lb",
+            "label": "10x HTTP requests"
+          },
+          {
+            "id": "edge-lb-col",
+            "source": "node-lb",
+            "target": "node-collectors",
+            "label": "Distribute traffic"
+          },
+          {
+            "id": "edge-col-kafka",
+            "source": "node-collectors",
+            "target": "node-kafka",
+            "label": "Produce events"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-collectors",
+          "node-lb"
+        ],
+        "edgeIds": [
+          "edge-lb-col"
+        ],
+        "headline": "Stateless collectors choked by synchronous downstream writes during a 10x traffic spike"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_traffic_bursts",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "goal": "Decouple collector availability from downstream database ingestion speed using persistent queuing and fast asynchronous ACK response.",
+            "opener": "A push notification campaign triggered a 10x traffic surge that overwhelmed our collectors. How do we design the ingestion layer to tolerate sudden bursts without dropping events?",
+            "evidence": {
+              "strong": "Decouples collectors from synchronous downstream operations by writing directly to a partitioned buffer (e.g. Kafka/Kinesis), returning HTTP 202/200 instantly, and scaling stateless collector pods ahead of time or via aggressive target-tracking metrics.",
+              "adequate": "Proposes adding a queue between collectors and storage, but still does synchronous validation or database checks during the request lifecycle.",
+              "weak": "Suggests increasing database instance size or relying solely on default CPU autoscaling for collector pods."
+            },
+            "misconceptions": [
+              {
+                "id": "autoscaling_is_instant",
+                "pattern": "Autoscaling instances will seamlessly absorb instant traffic spikes",
+                "challenge": "If pod/VM warm-up takes 2-3 minutes, what happens to incoming events during the first 120 seconds of a flash spike?"
+              }
+            ],
+            "probes": [
+              "What is the bare minimum work the collector must perform before sending 200 OK to the SDK?",
+              "If the message queue becomes full, how should backpressure be communicated to the client?"
+            ],
+            "hints": [
+              "The collector shouldn't wait for database writes to complete before acknowledging the request.",
+              "Consider persistent append-only logs for fast write latency."
+            ],
+            "referenceFix": "Make ingestion collectors completely stateless. Collectors perform lightweight syntax validation, write raw payloads directly to a distributed event log (e.g., Apache Kafka / AWS Kinesis), and return 202 Accepted within milliseconds. Scale streaming consumers independently to consume off the queue buffer.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

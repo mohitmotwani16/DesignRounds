@@ -1,0 +1,454 @@
+{
+  "promptId": "autocomplete",
+  "packVersion": "pack-a831a30d",
+  "inputsFingerprint": "0cb7de0a43afff729fec4004eff1ffa185fbcb62c4c591c53545c15201a74f63",
+  "nuggets": [
+    {
+      "id": "autocomplete/trie-traversal-latency-spike",
+      "title": "Autocomplete Trie Traversal Latency Spike",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.trie",
+      "scenario": {
+        "symptoms": "p99 autocomplete query latency spiked from 4ms to 850ms on single-character queries during morning traffic peaks. Application CPU utilization hit 100%.",
+        "interviewerSetup": "Our search autocomplete system uses an in-memory Trie index. During peak morning hours, whenever users type single letters like 'a' or 's', search nodes spike to 100% CPU and experience heavy query queueing."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Web / Mobile Client"
+            }
+          },
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Load Balancer"
+            }
+          },
+          {
+            "id": "node-search-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-service",
+              "label": "Autocomplete Service"
+            }
+          },
+          {
+            "id": "node-trie-index",
+            "type": "systemNode",
+            "position": {
+              "x": 700,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "In-Memory Trie Index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-client",
+            "target": "node-lb",
+            "label": "GET /autocomplete?q=a"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-lb",
+            "target": "node-search-svc",
+            "label": "Forward Query"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-search-svc",
+            "target": "node-trie-index",
+            "label": "Trie Lookup"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-trie-index",
+          "node-search-svc"
+        ],
+        "edgeIds": [
+          "edge-3"
+        ],
+        "headline": "Full subtree traversal for short prefix queries causing severe CPU exhaustion on search nodes."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "goal": "Precompute top-K suggestions at each Trie node to achieve O(prefix_length) response time without subtree traversal.",
+            "opener": "Looking at the Trie node, queries with short prefixes are scanning millions of downstream leaf nodes. How can we restructure the Trie data stored in memory to resolve this incident?",
+            "evidence": {
+              "strong": "Proposes storing precomputed top-k sorted suggestions directly inside each Trie node during index generation, enabling O(length) lookups without subtree DFS/BFS.",
+              "adequate": "Identifies that subtree traversal is the root cause and suggests caching top results for 1-2 letter prefixes in Redis.",
+              "weak": "Suggests scaling out search nodes or adding SQL indexes to handle the traversal load."
+            },
+            "misconceptions": [
+              {
+                "id": "runtime-dfs",
+                "pattern": "Traversing the entire subtrie at query time and sorting results on the fly.",
+                "challenge": "If a prefix matches 500,000 terms, traversing every branch to rank top 5 terms will consume excessive CPU. How can we avoid traversing downstream nodes?"
+              }
+            ],
+            "probes": [
+              "What is the memory trade-off when storing top-k lists at every prefix node?",
+              "How does precomputing top-k impact index build time and updates?"
+            ],
+            "hints": [
+              "Notice how short prefixes like 'a' sit near the root of the tree.",
+              "If the top 5 suggestions rarely change for a prefix, do we need to calculate them on every user keystroke?"
+            ],
+            "referenceFix": "Store precomputed top-K (e.g., top 10) high-weight suggestion IDs directly on each Trie node during batch index building. On query execution, lookup traverses only the prefix characters and immediately returns the stored list in O(L) time.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "autocomplete/realtime-trends-stream-desync",
+      "title": "Real-time Trends Index Buffer Exhaustion",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.trends",
+      "scenario": {
+        "symptoms": "Breaking news search queries are missing from autocomplete suggestions. Stream processing metrics show rising consumer lag and backpressure.",
+        "interviewerSetup": "During a breaking news event, user search volume for new keywords surged. The static Trie index only updates daily, and the real-time stream processing pipeline feeding top trend overrides is dropping updates under memory pressure."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "User Client"
+            }
+          },
+          {
+            "id": "node-gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 230,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway"
+            }
+          },
+          {
+            "id": "node-search-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-service",
+              "label": "Autocomplete Service"
+            }
+          },
+          {
+            "id": "node-static-index",
+            "type": "systemNode",
+            "position": {
+              "x": 650,
+              "y": 70
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Static Trie Index"
+            }
+          },
+          {
+            "id": "node-flink",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 290
+            },
+            "data": {
+              "kind": "t-flink",
+              "label": "Stream Processor"
+            }
+          },
+          {
+            "id": "node-trends-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 650,
+              "y": 230
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Real-time Trends Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-client",
+            "target": "node-gateway",
+            "label": "Prefix Query"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-gateway",
+            "target": "node-search-svc",
+            "label": "Route Request"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-search-svc",
+            "target": "node-static-index",
+            "label": "Read Static Top-K"
+          },
+          {
+            "id": "edge-4",
+            "source": "node-search-svc",
+            "target": "node-trends-cache",
+            "label": "Read Trend Overrides"
+          },
+          {
+            "id": "edge-5",
+            "source": "node-flink",
+            "target": "node-trends-cache",
+            "label": "Write Sliding Windows"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-flink",
+          "node-trends-cache"
+        ],
+        "edgeIds": [
+          "edge-5"
+        ],
+        "headline": "Real-time stream processor buffer overload failing to push breaking search trends to the query merge layer."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "goal": "Architect a resilient real-time trend ingestion pipeline that decoupledly writes short-lived trend prefix scores into a distributed cache and merges them with static Trie results at query time.",
+            "opener": "Why are breaking news terms failing to reach users, and how should we structure the architecture to combine static historical data with real-time trend updates safely?",
+            "evidence": {
+              "strong": "Designs a dual-path architecture where a stream processor computes top terms over rolling time windows, stores them in Redis/Memcached, and the query layer merges static Trie and real-time trend results with graceful fallback.",
+              "adequate": "Suggests writing real-time query counts into a fast Redis cache and falling back to static trie if cache reads time out.",
+              "weak": "Recommends triggering a full batch Trie index rebuild every time a term trends."
+            },
+            "misconceptions": [
+              {
+                "id": "frequent-rebuilds",
+                "pattern": "Rebuilding the primary static batch index every few minutes.",
+                "challenge": "Rebuilding a global Trie index takes substantial compute and minutes of pipeline time. How can we serve real-time trends instantly without full index rebuilds?"
+              }
+            ],
+            "probes": [
+              "How do you merge and rank items coming from both the static batch Trie and the real-time trends cache?",
+              "What happens to response latency if the real-time cache becomes unavailable?"
+            ],
+            "hints": [
+              "Consider splitting the problem into long-term popularity vs short-term velocity.",
+              "What if the query layer combines results from two sources: static batch Trie and dynamic Redis trend sets?"
+            ],
+            "referenceFix": "Use stream processing (e.g., Flink/Spark Streaming) with sliding time windows (e.g. 5-15 mins) to write high-velocity prefixes into a low-latency cache (Redis sorted sets). The search service queries both static Trie and dynamic trend cache concurrently, deduplicating and re-ranking the top results in under 5ms.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "autocomplete/in-place-index-swap-deadlock",
+      "title": "In-Place Trie Index Update Memory Deadlock",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.updates",
+      "scenario": {
+        "symptoms": "Every night at 02:00 UTC when the daily batch index deploys, search servers show 500 error spikes and read timeout rates jump to 35% for 3 minutes.",
+        "interviewerSetup": "Our daily pipeline publishes a new Trie index file to search instances. The search service updates its active in-memory Trie by writing directly into existing nodes using an internal read-write lock."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Load Balancer"
+            }
+          },
+          {
+            "id": "node-search-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-service",
+              "label": "Search Node"
+            }
+          },
+          {
+            "id": "node-trie-index",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Live In-Memory Trie"
+            }
+          },
+          {
+            "id": "node-storage",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 290
+            },
+            "data": {
+              "kind": "block-storage",
+              "label": "New Index Snapshot"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-lb",
+            "target": "node-search-svc",
+            "label": "Read Queries"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-search-svc",
+            "target": "node-trie-index",
+            "label": "RWLock Acquire"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-storage",
+            "target": "node-search-svc",
+            "label": "Load New Index snapshot"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-search-svc",
+          "node-trie-index"
+        ],
+        "edgeIds": [
+          "edge-2"
+        ],
+        "headline": "Exclusive write lock during in-place Trie mutations blocking concurrent high-throughput read requests."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "goal": "Implement zero-downtime index reloading using double buffering with atomic pointer swaps or blue-green node reloads.",
+            "opener": "Why is modifying the live Trie in place causing request timeouts, and how can we swap to the new index without locking read queries?",
+            "evidence": {
+              "strong": "Proposes loading the new index snapshot into a secondary in-memory data structure in the background and performing an atomic pointer swap (or blue-green server deployment), avoiding write locks entirely.",
+              "adequate": "Proposes building a shadow Trie in memory on the node and swapping the reference when ready.",
+              "weak": "Recommends stopping incoming traffic or taking nodes offline sequentially without addressing memory overhead or reload mechanics."
+            },
+            "misconceptions": [
+              {
+                "id": "in-place-update",
+                "pattern": "Modifying the live data structure directly using fine-grained locking.",
+                "challenge": "Even with fine-grained locking, thousands of queries per second encounter lock contention during massive batch updates. How can reads remain 100% lock-free?"
+              }
+            ],
+            "probes": [
+              "What is the memory overhead of maintaining two index copies concurrently during an atomic swap?",
+              "How would you implement this at the cluster level using blue-green deployment of search instances?"
+            ],
+            "hints": [
+              "Think about immutable data structures and pointers.",
+              "If the old Trie is read-only, reading requires no locks. How can we introduce the new Trie without altering the old one in-place?"
+            ],
+            "referenceFix": "Treat the Trie index as immutable. When a new index version arrives, build or load it into memory side-by-side as a passive index pointer. Once fully loaded, perform an atomic pointer swap to direct all incoming traffic to the new index instantly, then garbage collect the old index.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

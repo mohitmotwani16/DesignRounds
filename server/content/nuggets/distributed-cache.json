@@ -1,0 +1,700 @@
+{
+  "promptId": "distributed-cache",
+  "packVersion": "pack-af99a2b3",
+  "inputsFingerprint": "8c526cc4e2baf928b308e9cd482fbd9b117b9ae4ce6c31250c8b85f43beb5ce4",
+  "nuggets": [
+    {
+      "id": "distributed-cache/mod-n-remap-storm",
+      "title": "Adding cache nodes causes massive remapping storm",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.hashing",
+      "scenario": {
+        "symptoms": "Expanding the memcached ring from 20 to 22 nodes dropped hit ratio from 92% to 40% for an hour. Origin DB CPU doubled during remapping.",
+        "interviewerSetup": "Clients use naive hash mod N without consistent hashing or virtual nodes; key ownership reshuffles entirely on scale-out."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App tier"
+            }
+          },
+          {
+            "id": "n-c1",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 80
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Cache A"
+            }
+          },
+          {
+            "id": "n-c2",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 200
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Cache B"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Origin DB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-app",
+            "target": "n-c1",
+            "label": "mod N keys"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-c2",
+            "label": "Remapped misses"
+          },
+          {
+            "id": "e3",
+            "source": "n-app",
+            "target": "n-db",
+            "label": "Thundering herd"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-app"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2",
+          "e3"
+        ],
+        "headline": "Mod-N hashing remaps most keys on topology change"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure node additions or removals do not cause massive remapping of keys.",
+            "opener": "Adding two nodes melted the database—the client hashing path is highlighted. Why and how do you fix it?",
+            "evidence": {
+              "strong": "Explains consistent hashing with virtual nodes to distribute the load evenly and minimize key movement.",
+              "adequate": "Mentions consistent hashing to avoid total reshuffling, but misses the skew issues solved by virtual nodes.",
+              "weak": "Uses simple modulo hashing, causing a near total cache miss storm on resize."
+            },
+            "misconceptions": [
+              {
+                "id": "modulo_hashing",
+                "pattern": "Using hash of key modulo number of nodes.",
+                "challenge": "If the cluster size changes from 10 to 11, how many keys will still map to their previous node?"
+              }
+            ],
+            "probes": [
+              "How do you ensure data is balanced evenly across all nodes if the hash ring is sparse?",
+              "What exactly happens to the mapping of keys when a node dies?"
+            ],
+            "hints": [
+              "Think about what happens to the modulo math when the denominator changes.",
+              "How could one physical machine represent multiple points on your routing ring?"
+            ],
+            "referenceFix": "Consistent hashing with many virtual nodes, gradual weight changes, client-side proactive migration, and warmup before cutting traffic."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-cache/async-replica-serves-stale",
+      "title": "Users see stale settings after update",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.replication",
+      "scenario": {
+        "symptoms": "Feature flag updates take up to five minutes to appear. Incidents traced to reads served from async replica lagging 200k writes behind primary.",
+        "interviewerSetup": "Cache layer reads from nearest replica for latency; writes go to primary with async replication and no read-your-writes guarantee."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-primary",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 80
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Primary shard"
+            }
+          },
+          {
+            "id": "n-replica",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 200
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Async replica"
+            }
+          },
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "user",
+              "label": "Users"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-app",
+            "target": "n-primary",
+            "label": "Write"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-replica",
+            "label": "Read local"
+          },
+          {
+            "id": "e3",
+            "source": "n-primary",
+            "target": "n-replica",
+            "label": "Replication lag"
+          },
+          {
+            "id": "e4",
+            "source": "n-replica",
+            "target": "n-user",
+            "label": "Stale response"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-replica"
+        ],
+        "edgeIds": [
+          "e2",
+          "e4"
+        ],
+        "headline": "Local replica reads miss recent writes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Provide continuous availability of cached data during node failures.",
+            "opener": "Config updates lag for minutes—the replication path is highlighted. How do you tighten consistency?",
+            "evidence": {
+              "strong": "Designs a primary and replica setup per shard with asynchronous replication and automatic failover, understanding the trade-off of potentially losing recent writes.",
+              "adequate": "Mentions replication to a backup node to prevent data loss, but the failover mechanics are manual or vague.",
+              "weak": "Assumes consistent hashing alone solves failure by routing to the next node, ignoring the massive cache miss penalty."
+            },
+            "misconceptions": [
+              {
+                "id": "sync_replication",
+                "pattern": "Using strict synchronous replication for a cache.",
+                "challenge": "If we wait for replicas to acknowledge every write, how does that impact our sub-millisecond latency goal?"
+              }
+            ],
+            "probes": [
+              "How does a replica know it needs to take over?",
+              "Is the replication synchronous or asynchronous, and why?"
+            ],
+            "hints": [
+              "If a node dies, the next node on the ring would be completely empty. How can we keep it warm?",
+              "Consider grouping nodes into primary and standby pairs."
+            ],
+            "referenceFix": "Read-your-writes via primary pin or version tokens, synchronous replicate for critical keys, track replication lag and route reads, or client sticky routing."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-cache/celebrity-key-melts-shard",
+      "title": "Viral product page melts one cache shard",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.hotkeys",
+      "scenario": {
+        "symptoms": "Flash sale SKU drove 500k RPS against one memcached instance while siblings idle. p99 product page latency hit 2 s though overall traffic normal.",
+        "interviewerSetup": "Hot key detection disabled; no local L1 or key splitting for mega-hot entries."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Shoppers"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 220,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Product API"
+            }
+          },
+          {
+            "id": "n-hot",
+            "type": "systemNode",
+            "position": {
+              "x": 420,
+              "y": 80
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Hot shard"
+            }
+          },
+          {
+            "id": "n-cold",
+            "type": "systemNode",
+            "position": {
+              "x": 420,
+              "y": 200
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Other shards"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Product views"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-hot",
+            "label": "Single key"
+          },
+          {
+            "id": "e3",
+            "source": "n-app",
+            "target": "n-cold",
+            "label": "Idle"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-hot"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unmitigated hot key saturates one shard"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Prevent a single node from being overwhelmed by a massive spike in reads to one key.",
+            "opener": "One SKU hammered a single shard—the hot key path is highlighted. What would you do mid-incident?",
+            "evidence": {
+              "strong": "Proposes local client-side caching, read replicas, or key splitting to distribute the read load for hot keys.",
+              "adequate": "Suggests adding more replicas to the shard, which helps reads but does not address the fundamental single-shard bottleneck.",
+              "weak": "Claims consistent hashing balances the load, forgetting that a single key always hashes to the same node."
+            },
+            "misconceptions": [
+              {
+                "id": "hashing_solves_hot_keys",
+                "pattern": "Believing that consistent hashing inherently mitigates hot keys.",
+                "challenge": "Consistent hashing distributes keys evenly, but what if ninety percent of traffic is for just one key?"
+              }
+            ],
+            "probes": [
+              "How could the application nodes themselves help reduce the load on the cache cluster?",
+              "What if the hot key is heavily written to, not just read?"
+            ],
+            "hints": [
+              "If everyone is asking for the exact same value, where is the fastest place to store it?",
+              "Can we append a random number to the key to store it in multiple places?"
+            ],
+            "referenceFix": "Hot key detection, local in-process cache, random suffix replicas of hot key, proactive replication, and request coalescing on miss."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-cache/ttl-sync-mass-eviction",
+      "title": "Synchronized TTLs cause synchronized miss storm",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.eviction",
+      "scenario": {
+        "symptoms": "Every hour on the hour, cache hit ratio drops from 95% to 60% and database IOPS spike. Metrics show mass key expiry at :00.",
+        "interviewerSetup": "All keys set TTL at insert without jitter; cron bulk refresh resets identical expiry times."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Services"
+            }
+          },
+          {
+            "id": "n-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Redis cluster"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Database"
+            }
+          },
+          {
+            "id": "n-cron",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Refresh job"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-app",
+            "target": "n-cache",
+            "label": "Reads"
+          },
+          {
+            "id": "e2",
+            "source": "n-cache",
+            "target": "n-db",
+            "label": "Hourly misses"
+          },
+          {
+            "id": "e3",
+            "source": "n-cron",
+            "target": "n-cache",
+            "label": "Align TTL"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-cache",
+          "n-cron"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Correlated TTL expiry causes periodic miss storm"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Safely free memory and handle key expiration without overwhelming the backend database.",
+            "opener": "The clock hits :00 and the DB spikes—the eviction timing path is highlighted. How do you smooth it?",
+            "evidence": {
+              "strong": "Specifies an eviction policy like LRU or LFU, and addresses cache stampedes via request coalescing or TTL jittering.",
+              "adequate": "Mentions LRU or TTL for memory management but misses the thundering herd problem on expiry.",
+              "weak": "Assumes data stays in cache forever or only expires when the user explicitly deletes it."
+            },
+            "misconceptions": [
+              {
+                "id": "no_stampede",
+                "pattern": "Assuming that when a key expires, it triggers just a single database read to fetch it again.",
+                "challenge": "If a key getting ten thousand requests per second expires, how many of those requests will hit the database at the exact same time?"
+              }
+            ],
+            "probes": [
+              "How do we prevent a huge spike in requests from hitting the database when a popular key expires?",
+              "How does the cache node physically reclaim memory when it is full?"
+            ],
+            "hints": [
+              "If multiple clients ask for an expired key at the same time, could the cache node pause them and only send one request to the database?",
+              "Could we add a bit of randomness to the expiration times?"
+            ],
+            "referenceFix": "TTL jitter on write, stagger refresh jobs, lazy refresh before expiry, monitor expiry rate, and separate hot key TTL policy."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-cache/ghost-node-receives-traffic",
+      "title": "Dead cache node still receives keys after slow failure",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.membership",
+      "scenario": {
+        "symptoms": "Intermittent cache misses and timeouts after a rack power event. Gossip still lists a dead node for 90 s while clients keep routing keys there.",
+        "interviewerSetup": "Membership propagation delay with no health checks; clients trust stale ring state."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "n-gossip",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Membership gossip"
+            }
+          },
+          {
+            "id": "n-dead",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 80
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Dead node"
+            }
+          },
+          {
+            "id": "n-live",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 200
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Live nodes"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-app",
+            "target": "n-gossip",
+            "label": "Ring state"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-dead",
+            "label": "Stale routes"
+          },
+          {
+            "id": "e3",
+            "source": "n-gossip",
+            "target": "n-live",
+            "label": "Delayed update"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-gossip",
+          "n-dead"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Stale membership routes traffic to failed node"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Detect node failures and propagate routing table changes reliably.",
+            "opener": "A dead node stayed in the ring—the membership path is highlighted. How do you detect and remove it fast?",
+            "evidence": {
+              "strong": "Introduces a configuration store like etcd or a gossip protocol to manage cluster state and detect failures via heartbeats.",
+              "adequate": "Mentions health checks from the proxy or client, but lacks a centralized or coordinated view of the cluster state.",
+              "weak": "Assumes nodes are statically configured or magically discoverable without a designated mechanism."
+            },
+            "misconceptions": [
+              {
+                "id": "static_config",
+                "pattern": "Hardcoding IP addresses in the client configuration.",
+                "challenge": "When an auto-scaling group replaces a dead node with a new IP, how do the thousands of clients find out?"
+              }
+            ],
+            "probes": [
+              "How do we prevent a split-brain scenario where clients disagree on which nodes are active?",
+              "Who is responsible for pinging the cache nodes to check their health?"
+            ],
+            "hints": [
+              "We need a system that acts as a source of truth for the cluster layout.",
+              "Look into how systems like Redis Cluster or Cassandra share state among nodes."
+            ],
+            "referenceFix": "Aggressive health probes, suspicion timeouts, client-side retry on error to alternate replicas, and faster failure detector with operator override."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

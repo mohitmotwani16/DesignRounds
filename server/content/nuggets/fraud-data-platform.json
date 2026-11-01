@@ -1,0 +1,690 @@
+{
+  "promptId": "fraud-data-platform",
+  "packVersion": "pack-c24c6afc",
+  "inputsFingerprint": "354f576ddeb9cb822fd6d17d929006026f0d02e188389808164612dab00816f2",
+  "nuggets": [
+    {
+      "id": "fraud-data-platform/deep-streaming_features",
+      "title": "Velocity Check Queries OLTP DB at Checkout",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.streaming_features",
+      "scenario": {
+        "symptoms": "Checkout P99 fraud decision latency exceeds 400ms; payment DB CPU spikes correlate with card velocity rule evaluation.",
+        "interviewerSetup": "The decision service runs SQL COUNT queries on the transactions table for every authorization request."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-checkout",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Checkout API"
+            }
+          },
+          {
+            "id": "node-decision",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Decision Service"
+            }
+          },
+          {
+            "id": "node-oltp",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "database",
+              "label": "Payments DB"
+            }
+          },
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Velocity Aggregator"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-checkout",
+            "target": "node-decision",
+            "label": "Score txn"
+          },
+          {
+            "id": "e2",
+            "source": "node-decision",
+            "target": "node-oltp",
+            "label": "COUNT last 10m"
+          },
+          {
+            "id": "e3",
+            "source": "node-stream",
+            "target": "node-decision",
+            "label": "Unused features"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-decision",
+          "node-oltp"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "OLTP velocity queries on hot path violate 100ms fraud budget"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_streaming_features",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a pipeline that computes real-time velocity features without querying databases at decision time.",
+            "opener": "How do you compute a feature like 'number of transactions from this card in the last 10 minutes'?",
+            "evidence": {
+              "strong": "Uses a stream processing engine to compute tumbling or sliding windows and writes the aggregated result to a low-latency KV store.",
+              "adequate": "Proposes updating a counter in a fast database upon every event.",
+              "weak": "Suggests running a SQL COUNT query over the recent events table during the checkout flow."
+            },
+            "misconceptions": [
+              {
+                "id": "query-at-runtime",
+                "pattern": "Querying raw events dynamically during the decision request.",
+                "challenge": "How long would a SELECT COUNT query take when run 30,000 times a second on a large table?"
+              }
+            ],
+            "probes": [
+              "How is the feature value made available to the decision service?",
+              "What happens to the window count when a new event arrives?"
+            ],
+            "hints": [
+              "We cannot afford complex queries within our 100ms budget.",
+              "Consider pre-computing these aggregates asynchronously as events flow in."
+            ],
+            "referenceFix": "We will pre-compute velocity features using a stream processor and push them to an online store."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "fraud-data-platform/deep-online_offline_parity",
+      "title": "Retrained Model Declines 3x More Legitimate Orders",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.online_offline_parity",
+      "scenario": {
+        "symptoms": "New fraud model shows great offline metrics but live false-positive rate triples after deployment.",
+        "interviewerSetup": "Training pipeline uses batch-computed velocity windows while online serving uses a different sliding-window implementation."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Training Features"
+            }
+          },
+          {
+            "id": "node-online",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Online Feature Store"
+            }
+          },
+          {
+            "id": "node-train",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Training"
+            }
+          },
+          {
+            "id": "node-live",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 300
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Live Scoring"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-batch",
+            "target": "node-train",
+            "label": "Dataset"
+          },
+          {
+            "id": "e2",
+            "source": "node-online",
+            "target": "node-live",
+            "label": "Realtime features"
+          },
+          {
+            "id": "e3",
+            "source": "node-batch",
+            "target": "node-online",
+            "label": "Backfill"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-batch",
+          "node-online"
+        ],
+        "edgeIds": [],
+        "headline": "Training-serving feature skew inflates false positives in production"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_online_offline_parity",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure that the features used for model training match exactly what the model sees in production.",
+            "opener": "How do you guarantee that the features used to train the model behave identically when served in production?",
+            "evidence": {
+              "strong": "Introduces a feature store abstraction that unifies batch and streaming definitions, ensuring point-in-time correctness for offline datasets.",
+              "adequate": "Mentions using the same code or shared libraries for both batch training and real-time computation.",
+              "weak": "Maintains two entirely separate codebases for offline SQL and online streaming without a sync mechanism."
+            },
+            "misconceptions": [
+              {
+                "id": "ignore-skew",
+                "pattern": "Assuming that identical database schemas guarantee identical feature values.",
+                "challenge": "If a data scientist updates the logic for a feature in the training pipeline, how does the real-time pipeline learn about it?"
+              }
+            ],
+            "probes": [
+              "How do data scientists access historical features for training?",
+              "What does 'point-in-time correctness' mean for this system?"
+            ],
+            "hints": [
+              "Training data needs to reflect what the system knew at the exact moment the historical transaction occurred.",
+              "Think about a central repository that manages feature definitions for both environments."
+            ],
+            "referenceFix": "We will use a feature store to maintain online/offline parity and prevent training-serving skew."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "fraud-data-platform/deep-decision_latency",
+      "title": "Sequential Model Chain Blows 100ms Budget",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.decision_latency",
+      "scenario": {
+        "symptoms": "40% of checkout authorizations time out at 120ms; tracing shows five sequential remote calls on the fraud path.",
+        "interviewerSetup": "Feature fetch, rules engine, and two ML models run strictly serially with no caching or parallelization."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-checkout",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Checkout"
+            }
+          },
+          {
+            "id": "node-orch",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Decision Orchestrator"
+            }
+          },
+          {
+            "id": "node-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 80
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Feature Store"
+            }
+          },
+          {
+            "id": "node-model",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "ML Models"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-checkout",
+            "target": "node-orch",
+            "label": "Authorize"
+          },
+          {
+            "id": "e2",
+            "source": "node-orch",
+            "target": "node-fs",
+            "label": "Fetch features"
+          },
+          {
+            "id": "e3",
+            "source": "node-orch",
+            "target": "node-model",
+            "label": "Score serially"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-orch"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Serial fraud pipeline exceeds strict checkout latency SLO"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_decision_latency",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Design the critical path to fetch features and evaluate models within the strict 100ms budget.",
+            "opener": "Walk me through exactly how a request gets processed within the 100ms budget.",
+            "evidence": {
+              "strong": "Uses an in-memory KV store for fast feature lookups, parallelises fetches, and hosts the model in a dedicated, optimised inference service.",
+              "adequate": "Uses a cache for features and clearly separates the evaluation logic from data ingestion.",
+              "weak": "Adds multiple sequential network hops or disk reads on the critical path."
+            },
+            "misconceptions": [
+              {
+                "id": "sequential-fetches",
+                "pattern": "Fetching features one by one from multiple services.",
+                "challenge": "If you have to fetch 50 features from 5 different services, how does that impact your latency budget?"
+              }
+            ],
+            "probes": [
+              "Where is the highest risk of latency on this path?",
+              "How do you deploy the machine learning model to ensure fast inference?"
+            ],
+            "hints": [
+              "Think about where the pre-computed features should live.",
+              "Consider how network calls add up."
+            ],
+            "referenceFix": "We rely on an in-memory KV store and parallel processing to meet the strict latency SLA."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "fraud-data-platform/deep-audit_trail",
+      "title": "Investigators Cannot Reconstruct Decline Reasons",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.audit_trail",
+      "scenario": {
+        "symptoms": "Compliance audit fails: analysts cannot explain why transaction ID 8842 was declined last Tuesday.",
+        "interviewerSetup": "Decision logs store only approve/decline bitmap without feature snapshots or model version identifiers."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-decision",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Decision Service"
+            }
+          },
+          {
+            "id": "node-log",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Decision Logger"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Audit Lake"
+            }
+          },
+          {
+            "id": "node-ui",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Investigator UI"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-decision",
+            "target": "node-log",
+            "label": "Minimal event"
+          },
+          {
+            "id": "e2",
+            "source": "node-log",
+            "target": "node-lake",
+            "label": "Append"
+          },
+          {
+            "id": "e3",
+            "source": "node-ui",
+            "target": "node-lake",
+            "label": "Query context"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-log",
+          "node-lake"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Incomplete decision audit records block regulatory reconstruction"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_audit_trail",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Create a robust, queryable log of every decision and its precise context.",
+            "opener": "How does an investigator see exactly why a specific payment was declined yesterday?",
+            "evidence": {
+              "strong": "Designs an asynchronous write of an immutable snapshot containing the decision, rule/model version, and all input feature values to a scalable datastore.",
+              "adequate": "Saves the final decision and transaction ID into a database table for investigators.",
+              "weak": "Suggests querying the live feature store to see the user's data, ignoring that features change over time."
+            },
+            "misconceptions": [
+              {
+                "id": "live-query-for-audit",
+                "pattern": "Re-evaluating the user's current data to explain a past decision.",
+                "challenge": "If the user's balance changed since yesterday, how will the investigator know what the model saw at the time?"
+              }
+            ],
+            "probes": [
+              "What specific data points need to be saved alongside the decision?",
+              "How do we prevent writing this heavy audit log from slowing down the checkout?"
+            ],
+            "hints": [
+              "The investigator needs a snapshot of the exact state at decision time.",
+              "Think about using an event bus or message queue to decouple the logging."
+            ],
+            "referenceFix": "We will asynchronously sink full decision snapshots to a data warehouse or document store."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "fraud-data-platform/deep-fallback",
+      "title": "Feature Store Outage Blocks All Checkouts",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.fallback",
+      "scenario": {
+        "symptoms": "Feature store regional outage causes 100% checkout hard failures instead of degraded fraud screening.",
+        "interviewerSetup": "Checkout returns HTTP 503 when feature fetch errors; no cached features or rules-only fallback path exists."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-checkout",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Checkout API"
+            }
+          },
+          {
+            "id": "node-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Feature Store"
+            }
+          },
+          {
+            "id": "node-rules",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Rules Engine"
+            }
+          },
+          {
+            "id": "node-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Feature Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-checkout",
+            "target": "node-fs",
+            "label": "Required fetch"
+          },
+          {
+            "id": "e2",
+            "source": "node-checkout",
+            "target": "node-rules",
+            "label": "Bypassed"
+          },
+          {
+            "id": "e3",
+            "source": "node-fs",
+            "target": "node-cache",
+            "label": "Cold cache"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-checkout",
+          "node-fs"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Hard dependency on feature store halts checkout during partial outage"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_fallback",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Define the system's behaviour when features or models are unavailable or timing out.",
+            "opener": "What happens to the checkout flow if the feature store or model service goes down?",
+            "evidence": {
+              "strong": "Implements tight timeouts and circuit breakers, falling back to a static set of conservative business rules or failing open to preserve revenue.",
+              "adequate": "Mentions adding retries and a timeout.",
+              "weak": "Allows the checkout to block indefinitely or fail completely without a fallback strategy."
+            },
+            "misconceptions": [
+              {
+                "id": "infinite-retries",
+                "pattern": "Using exponential backoff and retries on the critical path.",
+                "challenge": "The customer is staring at a loading spinner. Can we afford to wait for a 2-second retry?"
+              }
+            ],
+            "probes": [
+              "How long do you wait for the model service before giving up?",
+              "If you have to bypass the model, how do you decide whether to approve or decline the transaction?"
+            ],
+            "hints": [
+              "Consider the business impact of blocking all sales versus absorbing some fraud risk.",
+              "Look into circuit breaker patterns."
+            ],
+            "referenceFix": "We will use circuit breakers and fall back to static rules to protect the checkout flow."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

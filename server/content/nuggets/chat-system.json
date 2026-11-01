@@ -1,0 +1,301 @@
+{
+  "promptId": "chat-system",
+  "packVersion": "pack-f2f2f654",
+  "inputsFingerprint": "def081a26a81eac7cacbcf95631a9cd0730e9f5d4e2ca43c450ada67d65f35b8",
+  "nuggets": [
+    {
+      "id": "chat-system/chat-routing-blackhole",
+      "title": "Stale Session Registry Routing Blackhole",
+      "minutes": 4,
+      "parentAgendaItemId": "dd.delivery_flow",
+      "scenario": {
+        "symptoms": "Users report sent messages show a single checkmark (sent) but are never received by online recipients until the recipient restarts their mobile app.",
+        "interviewerSetup": "Following a rolling restart of gateway nodes, WebSocket connections migrated across nodes. However, Redis Session Registry cache entries were not invalidated or updated, causing the Pub/Sub router to publish incoming messages to inactive gateway channels."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node_client",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Sender Client"
+            }
+          },
+          {
+            "id": "node_gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Chat Gateway Service"
+            }
+          },
+          {
+            "id": "node_registry",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "session-store",
+              "label": "Session Registry (Redis)"
+            }
+          },
+          {
+            "id": "node_pubsub",
+            "type": "systemNode",
+            "position": {
+              "x": 550,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-pubsub",
+              "label": "Gateway Pub/Sub Broker"
+            }
+          },
+          {
+            "id": "node_target_gw",
+            "type": "systemNode",
+            "position": {
+              "x": 750,
+              "y": 150
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "Stale Target Gateway Node"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge_send",
+            "source": "node_client",
+            "target": "node_gateway",
+            "label": "Send Message"
+          },
+          {
+            "id": "edge_lookup",
+            "source": "node_gateway",
+            "target": "node_registry",
+            "label": "Lookup Recipient Gateway ID"
+          },
+          {
+            "id": "edge_publish",
+            "source": "node_gateway",
+            "target": "node_pubsub",
+            "label": "Publish to Gateway Channel"
+          },
+          {
+            "id": "edge_forward",
+            "source": "node_pubsub",
+            "target": "node_target_gw",
+            "label": "Deliver Message to Socket"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node_registry",
+          "node_pubsub"
+        ],
+        "edgeIds": [
+          "edge_publish",
+          "edge_forward"
+        ],
+        "headline": "Stale session mapping causes message router to push notifications to dead gateway connections without delivery ACK or fallback."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "goal": "Reconcile stale connection states in session registry using heartbeats, socket close hooks, and Pub/Sub delivery ACKs with offline queue fallback.",
+            "opener": "Messages are vanishing into dead gateway channels because the session store maps active users to old nodes. How do you fix the routing loop and prevent lost messages?",
+            "evidence": {
+              "strong": "Proposes setting socket heartbeat TTLs in Redis, attaching connection-close hooks to evict mappings, and requiring target gateway ACKs over Pub/Sub before marking messages delivered (falling back to offline push if unacknowledged).",
+              "adequate": "Suggests adding a timeout on Redis keys and sending a retry if the gateway fails to deliver the socket frame.",
+              "weak": "Recommends restarting the Redis cache or periodically clearing all session mappings."
+            },
+            "misconceptions": [
+              {
+                "id": "pubsub_guarantee",
+                "pattern": "Pub/Sub automatically handles routing failures if a subscriber node crashes.",
+                "challenge": "Standard Pub/Sub patterns are fire-and-forget; if no active socket handler listens on that specific node topic, where does the message go?"
+              }
+            ],
+            "probes": [
+              "What happens if a gateway node abruptly terminates without executing its socket disconnect handler?",
+              "How does the routing service determine that an in-flight message failed to deliver over an active socket?"
+            ],
+            "hints": [
+              "Think about how session state is invalidated when a server dies ungracefully.",
+              "Consider requiring a short application-level ACK from the gateway back to the routing broker."
+            ],
+            "referenceFix": "Implement heartbeat-backed TTLs (e.g. 30s) in the Redis Session Store refreshed by gateway nodes. When routing a message, if the target gateway node does not ACK the socket write back to the messaging broker within 500ms, fall back to enqueuing the message for offline push delivery and evicting the stale mapping.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "chat-system/push-notification-thundering-herd",
+      "title": "Offline Push Queue Thundering Herd",
+      "minutes": 3,
+      "parentAgendaItemId": "dd.offline_push",
+      "scenario": {
+        "symptoms": "Push notification queues are backing up with millions of delayed messages. Online users report getting duplicate push notifications for messages they already read on screen.",
+        "interviewerSetup": "A transient regional network disruption caused 500,000 mobile clients to repeatedly disconnect and reconnect within a 10-minute window. Every disconnection triggered an offline push notification request without checking if the client reconnected moments later."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node_gw",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "WebSocket Gateway Cluster"
+            }
+          },
+          {
+            "id": "node_push_svc",
+            "type": "systemNode",
+            "position": {
+              "x": 350,
+              "y": 150
+            },
+            "data": {
+              "kind": "notification-service",
+              "label": "Push Router Service"
+            }
+          },
+          {
+            "id": "node_queue",
+            "type": "systemNode",
+            "position": {
+              "x": 600,
+              "y": 150
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Push Notification SQS Queue"
+            }
+          },
+          {
+            "id": "node_fcm",
+            "type": "systemNode",
+            "position": {
+              "x": 850,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-firebase",
+              "label": "FCM / APNS External API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge_trigger",
+            "source": "node_gw",
+            "target": "node_push_svc",
+            "label": "Trigger Offline Push"
+          },
+          {
+            "id": "edge_enqueue",
+            "source": "node_push_svc",
+            "target": "node_queue",
+            "label": "Enqueue Notification Jobs"
+          },
+          {
+            "id": "edge_dispatch",
+            "source": "node_queue",
+            "target": "node_fcm",
+            "label": "Batch Push Dispatch"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node_push_svc",
+          "node_queue"
+        ],
+        "edgeIds": [
+          "edge_enqueue",
+          "edge_dispatch"
+        ],
+        "headline": "Rapid client socket reconnect cycles trigger high-volume duplicate push notification jobs that overwhelm external push worker queues."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Introduce push notification debouncing, message state checks before dispatch, and deduplication keys in the notification pipeline.",
+            "opener": "Our push queues are overflowing with redundant push jobs due to reconnecting devices. How do you prevent duplicate notification spam and reduce queue lag?",
+            "evidence": {
+              "strong": "Suggests delayed push scheduling (debouncing for 5-10 seconds), checking active connection registry prior to FCM/APNS delivery, and deduplicating queue tasks by message ID and recipient ID.",
+              "adequate": "Recommends deduplicating push tasks by message ID and adding worker scaling.",
+              "weak": "Suggests increasing queue memory limit or turning off push notifications for all users."
+            },
+            "misconceptions": [
+              {
+                "id": "immediate_push",
+                "pattern": "Push notifications must be enqueued immediately upon WebSocket drop.",
+                "challenge": "Given that short network flaps last 2-5 seconds, immediate push enqueuing guarantees massive redundant push loads during network drops."
+              }
+            ],
+            "probes": [
+              "What check should the push worker perform immediately before calling the APNS/FCM external API?",
+              "How can client read-receipts cancel outstanding enqueued push notifications?"
+            ],
+            "hints": [
+              "Consider delaying push execution by a few seconds to verify if the user re-establishes a WebSocket connection.",
+              "Think about using message IDs as deduplication keys in your queue worker layer."
+            ],
+            "referenceFix": "Implement a 5-second push delivery grace period using delayed queue tasks or sliding window buffers. When the push worker processes a job, it queries the Session Registry; if an active socket connection or read receipt exists for that conversation, the push task is discarded.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

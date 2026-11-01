@@ -1,0 +1,779 @@
+{
+  "promptId": "ad-click-prediction",
+  "packVersion": "pack-2011f3e9",
+  "inputsFingerprint": "48fc73eb759e6f2e992efe2f2985311d17a4ed3892891f4aca97f32a25749977",
+  "nuggets": [
+    {
+      "id": "ad-click-prediction/calibration-drift-after-downsample",
+      "title": "Advertiser spend diverges from realized CTR after training downsampling",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.calibration",
+      "scenario": {
+        "symptoms": "Finance reports a 3× gap between predicted click volume and billed clicks for several large advertisers. Reliability charts show average pCTR at 0.9% while observed CTR is 0.28% on the same placements.",
+        "interviewerSetup": "Training keeps one-in-ten negatives for cost but serving exports raw logits without inverse sampling correction or a fresh isotonic layer. Auction uses uncorrected probabilities as true CTR."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "user",
+              "label": "Feed requests"
+            }
+          },
+          {
+            "id": "n-serve",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 120
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "CTR scorer"
+            }
+          },
+          {
+            "id": "n-cal",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 280
+            },
+            "data": {
+              "kind": "evaluation",
+              "label": "Calibration layer"
+            }
+          },
+          {
+            "id": "n-train",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "training",
+              "label": "Offline trainer"
+            }
+          },
+          {
+            "id": "n-log",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 120
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Impression log"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-feed",
+            "target": "n-serve",
+            "label": "Score ads"
+          },
+          {
+            "id": "e2",
+            "source": "n-serve",
+            "target": "n-cal",
+            "label": "Raw logits"
+          },
+          {
+            "id": "e3",
+            "source": "n-cal",
+            "target": "n-feed",
+            "label": "pCTR to auction"
+          },
+          {
+            "id": "e4",
+            "source": "n-log",
+            "target": "n-train",
+            "label": "Sampled negatives"
+          },
+          {
+            "id": "e5",
+            "source": "n-train",
+            "target": "n-serve",
+            "label": "Deploy weights"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-serve",
+          "n-cal"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Missing downsampling correction and stale calibration makes served probabilities systematically high"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Make predicted probabilities match observed click rates, including after negative downsampling.",
+            "opener": "Rankings look fine but finance says our probabilities are wrong and advertisers are overcharged. The scoring and evaluation path is highlighted—what broke and how do you fix it?",
+            "evidence": {
+              "strong": "Measures predicted versus observed CTR in buckets and by segment, corrects for negative downsampling with the sampling-rate formula, adds isotonic or Platt calibration on recent data, and monitors the calibration ratio per advertiser and placement.",
+              "adequate": "Knows calibration matters and suggests a calibration step but misses the downsampling correction or monitoring.",
+              "weak": "Relies on AUC alone."
+            },
+            "misconceptions": [
+              {
+                "id": "cal.auc",
+                "pattern": "Believes a high AUC means probabilities are correct.",
+                "challenge": "Multiply every prediction by two. What happens to AUC, and what happens to advertiser prices?"
+              }
+            ],
+            "probes": [
+              "You kept one in ten negatives. What does that do to the raw outputs?",
+              "Where would miscalibration show up first in the business?"
+            ],
+            "hints": [
+              "Compare average prediction with actual click rate in buckets.",
+              "Sampling changes the base rate the model learned."
+            ],
+            "referenceFix": "Apply the negative downsampling correction to logits before calibration, refit isotonic or Platt on recent holdout by segment, monitor predicted-vs-observed ratio per placement, and block deploys when calibration error exceeds SLO."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ad-click-prediction/embedding-hotshard-oom",
+      "title": "Scoring latency spikes when hot ad ids saturate one embedding shard",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.features",
+      "scenario": {
+        "symptoms": "Ad request p99 jumped from 45 ms to 220 ms during a major campaign launch. One parameter-server shard pegged CPU at 100% while others sat idle; feature store timeouts rose 15×.",
+        "interviewerSetup": "Sparse ad and user ids hash to embedding shards without virtual nodes. A blockbuster campaign concentrated millions of impressions on a handful of ad ids mapped to shard 2."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-req",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 140
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Ad request"
+            }
+          },
+          {
+            "id": "n-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 140
+            },
+            "data": {
+              "kind": "feature-store",
+              "label": "Feature service"
+            }
+          },
+          {
+            "id": "n-ps1",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 60
+            },
+            "data": {
+              "kind": "database",
+              "label": "Embedding shard A"
+            }
+          },
+          {
+            "id": "n-ps2",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 180
+            },
+            "data": {
+              "kind": "database",
+              "label": "Embedding shard B"
+            }
+          },
+          {
+            "id": "n-ctr",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 300
+            },
+            "data": {
+              "kind": "stream",
+              "label": "CTR counters"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-req",
+            "target": "n-fs",
+            "label": "Bulk feature fetch"
+          },
+          {
+            "id": "e2",
+            "source": "n-fs",
+            "target": "n-ps1",
+            "label": "Embedding lookup"
+          },
+          {
+            "id": "e3",
+            "source": "n-fs",
+            "target": "n-ps2",
+            "label": "Hot ad ids"
+          },
+          {
+            "id": "e4",
+            "source": "n-fs",
+            "target": "n-ctr",
+            "label": "Smoothed CTR stats"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-fs",
+          "n-ps2"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Skewed id hashing creates a hot embedding shard under viral ads"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Represent billions of sparse ids and fresh statistics as features that fit in memory and time.",
+            "opener": "Latency blew up during a big campaign launch—the feature lookup and embedding path is highlighted. What's happening and how would you fix it?",
+            "evidence": {
+              "strong": "Uses hashing and learned embedding tables for sparse ids, sharded across parameter servers with hot ids cached, adds crosses or an interaction layer, and smoothed CTR counters per ad and advertiser over several windows from a stream, using priors so new ads aren't extreme.",
+              "adequate": "Mentions embeddings or one-hot but not memory size, sharding or smoothing.",
+              "weak": "One-hot encodes every id or uses raw unsmoothed CTRs."
+            },
+            "misconceptions": [
+              {
+                "id": "feat.raw_ctr",
+                "pattern": "Uses raw clicks divided by impressions as a feature for every ad.",
+                "challenge": "A new ad has one click from two impressions. What CTR feature does it get?"
+              }
+            ],
+            "probes": [
+              "How big are the embedding tables, and where do they live?",
+              "How fresh do the counter features need to be?"
+            ],
+            "hints": [
+              "Learned vectors per id handle large vocabularies.",
+              "Add a prior to counts that are still small."
+            ],
+            "referenceFix": "Re-shard with consistent hashing and many virtual nodes, replicate mega-hot embeddings locally in the scorer, add smoothed CTR priors from the stream, and cache top-N ad vectors with proactive refresh."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ad-click-prediction/stale-model-after-trend",
+      "title": "Model misses sudden CTR shift after viral creative",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.freshness",
+      "scenario": {
+        "symptoms": "Revenue per mille dropped 18% for 36 hours after a meme creative went viral. Offline AUC still looks healthy but live calibration error doubled and under-delivery alerts fired for new creatives.",
+        "interviewerSetup": "Production serves a daily snapshot while training retrains weekly with cold start. Incremental updates were disabled after a bad deploy last quarter."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-log",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Click stream"
+            }
+          },
+          {
+            "id": "n-train",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 120
+            },
+            "data": {
+              "kind": "training",
+              "label": "Trainer"
+            }
+          },
+          {
+            "id": "n-reg",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 260
+            },
+            "data": {
+              "kind": "model-registry",
+              "label": "Model registry"
+            }
+          },
+          {
+            "id": "n-serve",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 120
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Live scorer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-log",
+            "target": "n-train",
+            "label": "Hourly examples"
+          },
+          {
+            "id": "e2",
+            "source": "n-train",
+            "target": "n-reg",
+            "label": "Publish snapshot"
+          },
+          {
+            "id": "e3",
+            "source": "n-reg",
+            "target": "n-serve",
+            "label": "Load weights"
+          },
+          {
+            "id": "e4",
+            "source": "n-log",
+            "target": "n-serve",
+            "label": "Logging only"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-reg",
+          "n-serve"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Stale daily snapshot cannot track abrupt CTR regime change"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep the model fresh as ads and behaviour change, and push updates safely.",
+            "opener": "The registry still serves yesterday's weights while traffic behavior changed overnight—what would you change in the training and serving loop?",
+            "evidence": {
+              "strong": "Justifies frequent incremental training (hours) from a measured freshness gain plus periodic full retrains, validates each snapshot on a recent holdout for log loss and calibration before pushing, and can roll back.",
+              "adequate": "Retrains on a schedule but with no validation gate or rollback.",
+              "weak": "Retrains rarely and pushes models without checks."
+            },
+            "misconceptions": [
+              {
+                "id": "fresh.weekly",
+                "pattern": "Thinks a weekly retrain is fine for ads.",
+                "challenge": "A big campaign launches Monday morning. What does a model trained last Sunday know about it?"
+              }
+            ],
+            "probes": [
+              "How would you measure whether fresher models help?",
+              "What stops a corrupted batch of logs from breaking production?"
+            ],
+            "hints": [
+              "Compare models trained on data ending on different days.",
+              "Check each new snapshot before it serves traffic."
+            ],
+            "referenceFix": "Enable warm-start incremental training on recent windows, canary new snapshots against live traffic, auto-rollback on calibration drift, and shorten the promotion cadence with shadow scoring."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ad-click-prediction/new-campaign-zero-delivery",
+      "title": "Brand-new campaigns get almost no impressions",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.coldstart",
+      "scenario": {
+        "symptoms": "Launch day reports show new campaigns stuck below 200 impressions despite high budgets. Auction simulators show their ads ranked last because pCTR estimates sit near zero.",
+        "interviewerSetup": "The model uses raw historical CTR features with no hierarchical priors. Fresh ad ids have zero clicks so embeddings and counters collapse scores."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-ad",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 140
+            },
+            "data": {
+              "kind": "client",
+              "label": "New campaign"
+            }
+          },
+          {
+            "id": "n-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "feature-store",
+              "label": "Feature builder"
+            }
+          },
+          {
+            "id": "n-emb",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "embedding",
+              "label": "Ad embeddings"
+            }
+          },
+          {
+            "id": "n-serve",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 200
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Scorer"
+            }
+          },
+          {
+            "id": "n-auc",
+            "type": "systemNode",
+            "position": {
+              "x": 680,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Auction"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-ad",
+            "target": "n-fs",
+            "label": "Register creative"
+          },
+          {
+            "id": "e2",
+            "source": "n-fs",
+            "target": "n-emb",
+            "label": "Cold id lookup"
+          },
+          {
+            "id": "e3",
+            "source": "n-fs",
+            "target": "n-serve",
+            "label": "Sparse features"
+          },
+          {
+            "id": "e4",
+            "source": "n-serve",
+            "target": "n-auc",
+            "label": "pCTR bid"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-fs",
+          "n-emb"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Zero-history ads get extreme low scores without smoothing or exploration"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Give brand-new ads sensible predictions and a chance to collect data.",
+            "opener": "New advertisers say the system never spends their budget—the scoring features for cold ads are highlighted. Why, and how do you fix delivery fairness?",
+            "evidence": {
+              "strong": "Uses advertiser and category priors, content embeddings of the creative's image and text, smoothed counters, and a small exploration budget, then lets real engagement take over quickly through fresh counters.",
+              "adequate": "Falls back to a category average but no exploration or content features.",
+              "weak": "Gives new ads a zero or random prediction."
+            },
+            "misconceptions": [
+              {
+                "id": "cold.zero",
+                "pattern": "Thinks new ads can wait until they have data.",
+                "challenge": "If new ads are never shown because they have no clicks, how do they ever get clicks?"
+              }
+            ],
+            "probes": [
+              "Which information exists about an ad before anyone has seen it?",
+              "How much traffic would you spend exploring?"
+            ],
+            "hints": [
+              "The advertiser and the creative itself carry signal.",
+              "A little exploration buys data."
+            ],
+            "referenceFix": "Add hierarchical priors by advertiser and category, smoothed CTR counters, creative-content embeddings for cold start, and controlled exploration slots with capped regret."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ad-click-prediction/sequential-feature-budget-blow",
+      "title": "Sequential feature fetches blow the 80 ms scoring budget",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.latency",
+      "scenario": {
+        "symptoms": "Feed ad load p99 exceeded 120 ms after enabling richer cross features. Traces show dozens of serial RPCs to the feature store before GPU batch inference even starts.",
+        "interviewerSetup": "The scorer calls user, ad, and cross features one after another per candidate batch instead of a single bulk fetch or two-stage pruning."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-feed",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile feed"
+            }
+          },
+          {
+            "id": "n-rank",
+            "type": "systemNode",
+            "position": {
+              "x": 220,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Ranking service"
+            }
+          },
+          {
+            "id": "n-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 420,
+              "y": 120
+            },
+            "data": {
+              "kind": "feature-store",
+              "label": "Feature store"
+            }
+          },
+          {
+            "id": "n-gpu",
+            "type": "systemNode",
+            "position": {
+              "x": 620,
+              "y": 120
+            },
+            "data": {
+              "kind": "gpu",
+              "label": "GPU batch scorer"
+            }
+          },
+          {
+            "id": "n-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 420,
+              "y": 260
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Hot feature cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-feed",
+            "target": "n-rank",
+            "label": "Ad candidates"
+          },
+          {
+            "id": "e2",
+            "source": "n-rank",
+            "target": "n-fs",
+            "label": "Serial RPCs"
+          },
+          {
+            "id": "e3",
+            "source": "n-fs",
+            "target": "n-cache",
+            "label": "Per-id lookups"
+          },
+          {
+            "id": "e4",
+            "source": "n-rank",
+            "target": "n-gpu",
+            "label": "Batch infer"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-rank",
+          "n-fs"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Serial feature RPCs dominate latency before lightweight pruning or batching"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Score hundreds of candidates within the scoring budget at peak load.",
+            "opener": "We have only 80 ms end-to-end but the highlighted path shows serial feature RPCs—how would you restructure scoring to fit the budget?",
+            "evidence": {
+              "strong": "Uses a light model to trim candidates before the heavy model, batches requests on GPUs, caches hot embeddings and ad features on inference hosts, sets a per-step budget with a fallback score when the heavy model times out, and sizes the fleet from predictions per second.",
+              "adequate": "Mentions caching or a smaller model without numbers or a fallback.",
+              "weak": "Assumes the heavy model can score everything in time."
+            },
+            "misconceptions": [
+              {
+                "id": "lat.one_model",
+                "pattern": "Believes one large model can score all candidates within budget.",
+                "challenge": "How many predictions per second is that at peak, and what does each cost?"
+              }
+            ],
+            "probes": [
+              "What happens when the heavy model is slow for one request?",
+              "How many predictions per second does the fleet need?"
+            ],
+            "hints": [
+              "A cheap first pass can shrink the candidate list.",
+              "Batching across requests helps GPUs."
+            ],
+            "referenceFix": "Collapse feature reads into one bulk request, add a lightweight first-stage model on cheap features, colocate hot embeddings in-process, and batch GPU inference with strict per-stage timeouts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

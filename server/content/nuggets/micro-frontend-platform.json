@@ -1,0 +1,688 @@
+{
+  "promptId": "micro-frontend-platform",
+  "packVersion": "pack-c31454c5",
+  "inputsFingerprint": "c197b0c67d9adaa7ca6310fa16f8b093438b60075b1d5a1e5a786410056d2aa8",
+  "nuggets": [
+    {
+      "id": "micro-frontend-platform/deep-composition",
+      "title": "Runtime Script Tag Order Breaks Shared Shell",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.composition",
+      "scenario": {
+        "symptoms": "Checkout micro-frontend loads before shell router; white screen on 20% of page loads due to race.",
+        "interviewerSetup": "Teams inject bundles via unordered async script tags without module federation manifest orchestration."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-shell",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Shell App"
+            }
+          },
+          {
+            "id": "node-mfe-a",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "kind": "client",
+              "label": "Team A MFE"
+            }
+          },
+          {
+            "id": "node-mfe-b",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 220
+            },
+            "data": {
+              "kind": "client",
+              "label": "Team B MFE"
+            }
+          },
+          {
+            "id": "node-cdn",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "cdn",
+              "label": "Bundle CDN"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-shell",
+            "target": "node-mfe-a",
+            "label": "Async script"
+          },
+          {
+            "id": "e2",
+            "source": "node-shell",
+            "target": "node-mfe-b",
+            "label": "Async script"
+          },
+          {
+            "id": "e3",
+            "source": "node-cdn",
+            "target": "node-mfe-a",
+            "label": "Serve JS"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-shell",
+          "node-mfe-a"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Unorchestrated script loading races break shell composition"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_composition",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Detail the specific mechanism used to compose the application at runtime.",
+            "opener": "How exactly are the different teams' JavaScript bundles composed into a single running application?",
+            "evidence": {
+              "strong": "Evaluates runtime composition via Module Federation or import maps, explaining the mechanics of remote entry resolution.",
+              "adequate": "Chooses a runtime method but lacks depth on how the browser actually resolves the dependencies.",
+              "weak": "Proposes build-time NPM packages, completely violating the independent deployment requirement."
+            },
+            "misconceptions": [
+              {
+                "id": "build-time-coupling",
+                "pattern": "Believing NPM packages allow independent deployments.",
+                "challenge": "If Team A updates their NPM package, how does that change reach the live production site?"
+              }
+            ],
+            "probes": [
+              "How does the host app execute the remote code?",
+              "What format are these bundles served in?"
+            ],
+            "hints": [
+              "Think about modern bundler features that allow dynamic code loading.",
+              "How does Webpack 5 handle sharing code between separate builds?"
+            ],
+            "referenceFix": "Chose a runtime composition mechanism like Module Federation to enable independent deploys."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "micro-frontend-platform/deep-dependencies",
+      "title": "Users Download React Four Times on One Page",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.dependencies",
+      "scenario": {
+        "symptoms": "Lighthouse shows 1.2MB duplicate React bundles from four micro-frontends on dashboard.",
+        "interviewerSetup": "Each MFE bundles its own React version; shared dependency config not enforced in build pipeline."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-user",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "user",
+              "label": "Browser"
+            }
+          },
+          {
+            "id": "node-shell",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Shell"
+            }
+          },
+          {
+            "id": "node-mfe1",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "client",
+              "label": "MFE 1"
+            }
+          },
+          {
+            "id": "node-mfe2",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 220
+            },
+            "data": {
+              "kind": "client",
+              "label": "MFE 2"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-user",
+            "target": "node-shell",
+            "label": "Load shell"
+          },
+          {
+            "id": "e2",
+            "source": "node-shell",
+            "target": "node-mfe1",
+            "label": "React 18"
+          },
+          {
+            "id": "e3",
+            "source": "node-shell",
+            "target": "node-mfe2",
+            "label": "React 17"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-mfe1",
+          "node-mfe2"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Duplicate shared library bundles inflate page weight"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_dependencies",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a strategy to share heavy libraries without causing version conflicts or redundant downloads.",
+            "opener": "If multiple teams use React and the same design system, how do you prevent the user from downloading these libraries multiple times?",
+            "evidence": {
+              "strong": "Proposes singletons for core libraries, defines a strict sharing contract, and handles fallback if versions mismatch.",
+              "adequate": "Mentions sharing libraries via a CDN or bundler but misses the singleton requirement for stateful frameworks.",
+              "weak": "Forces every micro-frontend to bundle its own dependencies, leading to massive performance hits."
+            },
+            "misconceptions": [
+              {
+                "id": "share-everything",
+                "pattern": "Attempting to share every single library across all teams.",
+                "challenge": "What happens to team autonomy if they have to coordinate updating a minor utility library?"
+              }
+            ],
+            "probes": [
+              "React crashes if two copies are running. How do you guarantee only one copy is instantiated?",
+              "How is the design system package distributed and versioned?"
+            ],
+            "hints": [
+              "Module Federation has a 'shared' configuration. How does it work?",
+              "Consider the difference between libraries that maintain internal state and pure utility libraries."
+            ],
+            "referenceFix": "Set up shared dependency singletons for core frameworks while letting teams bundle specific utilities."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "micro-frontend-platform/deep-isolation",
+      "title": "Team A Exception Crashes Entire Shell",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.isolation",
+      "scenario": {
+        "symptoms": "Uncaught TypeError in recommendations widget takes down navigation and payments MFEs.",
+        "interviewerSetup": "All micro-frontends share same JS realm without error boundaries or iframe sandbox isolation."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-shell",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App Shell"
+            }
+          },
+          {
+            "id": "node-mfe-bug",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "kind": "client",
+              "label": "Buggy MFE"
+            }
+          },
+          {
+            "id": "node-mfe-ok",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 220
+            },
+            "data": {
+              "kind": "client",
+              "label": "Healthy MFE"
+            }
+          },
+          {
+            "id": "node-user",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "user",
+              "label": "User Browser"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-user",
+            "target": "node-shell",
+            "label": "Single page"
+          },
+          {
+            "id": "e2",
+            "source": "node-shell",
+            "target": "node-mfe-bug",
+            "label": "Throw error"
+          },
+          {
+            "id": "e3",
+            "source": "node-shell",
+            "target": "node-mfe-ok",
+            "label": "Unmount cascade"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-mfe-bug",
+          "node-shell"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing fault isolation lets one MFE crash entire application shell"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_isolation",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure failures in one micro-frontend do not cascade to the shell or other micro-frontends.",
+            "opener": "Let's say Team A ships a bug that causes an unhandled JavaScript exception. What happens to the rest of the page?",
+            "evidence": {
+              "strong": "Uses framework Error Boundaries to catch render errors, provides graceful fallbacks, and uses CSS modules or Shadow DOM for style isolation.",
+              "adequate": "Mentions catching errors but misses style leakage or infinite loop protections.",
+              "weak": "Allows a single broken component to white-screen the entire application."
+            },
+            "misconceptions": [
+              {
+                "id": "global-try-catch",
+                "pattern": "Believing window.onerror is sufficient to recover the UI.",
+                "challenge": "If a React component throws during render, how does a global error handler restore the rest of the component tree?"
+              }
+            ],
+            "probes": [
+              "How do you prevent Team B's CSS from overwriting Team A's buttons?",
+              "What if a micro-frontend takes 10 seconds to respond?"
+            ],
+            "hints": [
+              "How does React natively handle component crashes?",
+              "How can you scope CSS so it doesn't leak globally?"
+            ],
+            "referenceFix": "Applied error boundaries and scoped CSS to strictly isolate micro-frontend failures."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "micro-frontend-platform/deep-communication",
+      "title": "Global Window Events Break Cross-Team Contracts",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.communication",
+      "scenario": {
+        "symptoms": "Cart MFE listens to ad-hoc window events; refactor in checkout team breaks cart count silently.",
+        "interviewerSetup": "Cross-MFE communication uses undocumented global CustomEvents instead of versioned event bus."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-cart",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Cart MFE"
+            }
+          },
+          {
+            "id": "node-checkout",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Checkout MFE"
+            }
+          },
+          {
+            "id": "node-bus",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "event-bus",
+              "label": "Shared Event Bus"
+            }
+          },
+          {
+            "id": "node-shell",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Shell"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-checkout",
+            "target": "node-cart",
+            "label": "window.dispatch"
+          },
+          {
+            "id": "e2",
+            "source": "node-cart",
+            "target": "node-bus",
+            "label": "Not connected"
+          },
+          {
+            "id": "e3",
+            "source": "node-shell",
+            "target": "node-bus",
+            "label": "Unused contract"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-cart",
+          "node-checkout"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Ad-hoc global events create fragile cross-MFE coupling"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_communication",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Establish a decoupled contract for cross-micro-frontend communication.",
+            "opener": "How do two micro-frontends on the same page share state or communicate with each other?",
+            "evidence": {
+              "strong": "Proposes a decoupled event bus or explicit prop passing via the shell, avoiding shared global state.",
+              "adequate": "Suggests storing state in local storage or the URL without a clear notification mechanism.",
+              "weak": "Tries to share a single global state store across independent builds, tightly coupling all teams."
+            },
+            "misconceptions": [
+              {
+                "id": "shared-redux",
+                "pattern": "Using a single global Redux store for all teams.",
+                "challenge": "If Team A changes their state shape, how do you prevent Team B's code from breaking?"
+              }
+            ],
+            "probes": [
+              "How do you ensure the event payloads don't introduce tight coupling?",
+              "What if the receiving micro-frontend hasn't loaded yet when the event fires?"
+            ],
+            "hints": [
+              "How do native DOM elements communicate?",
+              "Consider a publish-subscribe pattern isolated to the browser."
+            ],
+            "referenceFix": "Designed a decoupled event bus for cross-app communication."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "micro-frontend-platform/deep-deployment",
+      "title": "Stale Manifest Serves Old MFE After Deploy",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.deployment",
+      "scenario": {
+        "symptoms": "Team ships fix but users still hit broken bundle for 30 minutes; CDN and manifest cache not invalidated together.",
+        "interviewerSetup": "Shell fetches manifest cached 24h at edge while MFE bundle URL version not tied to manifest epoch."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ci",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Team CI"
+            }
+          },
+          {
+            "id": "node-registry",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "registry",
+              "label": "MFE Manifest"
+            }
+          },
+          {
+            "id": "node-cdn",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "cdn",
+              "label": "CDN Edge"
+            }
+          },
+          {
+            "id": "node-shell",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Shell"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-ci",
+            "target": "node-registry",
+            "label": "Publish version"
+          },
+          {
+            "id": "e2",
+            "source": "node-shell",
+            "target": "node-registry",
+            "label": "Cached manifest"
+          },
+          {
+            "id": "e3",
+            "source": "node-cdn",
+            "target": "node-shell",
+            "label": "Old bundle URL"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-registry",
+          "node-cdn"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Manifest and asset cache skew delays MFE deploy visibility"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_deployment",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design the deployment lifecycle, from code push to updating the registry/manifest.",
+            "opener": "Walk me through the exact steps when a team clicks deploy. How does their new code reach the live shell?",
+            "evidence": {
+              "strong": "Describes building assets, uploading to a CDN with content hashes, and updating a central manifest that the shell fetches dynamically.",
+              "adequate": "Mentions deploying to a CDN but is vague on how the shell discovers there is a new version.",
+              "weak": "Requires rebuilding the entire shell app to deploy a child micro-frontend."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you roll back a bad deployment instantly?",
+              "How does the shell fetch the latest manifest without caching stale versions?"
+            ],
+            "hints": [
+              "The shell needs to know the exact URL of the new JavaScript file.",
+              "Where is the mapping between the section name and its bundle URL stored?"
+            ],
+            "referenceFix": "Outlined a manifest-driven deployment flow with content-hashed CDN assets."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

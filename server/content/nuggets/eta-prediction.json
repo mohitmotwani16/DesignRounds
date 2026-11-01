@@ -1,0 +1,692 @@
+{
+  "promptId": "eta-prediction",
+  "packVersion": "pack-cc16bfaa",
+  "inputsFingerprint": "a65279816edfc52fa30a76c4c4e44624e04a46cce9e3a1351e78287d65d518ca",
+  "nuggets": [
+    {
+      "id": "eta-prediction/stale-traffic-features",
+      "title": "ETA wrong after sudden road closure",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.features",
+      "scenario": {
+        "symptoms": "ETAs underestimated by 18 minutes across a corridor after bridge closure. Traffic feature pipeline still served pre-closure speeds for 45 minutes.",
+        "interviewerSetup": "Online features refresh every 30 minutes from batch table; closure events not wired to streaming override."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-map",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Routing requests"
+            }
+          },
+          {
+            "id": "n-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "feature-store",
+              "label": "Feature store"
+            }
+          },
+          {
+            "id": "n-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Traffic batch"
+            }
+          },
+          {
+            "id": "n-model",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "ETA model"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-map",
+            "target": "n-model",
+            "label": "Predict"
+          },
+          {
+            "id": "e2",
+            "source": "n-model",
+            "target": "n-fs",
+            "label": "Segment speeds"
+          },
+          {
+            "id": "e3",
+            "source": "n-fs",
+            "target": "n-batch",
+            "label": "Stale 45m"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-fs",
+          "n-batch"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Batch traffic features lagged real-world closure"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Pick and compute the features that drive each stage.",
+            "opener": "Drivers routed into a closed bridge—the traffic feature path is highlighted. How do you freshness-fix ETAs?",
+            "evidence": {
+              "strong": "Prep: historical prep time by restaurant, item and hour, open orders in the kitchen now, recent prep-time trend; courier: available couriers nearby, assignment delays, routing time, traffic and weather; order size and type; drop-off difficulty; real-time ones from streams, the rest from batch.",
+              "adequate": "Reasonable features without freshness or source.",
+              "weak": "Distance and time of day only."
+            },
+            "misconceptions": [
+              {
+                "id": "feat.history",
+                "pattern": "Relies only on historical averages.",
+                "challenge": "A restaurant usually takes twelve minutes, but has fifteen orders open right now. What's your estimate?"
+              }
+            ],
+            "probes": [
+              "How fresh must kitchen load be?",
+              "How do you handle a restaurant that never taps 'food ready'?"
+            ],
+            "hints": [
+              "What's happening right now beats last month.",
+              "Courier wait times reveal when food was really ready."
+            ],
+            "referenceFix": "Stream closure and incident feeds into online store, lower TTL on corridor features, fallback to live probe data, and alert when feature age exceeds SLO."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "eta-prediction/overconfident-narrow-window",
+      "title": "Overconfident ETA window anger customers",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.uncertainty",
+      "scenario": {
+        "symptoms": "Complaints rose when meals arrived outside the 5-minute quoted window though model RMSE was fine. Interval always ±3 minutes regardless of route variance.",
+        "interviewerSetup": "Serving returns point estimate with fixed margin; quantile model outputs ignored in API layer."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Customer app"
+            }
+          },
+          {
+            "id": "n-api",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "ETA API"
+            }
+          },
+          {
+            "id": "n-model",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Quantile model"
+            }
+          },
+          {
+            "id": "n-fix",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Fixed ±3m"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-user",
+            "target": "n-api",
+            "label": "Show ETA"
+          },
+          {
+            "id": "e2",
+            "source": "n-api",
+            "target": "n-model",
+            "label": "p50 only"
+          },
+          {
+            "id": "e3",
+            "source": "n-api",
+            "target": "n-fix",
+            "label": "Fixed band"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-api",
+          "n-fix"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Fixed uncertainty band ignored route-specific variance"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle uncertainty and the asymmetric cost of lateness.",
+            "opener": "Customers distrust ETAs—the uncertainty presentation path is highlighted. How should intervals work?",
+            "evidence": {
+              "strong": "Predicts quantiles (P50 and P80 or P90) with quantile loss, shows a range or a cautious point, chooses the displayed quantile through experiments balancing conversion against lateness, and checks quantile coverage.",
+              "adequate": "Adds a fixed buffer.",
+              "weak": "Shows the mean."
+            },
+            "misconceptions": [
+              {
+                "id": "unc.mean",
+                "pattern": "Shows the average prediction.",
+                "challenge": "If you show the average, how often is the delivery late?"
+              }
+            ],
+            "probes": [
+              "How would you choose which quantile to show?",
+              "How do you check the P90 is really a P90?"
+            ],
+            "hints": [
+              "A model can predict more than the middle.",
+              "Coverage tells you if the upper estimate is honest."
+            ],
+            "referenceFix": "Serve p10/p90 from quantile model, widen on long routes and bad weather features, calibrate intervals to hit coverage targets, and show honest ranges in UI."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "eta-prediction/route-matrix-timeout",
+      "title": "Batch route matrix job timeouts at city scale",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.searchscale",
+      "scenario": {
+        "symptoms": "Nightly ETA retrain failed after city expansion; all-pairs shortest path matrix exceeded memory on single Spark driver.",
+        "interviewerSetup": "Matrix built globally in one stage without graph partitioning or hierarchical contraction."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-graph",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Road graph"
+            }
+          },
+          {
+            "id": "n-spark",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-spark",
+              "label": "Spark job"
+            }
+          },
+          {
+            "id": "n-mat",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "storage",
+              "label": "Distance matrix"
+            }
+          },
+          {
+            "id": "n-train",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "training",
+              "label": "Retrain"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-graph",
+            "target": "n-spark",
+            "label": "All-pairs"
+          },
+          {
+            "id": "e2",
+            "source": "n-spark",
+            "target": "n-mat",
+            "label": "OOM"
+          },
+          {
+            "id": "e3",
+            "source": "n-mat",
+            "target": "n-train",
+            "label": "Blocked"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-spark"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Monolithic all-pairs matrix exceeded compute limits"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Afford estimates for many restaurants on every search.",
+            "opener": "City scale broke the route matrix job—the search scale path is highlighted. How do you scale graph features?",
+            "evidence": {
+              "strong": "Computes the requests per second, caches estimates per restaurant and delivery area (for example a hexagon) for about a minute, batches model calls, precomputes for active restaurants, and reserves exact per-order predictions for checkout.",
+              "adequate": "Caches results without keys or TTL reasoning.",
+              "weak": "Calls the full model per restaurant per search."
+            },
+            "misconceptions": [
+              {
+                "id": "scale.percall",
+                "pattern": "Runs the full model for every restaurant on every search.",
+                "challenge": "Tens of thousands of searches a second times dozens of restaurants: how many model calls is that?"
+              }
+            ],
+            "probes": [
+              "What's the cache key?",
+              "How stale can a search-page estimate be?"
+            ],
+            "hints": [
+              "Nearby customers get similar estimates.",
+              "Checkout deserves a precise number."
+            ],
+            "referenceFix": "Partition graph by region, use contraction hierarchies or sampling for far pairs, incremental updates for changed edges, and distributed storage of blocks."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "eta-prediction/train-serve-skew",
+      "title": "Training-serving skew on route encoding",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.model",
+      "scenario": {
+        "symptoms": "Live ETA bias spiked after deploy though offline eval looked good. Serving hash encodes road segments differently than training pipeline after library upgrade.",
+        "interviewerSetup": "Training uses Python 3.10 feature job; serving C++ encoder lags one version on polyline splitting."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-train",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "training",
+              "label": "Training pipeline"
+            }
+          },
+          {
+            "id": "n-reg",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-registry",
+              "label": "Registry"
+            }
+          },
+          {
+            "id": "n-serve",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Online scorer"
+            }
+          },
+          {
+            "id": "n-enc",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Route encoder"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-train",
+            "target": "n-reg",
+            "label": "Publish"
+          },
+          {
+            "id": "e2",
+            "source": "n-reg",
+            "target": "n-serve",
+            "label": "Deploy"
+          },
+          {
+            "id": "e3",
+            "source": "n-serve",
+            "target": "n-enc",
+            "label": "Different hash"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-serve",
+          "n-enc"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Encoder version mismatch between train and serve"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Choose and train the models sensibly.",
+            "opener": "Offline metrics fine but live ETAs biased—the train/serve path is highlighted. Where is skew?",
+            "evidence": {
+              "strong": "A baseline of routing time plus average prep, gradient-boosted trees per stage, possibly a deep model predicting the residual over the routing estimate; time-based splits and rolling backtests; regular retraining.",
+              "adequate": "A reasonable model with no baseline or time split.",
+              "weak": "No model reasoning."
+            },
+            "misconceptions": [
+              {
+                "id": "model.random",
+                "pattern": "Uses a random train/test split.",
+                "challenge": "Training on next week's holiday rush to predict last week's: what goes wrong?"
+              }
+            ],
+            "probes": [
+              "What baseline must the model beat?",
+              "How do you split data for evaluation?"
+            ],
+            "hints": [
+              "Start with what the routing engine already gives you.",
+              "Time ordering matters."
+            ],
+            "referenceFix": "Shared feature spec artifact, contract tests on sample routes in CI, shadow compare train vs serve outputs, and block deploy on skew alerts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "eta-prediction/silent-drift-unalerted",
+      "title": "ETA drift went unalerted for two weeks",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.monitoring",
+      "scenario": {
+        "symptoms": "Mean absolute error crept up 30% over two weeks after map vendor change. Monitoring dashboard only tracked p95 latency not error vs actuals.",
+        "interviewerSetup": "Ground truth feedback loop broken when trip completion events stopped emitting to metrics topic."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-trip",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Completed trips"
+            }
+          },
+          {
+            "id": "n-metrics",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Quality metrics"
+            }
+          },
+          {
+            "id": "n-dash",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Ops dashboard"
+            }
+          },
+          {
+            "id": "n-model",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "ETA service"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-trip",
+            "target": "n-metrics",
+            "label": "Broken feed"
+          },
+          {
+            "id": "e2",
+            "source": "n-metrics",
+            "target": "n-dash",
+            "label": "Latency only"
+          },
+          {
+            "id": "e3",
+            "source": "n-model",
+            "target": "n-dash",
+            "label": "Green p95"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-metrics"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Missing ground-truth feed left accuracy unmonitored"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Detect bad estimates quickly and degrade safely.",
+            "opener": "ETAs got worse but nobody noticed—the monitoring path is highlighted. What should alert?",
+            "evidence": {
+              "strong": "Live dashboards of error and lateness by city and stage, alerts on spikes, feature-freshness checks on the streams, a conservative buffer or fallback when inputs look abnormal, and incidents feeding retraining.",
+              "adequate": "Periodic offline evaluation.",
+              "weak": "No monitoring."
+            },
+            "misconceptions": [
+              {
+                "id": "mon.offline",
+                "pattern": "Checks accuracy only in weekly reports.",
+                "challenge": "Estimates are twenty minutes late tonight in one city. When does a weekly report notice?"
+              }
+            ],
+            "probes": [
+              "Which streams must stay fresh?",
+              "What would you show if the model's inputs are broken?"
+            ],
+            "hints": [
+              "Watch lateness live, per city.",
+              "Have a safe default."
+            ],
+            "referenceFix": "Stream actual vs predicted into error metrics by segment, alert on drift, page when feedback pipeline stalls, and weekly calibration reviews."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

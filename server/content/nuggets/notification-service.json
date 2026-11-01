@@ -1,0 +1,137 @@
+{
+  "promptId": "notification-service",
+  "nuggets": [
+    {
+      "id": "notification-service/provider-rate-limit",
+      "title": "APNs rate limit drops critical alerts",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.reliability",
+      "scenario": {
+        "symptoms": "During a security incident, password-reset pushes failed for 18% of users. APNs returned HTTP 429 and the service had no retry backoff or priority queue separation.",
+        "interviewerSetup": "Marketing and transactional notifications share one worker pool and the same provider credentials. Bursty marketing traffic consumed the provider token bucket."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-mkt", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "worker", "label": "Marketing sends" } },
+          { "id": "n-txn", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "worker", "label": "Transactional sends" } },
+          { "id": "n-pool", "type": "systemNode", "position": { "x": 280, "y": 140 }, "data": { "kind": "service", "label": "Shared dispatcher" } },
+          { "id": "n-apns", "type": "systemNode", "position": { "x": 520, "y": 140 }, "data": { "kind": "service", "label": "APNs" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-mkt", "target": "n-pool", "label": "High volume" },
+          { "id": "e2", "source": "n-txn", "target": "n-pool", "label": "Starved" },
+          { "id": "e3", "source": "n-pool", "target": "n-apns", "label": "429 rate limit" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-pool", "n-apns"], "edgeIds": ["e3"], "headline": "Shared provider queue lets marketing exhaust rate limits for transactional pushes" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Deliver critical notifications even when providers throttle bulk traffic.",
+          "opener": "Password-reset pushes failed during a marketing blast—how would you isolate and protect transactional delivery?",
+          "evidence": {
+            "strong": "Separate queues/credentials per priority, exponential backoff on 429, circuit breakers, and shed lower-priority traffic under pressure.",
+            "adequate": "Retries all sends equally without priority.",
+            "weak": "Single worker pool for all notification types."
+          },
+          "misconceptions": [{ "id": "retry.storm", "pattern": "Immediate infinite retries on 429.", "challenge": "What happens to provider limits if every worker hammers retries?" }],
+          "probes": ["How do you prove transactional SLA during a campaign?", "Should marketing and security share APNs topic credentials?"],
+          "hints": ["Priority queues are common for SMS/push providers.", "Backoff headers from providers are a signal."],
+          "referenceFix": "Split transactional and bulk into isolated dispatchers with reserved throughput, honor Retry-After, pause marketing when transactional backlog grows, and alert on 429 rates."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "notification-service/duplicate-token-send",
+      "title": "Duplicate pushes after at-least-once queue",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.tracking",
+      "scenario": {
+        "symptoms": "Users received the same promo push twice within 30 seconds. Logs show two delivery attempts with identical payload hash but different worker attempt IDs.",
+        "interviewerSetup": "The outbound queue is at-least-once. Workers crash after sending to APNs but before marking the job complete, causing redelivery without idempotency keys."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-q", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "queue", "label": "Send queue" } },
+          { "id": "n-w1", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "worker", "label": "Worker" } },
+          { "id": "n-apns", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "service", "label": "APNs" } },
+          { "id": "n-track", "type": "systemNode", "position": { "x": 480, "y": 240 }, "data": { "kind": "database", "label": "Delivery log (missing dedupe)" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-q", "target": "n-w1", "label": "Redelivered job" },
+          { "id": "e2", "source": "n-w1", "target": "n-apns", "label": "Send twice" },
+          { "id": "e3", "source": "n-w1", "target": "n-track", "label": "Ack after crash" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-w1", "n-track"], "edgeIds": ["e1", "e2"], "headline": "Worker crash after send causes duplicate delivery on queue redelivery" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Make notification delivery idempotent end-to-end.",
+          "opener": "Same push arrived twice—where should idempotency live in this pipeline?",
+          "evidence": {
+            "strong": "Idempotency key per user+template+event, dedupe store with TTL, provider collapse-id, and ack-after-durable log.",
+            "adequate": "Dedupes only at enqueue time, not after provider send.",
+            "weak": "Assumes queue exactly-once semantics."
+          },
+          "misconceptions": [],
+          "probes": ["When do you write the dedupe record relative to the APNs call?", "How long must dedupe keys live?"],
+          "hints": ["At-least-once queues always redeliver.", "APNs supports collapse identifiers for duplicates."],
+          "referenceFix": "Check dedupe store before send, record send intent atomically, use provider collapse-id, and mark queue jobs complete only after durable delivery log write."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "notification-service/per-user-quota-exhaustion",
+      "title": "App silently drops notifications over quota",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.quotas",
+      "scenario": {
+        "symptoms": "Enterprise customers report missing in-app alerts while push volume looked normal. Internal metrics show 35% of enqueue requests rejected with HTTP 429 from the quota middleware.",
+        "interviewerSetup": "Per-tenant quotas are enforced at enqueue time with a hard fail and no visibility to product teams. Burst traffic from webhooks exhausts shared tenant buckets."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-api", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "api-gateway", "label": "Enqueue API" } },
+          { "id": "n-quota", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "Quota counter" } },
+          { "id": "n-q", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "queue", "label": "Notification queue" } },
+          { "id": "n-dash", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "dashboard", "label": "Tenant dashboard" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-api", "target": "n-quota", "label": "Check tenant cap" },
+          { "id": "e2", "source": "n-quota", "target": "n-api", "label": "429 drop" },
+          { "id": "e3", "source": "n-api", "target": "n-q", "label": "Accepted only" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-quota"], "edgeIds": ["e2"], "headline": "Hard quota rejections silently discard notifications without tenant visibility" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Enforce fair quotas while giving tenants predictable behavior under bursts.",
+          "opener": "Alerts vanished for a tenant hitting quota—how should quotas work without silent data loss?",
+          "evidence": {
+            "strong": "Token bucket with burst allowance, priority tiers, structured 429 with retry-after, metrics/alerts per tenant, and optional paid overage queue.",
+            "adequate": "Fixed cap with hard fail but adds logging only.",
+            "weak": "Unbounded enqueue leading to provider bans."
+          },
+          "misconceptions": [],
+          "probes": ["Should transactional alerts bypass marketing quotas?", "How does the client backoff when quota is exceeded?"],
+          "hints": ["Silent drops are worse than delayed delivery.", "Expose quota usage in tenant APIs."],
+          "referenceFix": "Use token buckets with burst, separate transactional vs bulk quotas, return explicit retry-after, surface usage metrics to tenants, and optionally queue overflow instead of dropping."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

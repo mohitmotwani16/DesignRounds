@@ -1,0 +1,713 @@
+{
+  "promptId": "dynamic-pricing",
+  "packVersion": "pack-81132d6e",
+  "inputsFingerprint": "bea3200352b40ba45107117c6881b1af7e190a3446e52c5f4f89f84c7fd71730",
+  "nuggets": [
+    {
+      "id": "dynamic-pricing/elasticity-model-overshoot",
+      "title": "Price hike collapsed conversion overnight",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.elasticity",
+      "scenario": {
+        "symptoms": "Dynamic pricing raised rides 25% in a dense city; completed trips fell 40% while competitors held flat. Elasticity model trained on pre-pandemic data.",
+        "interviewerSetup": "Pricing engine applies global elasticity coefficient without segment or time-of-day adjustment; no guardrails on max delta."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Rider app"
+            }
+          },
+          {
+            "id": "n-price",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Pricing model"
+            }
+          },
+          {
+            "id": "n-rules",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Rule engine"
+            }
+          },
+          {
+            "id": "n-trip",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Trip service"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-user",
+            "target": "n-price",
+            "label": "Quote"
+          },
+          {
+            "id": "e2",
+            "source": "n-price",
+            "target": "n-rules",
+            "label": "Apply +25%"
+          },
+          {
+            "id": "e3",
+            "source": "n-rules",
+            "target": "n-trip",
+            "label": "Low accept"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-price",
+          "n-rules"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stale elasticity estimate caused excessive price increase"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Treat price as an intervention whose effect must be estimated.",
+            "opener": "Conversion crashed after an automatic price bump—the elasticity model path is highlighted. What failed?",
+            "evidence": {
+              "strong": "Estimates how demand falls and supply rises with price (elasticity) using randomised or quasi-experimental price variation, not just correlations, and picks the multiplier that closes the gap under caps; notes that observational data is biased because surge happens when demand is high anyway.",
+              "adequate": "Sets price from the forecasted gap with a hand-tuned formula.",
+              "weak": "Price equals predicted demand."
+            },
+            "misconceptions": [
+              {
+                "id": "el.correlation",
+                "pattern": "Learns price response from historical data directly.",
+                "challenge": "Surge always happens when demand is highest. Does history show high prices causing high demand?"
+              }
+            ],
+            "probes": [
+              "Why is historical data misleading here?",
+              "How would you measure riders' sensitivity to price?"
+            ],
+            "hints": [
+              "Prices and demand move together for a reason.",
+              "Small randomised variations reveal causal effects."
+            ],
+            "referenceFix": "Segmented elasticity with recent data, cap per-interval price change, shadow mode evaluation, rollback on conversion SLO, and human approval for large shifts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "dynamic-pricing/experiment-leak-contaminated",
+      "title": "Pricing experiment leaked to control users",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.experiments",
+      "scenario": {
+        "symptoms": "Finance noticed control city revenue drop matching treatment algorithm. Feature flag misconfigured to 100% rollout in neighboring geofence.",
+        "interviewerSetup": "Experiment assignment uses IP geolocation with overlapping polygons; cache serves stale assignment bucket."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "user",
+              "label": "Riders"
+            }
+          },
+          {
+            "id": "n-flag",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Experiment service"
+            }
+          },
+          {
+            "id": "n-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 280
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Assignment cache"
+            }
+          },
+          {
+            "id": "n-price",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Pricing engine"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-user",
+            "target": "n-flag",
+            "label": "Bucket lookup"
+          },
+          {
+            "id": "e2",
+            "source": "n-flag",
+            "target": "n-cache",
+            "label": "Stale 100%"
+          },
+          {
+            "id": "e3",
+            "source": "n-flag",
+            "target": "n-price",
+            "label": "Treatment algo"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-flag",
+          "n-cache"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Misconfigured geofence and cache leaked experiment"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Test pricing changes despite a shared market.",
+            "opener": "Control users got treatment prices—the experiment assignment path is highlighted. How do you contain leakage?",
+            "evidence": {
+              "strong": "Explains that rider-level A/B tests leak through shared drivers, uses switchback experiments randomising by area and time window (or geo tests), measures wait times, completion, cancellations, driver earnings and rider retention, and accounts for carry-over between windows.",
+              "adequate": "A standard A/B test by rider.",
+              "weak": "No testing plan."
+            },
+            "misconceptions": [
+              {
+                "id": "exp.userab",
+                "pattern": "Splits riders into treatment and control.",
+                "challenge": "Treatment riders get cheaper rides and take more drivers. What happens to control riders' wait times?"
+              }
+            ],
+            "probes": [
+              "Why can't you split riders randomly?",
+              "What would you measure besides revenue?"
+            ],
+            "hints": [
+              "Riders compete for the same drivers.",
+              "Randomise something larger than a person."
+            ],
+            "referenceFix": "Hard isolation by user id hash, geofence validation tests, short TTL on assignment cache, real-time exposure logging, and automatic kill switch on SRM."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "dynamic-pricing/price-jitter-complaints",
+      "title": "Quote flickers every refresh anger users",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.smoothing",
+      "scenario": {
+        "symptoms": "Support tickets spiked about 'bait price' when quotes changed 15% between two refreshes seconds apart. Smoothing filter disabled during load test leftover flag.",
+        "interviewerSetup": "Raw model output surfaced without exponential smoothing or minimum time between visible changes."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-quote",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Quote API"
+            }
+          },
+          {
+            "id": "n-model",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Surge model"
+            }
+          },
+          {
+            "id": "n-smooth",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Smoothing (off)"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-app",
+            "target": "n-quote",
+            "label": "Refresh"
+          },
+          {
+            "id": "e2",
+            "source": "n-quote",
+            "target": "n-model",
+            "label": "Raw score"
+          },
+          {
+            "id": "e3",
+            "source": "n-quote",
+            "target": "n-smooth",
+            "label": "Bypassed"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-quote",
+          "n-smooth"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Disabled smoothing exposed volatile model output"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep prices stable across time and neighbouring areas.",
+            "opener": "Prices jump on every refresh—the smoothing path is highlighted. How do you stabilize quotes?",
+            "evidence": {
+              "strong": "Identifies flickering prices and sharp differences at area boundaries (riders walking across, drivers chasing), applies temporal smoothing with hysteresis, spatial smoothing across neighbours, rate limits on changes, and quote locking.",
+              "adequate": "Mentions smoothing without boundaries.",
+              "weak": "Doesn't see a problem."
+            },
+            "misconceptions": [
+              {
+                "id": "sm.precise",
+                "pattern": "Believes the most responsive price is always best.",
+                "challenge": "The price jumps up and down every minute. How do riders feel opening the app twice?"
+              }
+            ],
+            "probes": [
+              "What happens at the edge between a cheap and an expensive area?",
+              "How do you stop prices jumping each minute?"
+            ],
+            "hints": [
+              "Neighbouring areas should look similar.",
+              "Change slowly unless something big happens."
+            ],
+            "referenceFix": "Exponential smoothing with max delta per minute, sticky quote token for session, show band not point estimate, and monitor quote variance metrics."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "dynamic-pricing/runaway-surge-cap-missing",
+      "title": "Runaway surge multiplier during outage",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.safeguards",
+      "scenario": {
+        "symptoms": "During partial dispatch outage, surge hit 8× normal while supply recovered; regulators contacted about price gouging. Hard cap feature flag off in prod.",
+        "interviewerSetup": "Surge feedback loop uses demand/supply ratio without ceiling; safeguards only in staging config."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-demand",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Demand signal"
+            }
+          },
+          {
+            "id": "n-supply",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 280
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Supply signal"
+            }
+          },
+          {
+            "id": "n-surge",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Surge calculator"
+            }
+          },
+          {
+            "id": "n-cap",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 280
+            },
+            "data": {
+              "kind": "config",
+              "label": "Cap config"
+            }
+          },
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "user",
+              "label": "Riders"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-demand",
+            "target": "n-surge",
+            "label": "High demand"
+          },
+          {
+            "id": "e2",
+            "source": "n-supply",
+            "target": "n-surge",
+            "label": "Low supply glitch"
+          },
+          {
+            "id": "e3",
+            "source": "n-cap",
+            "target": "n-surge",
+            "label": "Disabled"
+          },
+          {
+            "id": "e4",
+            "source": "n-surge",
+            "target": "n-user",
+            "label": "8× price"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-surge",
+          "n-cap"
+        ],
+        "edgeIds": [
+          "e3",
+          "e4"
+        ],
+        "headline": "Missing surge ceiling during bad supply telemetry"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "requirements",
+            "weight": 3,
+            "required": true,
+            "goal": "Prevent harmful or unlawful prices.",
+            "opener": "Surge hit 8× when supply glitched—the safeguards path is highlighted. What caps were missing?",
+            "evidence": {
+              "strong": "Hard caps per city, emergency overrides that freeze or cap prices during disasters, fairness checks across neighbourhoods, anomaly alerts on extreme multipliers, a manual kill switch and audit logs.",
+              "adequate": "Caps only.",
+              "weak": "No safeguards."
+            },
+            "misconceptions": [
+              {
+                "id": "sg.model",
+                "pattern": "Trusts the model to stay reasonable on its own.",
+                "challenge": "A data bug reports zero drivers in a city. What price does the model choose?"
+              }
+            ],
+            "probes": [
+              "What happens during a natural disaster?",
+              "How would you spot a data bug driving prices?"
+            ],
+            "hints": [
+              "Some limits must be absolute.",
+              "People need a way to override quickly."
+            ],
+            "referenceFix": "Hard max multiplier, anomaly detection on supply feed, manual override dashboard, regulatory caps by region, and automatic freeze on data quality alerts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "dynamic-pricing/stale-supply-signal-surge",
+      "title": "Stale driver GPS caused false surge",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.drivers",
+      "scenario": {
+        "symptoms": "Surge pricing activated citywide though plenty of drivers were online. Location pipeline lagged 12 minutes dropping available supply counts.",
+        "interviewerSetup": "Pricing reads aggregated supply from batch table updated every 10 minutes instead of realtime stream."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-drivers",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Driver apps"
+            }
+          },
+          {
+            "id": "n-gps",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "GPS stream"
+            }
+          },
+          {
+            "id": "n-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 280
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Batch aggregate"
+            }
+          },
+          {
+            "id": "n-price",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Pricing"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-drivers",
+            "target": "n-gps",
+            "label": "Live locations"
+          },
+          {
+            "id": "e2",
+            "source": "n-batch",
+            "target": "n-price",
+            "label": "Stale supply"
+          },
+          {
+            "id": "e3",
+            "source": "n-gps",
+            "target": "n-batch",
+            "label": "12m lag"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-batch",
+          "n-price"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Pricing consumed stale batch supply counts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Use pricing to move supply, not only to cut demand.",
+            "opener": "Surge fired with drivers sitting idle—the supply signal path is highlighted. Why was supply wrong?",
+            "evidence": {
+              "strong": "Shows demand heatmaps or area bonuses in the driver app, predicts driver repositioning, avoids sending too many drivers to one area, and measures driver earnings and idle time.",
+              "adequate": "Mentions a heatmap only.",
+              "weak": "Ignores drivers."
+            },
+            "misconceptions": [
+              {
+                "id": "dr.ignore",
+                "pattern": "Thinks pricing only works by reducing rider demand.",
+                "challenge": "If no extra drivers ever come, what does a higher price do except turn riders away?"
+              }
+            ],
+            "probes": [
+              "How do you stop every nearby driver rushing to the same area?",
+              "What would you measure for drivers?"
+            ],
+            "hints": [
+              "Supply responds to visible incentives.",
+              "Overcorrection creates a new shortage elsewhere."
+            ],
+            "referenceFix": "Feed pricing from streaming supply with freshness SLA, fallback when lag exceeds threshold, compare stream vs batch monitors, and disable surge on stale inputs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

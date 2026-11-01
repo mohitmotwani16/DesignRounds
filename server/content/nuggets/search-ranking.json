@@ -1,0 +1,267 @@
+{
+  "promptId": "search-ranking",
+  "packVersion": "pack-b3c4624a",
+  "inputsFingerprint": "fadc8cc61ac76830322686138c5c4c5922945218523768083793f38a2b625654",
+  "nuggets": [
+    {
+      "id": "search-ranking/position_bias_ranker_regression",
+      "title": "Raw Click Labels Teach Ranker to Love Top Slots",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.labels",
+      "scenario": {
+        "symptoms": "After retraining the search ranker on six months of click logs, NDCG on human-rated sets drops 8%. Merchandising reports that highly relevant products in positions 6–10 get almost no clicks despite strong rater grades.",
+        "interviewerSetup": "The new model was trained with binary click labels on impression logs without position features or debiasing. Offline training loss improved, but the model heavily weights historical slot position."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-logs", "type": "systemNode", "position": { "x": 80, "y": 200 }, "data": { "kind": "clickstream", "label": "Search Impression Logs" } },
+          { "id": "node-trainer", "type": "systemNode", "position": { "x": 320, "y": 200 }, "data": { "kind": "ml-training", "label": "Ranker Trainer" } },
+          { "id": "node-raters", "type": "systemNode", "position": { "x": 320, "y": 40 }, "data": { "kind": "labeling", "label": "Human Rater Grades" } },
+          { "id": "node-serving", "type": "systemNode", "position": { "x": 560, "y": 200 }, "data": { "kind": "search-service", "label": "Search Serving" } }
+        ],
+        "edges": [
+          { "id": "e-logs-train", "source": "node-logs", "target": "node-trainer", "label": "Raw click labels" },
+          { "id": "e-raters-eval", "source": "node-raters", "target": "node-trainer", "label": "Unused in training" },
+          { "id": "e-train-serve", "source": "node-trainer", "target": "node-serving", "label": "Deploy model" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-trainer", "node-logs"],
+        "edgeIds": ["e-logs-train"],
+        "headline": "Training on uncorrected click labels encodes position bias into the production ranker"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_label_bias",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Create trustworthy ranking labels from raters and behaviour.",
+          "opener": "Our freshly trained ranker looks great on click AUC but human eval says relevance got worse. Where do your training labels come from, and how do you trust them?",
+          "evidence": {
+            "strong": "Human graded labels for evaluation and some training, graded implicit labels (shown, click, cart, purchase) at scale, corrected for position bias with position features, propensity weighting or randomised swaps, and rater guidelines with agreement checks.",
+            "adequate": "Uses clicks as labels but ignores position bias.",
+            "weak": "No labels plan."
+          },
+          "misconceptions": [{ "id": "lab.raw_clicks", "pattern": "Believes clicks directly measure relevance.", "challenge": "Results at the top always get more clicks. What does a model trained on raw clicks learn?" }],
+          "probes": ["How do you separate relevance from position in click data?", "What do raters do that clicks can't?"],
+          "hints": ["The top slot gets clicks regardless.", "Graded labels can mix several behaviours."],
+          "referenceFix": "Rater grades for evaluation, graded implicit labels at scale, and position-bias correction."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "search-ranking/query_understanding_cache_poison",
+      "title": "Stale Query Interpretation Cache Drives Zero-Result Spike",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.query",
+      "scenario": {
+        "symptoms": "Zero-result rate jumps from 2% to 11% after a catalog taxonomy migration. Queries like 'running shoes' return empty lists even though inventory exists under the new category IDs.",
+        "interviewerSetup": "Head-query interpretation results are cached in Redis for 24 hours. The cache still maps queries to old category filter IDs that no longer match indexed products."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-user", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Shopper" } },
+          { "id": "node-qu", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "search-service", "label": "Query Understanding" } },
+          { "id": "node-cache", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "cache", "label": "Interpretation Cache" } },
+          { "id": "node-index", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "shard", "label": "Product Index Shards" } }
+        ],
+        "edges": [
+          { "id": "e-user-qu", "source": "node-user", "target": "node-qu", "label": "Search query" },
+          { "id": "e-qu-cache", "source": "node-qu", "target": "node-cache", "label": "Read cached filters" },
+          { "id": "e-qu-index", "source": "node-qu", "target": "node-index", "label": "Filter by category_id" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-cache", "node-qu"],
+        "edgeIds": ["e-qu-cache", "e-qu-index"],
+        "headline": "Long-lived cached query interpretations reference obsolete category filters after taxonomy cutover"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_query_cache",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Understand queries well enough to retrieve and filter correctly.",
+          "opener": "Shoppers suddenly see empty search pages for common queries after our category migration. What does your system do with the query string, and what could be stale?",
+          "evidence": {
+            "strong": "Normalises and spell-corrects, classifies category, extracts brand, colour and size as filters or features, expands synonyms, caches interpretations of head queries, and relaxes terms when there are no results.",
+            "adequate": "Spell correction or synonyms but no attribute extraction.",
+            "weak": "Passes the raw string to the index."
+          },
+          "misconceptions": [{ "id": "q.raw", "pattern": "Assumes the index will handle typos and attributes.", "challenge": "How does a keyword index match 'runing' to products titled 'running'?" }],
+          "probes": ["What happens when a query has zero results?", "Which parts of the query should become filters?"],
+          "hints": ["Structure hides inside free text.", "Removing a term can rescue an empty result."],
+          "referenceFix": "Normalisation, spell correction, category classification, attribute extraction, synonyms, cached head-query interpretations and query relaxation."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "search-ranking/slow_shard_p99_breach",
+      "title": "One Index Shard Blows p99 Latency During Flash Sale",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.serving",
+      "scenario": {
+        "symptoms": "During a flash sale, search p99 latency breaches 200 ms for 25 minutes while p50 stays near 45 ms. Error budgets burn on scatter-gather timeouts returning partial result sets.",
+        "interviewerSetup": "Shard 7 hosts a disproportionate share of best-selling SKUs. Scatter-gather waits for all shard top-k responses; shard 7 CPU pegs at 100% while other shards are idle."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-gw", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "search-service", "label": "Search Gateway" } },
+          { "id": "node-shard-a", "type": "systemNode", "position": { "x": 320, "y": 80 }, "data": { "kind": "shard", "label": "Index Shards 1-6" } },
+          { "id": "node-shard-hot", "type": "systemNode", "position": { "x": 320, "y": 220 }, "data": { "kind": "shard", "label": "Index Shard 7 (Hot)" } },
+          { "id": "node-cache", "type": "systemNode", "position": { "x": 80, "y": 300 }, "data": { "kind": "cache", "label": "Head Query Cache" } }
+        ],
+        "edges": [
+          { "id": "e-gw-a", "source": "node-gw", "target": "node-shard-a", "label": "Scatter top-k" },
+          { "id": "e-gw-hot", "source": "node-gw", "target": "node-shard-hot", "label": "Scatter top-k (slow)" },
+          { "id": "e-gw-cache", "source": "node-gw", "target": "node-cache", "label": "Optional cache miss" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-shard-hot", "node-gw"],
+        "edgeIds": ["e-gw-hot"],
+        "headline": "Hot SKU skew on one index shard dominates scatter-gather tail latency at peak"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_serving_latency",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Serve searches at peak within the latency budget.",
+          "opener": "Flash sale traffic pushed search p99 past our 200 ms SLO while median latency looks fine. How does retrieval and ranking fit the latency budget at peak?",
+          "evidence": {
+            "strong": "Shards with replicas and scatter-gather with per-shard top-k and timeouts, caches head-query results briefly by query and locale, fetches features in bulk, budgets each stage, and degrades to retrieval order if ranking is slow.",
+            "adequate": "Caching or sharding without a latency budget.",
+            "weak": "Assumes one big server."
+          },
+          "misconceptions": [{ "id": "serve.cache_all", "pattern": "Thinks caching every query result solves latency.", "challenge": "Most distinct queries are rare. How often would a rare query hit the cache?" }],
+          "probes": ["What happens if one shard is slow?", "Which results can you cache, and for how long?"],
+          "hints": ["The slowest shard sets the response time.", "Popular queries repeat; rare ones don't."],
+          "referenceFix": "Replicated shards with scatter-gather and timeouts, head-query result caching, bulk features, per-stage budgets and a fallback order."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "search-ranking/ab_test_tail_reformulation",
+      "title": "Winning A/B Test Hides Tail Query Regressions",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.eval",
+      "scenario": {
+        "symptoms": "A new ranker wins the A/B test on overall conversion (+1.2%) but support tickets rise for long-tail queries. Reformulation rate on tail segments increases 35% while head queries improve.",
+        "interviewerSetup": "The experiment dashboard only tracks global conversion. Offline NDCG was averaged across all rated queries without head/torso/tail splits."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-exp", "type": "systemNode", "position": { "x": 100, "y": 150 }, "data": { "kind": "experiment", "label": "A/B Experiment" } },
+          { "id": "node-metrics", "type": "systemNode", "position": { "x": 320, "y": 150 }, "data": { "kind": "metrics", "label": "Metrics Dashboard" } },
+          { "id": "node-raters", "type": "systemNode", "position": { "x": 320, "y": 300 }, "data": { "kind": "evaluation", "label": "Offline Eval Pipeline" } },
+          { "id": "node-search", "type": "systemNode", "position": { "x": 100, "y": 300 }, "data": { "kind": "search-service", "label": "Search Serving" } }
+        ],
+        "edges": [
+          { "id": "e-search-exp", "source": "node-search", "target": "node-exp", "label": "Traffic split" },
+          { "id": "e-exp-metrics", "source": "node-exp", "target": "node-metrics", "label": "Aggregate KPIs" },
+          { "id": "e-raters-offline", "source": "node-raters", "target": "node-exp", "label": "Pre-ship NDCG (global avg)" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-metrics", "node-raters"],
+        "edgeIds": ["e-exp-metrics"],
+        "headline": "Aggregate experiment metrics mask severe ranking regressions on rare queries"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_eval_segments",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Measure ranking quality offline and online by query segment.",
+          "opener": "Leadership wants to ship the winning variant, but tail-query reformulations spiked. How would you decide a new ranker is better before rolling it out broadly?",
+          "evidence": {
+            "strong": "NDCG@10 on rated query sets split into head, torso and tail, recall for retrieval, interleaving for sensitive comparisons, then an A/B test on conversion and revenue per search with guardrails such as zero-result and reformulation rates.",
+            "adequate": "NDCG and an A/B test without segments.",
+            "weak": "Only clicks."
+          },
+          "misconceptions": [{ "id": "eval.average", "pattern": "Trusts one average metric over all queries.", "challenge": "A change helps popular queries and hurts rare ones. Does the average show it?" }],
+          "probes": ["Why might you use interleaving before an A/B test?", "Which metric shows people didn't find what they wanted?"],
+          "hints": ["Split queries by popularity.", "Rephrasing a query is a signal."],
+          "referenceFix": "Segmented NDCG on rated sets, interleaving, and A/B tests on conversion with zero-result and reformulation guardrails."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "search-ranking/new_listing_cold_start",
+      "title": "Brand-New Listings Never Surface in Search Results",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.coldstart",
+      "scenario": {
+        "symptoms": "Sellers complain new SKUs are invisible in search for 72+ hours despite matching titles. Only products with historical click features rank on page one.",
+        "interviewerSetup": "The LTR model relies on behaviour features with zero defaults for new products. Retrieval returns them but the ranker scores them below everything with any click history."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-index", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "shard", "label": "Inverted Index" } },
+          { "id": "node-ranker", "type": "systemNode", "position": { "x": 300, "y": 150 }, "data": { "kind": "ml-serving", "label": "LTR Ranker" } },
+          { "id": "node-features", "type": "systemNode", "position": { "x": 300, "y": 300 }, "data": { "kind": "feature-store", "label": "Behaviour Features" } },
+          { "id": "node-content", "type": "systemNode", "position": { "x": 520, "y": 300 }, "data": { "kind": "embedding", "label": "Content Embeddings" } }
+        ],
+        "edges": [
+          { "id": "e-index-rank", "source": "node-index", "target": "node-ranker", "label": "Candidate set" },
+          { "id": "e-feat-rank", "source": "node-features", "target": "node-ranker", "label": "Click counts (zero for new)" },
+          { "id": "e-content-unused", "source": "node-content", "target": "node-ranker", "label": "Sparse use in model" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-ranker", "node-features"],
+        "edgeIds": ["e-feat-rank"],
+        "headline": "Ranker overweights missing behaviour features, burying new listings with strong textual relevance"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_cold_start",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Rank new products sensibly before they have behaviour data.",
+          "opener": "A seller listed a product an hour ago with a perfect title match, but it never appears on page one. How does it rank today?",
+          "evidence": {
+            "strong": "Uses text and image content features and embeddings, category and seller priors, and smoothed behaviour features so the product can rank on relevance, with a small exploration boost.",
+            "adequate": "Falls back to category averages only.",
+            "weak": "New products effectively never appear."
+          },
+          "misconceptions": [{ "id": "cold.behaviour", "pattern": "Depends entirely on behaviour features.", "challenge": "If ranking needs clicks and clicks need ranking, how does a new product start?" }],
+          "probes": ["What do you know about a product on day one?", "How do behaviour features handle small counts?"],
+          "hints": ["Titles and images describe a product.", "Priors smooth small numbers."],
+          "referenceFix": "Content embeddings, category and seller priors, smoothed behaviour features and a small exploration boost."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

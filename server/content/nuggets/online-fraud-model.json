@@ -1,0 +1,133 @@
+{
+  "promptId": "online-fraud-model",
+  "nuggets": [
+    {
+      "id": "online-fraud-model/score-path-timeout",
+      "title": "Fraud scoring breaches checkout latency SLO",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.latency",
+      "scenario": {
+        "symptoms": "Checkout p99 rose from 180 ms to 950 ms after enabling a new graph feature. The fraud service blocks the payment API synchronously on every request.",
+        "interviewerSetup": "Feature lookup hits a remote graph service with p95 400 ms. There is no timeout fallback or async shadow scoring path."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-pay", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "api-gateway", "label": "Checkout API" } },
+          { "id": "n-fraud", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Fraud scorer" } },
+          { "id": "n-graph", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "service", "label": "Graph features" } },
+          { "id": "n-user", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "user", "label": "Shopper" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-pay", "label": "Pay" },
+          { "id": "e2", "source": "n-pay", "target": "n-fraud", "label": "Sync block" },
+          { "id": "e3", "source": "n-fraud", "target": "n-graph", "label": "Remote features" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-fraud", "n-graph"], "edgeIds": ["e2", "e3"], "headline": "Synchronous graph feature fetch dominates checkout latency" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Keep fraud decisions within checkout latency budget.",
+          "opener": "Checkout slowed after fraud graph features—how do you meet the latency SLO without turning fraud off?",
+          "evidence": {
+            "strong": "Precomputed features in low-latency store, strict timeouts, degrade to rules/light model, async enrichment for review queue.",
+            "adequate": "Caches graph calls but still blocks on cache miss without fallback.",
+            "weak": "Adds more graph servers only, still synchronous."
+          },
+          "misconceptions": [{ "id": "latency.more_servers", "pattern": "Assuming horizontal scale fixes tail latency on the critical path.", "challenge": "What happens on a cache miss during peak?" }],
+          "probes": ["Which features must be synchronous vs review-queue?", "What default decision applies when scoring times out?"],
+          "hints": ["Separate real-time path from batch graph analytics.", "Budget milliseconds per dependency."],
+          "referenceFix": "Serve hot features from Redis/feature store, cap graph RPC at tens of ms with fallback score, and route heavy features to async human review rather than blocking authorize."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "online-fraud-model/feature-store-hot-key",
+      "title": "Hot merchant key melts feature store",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.hot_keys",
+      "scenario": {
+        "symptoms": "A flash sale on one merchant drove fraud feature Redis CPU to 100%. Latency correlated with a single feature key read millions of times per minute.",
+        "interviewerSetup": "Features are keyed only by merchant id without local caching on scoring nodes. All fraud workers hammer the same Redis shard."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-scorers", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Fraud workers" } },
+          { "id": "n-redis", "type": "systemNode", "position": { "x": 320, "y": 120 }, "data": { "kind": "cache", "label": "Feature Redis" } },
+          { "id": "n-merchant", "type": "systemNode", "position": { "x": 600, "y": 120 }, "data": { "kind": "service", "label": "Viral merchant" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-scorers", "target": "n-redis", "label": "Hot key reads" },
+          { "id": "e2", "source": "n-merchant", "target": "n-scorers", "label": "Traffic spike" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-redis"], "edgeIds": ["e1"], "headline": "Single merchant feature key becomes a hot spot in Redis" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Serve high-QPS features without hot-key collapse.",
+          "opener": "One merchant sale saturated Redis on a single key—how would you fix feature serving?",
+          "evidence": {
+            "strong": "Local in-process cache with short TTL, read replicas, key splitting, proactive refresh, and monitoring hot keys.",
+            "adequate": "Bigger Redis instance without local cache.",
+            "weak": "Unbounded remote fetch per request."
+          },
+          "misconceptions": [],
+          "probes": ["How stale can a locally cached merchant feature be for fraud?", "When do you shard a hot key?"],
+          "hints": ["Same patterns as viral URL short codes.", "Combine local LRU with Redis."],
+          "referenceFix": "Add per-node LRU for top merchant features, use Redis read replicas, detect hot keys automatically, and pre-warm features before known sales."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "online-fraud-model/rules-fallback-gap",
+      "title": "Model outage blocks all payments",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.fallback",
+      "scenario": {
+        "symptoms": "When the ML scoring cluster crashed for 12 minutes, checkout returned HTTP 503 for every card payment. No rule-based fallback path existed.",
+        "interviewerSetup": "Architecture treats model score as mandatory gate with fail-closed policy and no degraded mode."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-pay", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Payments" } },
+          { "id": "n-ml", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "ML scorer (down)" } },
+          { "id": "n-rules", "type": "systemNode", "position": { "x": 280, "y": 240 }, "data": { "kind": "service", "label": "Rules engine (bypassed)" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-pay", "target": "n-ml", "label": "Required score" },
+          { "id": "e2", "source": "n-pay", "target": "n-rules", "label": "Not wired" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-ml", "n-pay"], "edgeIds": ["e1"], "headline": "Hard dependency on ML scorer stops payments during model outage" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Keep payments flowing with safe degradation when ML is unavailable.",
+          "opener": "Model cluster down and checkout hard-stopped—what fallback strategy balances risk and availability?",
+          "evidence": {
+            "strong": "Tiered fallback to rules/light model, circuit breaker, tightened limits during degrade, and post-hoc review queue.",
+            "adequate": "Fail open to approve all—high fraud risk.",
+            "weak": "Fail closed 503 with no alternate path."
+          },
+          "misconceptions": [{ "id": "fallback.fail_open", "pattern": "Automatically approving all transactions when ML is down.", "challenge": "What fraud exposure does unlimited approve create in 12 minutes?" }],
+          "probes": ["Which signals can rules evaluate without the full model?", "How do you communicate degraded mode to risk ops?"],
+          "hints": ["Degraded != off.", "Combine stricter caps with rules."],
+          "referenceFix": "Circuit-break to rules engine with lower amount thresholds, velocity limits, and manual review backlog; restore ML when healthy and re-score async."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

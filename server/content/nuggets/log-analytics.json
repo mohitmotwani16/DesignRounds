@@ -1,0 +1,688 @@
+{
+  "promptId": "log-analytics",
+  "packVersion": "pack-7c7f88a0",
+  "inputsFingerprint": "51fb8ac68cb8eac47b96b028ff70bae97f4d0e67faf5031d75371d09e5e2769a",
+  "nuggets": [
+    {
+      "id": "log-analytics/deep-bursts",
+      "title": "Incident Log Storm Backpressures Ingest Pipeline",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.bursts",
+      "scenario": {
+        "symptoms": "During outage every service logs 50x errors; Kafka consumer lag hits 6 hours and search falls behind.",
+        "interviewerSetup": "Ingest tier sized for steady state with no burst buffering or dynamic partition expansion."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Services"
+            }
+          },
+          {
+            "id": "node-agent",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Log Agents"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Log Kafka"
+            }
+          },
+          {
+            "id": "node-index",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Search Indexer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-svc",
+            "target": "node-agent",
+            "label": "Error flood"
+          },
+          {
+            "id": "e2",
+            "source": "node-agent",
+            "target": "node-kafka",
+            "label": "Produce"
+          },
+          {
+            "id": "e3",
+            "source": "node-kafka",
+            "target": "node-index",
+            "label": "Lag growth"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-kafka",
+          "node-index"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Incident log burst overwhelms ingest and indexing capacity"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_bursts",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep logs flowing and searchable during incident bursts.",
+            "opener": "An outage makes every service log far more errors than usual. Which part falls behind first, and what do engineers see?",
+            "evidence": {
+              "strong": "Identifies indexing as the bottleneck; the log broker absorbs the burst so nothing is lost and indexers fall behind; scales indexers, prioritises error and security topics, monitors and shows ingest lag so engineers know how fresh search is.",
+              "adequate": "Says the broker absorbs bursts but has no plan for indexer lag or priorities.",
+              "weak": "Assumes autoscaling the search cluster handles it, or accepts losing logs."
+            },
+            "misconceptions": [
+              {
+                "id": "burst.autoscale",
+                "pattern": "Thinks autoscaling the search cluster keeps up instantly.",
+                "challenge": "Adding search nodes means moving shards between them. How quickly does that help during the incident?"
+              }
+            ],
+            "probes": [
+              "How do engineers know how far behind the search is?",
+              "What would you prioritise when you can't index everything at once?"
+            ],
+            "hints": [
+              "A durable broker lets indexing lag without losing data.",
+              "Not all topics need to catch up at the same speed."
+            ],
+            "referenceFix": "Kafka absorbs bursts, indexers lag but nothing is lost, critical topics are prioritised and lag is visible."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "log-analytics/deep-priority",
+      "title": "Low-Priority Debug Logs Crowd Out Audit Trail",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.priority",
+      "scenario": {
+        "symptoms": "Security audit logs dropped during spike while verbose debug logs from one team fill retention tier.",
+        "interviewerSetup": "No priority tiers or shedding policy; FIFO drop when indexer queue full."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-debug",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Debug Loggers"
+            }
+          },
+          {
+            "id": "node-audit",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Audit Logger"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingest Router"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Log Store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-debug",
+            "target": "node-ingest",
+            "label": "Verbose"
+          },
+          {
+            "id": "e2",
+            "source": "node-audit",
+            "target": "node-ingest",
+            "label": "Critical"
+          },
+          {
+            "id": "e3",
+            "source": "node-ingest",
+            "target": "node-store",
+            "label": "FIFO drop"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-ingest",
+          "node-store"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Undifferentiated shedding drops critical audit logs first"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_priority",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Decide what to shed under pressure without losing critical logs.",
+            "opener": "If you truly can't keep everything during a spike, what gets dropped and what never does?",
+            "evidence": {
+              "strong": "Separates classes by topic: security and audit never dropped and replicated; debug sampled first; per-service quotas so one noisy service can't starve others; drops are counted and reported.",
+              "adequate": "Samples everything uniformly, including security logs.",
+              "weak": "Drops whatever arrives when queues are full."
+            },
+            "misconceptions": [
+              {
+                "id": "prio.uniform",
+                "pattern": "Believes uniform random sampling is fair to all logs.",
+                "challenge": "An attacker's login attempts are in the security log. Is sampling those acceptable?"
+              }
+            ],
+            "probes": [
+              "How do you stop one noisy service from crowding out everyone else?"
+            ],
+            "hints": [
+              "Classes of logs have different value.",
+              "Quotas per producer keep one service from dominating."
+            ],
+            "referenceFix": "Security and audit never dropped, debug sampled first, per-service quotas, and drops reported."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "log-analytics/deep-parse",
+      "title": "Mixed JSON and Plain Logs Break Unified Search",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.parse",
+      "scenario": {
+        "symptoms": "Half of microservices invisible to structured queries; parser drops malformed multiline stack traces.",
+        "interviewerSetup": "Ingest pipeline assumes single-line JSON; stack traces and plain text routed to dead letter without enrichment."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Services"
+            }
+          },
+          {
+            "id": "node-parser",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Parse Pipeline"
+            }
+          },
+          {
+            "id": "node-dlq",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "dlq",
+              "label": "Parse DLQ"
+            }
+          },
+          {
+            "id": "node-index",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Search Index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-svc",
+            "target": "node-parser",
+            "label": "Mixed formats"
+          },
+          {
+            "id": "e2",
+            "source": "node-parser",
+            "target": "node-dlq",
+            "label": "Drop bad"
+          },
+          {
+            "id": "e3",
+            "source": "node-parser",
+            "target": "node-index",
+            "label": "Partial index"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-parser",
+          "node-dlq"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Rigid parsing drops multiline and plain-text logs from search"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_parse",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Turn raw lines into structured, enriched records with a path for bad ones.",
+            "opener": "How do you make plain-text and JSON logs from many services searchable in the same way?",
+            "evidence": {
+              "strong": "A processing stage parses JSON and known text patterns into a common schema (timestamp, level, service, host, trace id, message), enriches with metadata such as pod and region, and routes unparsable lines to a dead-letter topic rather than dropping them.",
+              "adequate": "Parses JSON but drops or ignores text logs.",
+              "weak": "Indexes raw lines as one text blob with no structure."
+            },
+            "misconceptions": [
+              {
+                "id": "parse.drop_bad",
+                "pattern": "Thinks unparsable lines can just be dropped.",
+                "challenge": "A legacy payment service only writes plain text. What do you lose by dropping its lines?"
+              }
+            ],
+            "probes": [
+              "How would you search for one request across all services?"
+            ],
+            "hints": [
+              "A shared set of fields makes cross-service search possible.",
+              "Bad lines can be kept aside rather than lost."
+            ],
+            "referenceFix": "Parse to a common schema, enrich with metadata and trace ids, and dead-letter unparsable lines."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "log-analytics/deep-mapping",
+      "title": "Dynamic JSON Keys Explode Index Mapping",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.mapping",
+      "scenario": {
+        "symptoms": "Cluster health red after team logs random UUID field names; mapping count exceeds cluster limit.",
+        "interviewerSetup": "Dynamic mapping enabled; no schema guardrails or field name denylist at ingest."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-team",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "New Service"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingest"
+            }
+          },
+          {
+            "id": "node-es",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Elasticsearch"
+            }
+          },
+          {
+            "id": "node-guard",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Schema Guard"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-team",
+            "target": "node-ingest",
+            "label": "Random keys"
+          },
+          {
+            "id": "e2",
+            "source": "node-ingest",
+            "target": "node-es",
+            "label": "Dynamic map"
+          },
+          {
+            "id": "e3",
+            "source": "node-guard",
+            "target": "node-ingest",
+            "label": "Disabled"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-es",
+          "node-ingest"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Uncontrolled dynamic mapping causes index cardinality explosion"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_mapping",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep the search index healthy as teams log arbitrary fields.",
+            "opener": "A team starts logging a JSON field with a random key on every line. What happens to your index?",
+            "evidence": {
+              "strong": "Explains that dynamic mappings create a new field per key until the cluster's metadata explodes; enforces field limits and a logging convention, maps unknown fields into a catch-all text or flattened field, and sizes shards with time-based rollover per service.",
+              "adequate": "Knows mappings can grow but has no limit or fallback.",
+              "weak": "Doesn't foresee any problem."
+            },
+            "misconceptions": [
+              {
+                "id": "map.no_limit",
+                "pattern": "Believes the search engine handles any number of fields automatically.",
+                "challenge": "Each unique key becomes a field in the cluster's mapping. What happens after millions of unique keys?"
+              }
+            ],
+            "probes": [
+              "How big would you make each shard, and why does it matter?"
+            ],
+            "hints": [
+              "Every distinct field costs the cluster something.",
+              "Conventions and limits protect a shared index."
+            ],
+            "referenceFix": "Field limits, logging conventions and a catch-all field prevent mapping explosion; time-based rollover keeps shards healthy."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "log-analytics/deep-redact",
+      "title": "Credit Card Numbers Indexed in Plain Text",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.redact",
+      "scenario": {
+        "symptoms": "DLP audit finds PAN sequences searchable in production log index accessible to all engineers.",
+        "interviewerSetup": "Redaction regex runs only in UI layer; raw logs stored unmodified at ingest."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Payment Service"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Log Shipper"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Log Index"
+            }
+          },
+          {
+            "id": "node-redact",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Redaction Processor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-ingest",
+            "label": "Log PAN"
+          },
+          {
+            "id": "e2",
+            "source": "node-ingest",
+            "target": "node-store",
+            "label": "Store raw"
+          },
+          {
+            "id": "e3",
+            "source": "node-redact",
+            "target": "node-ingest",
+            "label": "Not inline"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-ingest",
+          "node-store"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing ingest-time redaction persists secrets in log index"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_redact",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep secrets and personal data out of stored logs and control who reads what.",
+            "opener": "How do you keep passwords, tokens and card numbers out of the logs, and who can read which logs?",
+            "evidence": {
+              "strong": "Redacts at the agent or the processing stage, before indexing or archiving, using pattern rules for tokens, emails and card numbers and allow-lists of fields; restricts access per team and per log class, with security logs readable only by a few, and audits searches.",
+              "adequate": "Plans to redact after indexing, or has redaction but no access control.",
+              "weak": "Doesn't consider sensitive data."
+            },
+            "misconceptions": [
+              {
+                "id": "redact.later",
+                "pattern": "Thinks redacting after the logs are stored is fine.",
+                "challenge": "A card number reached the archive and its replicas. How do you remove it from every copy?"
+              }
+            ],
+            "probes": [
+              "Where in the pipeline is the earliest point you can redact?"
+            ],
+            "hints": [
+              "The earlier you redact, the fewer copies you have to clean.",
+              "Different teams shouldn't see every team's logs."
+            ],
+            "referenceFix": "Redact at ingest with pattern and allow-list rules, and enforce per-team and per-class access with audit."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

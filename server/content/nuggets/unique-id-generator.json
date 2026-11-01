@@ -1,0 +1,261 @@
+{
+  "promptId": "unique-id-generator",
+  "packVersion": "pack-fa1f38f2",
+  "inputsFingerprint": "6c250bbd2b62b75cd0db149a2911730aa99b1c52bd79e5fb19abc7d647cae87c",
+  "nuggets": [
+    {
+      "id": "unique-id-generator/clock_rollback_duplicate",
+      "title": "NTP Step Backward Generates Duplicate Snowflake IDs",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.clock",
+      "scenario": {
+        "symptoms": "Primary key collisions spike on orders table after VM clock correction. Two ID generator nodes emit identical 64-bit IDs milliseconds apart.",
+        "interviewerSetup": "Snowflake-style generator uses local wall clock without waiting until caught up after backward step; sequence bits reset while timestamp unchanged."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-a", "type": "systemNode", "position": { "x": 80, "y": 120 }, "data": { "kind": "service", "label": "ID Node A" } },
+          { "id": "node-b", "type": "systemNode", "position": { "x": 80, "y": 220 }, "data": { "kind": "service", "label": "ID Node B" } },
+          { "id": "node-ntp", "type": "systemNode", "position": { "x": 280, "y": 170 }, "data": { "kind": "network", "label": "NTP Step Back" } },
+          { "id": "node-db", "type": "systemNode", "position": { "x": 480, "y": 170 }, "data": { "kind": "database", "label": "Orders DB" } }
+        ],
+        "edges": [
+          { "id": "e-ntp-a", "source": "node-ntp", "target": "node-a", "label": "Clock rollback" },
+          { "id": "e-a-db", "source": "node-a", "target": "node-db", "label": "Duplicate IDs" },
+          { "id": "e-b-db", "source": "node-b", "target": "node-db", "label": "PK violation" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-a", "node-ntp"],
+        "edgeIds": ["e-ntp-a"],
+        "headline": "Clock rollback without guard logic regenerates previously issued timestamp sequences"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_clock_skew",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Detect backward clock steps, refuse to generate until safe, or use logical clock with lease on time source.",
+          "opener": "After NTP corrected the clock backward, we saw duplicate snowflake IDs. How does your generator handle clock skew?",
+          "evidence": {
+            "strong": "Monotonic logical clock, sleep until last timestamp if clock moves back, monitor clock drift, prefer synchronized time with bounded error, alert on refusal.",
+            "adequate": "Use NTP but no rollback handling.",
+            "weak": "System.currentTimeMillis without checks."
+          },
+          "misconceptions": [{ "id": "clk.unique", "pattern": "Assumes wall clock always moves forward.", "challenge": "What does snowflake do if time goes backward 200ms?" }],
+          "probes": ["When should the generator stop issuing IDs?", "How are sequence bits managed per millisecond?"],
+          "hints": ["Wait until clock catches up to last issued ms.", "Log and block rather than collide."],
+          "referenceFix": "On clock regression, stall generation until time >= last_timestamp; metrics on clock issues."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "unique-id-generator/worker_id_collision",
+      "title": "Duplicate Worker IDs Collide After Auto-Scale",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.worker_id",
+      "scenario": {
+        "symptoms": "Collision rate jumps when Kubernetes HPA doubles ID generator pods. Two pods assigned worker_id=17 via modulo on pod name hash clash.",
+        "interviewerSetup": "Worker id allocated locally from hash(pod_name) % 1024 without coordination; scale-up creates birthday collisions."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-k8s", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "kubernetes", "label": "HPA Scale Out" } },
+          { "id": "node-p1", "type": "systemNode", "position": { "x": 280, "y": 100 }, "data": { "kind": "service", "label": "Generator Pod (id 17)" } },
+          { "id": "node-p2", "type": "systemNode", "position": { "x": 280, "y": 220 }, "data": { "kind": "service", "label": "Generator Pod (id 17 dup)" } },
+          { "id": "node-coord", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "coordination", "label": "Worker ID Lease (missing)" } }
+        ],
+        "edges": [
+          { "id": "e-k8s-p1", "source": "node-k8s", "target": "node-p1", "label": "New pods" },
+          { "id": "e-k8s-p2", "source": "node-k8s", "target": "node-p2", "label": "Hash collision" },
+          { "id": "e-p1-coord", "source": "node-p1", "target": "node-coord", "label": "Not used" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-p1", "node-p2"],
+        "edgeIds": ["e-k8s-p2"],
+        "headline": "Uncoordinated worker id assignment duplicates machine bits in snowflake layout"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_worker_id",
+          "stage": "incident",
+          "dimension": "architecture",
+          "weight": 3,
+          "required": true,
+          "goal": "Assign unique worker ids via coordinated lease service or centralized allocator with conflict detection.",
+          "opener": "Scaling ID generators caused duplicate worker bits and colliding IDs. How does each node get a unique worker id?",
+          "evidence": {
+            "strong": "Lease worker ids from etcd/DB with TTL and renewal, detect conflicts at startup, expand bit width or use UUID for low scale.",
+            "adequate": "Manual static worker id config per host.",
+            "weak": "Hash hostname modulo without coordination."
+          },
+          "misconceptions": [{ "id": "wid.hash", "pattern": "Assumes hash of pod name is unique across fleet.", "challenge": "With 1024 slots and 200 pods, what does birthday paradox tell you?" }],
+          "probes": ["What happens to worker id when pod restarts?", "How many bits do you reserve for worker id?"],
+          "hints": ["Coordination service hands out ids.", "Renew leases while running."],
+          "referenceFix": "Central lease of worker ids with heartbeat; refuse start if id taken."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "unique-id-generator/sequence_exhaustion_stall",
+      "title": "Sequence Bit Overflow Stalls Generator at Peak QPS",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.throughput",
+      "scenario": {
+        "symptoms": "ID API latency spikes to 2s during flash sale while QPS is 80k per node. Generator busy-waits for next millisecond after exhausting 12-bit sequence in one ms.",
+        "interviewerSetup": "Single-threaded ID generation per node; no batch preallocation or extra sequence bits; all clients sync-call HTTP API."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-clients", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "Order Services" } },
+          { "id": "node-api", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "app-server", "label": "ID HTTP API" } },
+          { "id": "node-gen", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "service", "label": "Snowflake Generator" } }
+        ],
+        "edges": [
+          { "id": "e-cli-api", "source": "node-clients", "target": "node-api", "label": "80k RPS" },
+          { "id": "e-api-gen", "source": "node-api", "target": "node-gen", "label": "Spin wait next ms" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-gen", "node-api"],
+        "edgeIds": ["e-api-gen"],
+        "headline": "Per-millisecond sequence exhaustion throttles ID throughput below business peak"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_throughput",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Meet peak ID rates by scaling nodes, batch allocation, widening sequence bits, or segmenting namespaces.",
+          "opener": "At 80k IDs/sec our generator started stalling waiting for the next millisecond. How do you hit required throughput?",
+          "evidence": {
+            "strong": "Horizontal scale of generators with unique worker ids, batch prefetch of ids client-side, tune bits for peak ms rate, optional separate numeric spaces per service.",
+            "adequate": "Add nodes without throughput math on sequence bits.",
+            "weak": "Single node snowflake only."
+          },
+          "misconceptions": [{ "id": "tp.http", "pattern": "Uses synchronous HTTP per ID at extreme QPS.", "challenge": "What is max IDs/ms with 12 sequence bits?" }],
+          "probes": ["How many IDs can one node emit per millisecond?", "Should clients batch-fetch IDs?"],
+          "hints": ["4096 ids/ms per node is the ceiling with 12 bits.", "Scale workers and prefetch."],
+          "referenceFix": "Batch ID allocation API, enough generator nodes for peak, client-side id buffer."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "unique-id-generator/embedded_layout_breaking_change",
+      "title": "Client Parses ID Layout That Changed Server Side",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.layout",
+      "scenario": {
+        "symptoms": "Sharding router sends 30% of traffic to wrong database after server adds datacenter bits to ID format. Mobile apps embed timestamp extraction logic.",
+        "interviewerSetup": "Clients decode snowflake bitfields assuming old schema; server v2 adds 2 datacenter bits shrinking worker field without version flag."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-server", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "service", "label": "ID Gen v2" } },
+          { "id": "node-mobile", "type": "systemNode", "position": { "x": 280, "y": 80 }, "data": { "kind": "mobile", "label": "Mobile SDK (old layout)" } },
+          { "id": "node-router", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "app-server", "label": "Shard Router" } }
+        ],
+        "edges": [
+          { "id": "e-server-mobile", "source": "node-server", "target": "node-mobile", "label": "New ID format" },
+          { "id": "e-mobile-router", "source": "node-mobile", "target": "node-router", "label": "Wrong shard key" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-mobile", "node-server"],
+        "edgeIds": ["e-mobile-router"],
+        "headline": "Undocumented ID bit layout change breaks client-side routing assumptions"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_id_layout",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Treat IDs as opaque or version the bit layout with compatibility policy documented to clients.",
+          "opener": "Changing our snowflake layout broke mobile shard routing. What is in the 64-bit ID and who is allowed to decode it?",
+          "evidence": {
+            "strong": "Opaque ids for clients, server-side mapping for shard, version nibble in id if decoding needed, migration window with dual routing, documented layout semver.",
+            "adequate": "Document layout but clients still hardcode.",
+            "weak": "Clients parse bits without version."
+          },
+          "misconceptions": [{ "id": "lay.parse", "pattern": "Encourages all clients to parse snowflake bitfields.", "challenge": "What happens when you need another bit for region?" }],
+          "probes": ["Should mobile apps know shard from id?", "How do you migrate layout safely?"],
+          "hints": ["Opaque ids reduce coupling.", "Version field enables evolution."],
+          "referenceFix": "Stop client bit parsing; lookup shard by registry; if parsing required embed version bits."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "unique-id-generator/client_no_retry_idempotency",
+      "title": "Client Retry After Timeout Creates Duplicate Business Records",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.client_integration",
+      "scenario": {
+        "symptoms": "Users double-charged when checkout retried ID fetch after 504 timeout though server actually allocated ID. Two orders share different IDs for one cart.",
+        "interviewerSetup": "Checkout requests new ID per attempt without idempotency key; ID service has no dedupe of client request token."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-checkout", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "app-server", "label": "Checkout" } },
+          { "id": "node-id", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "service", "label": "ID Service" } },
+          { "id": "node-orders", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "database", "label": "Orders" } }
+        ],
+        "edges": [
+          { "id": "e-checkout-id", "source": "node-checkout", "target": "node-id", "label": "Retry on timeout" },
+          { "id": "e-checkout-orders", "source": "node-checkout", "target": "node-orders", "label": "Two orders" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-checkout", "node-id"],
+        "edgeIds": ["e-checkout-id"],
+        "headline": "Non-idempotent ID allocation on client retry creates duplicate orders for one checkout"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_client_integration",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Integrate ID generation with client idempotency keys so retries return same id without double side effects.",
+          "opener": "A timeout retry got a second order id and we double-charged. How should clients call the ID service safely?",
+          "evidence": {
+            "strong": "Client supplies idempotency-key per checkout session, ID service stores key->id mapping 24h, checkout uses business idempotency before payment, return same id on retry.",
+            "adequate": "Client generates UUID locally without server dedupe.",
+            "weak": "New ID every HTTP retry."
+          },
+          "misconceptions": [{ "id": "cli.new", "pattern": "Assumes every retry must fetch a brand new id.", "challenge": "If first request succeeded but response lost, what id should retry use?" }],
+          "probes": ["Where is idempotency key generated?", "How long does ID service remember keys?"],
+          "hints": ["Same key should yield same id.", "Align with payment idempotency."],
+          "referenceFix": "Idempotent ID API keyed by checkout session; client reuses id on uncertain failures."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

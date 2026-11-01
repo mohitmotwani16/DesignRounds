@@ -1,0 +1,688 @@
+{
+  "promptId": "lakehouse-platform",
+  "packVersion": "pack-de5ab69c",
+  "inputsFingerprint": "64647fae95867c255a35cfe9a49d2afd73117359bada4a6279d727628bc16f30",
+  "nuggets": [
+    {
+      "id": "lakehouse-platform/deep-smallfiles",
+      "title": "Millions of Tiny Files Crush Metadata and Queries",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.smallfiles",
+      "scenario": {
+        "symptoms": "Lake queries that used to take minutes now take hours; metastore CPU pegged after streaming ingest lands micro-files.",
+        "interviewerSetup": "Streaming writers commit every few seconds creating thousands of 1MB Parquet files per table."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Stream Writer"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Delta Lake"
+            }
+          },
+          {
+            "id": "node-meta",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Metastore"
+            }
+          },
+          {
+            "id": "node-compact",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Compaction Job"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-stream",
+            "target": "node-lake",
+            "label": "Micro commits"
+          },
+          {
+            "id": "e2",
+            "source": "node-lake",
+            "target": "node-meta",
+            "label": "File listings"
+          },
+          {
+            "id": "e3",
+            "source": "node-compact",
+            "target": "node-lake",
+            "label": "Not scheduled"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-lake",
+          "node-meta"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Small file problem explodes metadata and scan costs"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_smallfiles",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Prevent and repair the small-file problem from streaming and frequent commits.",
+            "opener": "A streaming job commits to a table every minute. What happens to query speed after a month, and what do you do about it?",
+            "evidence": {
+              "strong": "Explains that frequent commits create many small files and much metadata, slowing planning and scans; sets a sensible commit interval and target file size, runs scheduled compaction and metadata cleanup, and monitors file counts per partition.",
+              "adequate": "Mentions compaction but not why small files hurt or when to run it.",
+              "weak": "Doesn't foresee any slowdown."
+            },
+            "misconceptions": [
+              {
+                "id": "small.more_compute",
+                "pattern": "Thinks more compute fixes small-file slowdowns.",
+                "challenge": "Planning a query must open metadata for a huge number of tiny files. Does a bigger cluster make that faster?"
+              }
+            ],
+            "probes": [
+              "What file size would you aim for, and why?",
+              "How do compaction and active writers avoid conflicting?"
+            ],
+            "hints": [
+              "Count the files a month of one-minute commits creates.",
+              "Rewriting many small files into fewer large ones is routine maintenance."
+            ],
+            "referenceFix": "Frequent commits create small files; tune commit size and run scheduled compaction and metadata cleanup."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "lakehouse-platform/deep-layout",
+      "title": "Unpartitioned Table Full Scans Every BI Query",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.layout",
+      "scenario": {
+        "symptoms": "Finance dashboards time out scanning 500TB events table for single-day filters.",
+        "interviewerSetup": "Events table lacks partition columns and Z-order; queries filter on date but scan all files."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-bi",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "BI Tool"
+            }
+          },
+          {
+            "id": "node-engine",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Query Engine"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Events Table"
+            }
+          },
+          {
+            "id": "node-layout",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Layout Optimizer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-bi",
+            "target": "node-engine",
+            "label": "Daily report"
+          },
+          {
+            "id": "e2",
+            "source": "node-engine",
+            "target": "node-lake",
+            "label": "Full scan"
+          },
+          {
+            "id": "e3",
+            "source": "node-layout",
+            "target": "node-lake",
+            "label": "No clustering"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-engine",
+          "node-lake"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing partition layout forces petabyte scans for date filters"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_layout",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Choose partitioning and clustering that match query patterns without exploding file counts.",
+            "opener": "How would you partition and lay out a large events table so common queries stay fast?",
+            "evidence": {
+              "strong": "Partitions coarsely (usually by day) using hidden partitioning where available, clusters or sorts within partitions on frequent filters, avoids high-cardinality partition columns, and checks pruning with query plans.",
+              "adequate": "Partitions by date but doesn't consider clustering or the cost of over-partitioning.",
+              "weak": "Partitions by user id or another high-cardinality column."
+            },
+            "misconceptions": [
+              {
+                "id": "layout.by_user",
+                "pattern": "Believes partitioning by user id speeds up per-user queries.",
+                "challenge": "With tens of millions of users, how many partitions and files does one day create?"
+              }
+            ],
+            "probes": [
+              "What would you do for queries that filter by customer rather than date?"
+            ],
+            "hints": [
+              "Partitions should be few and large.",
+              "Sorting within files helps skip data too."
+            ],
+            "referenceFix": "Coarse date partitions plus clustering or sorting on common filters; never partition on high-cardinality columns."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "lakehouse-platform/deep-timetravel",
+      "title": "Training Reproducibility Fails on Old Snapshot",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.timetravel",
+      "scenario": {
+        "symptoms": "ML team cannot reproduce March model; time travel query returns empty after aggressive vacuum deleted history.",
+        "interviewerSetup": "Retention policy vacuums snapshots older than 7 days while compliance requires 90-day reproducibility."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ml",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "ML Pipeline"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Feature Table"
+            }
+          },
+          {
+            "id": "node-vacuum",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Vacuum Job"
+            }
+          },
+          {
+            "id": "node-snap",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Snapshot Storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-ml",
+            "target": "node-lake",
+            "label": "AS OF March"
+          },
+          {
+            "id": "e2",
+            "source": "node-vacuum",
+            "target": "node-lake",
+            "label": "Delete history"
+          },
+          {
+            "id": "e3",
+            "source": "node-lake",
+            "target": "node-snap",
+            "label": "Pruned files"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-vacuum",
+          "node-lake"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Aggressive vacuum breaks time travel reproducibility guarantees"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_timetravel",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Make training data reproducible on a past date while controlling snapshot retention.",
+            "opener": "A data scientist needs exactly the training data that was used on a particular date months ago. How do they get it?",
+            "evidence": {
+              "strong": "Records the table snapshot ids (or tags them) used for each training run in the model registry, reads with time travel, and sets snapshot retention so needed snapshots are tagged and kept while others expire; notes that deletion obligations may require rebuilding rather than keeping old snapshots.",
+              "adequate": "Mentions time travel but not retention or recording which snapshot was used.",
+              "weak": "Copies the training data into a separate folder each time, or says it can't be done."
+            },
+            "misconceptions": [
+              {
+                "id": "tt.forever",
+                "pattern": "Thinks keeping every snapshot forever is the safe default.",
+                "challenge": "Storage keeps every old file version forever, and a user asked to be deleted. What does that mean?"
+              }
+            ],
+            "probes": [
+              "How long would you keep snapshots, and who decides?"
+            ],
+            "hints": [
+              "The table format already versions every commit.",
+              "Record which version a model was trained on."
+            ],
+            "referenceFix": "Record or tag snapshot ids per training run and read with time travel; expire untagged snapshots under a retention policy."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "lakehouse-platform/deep-governance",
+      "title": "Analysts Query Raw PII Despite Column Masking Policy",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.governance",
+      "scenario": {
+        "symptoms": "Audit finds analysts selecting raw email column via ad-hoc SQL bypassing approved views.",
+        "interviewerSetup": "Governance tags exist in catalog but engines enforce no row/column ACLs at scan time."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-analyst",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Analysts"
+            }
+          },
+          {
+            "id": "node-engine",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "SQL Engine"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Raw Tables"
+            }
+          },
+          {
+            "id": "node-gov",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Policy Catalog"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-analyst",
+            "target": "node-engine",
+            "label": "Ad-hoc SQL"
+          },
+          {
+            "id": "e2",
+            "source": "node-engine",
+            "target": "node-lake",
+            "label": "Unrestricted scan"
+          },
+          {
+            "id": "e3",
+            "source": "node-gov",
+            "target": "node-engine",
+            "label": "Not enforced"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-engine",
+          "node-gov"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Catalog-only governance fails to block sensitive column access"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_governance",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Control access to sensitive data centrally across engines.",
+            "opener": "How do you stop analysts from seeing raw email addresses while some data scientists see hashed ones?",
+            "evidence": {
+              "strong": "Tags sensitive columns in the catalog and applies policies there: column masks (hash or redact) and row filters by role, enforced for every engine through the catalog, with audit logs and lineage to find derived copies.",
+              "adequate": "Restricts whole tables or keeps separate copies with columns removed.",
+              "weak": "Uses bucket policies per team, or no access control."
+            },
+            "misconceptions": [
+              {
+                "id": "gov.bucket",
+                "pattern": "Believes object-storage bucket policies are enough access control.",
+                "challenge": "An analyst needs most columns of a table but not the email column. Can a bucket policy express that?"
+              }
+            ],
+            "probes": [
+              "How do you know where else an email column was copied to?"
+            ],
+            "hints": [
+              "Control access at the table and column level, not the file level.",
+              "Tags let one policy cover many tables."
+            ],
+            "referenceFix": "Tag-based column masks and row filters in the catalog, enforced for all engines, with audit and lineage."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "lakehouse-platform/deep-compute",
+      "title": "Massive ML Backfill Starves Interactive BI Queries",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.compute",
+      "scenario": {
+        "symptoms": "Executive dashboards fail during nightly feature backfill; shared cluster queues BI behind 10k Spark tasks.",
+        "interviewerSetup": "Single shared compute pool serves both interactive SQL and long batch without workload isolation."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-bi",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "BI Dashboards"
+            }
+          },
+          {
+            "id": "node-ml",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "ML Backfill"
+            }
+          },
+          {
+            "id": "node-cluster",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Shared Compute"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Lake Storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-bi",
+            "target": "node-cluster",
+            "label": "Interactive"
+          },
+          {
+            "id": "e2",
+            "source": "node-ml",
+            "target": "node-cluster",
+            "label": "Monopolize"
+          },
+          {
+            "id": "e3",
+            "source": "node-cluster",
+            "target": "node-lake",
+            "label": "Scan data"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-cluster",
+          "node-ml"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unisolated compute lets batch backfills starve BI workloads"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_compute",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Serve BI and ML workloads without one starving the other.",
+            "opener": "Should dashboards query the lake directly or a warehouse copy, and how do you keep a big backfill from slowing every report?",
+            "evidence": {
+              "strong": "Separates compute per workload (ETL, BI SQL engine, ML Spark) over the same storage, autoscaled; serves BI from gold tables with a SQL engine and caching, or copies gold into a warehouse when concurrency and latency demand it; explains the trade-off.",
+              "adequate": "Separates compute but doesn't say how BI gets interactive latency.",
+              "weak": "Runs everything on one shared cluster."
+            },
+            "misconceptions": [
+              {
+                "id": "compute.one_cluster",
+                "pattern": "Thinks one big shared cluster is simplest and fine.",
+                "challenge": "A two-year backfill starts at nine in the morning. What happens to the CEO's dashboard?"
+              }
+            ],
+            "probes": [
+              "When would a warehouse copy of gold tables be worth it?"
+            ],
+            "hints": [
+              "Storage and compute can scale separately here.",
+              "Different workloads deserve different engines and capacity."
+            ],
+            "referenceFix": "Separate compute per workload on shared storage; BI from gold via a SQL engine and caching, or a warehouse copy when needed."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

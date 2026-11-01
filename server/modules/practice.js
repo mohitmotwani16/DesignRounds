@@ -5,6 +5,8 @@ import { HttpError, parse, route } from "../http.js";
 import { deleteInterviewAudioForSession } from "../object-storage.js";
 import { requireUser } from "./identity.js";
 import { briefFor, canAccessRound, promptById } from "./rounds.js";
+import { getNugget, pickNugget, publicNuggetSummary } from "./nuggets/index.js";
+import { maybeUpgradeScaffoldParent } from "./nuggets/live.js";
 
 const CHECKPOINT_INTERVAL_MS = 5 * 60_000;
 const MAX_NODES = 400;
@@ -69,7 +71,13 @@ const diagramSchema = z.object({
 
 // interviewMode: guided or realistic for the live interviewer; unset picks the default
 // for the learner and question when the interview opens.
-const createBody = z.object({ promptId: z.string().max(80), interviewMode: z.enum(["guided", "realistic"]).optional() });
+const fullStartBody = z.object({ promptId: z.string().max(80), interviewMode: z.enum(["guided", "realistic"]).optional() });
+const nuggetStartBody = z.union([
+  z.object({ nuggetId: z.string().max(120) }),
+  z.object({ parentPromptId: z.string().max(80), pick: z.literal("random_nugget") }),
+  z.object({ pick: z.literal("random_nugget") }),
+]);
+const createBody = z.union([fullStartBody, nuggetStartBody]);
 const saveBody = z.object({ version: z.number().int().min(0), diagram: diagramSchema });
 const updateBody = z.object({ status: z.enum(["completed", "in_progress"]) }).strict();
 const uuid = z.string().uuid();
@@ -82,14 +90,32 @@ function toSummary(row) {
     promptTitle: prompt?.title ?? row.prompt_id,
     track: prompt?.track ?? null,
     status: row.status,
+    sessionKind: row.session_kind ?? "full",
+    nuggetId: row.nugget_id ?? null,
     componentCount: row.component_count ?? row.diagram?.nodes?.length ?? 0,
     diagramVersion: row.diagram_version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
-    // This round is the learner's free interviewer round (issue #75).
     interviewerTrial: Boolean(row.interviewer_trial),
   };
+}
+
+function nuggetPayload(nuggetId) {
+  const nugget = getNugget(nuggetId);
+  if (!nugget) return null;
+  return {
+    ...publicNuggetSummary(nugget),
+    symptoms: nugget.scenario.symptoms,
+    incident: nugget.incident,
+    minutes: nugget.minutes,
+  };
+}
+
+function sessionResponse(row, { brief = null, resumed }) {
+  const base = { ...toSummary(row), diagram: row.diagram, brief, resumed };
+  if (row.session_kind === "nugget" && row.nugget_id) base.nugget = nuggetPayload(row.nugget_id);
+  return base;
 }
 
 export async function ownedSession(req) {
@@ -105,7 +131,7 @@ practiceRouter.use(requireUser);
 
 practiceRouter.get("/sessions", route(async (req, res) => {
   const rows = await query(
-    `select id, prompt_id, status, diagram_version, created_at, updated_at, completed_at, interviewer_trial,
+    `select id, prompt_id, status, session_kind, nugget_id, diagram_version, created_at, updated_at, completed_at, interviewer_trial,
             jsonb_array_length(diagram -> 'nodes') as component_count
        from practice_sessions where user_id = $1
       order by updated_at desc limit 200`,
@@ -114,33 +140,75 @@ practiceRouter.get("/sessions", route(async (req, res) => {
   res.json({ sessions: rows.map(toSummary) });
 }));
 
-// Resumes the learner's in-progress round for a prompt, or starts a new one.
-practiceRouter.post("/sessions", route(async (req, res) => {
-  const { promptId, interviewMode } = parse(createBody, req.body);
-  const prompt = promptById.get(promptId);
-  if (!prompt) throw new HttpError(404, "NOT_FOUND", "Unknown design round.");
-  if (!canStartPrompt(req.user, prompt)) throw new HttpError(403, "PLAN_REQUIRED", "This round is part of the Plus plan.");
+function pickError(error) {
+  const map = {
+    NOT_FOUND: [404, "NOT_FOUND", "Unknown nugget."],
+    PLAN_REQUIRED: [403, "PLAN_REQUIRED", "This nugget belongs to a Plus round."],
+    NO_NUGGETS: [404, "NO_NUGGETS", "No nuggets are available yet for that selection."],
+    INVALID_PICK: [400, "INVALID_REQUEST", "Specify a nugget, a parent question, or random pick."],
+  };
+  const entry = map[error.message];
+  if (entry) throw new HttpError(entry[0], entry[1], entry[2]);
+  throw error;
+}
 
+// Resumes the learner's in-progress round for a prompt or nugget, or starts a new one.
+practiceRouter.post("/sessions", route(async (req, res) => {
+  const body = parse(createBody, req.body);
+
+  if ("promptId" in body) {
+    const { promptId, interviewMode } = body;
+    const prompt = promptById.get(promptId);
+    if (!prompt) throw new HttpError(404, "NOT_FOUND", "Unknown design round.");
+    if (!canStartPrompt(req.user, prompt)) throw new HttpError(403, "PLAN_REQUIRED", "This round is part of the Plus plan.");
+
+    const existing = await queryOne(
+      "select * from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress' and session_kind = 'full'",
+      [req.user.id, promptId]
+    );
+    if (existing) return res.json({ session: sessionResponse(existing, { brief: briefFor(prompt), resumed: true }) });
+
+    const created = await queryOne(
+      `insert into practice_sessions (user_id, prompt_id, prompt_version, interview_mode, session_kind)
+       values ($1, $2, $3, $4, 'full')
+       on conflict (user_id, prompt_id) where status = 'in_progress' and session_kind = 'full' do update set updated_at = practice_sessions.updated_at
+       returning *`,
+      [req.user.id, promptId, prompt.version ?? 1, interviewMode ?? null]
+    );
+    return res.status(201).json({ session: sessionResponse(created, { brief: briefFor(prompt), resumed: false }) });
+  }
+
+  let nugget;
+  try {
+    if ("nuggetId" in body) nugget = pickNugget(req.user, { nuggetId: body.nuggetId });
+    else if ("parentPromptId" in body) nugget = pickNugget(req.user, { parentPromptId: body.parentPromptId, random: true });
+    else nugget = pickNugget(req.user, { random: true });
+  } catch (error) {
+    pickError(error);
+  }
+  maybeUpgradeScaffoldParent(nugget.parentPromptId);
+
+  const prompt = promptById.get(nugget.parentPromptId);
   const existing = await queryOne(
-    "select * from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress'",
-    [req.user.id, promptId]
+    "select * from practice_sessions where user_id = $1 and nugget_id = $2 and status = 'in_progress' and session_kind = 'nugget'",
+    [req.user.id, nugget.id]
   );
-  if (existing) return res.json({ session: { ...toSummary(existing), diagram: existing.diagram, brief: briefFor(prompt) }, resumed: true });
+  if (existing) return res.json({ session: sessionResponse(existing, { brief: prompt ? briefFor(prompt) : null, resumed: true }) });
 
   const created = await queryOne(
-    `insert into practice_sessions (user_id, prompt_id, prompt_version, interview_mode) values ($1, $2, $3, $4)
-     on conflict (user_id, prompt_id) where status = 'in_progress' do update set updated_at = practice_sessions.updated_at
+    `insert into practice_sessions (user_id, prompt_id, prompt_version, session_kind, nugget_id, diagram)
+     values ($1, $2, $3, 'nugget', $4, $5::jsonb)
      returning *`,
-    [req.user.id, promptId, prompt.version ?? 1, interviewMode ?? null]
+    [req.user.id, nugget.parentPromptId, prompt?.version ?? 1, nugget.id, JSON.stringify(nugget.diagram)]
   );
-  res.status(201).json({ session: { ...toSummary(created), diagram: created.diagram, brief: briefFor(prompt) }, resumed: false });
+  return res.status(201).json({ session: sessionResponse(created, { brief: prompt ? briefFor(prompt) : null, resumed: false }) });
 }));
 
 practiceRouter.get("/sessions/:sessionId", route(async (req, res) => {
   const row = await ownedSession(req);
   // The owner keeps their round's brief even if their plan changes later.
   const prompt = promptById.get(row.prompt_id);
-  res.json({ session: { ...toSummary(row), diagram: row.diagram, brief: prompt ? briefFor(prompt) : null } });
+  res.json({ session: sessionResponse(row, { brief: prompt ? briefFor(prompt) : null, resumed: undefined }) });
 }));
 
 practiceRouter.put("/sessions/:sessionId/diagram", route(async (req, res) => {
@@ -172,11 +240,19 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
   const row = await ownedSession(req);
   const { status } = parse(updateBody, req.body);
   if (status === "in_progress" && row.status !== "in_progress") {
-    const other = await queryOne(
-      "select id from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress' and id <> $3",
-      [req.user.id, row.prompt_id, row.id]
-    );
-    if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this design.");
+    if (row.session_kind === "nugget") {
+      const other = await queryOne(
+        "select id from practice_sessions where user_id = $1 and nugget_id = $2 and status = 'in_progress' and id <> $3",
+        [req.user.id, row.nugget_id, row.id]
+      );
+      if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open session for this nugget.");
+    } else {
+      const other = await queryOne(
+        "select id from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress' and session_kind = 'full' and id <> $3",
+        [req.user.id, row.prompt_id, row.id]
+      );
+      if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this design.");
+    }
   }
   const updated = await queryOne(
     `update practice_sessions

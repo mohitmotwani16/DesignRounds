@@ -1,0 +1,699 @@
+{
+  "promptId": "cdc-pipeline",
+  "packVersion": "pack-d05e54fc",
+  "inputsFingerprint": "32bb55b4dd838c5bb4009670e64a0d395e5e324df9bde77babb24880af919a52",
+  "nuggets": [
+    {
+      "id": "cdc-pipeline/slot-wal-exhaustion",
+      "title": "CDC Replication Slot Disk Full",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.slot",
+      "scenario": {
+        "symptoms": "Primary PostgreSQL database disk space utilization reached 98% and alerted critical after the CDC connector went offline during a deployment.",
+        "interviewerSetup": "The CDC connector pod crashed during a cluster node drain and failed to restart due to a configuration mismatch. PostgreSQL has maintained an active logical replication slot, causing WAL files to accumulate continuously on disk."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-db",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-postgres",
+              "label": "Primary Postgres"
+            }
+          },
+          {
+            "id": "node-connector",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "CDC Connector (Debezium)"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "topic",
+              "label": "CDC Kafka Topic"
+            }
+          },
+          {
+            "id": "node-alert",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 300
+            },
+            "data": {
+              "kind": "alerting",
+              "label": "PagerDuty / Disk Alert"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-db",
+            "target": "node-connector",
+            "label": "Logical Replication Slot"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-connector",
+            "target": "node-kafka",
+            "label": "Produce CDC Events"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-db",
+            "target": "node-alert",
+            "label": "High Storage Utilization"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-db"
+        ],
+        "edgeIds": [
+          "edge-1"
+        ],
+        "headline": "Primary PostgreSQL Disk Usage at 98% Due to Retained WAL Segments"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Protect primary database disk space while safely recovering or re-bootstrapping the CDC pipeline.",
+            "opener": "The primary database disk is about to fill up because the offline CDC slot is retaining write-ahead logs. How do you resolve this immediate crisis and prevent future outages?",
+            "evidence": {
+              "strong": "Recommends setting a maximum slot WAL keep limit (`max_slot_wal_keep_size`) and alerting on replication slot lag before disk space drops low. If disk space is critically low, drop the blocked slot to save the database, then trigger an incremental re-snapshot for affected tables once the connector is healthy.",
+              "adequate": "Proposes increasing database disk capacity or restarting the connector pod, but misses setting WAL caps or handling snapshot recovery if the slot must be dropped.",
+              "weak": "Suggests manually deleting raw WAL files from disk or ignoring replication slot mechanics."
+            },
+            "misconceptions": [
+              {
+                "id": "slot.no_impact",
+                "pattern": "Believes a stopped CDC consumer cannot affect the source database engine.",
+                "challenge": "PostgreSQL must preserve all unconfirmed log segments for logical replication slots. Where do those unconfirmed segments accumulate while the consumer is offline?"
+              }
+            ],
+            "probes": [
+              "What postgres configuration setting limits how much WAL a logical replication slot can retain?",
+              "If you are forced to drop the replication slot to save production, how do you resynchronize downstream storage without losing data?"
+            ],
+            "hints": [
+              "Logical replication slots hold WAL until the connector explicitly acknowledges consumption.",
+              "PostgreSQL allows configuring a ceiling on WAL retention per slot to prioritize primary availability over replication continuousness."
+            ],
+            "referenceFix": "Set `max_slot_wal_keep_size` on the primary database, add replication slot lag metrics to alerting, fix the connector configuration to resume processing, and run incremental re-snapshots if a slot is ever dropped to protect the database.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "cdc-pipeline/bootstrap-data-loss",
+      "title": "CDC Initial Load Data Loss Handover",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.bootstrap",
+      "scenario": {
+        "symptoms": "Data warehouse reports missing record updates for mutations that occurred while the multi-hour initial database snapshot process was executing.",
+        "interviewerSetup": "The CDC team performed an initial export of a 500GB table using a standard database dump script, then pointed Debezium to stream continuous events starting from 'now' after the bulk export finished."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-source",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-postgres",
+              "label": "Production DB"
+            }
+          },
+          {
+            "id": "node-dump",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 100
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Bulk Dump Worker"
+            }
+          },
+          {
+            "id": "node-cdc",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 200
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "CDC Streaming Engine"
+            }
+          },
+          {
+            "id": "node-target",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Data Warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-source",
+            "target": "node-dump",
+            "label": "Initial Bulk Export"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-source",
+            "target": "node-cdc",
+            "label": "Stream Changes"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-dump",
+            "target": "node-target",
+            "label": "Load Snapshot"
+          },
+          {
+            "id": "edge-4",
+            "source": "node-cdc",
+            "target": "node-target",
+            "label": "Append CDC Events"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-dump",
+          "node-cdc"
+        ],
+        "edgeIds": [
+          "edge-1",
+          "edge-2"
+        ],
+        "headline": "Data Gaps in Target Warehouse for Rows Modified During Initial Snapshot"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Ensure seamless handover between initial table snapshot and CDC log streaming without losing or corrupting records.",
+            "opener": "Mutations occurring during the bulk snapshot copy phase were skipped. How do you tie the snapshot position to the change log stream to ensure zero missing data?",
+            "evidence": {
+              "strong": "Explains capturing a consistent snapshot linked to an explicit log sequence number (LSN/position), initiating streaming from that exact LSN (or slightly before it), and using idempotent LSN-ordered merge logic downstream so overlapping events are safely applied.",
+              "adequate": "Proposes pausing writes on the primary database during the initial snapshot, or mentions starting streaming before taking the snapshot without details on LSN alignment.",
+              "weak": "Recommends running periodic full exports instead of integrating snapshot positions with WAL streaming."
+            },
+            "misconceptions": [
+              {
+                "id": "boot.gap",
+                "pattern": "Thinks starting CDC streaming after the initial bulk copy finishes is sufficient.",
+                "challenge": "If a large snapshot takes 3 hours, what happens to writes made to the source database during those 3 hours if streaming only captures changes from hour 3 onward?"
+              }
+            ],
+            "probes": [
+              "How does Debezium's incremental snapshot algorithm avoid locking source tables while maintaining precise log position boundaries?",
+              "Why are idempotent upserts critical when CDC streaming overlaps with the snapshot timeframe?"
+            ],
+            "hints": [
+              "The source log sequence position must be established when the snapshot snapshot read starts.",
+              "Overlap between snapshot rows and change events is harmless if target writes use idempotent key-based upserts keyed by source commit sequence."
+            ],
+            "referenceFix": "Capture the database LSN before starting the snapshot read, configure the CDC stream consumer to start reading log entries from that LSN, and employ idempotent merge semantics (e.g. `MERGE INTO` matching on primary key and LSN/timestamp) downstream.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "cdc-pipeline/out-of-order-updates",
+      "title": "Out-of-Order CDC Update Overwrites",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.ordering",
+      "scenario": {
+        "symptoms": "Data warehouse tables display stale entity values even though the source OLTP database committed newer updates.",
+        "interviewerSetup": "Kafka topics are partitioned randomly across consumer instances. Out-of-order execution across parallel workers causes older events to overwrite newer row states during high update traffic."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-source",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-postgres",
+              "label": "OLTP Database"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "topic",
+              "label": "CDC Event Stream"
+            }
+          },
+          {
+            "id": "node-workers",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "worker",
+              "label": "Parallel Warehouse Loaders"
+            }
+          },
+          {
+            "id": "node-target",
+            "type": "systemNode",
+            "position": {
+              "x": 700,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Data Warehouse Table"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-source",
+            "target": "node-kafka",
+            "label": "Capture Changes"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-kafka",
+            "target": "node-workers",
+            "label": "Round-Robin Consumer Fetch"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-workers",
+            "target": "node-target",
+            "label": "Unordered Merge / Update"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-kafka",
+          "node-workers"
+        ],
+        "edgeIds": [
+          "edge-2",
+          "edge-3"
+        ],
+        "headline": "Stale Row Overwriting Newer Row in Analytics Warehouse"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "goal": "Guarantee key-level event ordering and idempotent execution across parallel consumers.",
+            "opener": "Parallel consumers are executing updates out of sequence, resulting in stale data overwriting current records in the warehouse. How do you guarantee correct record state?",
+            "evidence": {
+              "strong": "Advocates partitioning CDC Kafka topics by table primary key so all changes for a row land in the exact same partition/worker. Combine this with carrying WAL source commit sequence/LSN on events and rejecting incoming updates whose LSN is lower than the target table's stored row LSN.",
+              "adequate": "Suggests partitioning by primary key but relies on wall-clock timestamps or single-threaded global consumption.",
+              "weak": "Suggests reducing parallel consumers to 1 worker globally without key partitioning or timestamp check."
+            },
+            "misconceptions": [
+              {
+                "id": "order.timestamp",
+                "pattern": "Believes wall-clock timestamps from event payloads reliably order rapid sequence modifications.",
+                "challenge": "If two database transactions modify the same row within the same millisecond on systems with slight clock skew, how do wall-clock timestamps resolve which transaction committed second?"
+              }
+            ],
+            "probes": [
+              "Why is source database LSN or commit sequence superior to system wall-clock timestamps for sequence ordering?",
+              "What happens if a partition consumer crashes, re-reads past events from Kafka, and re-processes them?"
+            ],
+            "hints": [
+              "Kafka guarantees message ordering only within a single topic partition.",
+              "To make re-processing safe, updates should conditionally apply only when the incoming record's LSN is greater than the target record's existing LSN."
+            ],
+            "referenceFix": "Partition event streams strictly by entity primary key. Include database source LSN/sequence number in event header metadata, and update target tables using conditional merges (`WHERE event.lsn > target.current_lsn`).",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "cdc-pipeline/schema-breaking-change",
+      "title": "Schema Evolution Pipeline Stall",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.schema",
+      "scenario": {
+        "symptoms": "The downstream CDC target ingestion job is throwing unhandled deserialization exceptions, backing up the pipeline queue.",
+        "interviewerSetup": "An upstream engineering team executed a DDL operation altering a column data type from string to integer without notifying data engineering. Consumers failed on payload parsing."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-source",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-postgres",
+              "label": "Source DB (DDL Modified)"
+            }
+          },
+          {
+            "id": "node-registry",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 50
+            },
+            "data": {
+              "kind": "data-quality",
+              "label": "Schema Registry"
+            }
+          },
+          {
+            "id": "node-connector",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "CDC Producer"
+            }
+          },
+          {
+            "id": "node-target",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Warehouse Ingestion"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-source",
+            "target": "node-connector",
+            "label": "Reads DDL & Changes"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-connector",
+            "target": "node-registry",
+            "label": "Validate / Register Schema"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-connector",
+            "target": "node-target",
+            "label": "Failing Ingestion Payload"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-registry",
+          "node-target"
+        ],
+        "edgeIds": [
+          "edge-2",
+          "edge-3"
+        ],
+        "headline": "Pipeline Ingestion Halted by Incompatible Schema Change"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "goal": "Handle breaking upstream schema changes without pipeline corruption or unhandled consumer crashes.",
+            "opener": "A type change in the source database crashed your downstream consumers and blocked processing for unrelated tables. How should the pipeline handle breaking schema changes?",
+            "evidence": {
+              "strong": "Recommends registering schemas using Avro/Protobuf with a Schema Registry enforcing compatibility rules. Backward-compatible changes (e.g. additive optional fields) stream automatically; breaking changes pause only the affected table's partition, route unparseable messages to a Dead Letter Queue (DLQ), and raise alerts for automated or manual schema migration.",
+              "adequate": "Proposes using JSON and wrapping consumer parsing code in try-catch blocks to drop invalid messages.",
+              "weak": "Recommends dropping target tables and running full pipeline re-bootstraps on every DDL failure."
+            },
+            "misconceptions": [
+              {
+                "id": "schema.auto_everything",
+                "pattern": "Assumes every DDL schema modification can be handled completely automatically downstream.",
+                "challenge": "If a column type changes from string containing UUIDs to integer IDs, how can downstream SQL queries automatically convert or interpret existing legacy string rows without explicit transformation logic?"
+              }
+            ],
+            "probes": [
+              "What schema evolution rules (FULL, BACKWARD, FORWARD) should be enforced in the Schema Registry for CDC event producers?",
+              "How do you isolate breaking schema changes on one source table so they do not block processing for other tables on the same cluster?"
+            ],
+            "hints": [
+              "Schema registries catch incompatible schema evolution before corrupt payloads reach consumers.",
+              "Dead Letter Queues and table-isolated processing prevent one broken stream from blocking the entire pipeline."
+            ],
+            "referenceFix": "Integrate a Schema Registry enforcing strict backward compatibility. Quarantine incompatible records into a Dead Letter Queue while raising schema drift alerts, ensuring unaffected tables continue streaming continuously.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "cdc-pipeline/phantom-deleted-records",
+      "title": "Phantom Records from Ignored Deletes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.deletes",
+      "scenario": {
+        "symptoms": "Hard-deleted records in the production database remain permanently visible in downstream analytical reports.",
+        "interviewerSetup": "The warehouse ingestion team implemented `INSERT` and `UPDATE` handling for CDC events but ignored database `DELETE` op-codes, treating incoming events as an append-only stream."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-source",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-postgres",
+              "label": "Production DB (Hard Delete)"
+            }
+          },
+          {
+            "id": "node-cdc",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "CDC Connector"
+            }
+          },
+          {
+            "id": "node-topic",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "topic",
+              "label": "CDC Topic (op='d')"
+            }
+          },
+          {
+            "id": "node-warehouse",
+            "type": "systemNode",
+            "position": {
+              "x": 700,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Target Warehouse (Append Only)"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-1",
+            "source": "node-source",
+            "target": "node-cdc",
+            "label": "WAL Delete Record"
+          },
+          {
+            "id": "edge-2",
+            "source": "node-cdc",
+            "target": "node-topic",
+            "label": "Publish Tombstone / Delete Event"
+          },
+          {
+            "id": "edge-3",
+            "source": "node-topic",
+            "target": "node-warehouse",
+            "label": "Ignored Delete Payload"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-warehouse"
+        ],
+        "edgeIds": [
+          "edge-3"
+        ],
+        "headline": "Hard-Deleted Source Rows Persisting in Active Analytics Views"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "goal": "Accurately reflect hard deletes in target serving layer while preserving historical audit logging.",
+            "opener": "Source database hard deletes are leaving orphan rows in target analytical tables. How do you properly model delete operations across warehouse tables and raw change logs?",
+            "evidence": {
+              "strong": "Explains capturing explicit delete events (`op = 'd'`) and tombstone keys. In current-state warehouse tables, execute SQL deletion or mark `is_deleted = true` with a `deleted_at` timestamp. Maintain raw append-only CDC log tables for auditability where delete records are preserved as immutable event rows.",
+              "adequate": "Proposes physically deleting the row in the warehouse upon receiving delete events, but does not address compliance/audit requirements or tombstone handling.",
+              "weak": "Suggests filtering deleted records out by running daily full table diff comparisons between source and target."
+            },
+            "misconceptions": [
+              {
+                "id": "del.ignore",
+                "pattern": "Believes database hard deletes can be ignored downstream because data warehouses only log incremental growth.",
+                "challenge": "If a user requests account deletion under GDPR, what happens if your analytical reporting tables ignore CDC delete events?"
+              }
+            ],
+            "probes": [
+              "What is the role of Kafka tombstones (null payload with entity key) when managing CDC topic storage compaction?",
+              "How does a soft-delete flag (`is_deleted`) in serving layers aid query performance compared to hard SQL physical row deletions?"
+            ],
+            "hints": [
+              "CDC connectors emit delete payload records containing primary keys and operation types (`op: d`).",
+              "Logical serving tables require either physical row removal during MERGE operations or soft-delete metadata flags."
+            ],
+            "referenceFix": "Update target merge SQL scripts to process `op = 'd'` events by applying soft deletes (`is_deleted = TRUE`, `deleted_at = event_time`) or physical row deletes in current-state views, while retaining the raw delete event in historical log storage.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

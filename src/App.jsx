@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
 import { identifyUser, PRIVATE_ZONE, track } from "./analytics.js";
@@ -20,6 +20,7 @@ import TermsPage from "./pages/Terms.jsx";
 import { CommunityArticlePage, LearnHubPage, LearnTopicPage } from "./pages/Learn.jsx";
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
+import NuggetsPage from "./pages/Nuggets.jsx";
 import OnboardingPage from "./pages/Onboarding.jsx";
 import PlusPage from "./pages/Plus.jsx";
 import ProfilePage from "./pages/Profile.jsx";
@@ -31,6 +32,32 @@ const LearnWritePage = lazy(() => import("./pages/LearnWrite.jsx"));
 const AdminPage = lazy(() => import("./pages/Admin.jsx"));
 const InvitePage = lazy(() => import("./pages/Invite.jsx"));
 const loadingScreen = <FullPageMessage title="Loading…"><LoaderCircle size={18} className="spin" /></FullPageMessage>;
+
+class RouteErrorBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error) {
+    console.error("[ui] route render failed:", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <FullPageMessage
+          title="Something went wrong loading this page"
+          action={<button type="button" className="button button-dark" onClick={() => navigate("/library")}>Back to library</button>}
+        >
+          {this.state.error.message || "Try refreshing. If it keeps happening, report a problem from the menu."}
+        </FullPageMessage>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // `authStatus` lets the prerenderer render public pages as a signed-out visitor.
 export default function App({ authStatus }) {
@@ -47,7 +74,7 @@ export default function App({ authStatus }) {
 
 // Pages that need an account. They hold the learner's own work and details.
 const isAccountPath = (path) => path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/workspace/") || path.startsWith("/start/")
-  || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/");
+  || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/") || path.startsWith("/start/nugget");
 
 // Account pages are kept out of analytics recordings (src/analytics.js). The wrapper is
 // always rendered, so moving between public and account pages doesn't remount the page.
@@ -87,6 +114,11 @@ function Routes() {
     navigate(`/start/${promptId}`);
   }, [auth.user]);
 
+  const lockRound = useCallback((promptId) => {
+    track("plus_round_locked", { prompt_id: promptId, via: "nugget" });
+    setLockedPromptId(promptId);
+  }, []);
+
   // A saved login survives a reload. Ask on a new browser session or network change;
   // reloads in the same session re-check Turnstile in the background.
   if (auth.status === "signed-in" && auth.humanCheckRequired && auth.humanVisible && !auth.humanLaunch && path !== "/signin") {
@@ -118,23 +150,35 @@ function Routes() {
     const prompt = recommendedFreeRound(auth.user);
     return prompt ? <Redirect to={`/start/${prompt.id}`} /> : <Redirect to="/library" />;
   }
-  if (path.startsWith("/start/")) return <StartRound promptId={path.slice("/start/".length)} />;
-  if (path.startsWith("/workspace/")) return <Suspense fallback={loadingScreen}><WorkspaceRoute sessionId={path.slice("/workspace/".length)} /></Suspense>;
+  if (path.startsWith("/start/")) {
+    if (path.startsWith("/start/nugget")) return <StartNugget query={params} />;
+    return <StartRound promptId={path.slice("/start/".length)} />;
+  }
+  if (path.startsWith("/workspace/")) {
+    return (
+      <RouteErrorBoundary>
+        <Suspense fallback={loadingScreen}>
+          <WorkspaceRoute sessionId={path.slice("/workspace/".length)} />
+        </Suspense>
+      </RouteErrorBoundary>
+    );
+  }
   if (path === "/workspace") return <Redirect to="/library" />;
 
   return (
     <div className="site-shell site">
       <SiteNav onStart={startPrompt} />
-      <Page path={path} onStart={startPrompt} />
+      <Page path={path} onStart={startPrompt} onLockRound={lockRound} />
       {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} alternative={freeAlternative(lockedPromptId)} onStart={startPrompt} onClose={() => setLockedPromptId(null)} />}
     </div>
   );
 }
 
 // Public pages (all prerendered) plus the profile.
-function Page({ path, onStart }) {
+function Page({ path, onStart, onLockRound }) {
   if (path === "/") return <LandingPage onStart={onStart} />;
   if (path === "/library") return <LibraryPage key="all" onStart={onStart} track="all" />;
+  if (path === "/nuggets") return <NuggetsPage onLockRound={onLockRound} />;
   if (path === "/profile") return <ProfilePage onStart={onStart} />;
   if (path === "/about") return <AboutPage />;
   if (path === "/plus") return <PlusPage />;
@@ -191,7 +235,27 @@ export function NotFound() {
 
 function Redirect({ to }) {
   useEffect(() => { navigate(safeNext(to), { replace: true }); }, [to]);
-  return null;
+  return loadingScreen;
+}
+
+function StartNugget({ query }) {
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    const body = query.get("id")
+      ? { nuggetId: query.get("id") }
+      : query.get("parent")
+        ? { parentPromptId: query.get("parent"), pick: "random_nugget" }
+        : { pick: "random_nugget" };
+    api.startNuggetSession(body)
+      .then(({ session }) => { if (!cancelled) navigate(`/workspace/${session.id}`, { replace: true }); })
+      .catch((startError) => { if (!cancelled) setError(startError); });
+    return () => { cancelled = true; };
+  }, [query]);
+  if (error) {
+    return <FullPageMessage title="Couldn't start the drill" action={<button className="button button-dark" onClick={() => navigate("/nuggets")}>Back to nuggets</button>}>{error.message}</FullPageMessage>;
+  }
+  return <FullPageMessage title="Preparing your drill…"><LoaderCircle size={18} className="spin" /></FullPageMessage>;
 }
 
 // Creates or resumes the learner's round on the server, then opens the workspace.

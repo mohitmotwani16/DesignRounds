@@ -1,0 +1,692 @@
+{
+  "promptId": "file-storage",
+  "packVersion": "pack-1e24feb1",
+  "inputsFingerprint": "7be15f2f554438296975467533302bdde17ea639df6945ddf7d6290013d0f70c",
+  "nuggets": [
+    {
+      "id": "file-storage/deep-upload_chunking",
+      "title": "9GB Upload Restart Forces Full Retry From Zero",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.upload_chunking",
+      "scenario": {
+        "symptoms": "Users report failed 10GB video uploads after brief Wi-Fi drops; mobile clients restart entire uploads from byte zero.",
+        "interviewerSetup": "Upload API accepts only single-shot multipart posts with no resumable session tokens or committed part manifests."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile Client"
+            }
+          },
+          {
+            "id": "node-api",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Upload API"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Object Storage"
+            }
+          },
+          {
+            "id": "node-meta",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "database",
+              "label": "Upload Metadata DB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-api",
+            "label": "Single POST"
+          },
+          {
+            "id": "e2",
+            "source": "node-api",
+            "target": "node-store",
+            "label": "Stream body"
+          },
+          {
+            "id": "e3",
+            "source": "node-api",
+            "target": "node-meta",
+            "label": "Track status"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-api",
+          "node-client"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Non-resumable upload API wastes bandwidth after transient network loss"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_upload_chunking",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a mechanism to reliably upload multi-gigabyte files that can resume after drops.",
+            "opener": "If a user is uploading a 10 GB file and their network drops at 9 GB, how does your system handle it?",
+            "evidence": {
+              "strong": "Splits files into blocks (e.g., 4MB), uploads in parallel, retries only failed blocks, and commits via a manifest.",
+              "adequate": "Mentions chunking or multipart upload for resuming.",
+              "weak": "Attempts to stream the whole file over one TCP connection with no resume capability."
+            },
+            "misconceptions": [
+              {
+                "id": "retry_whole_file",
+                "pattern": "If an upload fails, we just retry the whole file from the beginning.",
+                "challenge": "What happens if a user on a flaky connection tries to upload a 5 GB file?"
+              }
+            ],
+            "probes": [
+              "How does the server know when all the parts have arrived?",
+              "What size would you make the chunks and why?"
+            ],
+            "hints": [
+              "Is there a way to split the file before it leaves the client?",
+              "Look into how S3 handles multipart uploads."
+            ],
+            "referenceFix": "Used chunked, multipart uploads to allow resuming failed transfers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "file-storage/deep-direct_upload",
+      "title": "App Servers OOM During Viral File Drop",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.direct_upload",
+      "scenario": {
+        "symptoms": "API fleet memory saturates during a campus-wide file share event; upload throughput collapses despite auto-scaled pods.",
+        "interviewerSetup": "All file bytes proxy through application servers before reaching object storage."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-api",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App Servers"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Blob Storage"
+            }
+          },
+          {
+            "id": "node-sign",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Presign Service"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-api",
+            "label": "Upload bytes"
+          },
+          {
+            "id": "e2",
+            "source": "node-api",
+            "target": "node-store",
+            "label": "Forward stream"
+          },
+          {
+            "id": "e3",
+            "source": "node-client",
+            "target": "node-sign",
+            "label": "Unused presign"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-api"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Proxy uploads through app tier exhaust memory under large file fan-in"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_direct_upload",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Offload large file data transfers from application servers to storage directly.",
+            "opener": "How do you prevent your application servers from becoming a bottleneck during massive file uploads?",
+            "evidence": {
+              "strong": "Issues pre-signed URLs from the metadata service, allowing the client to PUT directly to object storage.",
+              "adequate": "Mentions uploading to object storage directly but vague on the security mechanism.",
+              "weak": "Routes multi-GB uploads through standard application servers, exhausting memory."
+            },
+            "misconceptions": [
+              {
+                "id": "app_server_passthrough",
+                "pattern": "The frontend sends the file to the backend, which streams it to storage.",
+                "challenge": "How much network bandwidth will your backend instances need if 1,000 users upload 1 GB files simultaneously?"
+              }
+            ],
+            "probes": [
+              "How do we ensure the user is authorized to write to that specific storage bucket location?",
+              "How does the metadata service know the direct upload succeeded?"
+            ],
+            "hints": [
+              "Can the client talk directly to the storage layer?",
+              "Most cloud providers offer temporary credentials or URLs for direct secure access."
+            ],
+            "referenceFix": "Used pre-signed URLs for direct client-to-storage uploads."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "file-storage/deep-sync_notifications",
+      "title": "Edits on Laptop Invisible on Phone for 20 Minutes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.sync_notifications",
+      "scenario": {
+        "symptoms": "Cross-device sync delays spike; users see stale folder listings on secondary devices after edits on primary.",
+        "interviewerSetup": "Change notifications rely on clients polling every 15 minutes instead of push/webhook fanout."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-a",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Device A"
+            }
+          },
+          {
+            "id": "node-b",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Device B"
+            }
+          },
+          {
+            "id": "node-api",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Metadata API"
+            }
+          },
+          {
+            "id": "node-bus",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "event-bus",
+              "label": "Change Events"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-a",
+            "target": "node-api",
+            "label": "Write metadata"
+          },
+          {
+            "id": "e2",
+            "source": "node-api",
+            "target": "node-bus",
+            "label": "Publish change"
+          },
+          {
+            "id": "e3",
+            "source": "node-b",
+            "target": "node-api",
+            "label": "Poll listing"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-b",
+          "node-bus"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Polling-based sync misses real-time change propagation to peer devices"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_sync_notifications",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure devices quickly learn about changes made by other devices or users.",
+            "opener": "When a file is updated on one device, how do a user's other devices find out about the change?",
+            "evidence": {
+              "strong": "Uses WebSockets or long polling connected to a pub/sub system to push invalidations or change events.",
+              "adequate": "Mentions polling or push notifications to trigger a sync.",
+              "weak": "Relies on naive polling every minute, burning client battery and server CPU."
+            },
+            "misconceptions": [
+              {
+                "id": "fetch_all_metadata",
+                "pattern": "The client fetches the whole file list from the server every time a sync happens.",
+                "challenge": "If a user has 100,000 files and only one changed, how do we avoid transferring the whole list?"
+              }
+            ],
+            "probes": [
+              "How do we scale the connections if we have 10 million online devices?",
+              "What message queue or broker helps route the events to the right server?"
+            ],
+            "hints": [
+              "If a client wants to be notified immediately, what connection type should it use?",
+              "How does the server know which device is subscribed to which user's folders?"
+            ],
+            "referenceFix": "Designed a real-time notification service to trigger client syncs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "file-storage/deep-conflicts",
+      "title": "Offline Edit Merge Produces Duplicate Conflicting Copies",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.conflicts",
+      "scenario": {
+        "symptoms": "Support tickets spike for duplicate files named doc (conflict 1) after users edited the same note offline on two devices.",
+        "interviewerSetup": "Sync merges by last-write-wins using server arrival time without operational transform or user resolution."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-laptop",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "client",
+              "label": "Laptop (offline)"
+            }
+          },
+          {
+            "id": "node-phone",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Phone (offline)"
+            }
+          },
+          {
+            "id": "node-sync",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Sync Service"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "File Blobs"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-laptop",
+            "target": "node-sync",
+            "label": "Push edit"
+          },
+          {
+            "id": "e2",
+            "source": "node-phone",
+            "target": "node-sync",
+            "label": "Push edit"
+          },
+          {
+            "id": "e3",
+            "source": "node-sync",
+            "target": "node-store",
+            "label": "Store both"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-sync"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Naive LWW merge silently forks concurrent offline edits"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_conflicts",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Resolve cases where a file is edited concurrently on different offline devices.",
+            "opener": "What happens if a user edits the same file on their laptop and phone while both are offline, and then both reconnect?",
+            "evidence": {
+              "strong": "Uses version vectors or a server-side version counter to detect forks, creating a 'conflicted copy' for the user to resolve.",
+              "adequate": "Recognizes the conflict and explicitly defaults to last-writer-wins with history.",
+              "weak": "Overwrites data silently based on client wall-clock time."
+            },
+            "misconceptions": [
+              {
+                "id": "client_timestamp_wins",
+                "pattern": "We can use the client's timestamp to decide which edit is newer and discard the older one.",
+                "challenge": "What if the user actually wanted both sets of changes, or the client's clock is out of sync?"
+              }
+            ],
+            "probes": [
+              "How does the server definitively know the file was edited concurrently and not sequentially?",
+              "How do you communicate the conflict back to the user?"
+            ],
+            "hints": [
+              "What does Dropbox do when you and a friend edit the same document?",
+              "Can the server track which version the client started editing from?"
+            ],
+            "referenceFix": "Handled conflicts gracefully by creating conflicted copies."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "file-storage/deep-deduplication",
+      "title": "Identical Viral Video Stored 50,000 Times",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.deduplication",
+      "scenario": {
+        "symptoms": "Storage costs jump 40% after a meme circulates; each user upload creates a unique object key with full byte copy.",
+        "interviewerSetup": "Deduplication is disabled; content addressing and chunk hashing are not used on ingest."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Uploaders"
+            }
+          },
+          {
+            "id": "node-api",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Upload API"
+            }
+          },
+          {
+            "id": "node-store",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Object Storage"
+            }
+          },
+          {
+            "id": "node-index",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Content Hash Index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-api",
+            "label": "Upload file"
+          },
+          {
+            "id": "e2",
+            "source": "node-api",
+            "target": "node-store",
+            "label": "Put object"
+          },
+          {
+            "id": "e3",
+            "source": "node-api",
+            "target": "node-index",
+            "label": "Skip dedupe"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-store",
+          "node-index"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing content-hash dedupe multiplies storage for identical uploads"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_deduplication",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Save storage costs by not storing identical file content twice.",
+            "opener": "If ten thousand users all upload the exact same popular video, how could we optimize our storage costs?",
+            "evidence": {
+              "strong": "Computes a hash of chunks on the client, checking if the block exists on the server before uploading.",
+              "adequate": "Hashes whole files to prevent storing duplicates.",
+              "weak": "Suggests scanning file names to find duplicates."
+            },
+            "misconceptions": [
+              {
+                "id": "filename_dedupe",
+                "pattern": "Deduplicating files based on their filename and size.",
+                "challenge": "What if two different users have completely different files that happen to both be named 'video.mp4'?"
+              }
+            ],
+            "probes": [
+              "How do we ensure privacy and security if one user can access a block uploaded by another?",
+              "When is the hash computed: on the client or the server?"
+            ],
+            "hints": [
+              "If we identify files by their content rather than their name, how would we do it?",
+              "Could the client ask the server 'do you already have this chunk' before sending it?"
+            ],
+            "referenceFix": "Applied chunk-level deduplication via content hashing to save storage."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

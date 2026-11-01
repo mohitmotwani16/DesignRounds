@@ -1,0 +1,213 @@
+{
+  "promptId": "ticket-booking",
+  "packVersion": "pack-3803319e",
+  "inputsFingerprint": "e447f0a1a520fd1daf62b9bfc61242f3ad9555852ff5eadee0b0efa55171b8ef",
+  "nuggets": [
+    {
+      "id": "ticket-booking/double_book_same_seat",
+      "title": "Flash Sale Double-Books the Same Seat",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.concurrency",
+      "scenario": {
+        "symptoms": "Concert on-sale generates 200 support tickets for duplicate seat assignments. Two confirmation emails reference seat A-12 for different orders.",
+        "interviewerSetup": "Seat hold uses read-modify-write in application code without transactional locking or unique constraint on (event_id, seat_id) for confirmed state."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-users", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Concurrent Buyers" } },
+          { "id": "node-api", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "app-server", "label": "Booking API" } },
+          { "id": "node-db", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "database", "label": "Seat Inventory DB" } }
+        ],
+        "edges": [
+          { "id": "e-users-api", "source": "node-users", "target": "node-api", "label": "Purchase same seat" },
+          { "id": "e-api-db", "source": "node-api", "target": "node-db", "label": "R-M-W race" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-api", "node-db"],
+        "edgeIds": ["e-api-db"],
+        "headline": "Non-atomic seat reservation allows two confirmations for one physical seat"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_seat_concurrency",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Reserve seats with atomic conditional updates or serializable transactions and unique sold constraints.",
+          "opener": "Two customers got the same seat during on-sale. How do you prevent double booking under concurrent load?",
+          "evidence": {
+            "strong": "UPDATE ... WHERE status=available with row count check, unique partial index on sold seats, serializable isolation or per-event locking shard, idempotent order id.",
+            "adequate": "Application mutex in one API instance only.",
+            "weak": "Check availability then insert in two steps without lock."
+          },
+          "misconceptions": [{ "id": "conc.cache", "pattern": "Relies on cache of available seats without DB authority.", "challenge": "Who wins if two servers read 'available' simultaneously?" }],
+          "probes": ["Where is the source of truth for seat state?", "How do you test race conditions?"],
+          "hints": ["Database conditional update is atomic.", "Unique constraint catches bugs."],
+          "referenceFix": "Atomic update seat row, unique constraint on confirmed seats, shard lock per hot event."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ticket-booking/hold_ttl_ghost_inventory",
+      "title": "Abandoned Holds Lock Inventory for Hours",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.holds",
+      "scenario": {
+        "symptoms": "Show appears sold out while UI shows 400 seats in 'held' state. Revenue lost because holds from abandoned carts never expire.",
+        "interviewerSetup": "Hold TTL job crashed three days ago; holds persist until manual cleanup. No heartbeat extends only active checkout sessions."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-checkout", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "Checkout Sessions" } },
+          { "id": "node-holds", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "database", "label": "Seat Holds" } },
+          { "id": "node-sweeper", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "cron", "label": "TTL Sweeper (down)" } },
+          { "id": "node-sale", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "app-server", "label": "Public Sale API" } }
+        ],
+        "edges": [
+          { "id": "e-checkout-holds", "source": "node-checkout", "target": "node-holds", "label": "Create hold" },
+          { "id": "e-sweeper-holds", "source": "node-sweeper", "target": "node-holds", "label": "Not expiring" },
+          { "id": "e-holds-sale", "source": "node-holds", "target": "node-sale", "label": "Seats unavailable" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-sweeper", "node-holds"],
+        "edgeIds": ["e-sweeper-holds"],
+        "headline": "Failed hold expiration leaves inventory locked in abandoned checkout states"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_hold_ttl",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Time-bound holds with reliable TTL sweeper, session heartbeat, and lazy expiry on read.",
+          "opener": "The show looked sold out but hundreds of seats were stuck in holds from abandoned carts. How do temporary holds work?",
+          "evidence": {
+            "strong": "Hold expires_at indexed, redundant sweeper + lazy check on purchase, heartbeat extends active checkout only, metrics on hold age, max hold duration.",
+            "adequate": "10 minute TTL without sweeper redundancy.",
+            "weak": "Holds until payment completes with no timeout."
+          },
+          "misconceptions": [{ "id": "hold.forever", "pattern": "Treats hold as soft reservation with no hard expiry.", "challenge": "What if user closes laptop mid-checkout?" }],
+          "probes": ["How long should holds last?", "What happens if sweeper fails?"],
+          "hints": ["Lazy expiry on next sale attempt.", "Monitor hold queue depth."],
+          "referenceFix": "TTL with dual expiry paths, alert on sweeper lag, cap holds per session."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ticket-booking/read_replica_stale_map",
+      "title": "Stale Read Replica Shows Seats as Available",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.read_scale",
+      "scenario": {
+        "symptoms": "Seat map API shows green available seats that fail at payment with 'already sold'. Replica lag averages 8 seconds during on-sale.",
+        "interviewerSetup": "Interactive seat map reads from async replica; writes go to primary. Users browse on stale view then hit primary on commit."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-map", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "Seat Map UI" } },
+          { "id": "node-api", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "app-server", "label": "Map API" } },
+          { "id": "node-replica", "type": "systemNode", "position": { "x": 460, "y": 80 }, "data": { "kind": "database", "label": "Read Replica (lag)" } },
+          { "id": "node-primary", "type": "systemNode", "position": { "x": 460, "y": 220 }, "data": { "kind": "database", "label": "Primary DB" } }
+        ],
+        "edges": [
+          { "id": "e-map-api", "source": "node-map", "target": "node-api", "label": "Browse seats" },
+          { "id": "e-api-replica", "source": "node-api", "target": "node-replica", "label": "SELECT availability" },
+          { "id": "e-api-primary", "source": "node-api", "target": "node-primary", "label": "Purchase fails" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-replica", "node-api"],
+        "edgeIds": ["e-api-replica"],
+        "headline": "Serving seat availability from lagging replicas misleads users during high write load"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_read_scale",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Scale reads without stale inventory using primary for hot paths, caching with invalidation, or CRDT-style version checks.",
+          "opener": "Users see seats available on the map but checkout says sold. How do you scale seat map reads during on-sale?",
+          "evidence": {
+            "strong": "Primary or strongly consistent read for availability, cache with pub/sub invalidation on sell, version token on map vs purchase, separate read scale for static venue layout only.",
+            "adequate": "Replica with 1s lag acceptable disclaimer.",
+            "weak": "Replica reads during flash sale."
+          },
+          "misconceptions": [{ "id": "read.always", "pattern": "Assumes read replicas are always fresh enough.", "challenge": "What lag is acceptable when seats sell per second?" }],
+          "probes": ["Which reads can be eventually consistent?", "How do you invalidate seat map cache on sell?"],
+          "hints": ["Hot inventory path needs authoritative reads.", "Static geometry can scale separately."],
+          "referenceFix": "Consistent availability reads on primary or cache with instant invalidation; replicas for historical analytics only."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ticket-booking/payment_success_order_lost",
+      "title": "Payment Captured but Booking Record Missing",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.payment_reliability",
+      "scenario": {
+        "symptoms": "Payment provider shows 1,200 successful captures without matching confirmed orders in booking DB after DB failover during on-sale.",
+        "interviewerSetup": "Checkout commits payment then writes order in separate step without outbox or reconciliation job; crash between steps loses linkage."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-api", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "app-server", "label": "Checkout API" } },
+          { "id": "node-pay", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "payment", "label": "Payment Gateway" } },
+          { "id": "node-db", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "database", "label": "Orders DB" } },
+          { "id": "node-recon", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "cron", "label": "Reconciliation (missing)" } }
+        ],
+        "edges": [
+          { "id": "e-api-pay", "source": "node-api", "target": "node-pay", "label": "Capture funds" },
+          { "id": "e-api-db", "source": "node-api", "target": "node-db", "label": "Crash before insert" },
+          { "id": "e-recon-gap", "source": "node-recon", "target": "node-pay", "label": "Not running" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-api", "node-recon"],
+        "edgeIds": ["e-api-db"],
+        "headline": "Non-atomic payment and booking flow leaves captured charges without confirmed tickets"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_payment_booking",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Make booking idempotent with transactional outbox, saga, and payment reconciliation jobs.",
+          "opener": "Customers were charged but have no tickets after the outage. How do payment and seat confirmation stay consistent?",
+          "evidence": {
+            "strong": "Idempotent checkout id, reserve seat then pay then confirm in saga with compensating refund, outbox for async confirm, nightly payment-order reconciliation.",
+            "adequate": "Retry order insert without idempotency.",
+            "weak": "Charge first hope DB write succeeds."
+          },
+          "misconceptions": [{ "id": "pay.first", "pattern": "Captures payment before seat is durably reserved.", "challenge": "If DB fails after charge, what does customer have?" }],
+          "probes": ["What is the idempotency key for checkout?", "How do you detect orphan captures?"],
+          "hints": ["Reconciliation finds money without order.", "Outbox ties payment webhook to order."],
+          "referenceFix": "Saga: hold seat, authorize, confirm order, capture; reconciliation refunds orphan charges."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

@@ -1,0 +1,263 @@
+{
+  "promptId": "task-scheduler",
+  "packVersion": "pack-e8306c95",
+  "inputsFingerprint": "ad691185441355e4e7d2c74c25411b240e78e984b5b1bf3e60be5b9cd8b0cb5e",
+  "nuggets": [
+    {
+      "id": "task-scheduler/postgres_poll_overload",
+      "title": "Polling the Job Store Saturates Database CPU",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.store",
+      "scenario": {
+        "symptoms": "Scheduler DB CPU pegs at 95% during peak. Job dispatch latency rises from 200ms to 8s. EXPLAIN shows millions of SELECT ... FOR UPDATE SKIP LOCKED scans per minute.",
+        "interviewerSetup": "500 worker processes poll the jobs table every 100ms with no indexing on (status, run_at). Table holds 50M historical completed rows."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-workers", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "worker", "label": "Scheduler Workers" } },
+          { "id": "node-db", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "database", "label": "Postgres Job Table" } },
+          { "id": "node-archive", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "warehouse", "label": "Completed Jobs (in hot table)" } }
+        ],
+        "edges": [
+          { "id": "e-workers-db", "source": "node-workers", "target": "node-db", "label": "Poll every 100ms" },
+          { "id": "e-db-archive", "source": "node-db", "target": "node-archive", "label": "50M completed rows scanned" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-db", "node-workers"],
+        "edgeIds": ["e-workers-db"],
+        "headline": "Hot job store design causes database meltdown under high-frequency worker polling"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_job_store",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Store schedulable jobs in an indexed hot table with archival, or use a queue/log built for dispatch workloads.",
+          "opener": "Our Postgres job table melted during peak. How should scheduled tasks be persisted and queried?",
+          "evidence": {
+            "strong": "Partial index on pending jobs, partition or archive completed work, lease-based claim, consider Kafka/SQS for dispatch with DB for metadata, backoff polling.",
+            "adequate": "Adds index but keeps all history in one table.",
+            "weak": "Full table scan each poll."
+          },
+          "misconceptions": [{ "id": "store.sql", "pattern": "Assumes any relational table works for high-QPS dispatch.", "challenge": "How many polls/sec hit the DB with 500 workers?" }],
+          "probes": ["What rows must be in the hot path?", "When do you move jobs to cold storage?"],
+          "hints": ["Index only pending runnable jobs.", "Archive completed jobs quickly."],
+          "referenceFix": "Hot pending table with index on (status, run_at), archive pipeline, adaptive poll interval."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "task-scheduler/lease_clock_skew_double_run",
+      "title": "Clock Skew Causes the Same Job to Run Twice",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.leases",
+      "scenario": {
+        "symptoms": "Billing export job emails customers duplicate PDFs. Two workers claim the same job_id within 500ms during NTP drift on one host.",
+        "interviewerSetup": "Leases expire based on worker wall clock without fencing tokens. Slow worker resumes after lease appears expired to another worker."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-w1", "type": "systemNode", "position": { "x": 80, "y": 120 }, "data": { "kind": "worker", "label": "Worker A (clock slow)" } },
+          { "id": "node-w2", "type": "systemNode", "position": { "x": 80, "y": 220 }, "data": { "kind": "worker", "label": "Worker B" } },
+          { "id": "node-store", "type": "systemNode", "position": { "x": 300, "y": 170 }, "data": { "kind": "database", "label": "Job Leases" } },
+          { "id": "node-job", "type": "systemNode", "position": { "x": 500, "y": 170 }, "data": { "kind": "service", "label": "Billing Export" } }
+        ],
+        "edges": [
+          { "id": "e-w1-store", "source": "node-w1", "target": "node-store", "label": "Renew lease (late)" },
+          { "id": "e-w2-store", "source": "node-w2", "target": "node-store", "label": "Steal lease" },
+          { "id": "e-both-job", "source": "node-w1", "target": "node-job", "label": "Both execute" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-store", "node-w1"],
+        "edgeIds": ["e-w2-store"],
+        "headline": "Weak lease semantics allow duplicate execution after clock skew and slow workers"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_leases",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Use store-monotonic leases with fencing tokens and idempotent job handlers.",
+          "opener": "Two workers ran the same billing export and customers got duplicate emails. How do leases prevent double execution?",
+          "evidence": {
+            "strong": "Lease expiry based on store time, monotonic lease generation/fencing token passed to downstream, heartbeats, job handler idempotency keys.",
+            "adequate": "Longer lease TTL without fencing.",
+            "weak": "Optimistic lock without handling slow workers."
+          },
+          "misconceptions": [{ "id": "lease.ttl", "pattern": "Believes longer TTL alone prevents overlap.", "challenge": "What if worker A pauses for GC longer than TTL?" }],
+          "probes": ["Who is the source of truth for time?", "How does downstream reject stale workers?"],
+          "hints": ["Fencing token increments on each claim.", "Jobs should be safe to retry."],
+          "referenceFix": "Central lease service with fencing tokens, idempotent side effects, heartbeats."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "task-scheduler/single_scheduler_bottleneck",
+      "title": "Single Leader Scheduler Drops Minute Cron Tasks",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.scheduler",
+      "scenario": {
+        "symptoms": "During leader failover, 18% of minute-level cron tasks never enqueue. Metrics show a 90-second gap in schedule ticks.",
+        "interviewerSetup": "One active scheduler leader fires all cron expressions; standby takes 90s to acquire lock after leader pod OOM."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-leader", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "service", "label": "Scheduler Leader" } },
+          { "id": "node-standby", "type": "systemNode", "position": { "x": 80, "y": 280 }, "data": { "kind": "service", "label": "Standby (slow failover)" } },
+          { "id": "node-lock", "type": "systemNode", "position": { "x": 280, "y": 210 }, "data": { "kind": "distributed-lock", "label": "Leader Lock" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 480, "y": 210 }, "data": { "kind": "t-kafka", "label": "Job Queue" } }
+        ],
+        "edges": [
+          { "id": "e-leader-lock", "source": "node-leader", "target": "node-lock", "label": "Hold lock" },
+          { "id": "e-leader-queue", "source": "node-leader", "target": "node-queue", "label": "Enqueue cron" },
+          { "id": "e-standby-lock", "source": "node-standby", "target": "node-lock", "label": "Failover delay" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-leader", "node-standby"],
+        "edgeIds": ["e-standby-lock"],
+        "headline": "Single-leader cron tick loop misses schedules during slow failover"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_scheduler_ha",
+          "stage": "incident",
+          "dimension": "architecture",
+          "weight": 3,
+          "required": true,
+          "goal": "Run highly available scheduling with fast leader election and catch-up of missed fire times.",
+          "opener": "We missed a minute of cron fires when the scheduler leader died. How should the scheduler component scale and fail over?",
+          "evidence": {
+            "strong": "Fast leader election, missed tick reconciliation on new leader, optional sharded schedulers by job namespace, persistent next_run_at per job.",
+            "adequate": "Hot standby with manual failover runbook.",
+            "weak": "Single scheduler process."
+          },
+          "misconceptions": [{ "id": "sched.workers", "pattern": "Confuses scaling workers with scaling the cron tick generator.", "challenge": "Who enqueues jobs at exactly 09:00 UTC?" }],
+          "probes": ["How are missed intervals recovered?", "Can cron be sharded by tenant?"],
+          "hints": ["Leader only ticks clocks; workers execute.", "Reconcile after outage."],
+          "referenceFix": "HA leader with sub-10s failover, backfill missed schedules idempotently."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "task-scheduler/recurring_dst_duplicate",
+      "title": "DST Transition Fires Hourly Job Twice or Skips Once",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.recurring",
+      "scenario": {
+        "symptoms": "Finance reconciliation ran twice on fall-back night and skipped entirely on spring-forward in US/Eastern cron jobs.",
+        "interviewerSetup": "Cron expressions interpreted in local timezone without storing UTC next_run or using robust recurrence library."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-sched", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "cron", "label": "Cron Evaluator (local TZ)" } },
+          { "id": "node-jobs", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "database", "label": "Recurring Job defs" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "queue", "label": "Dispatch Queue" } }
+        ],
+        "edges": [
+          { "id": "e-sched-jobs", "source": "node-sched", "target": "node-jobs", "label": "0 2 * * * America/New_York" },
+          { "id": "e-sched-queue", "source": "node-sched", "target": "node-queue", "label": "Double/skip enqueue" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-sched", "node-jobs"],
+        "edgeIds": ["e-sched-queue"],
+        "headline": "Naive timezone cron handling duplicates or skips recurring jobs on DST boundaries"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_recurring_tz",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Store next run in UTC with timezone-aware recurrence rules and explicit DST policy.",
+          "opener": "Our nightly job ran twice when clocks rolled back. How do you define and fire recurring schedules across timezones?",
+          "evidence": {
+            "strong": "Persist next_run_at UTC, use tz database rules, document skip vs run-once policy for ambiguous hours, iCal RRULE or mature library.",
+            "adequate": "UTC only cron without customer timezones.",
+            "weak": "Server local time cron."
+          },
+          "misconceptions": [{ "id": "rec.utc", "pattern": "Stores cron string without timezone context.", "challenge": "What is 2am America/New_York on DST fall-back day?" }],
+          "probes": ["Should a missed hour be skipped or run when time jumps?", "How do you test DST edges?"],
+          "hints": ["Use timezone-aware libraries.", "Persist computed next fire time."],
+          "referenceFix": "UTC next_run with tz-aware computation, explicit DST policies in job metadata."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "task-scheduler/tenant_hotkey_queue",
+      "title": "One Tenant's Job Flood Starves Everyone Else",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.hotkeys",
+      "scenario": {
+        "symptoms": "Platform-wide job latency SLO breaches while one enterprise tenant enqueues 2M backup jobs in an hour. Other tenants wait hours in FIFO queue.",
+        "interviewerSetup": "Single shared queue with global FIFO ordering and fixed worker pool without fair scheduling or per-tenant caps."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-tenant", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Enterprise Tenant" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "queue", "label": "Global FIFO Queue" } },
+          { "id": "node-workers", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "worker", "label": "Shared Workers" } },
+          { "id": "node-others", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "user", "label": "Other Tenants (starved)" } }
+        ],
+        "edges": [
+          { "id": "e-tenant-queue", "source": "node-tenant", "target": "node-queue", "label": "2M jobs" },
+          { "id": "e-queue-workers", "source": "node-queue", "target": "node-workers", "label": "Drain tenant first" },
+          { "id": "e-others-queue", "source": "node-others", "target": "node-queue", "label": "Blocked behind flood" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-queue", "node-tenant"],
+        "edgeIds": ["e-tenant-queue"],
+        "headline": "Global FIFO scheduling lets one tenant's hotkey workload monopolize all workers"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_fair_scheduling",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Isolate tenants with fair queuing, rate limits, and weighted scheduling across pools.",
+          "opener": "One customer enqueue storm blocked every other tenant's jobs. How do you prevent hotkey tenants from starving the platform?",
+          "evidence": {
+            "strong": "Per-tenant queues or weighted fair queuing, enqueue rate limits, dedicated pools for large tenants, priority tiers with caps.",
+            "adequate": "Priority field without enforcement.",
+            "weak": "Single global FIFO only."
+          },
+          "misconceptions": [{ "id": "hot.scale", "pattern": "Adds workers assuming they help all tenants equally.", "challenge": "If FIFO has 2M jobs from tenant A first, who runs tenant B's job?" }],
+          "probes": ["How do you cap enqueue rate?", "When does a tenant get a dedicated queue?"],
+          "hints": ["Fairness across tenants, not just throughput.", "Rate limit at API layer too."],
+          "referenceFix": "Per-tenant queues with WFQ, enqueue quotas, burst isolation."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

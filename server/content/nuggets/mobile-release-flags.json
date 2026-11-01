@@ -1,0 +1,686 @@
+{
+  "promptId": "mobile-release-flags",
+  "packVersion": "pack-bdc704ce",
+  "inputsFingerprint": "4fa6ce206802465b9bd2190d60c759fd97c02c9a2b32afe925b2ab94e10b7660",
+  "nuggets": [
+    {
+      "id": "mobile-release-flags/deep-eval_location",
+      "title": "Server Flag Evaluation Adds 800ms to Cold Start",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.eval_location",
+      "scenario": {
+        "symptoms": "App launch regression after moving all flag evaluation to blocking server round-trip on startup.",
+        "interviewerSetup": "Mobile client awaits flags API before rendering home screen; no local cache or bootstrap defaults."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile App"
+            }
+          },
+          {
+            "id": "node-flags",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Flags API"
+            }
+          },
+          {
+            "id": "node-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Local Flag Cache"
+            }
+          },
+          {
+            "id": "node-config",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "config",
+              "label": "Flag Config"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-flags",
+            "label": "Blocking fetch"
+          },
+          {
+            "id": "e2",
+            "source": "node-flags",
+            "target": "node-config",
+            "label": "Evaluate rules"
+          },
+          {
+            "id": "e3",
+            "source": "node-app",
+            "target": "node-cache",
+            "label": "Empty on cold start"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-app",
+          "node-flags"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Server-only flag evaluation blocks app render on slow networks"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_eval_location",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Evaluate the trade-offs between evaluating flag rules on the server versus on the device.",
+            "opener": "Where should the decision of whether a user gets a feature happen: calculated on the backend, or evaluated within the app?",
+            "evidence": {
+              "strong": "Compares payload size, offline capabilities, and security. Chooses client-side for speed/offline, or server-side if rules are complex/secret.",
+              "adequate": "Picks one approach and justifies it, but misses the trade-offs of the alternative.",
+              "weak": "Fails to distinguish between fetching rules and fetching resolved booleans."
+            },
+            "misconceptions": [
+              {
+                "id": "server_eval_offline",
+                "pattern": "Designing server-side evaluation but claiming it works perfectly offline.",
+                "challenge": "If the backend calculates the boolean for the user, how do their flags update if they cross into a new target segment while offline?"
+              }
+            ],
+            "probes": [
+              "If we evaluate on the device, what exactly does the server send in its response?",
+              "Are there any targeting rules we wouldn't want to send to the client?"
+            ],
+            "hints": [
+              "If the server evaluates, it sends `feature_x: true`. If the client evaluates, what does the server send instead?",
+              "Consider what happens if a user's location changes while they have no network connection."
+            ],
+            "referenceFix": "Discussed the trade-offs of client-side vs server-side flag evaluation."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "mobile-release-flags/deep-offline_defaults",
+      "title": "First Launch in Airplane Mode Uses Wrong Defaults",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.offline_defaults",
+      "scenario": {
+        "symptoms": "New installs on flights see experimental checkout enabled; no bundled default flag snapshot.",
+        "interviewerSetup": "Client has no embedded safe defaults when flag service unreachable on first open."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile App"
+            }
+          },
+          {
+            "id": "node-flags",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Flag Service"
+            }
+          },
+          {
+            "id": "node-bundle",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "config",
+              "label": "Bundled Defaults"
+            }
+          },
+          {
+            "id": "node-user",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "user",
+              "label": "New User"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-user",
+            "target": "node-app",
+            "label": "First open offline"
+          },
+          {
+            "id": "e2",
+            "source": "node-app",
+            "target": "node-flags",
+            "label": "Timeout"
+          },
+          {
+            "id": "e3",
+            "source": "node-bundle",
+            "target": "node-app",
+            "label": "Not loaded"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-app",
+          "node-bundle"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Missing offline defaults enable risky features on first launch"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_offline_defaults",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a fallback mechanism for when the flag service is unreachable, especially on first launch.",
+            "opener": "What happens if a user installs the app and opens it for the very first time while in airplane mode?",
+            "evidence": {
+              "strong": "Details embedding default flag configurations in the app binary and falling back to them when the network and local cache fail.",
+              "adequate": "Mentions caching previous configs, but forgets the first-launch scenario.",
+              "weak": "Assumes the app will just block or crash until the network is available."
+            },
+            "misconceptions": [
+              {
+                "id": "cache_first_launch",
+                "pattern": "Assuming the cache handles offline state on a brand-new installation.",
+                "challenge": "On a fresh install, the local cache is empty. What value does the flag return?"
+              }
+            ],
+            "probes": [
+              "How do we ensure the codebase knows what the default value should be?",
+              "How long should we wait for the network before falling back to the cache?"
+            ],
+            "hints": [
+              "Before the app makes its first network request, it needs a source of truth.",
+              "Could we package anything inside the app bundle itself?"
+            ],
+            "referenceFix": "Addressed local caching and binary-embedded defaults for offline resilience."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "mobile-release-flags/deep-kill_switch",
+      "title": "Android 12 Crash Feature Still Enabled After Kill Switch",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.kill_switch",
+      "scenario": {
+        "symptoms": "Kill switch toggled off bad feature globally but Android 12 clients keep crashing until app update.",
+        "interviewerSetup": "Kill switch only checked on cold start; clients cache enabled state in memory for session."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Android Client"
+            }
+          },
+          {
+            "id": "node-flags",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Flag Service"
+            }
+          },
+          {
+            "id": "node-push",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "notification-service",
+              "label": "Realtime Push"
+            }
+          },
+          {
+            "id": "node-crash",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Crashy Feature"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-flags",
+            "label": "Fetch once"
+          },
+          {
+            "id": "e2",
+            "source": "node-flags",
+            "target": "node-push",
+            "label": "Kill broadcast"
+          },
+          {
+            "id": "e3",
+            "source": "node-app",
+            "target": "node-crash",
+            "label": "Still active"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-app",
+          "node-push"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Session-cached flags ignore emergency kill switch updates"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_kill_switch",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Quickly disable a problematic feature without requiring an app store update.",
+            "opener": "Let's say a newly released feature causes a crash exclusively on Android 12 devices. How do we stop the bleeding?",
+            "evidence": {
+              "strong": "Uses the admin tool to instantly flip the flag for the specific segment (Android 12), which updates clients on their next fetch.",
+              "adequate": "Turns off the flag entirely for everyone to stop the crash.",
+              "weak": "Suggests rolling back the code and submitting a new build to the app store."
+            },
+            "misconceptions": [
+              {
+                "id": "revert_binary",
+                "pattern": "Believing a code revert is the primary way to fix a live mobile issue.",
+                "challenge": "Given that app store review can take 24 hours, how do we protect the users opening the app right now?"
+              }
+            ],
+            "probes": [
+              "How quickly will the Android 12 users see the fix?",
+              "What happens to iOS users while we are turning this off for Android?"
+            ],
+            "hints": [
+              "We have a feature flag system. How can we use its targeting rules to solve this?",
+              "How do the crashing devices find out we changed the rule?"
+            ],
+            "referenceFix": "Explained the workflow for utilizing targeted kill switches in an emergency."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "mobile-release-flags/deep-exposure",
+      "title": "A/B Test Missing Exposure Events Skews Results",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.exposure",
+      "scenario": {
+        "symptoms": "Experiment shows null effect; analytics pipeline logs conversions but not flag exposure impressions.",
+        "interviewerSetup": "Client applies variant UI but never emits exposure event tied to experiment_id."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile App"
+            }
+          },
+          {
+            "id": "node-flags",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Flag SDK"
+            }
+          },
+          {
+            "id": "node-events",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Analytics Pipeline"
+            }
+          },
+          {
+            "id": "node-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Experiment Analysis"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-flags",
+            "label": "Assign variant"
+          },
+          {
+            "id": "e2",
+            "source": "node-app",
+            "target": "node-events",
+            "label": "Conversion only"
+          },
+          {
+            "id": "e3",
+            "source": "node-events",
+            "target": "node-wh",
+            "label": "Biased join"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-app",
+          "node-events"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing exposure logging invalidates mobile A/B experiment analysis"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_exposure",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Track flag exposure accurately for A/B testing and analytics.",
+            "opener": "If we use a flag to run an A/B test, how does the data science team know if a user was actually exposed to the new feature?",
+            "evidence": {
+              "strong": "Fires an exposure event only when the code path gated by the flag is executed, not just when the config is fetched.",
+              "adequate": "Logs an event when the flag config is fetched from the server.",
+              "weak": "Assumes that being in the target segment automatically means the user saw the feature."
+            },
+            "misconceptions": [
+              {
+                "id": "fetch_equals_exposure",
+                "pattern": "Logging exposure when the device downloads the flag rules.",
+                "challenge": "What if the user downloads the flag config but never navigates to the screen where the feature lives?"
+              }
+            ],
+            "probes": [
+              "Does downloading the configuration mean the user experienced the change?",
+              "How do we handle the volume of analytics events if a flag is checked inside a list view loop?"
+            ],
+            "hints": [
+              "Think about the difference between 'having permission' to see a feature and 'actually seeing' it.",
+              "Where exactly in the client code should the analytics event trigger?"
+            ],
+            "referenceFix": "Differentiated between config fetch and actual feature exposure for analytics."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "mobile-release-flags/deep-cleanup",
+      "title": "Flag Payload Bloat Slows Every App Launch",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.cleanup",
+      "scenario": {
+        "symptoms": "Flags config download grows to 400KB; startup latency rises as hundreds of stale flags ship to clients.",
+        "interviewerSetup": "No archival process; retired flags remain in config bundle sent to all app versions."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile Clients"
+            }
+          },
+          {
+            "id": "node-cdn",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "cdn",
+              "label": "Config CDN"
+            }
+          },
+          {
+            "id": "node-flags",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "config",
+              "label": "Flag Registry"
+            }
+          },
+          {
+            "id": "node-gc",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Flag Cleanup Job"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-cdn",
+            "label": "Download config"
+          },
+          {
+            "id": "e2",
+            "source": "node-cdn",
+            "target": "node-flags",
+            "label": "Full history"
+          },
+          {
+            "id": "e3",
+            "source": "node-gc",
+            "target": "node-flags",
+            "label": "Never runs"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-flags",
+          "node-cdn"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Accumulated stale flags inflate client config payload"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_cleanup",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Define a process for removing old flags to prevent code bloat and config payload growth.",
+            "opener": "Over a year, we might create hundreds of flags. How do we manage the accumulation of these flags?",
+            "evidence": {
+              "strong": "Proposes automated tooling to detect unused flags in code, alerting on stale flags, and removing them from the payload.",
+              "adequate": "Mentions that developers should manually delete old code periodically.",
+              "weak": "Ignores the cost of stale flags or suggests keeping them forever."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How does keeping old flags impact the mobile app's performance?",
+              "How can we enforce flag cleanup in our development lifecycle?"
+            ],
+            "hints": [
+              "Think about what happens to the size of the network payload if flags are never deleted.",
+              "Could we use expiration dates or code analysis tools?"
+            ],
+            "referenceFix": "Discussed strategies for flag lifecycle management and technical debt."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

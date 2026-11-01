@@ -24,6 +24,7 @@ export const planFor = (user) => isPlus(user) ? "plus" : "free";
 export const onTrial = (user, session) => !isPlus(user) && Boolean(session?.interviewer_trial);
 
 export function limitsFor(user, session = null) {
+  if (session?.session_kind === "nugget") return aiLimits.nugget;
   if (onTrial(user, session)) return aiLimits.trial;
   return aiLimits[planFor(user)] || aiLimits.free;
 }

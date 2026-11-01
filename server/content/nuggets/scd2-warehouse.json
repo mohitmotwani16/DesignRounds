@@ -1,0 +1,135 @@
+{
+  "promptId": "scd2-warehouse",
+  "nuggets": [
+    {
+      "id": "scd2-warehouse/late-arrival-overlap",
+      "title": "Late CRM row creates overlapping SCD2 intervals",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.late_data",
+      "scenario": {
+        "symptoms": "Customer dimension queries for ‘as of March 15’ return two active addresses. A CRM correction effective February 10 arrived on March 20 and was inserted without closing the March 1 version.",
+        "interviewerSetup": "SCD2 loader appends new rows using load date instead of source effective date and skips interval repair for late records."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-crm", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "CRM extract" } },
+          { "id": "n-etl", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "worker", "label": "SCD2 loader" } },
+          { "id": "n-dim", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "warehouse", "label": "Customer dim" } },
+          { "id": "n-bi", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "dashboard", "label": "BI queries" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-crm", "target": "n-etl", "label": "Late correction" },
+          { "id": "e2", "source": "n-etl", "target": "n-dim", "label": "Insert w/o split" },
+          { "id": "e3", "source": "n-dim", "target": "n-bi", "label": "Overlapping rows" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-etl", "n-dim"], "edgeIds": ["e2"], "headline": "Late-arriving change fails to split historical validity intervals" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Maintain non-overlapping SCD2 timelines when corrections arrive late.",
+          "opener": "Two active addresses exist for one point in time—how should the loader handle a late CRM correction?",
+          "evidence": {
+            "strong": "Use source effective timestamps, locate overlapping interval, close prior row valid_to, insert corrected row, ripple forward if needed.",
+            "adequate": "Insert new current row only, leaving history wrong.",
+            "weak": "Append row with load timestamp as valid_from."
+          },
+          "misconceptions": [{ "id": "late.load_time", "pattern": "Using pipeline run time as valid_from.", "challenge": "Change happened in February but loaded in March—what should valid_from be?" }],
+          "probes": ["How do you detect overlapping valid_from/valid_to?", "What happens to facts pointing at surrogate keys during splits?"],
+          "hints": ["SCD2 is interval arithmetic.", "Event time drives effective dates."],
+          "referenceFix": "Apply corrections by source effective date: close affected row at effective instant, insert new version, adjust subsequent intervals, and validate no overlaps via constraints."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "scd2-warehouse/spurious-versions",
+      "title": "Daily load creates duplicate SCD2 versions",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.change_detection",
+      "scenario": {
+        "symptoms": "Customer dimension row count grew 40% month-over-month though business changes were flat. Nightly extracts re-insert identical rows because change detection compares all columns including volatile audit fields.",
+        "interviewerSetup": "Loader treats any column difference as a new version; source sends unchanged attributes plus updated_at metadata each day."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-src", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Source snapshot" } },
+          { "id": "n-etl", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "worker", "label": "SCD2 job" } },
+          { "id": "n-dim", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "warehouse", "label": "Customer dim" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-src", "target": "n-etl", "label": "Daily full file" },
+          { "id": "e2", "source": "n-etl", "target": "n-dim", "label": "New version daily" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-etl"], "edgeIds": ["e2"], "headline": "Noisy change detection generates spurious SCD2 history rows" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Open a new SCD2 version only when tracked attributes truly change.",
+          "opener": "Dimension history exploded without real business changes—how do you detect genuine changes?",
+          "evidence": {
+            "strong": "Hash tracked business columns, ignore volatile metadata, compare hash to active version, skip insert when equal.",
+            "adequate": "Compare dozens of columns individually without hash.",
+            "weak": "Insert new row every load."
+          },
+          "misconceptions": [{ "id": "change.always_insert", "pattern": "Inserting on every extract schedule tick.", "challenge": "If address unchanged for 30 days, should you have 30 versions?" }],
+          "probes": ["Which columns belong in the hash?", "How does hash compare scale versus wide rows?"],
+          "hints": ["Exclude source updated_at from business hash.", "MD5/SHA of canonical column set."],
+          "referenceFix": "Compute row hash over tracked attributes only, compare to current active hash, and insert/close versions solely when hash differs."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "scd2-warehouse/gdpr-history-mask",
+      "title": "GDPR delete leaves PII in history",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.gdpr",
+      "scenario": {
+        "symptoms": "Privacy request verified removal from the active customer row, but analysts still queried historical SCD2 versions containing email and phone from prior years.",
+        "interviewerSetup": "Erasure job updates is_current flag and deletes active row attributes but historical versions remain untouched."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-privacy", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "GDPR erasure API" } },
+          { "id": "n-dim", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "warehouse", "label": "Customer SCD2" } },
+          { "id": "n-facts", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "warehouse", "label": "Fact tables" } },
+          { "id": "n-analyst", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "user", "label": "Analyst" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-privacy", "target": "n-dim", "label": "Active row only" },
+          { "id": "e2", "source": "n-dim", "target": "n-analyst", "label": "Historical PII" },
+          { "id": "e3", "source": "n-facts", "target": "n-dim", "label": "Surrogate key link" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-dim"], "edgeIds": ["e2"], "headline": "GDPR job masks current row but leaves PII in SCD2 history" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Honor erasure across all historical dimension versions without breaking facts.",
+          "opener": "User was ‘deleted’ but old dimension rows still show email—how do you erase SCD2 history safely?",
+          "evidence": {
+            "strong": "Mask/hash PII on all versions, retain surrogate key for facts, optional cryptoshred, audit trail of erasure.",
+            "adequate": "Delete all history rows and orphan facts.",
+            "weak": "Clear current record only."
+          },
+          "misconceptions": [{ "id": "gdpr.delete_rows", "pattern": "Deleting all dimension rows outright.", "challenge": "What happens to sales facts referencing the surrogate key?" }],
+          "probes": ["Which fields can be nulled vs must remain for analytics?", "How do you prove erasure completeness?"],
+          "hints": ["Keep key, remove identifying attributes.", "Apply masking to every version row."],
+          "referenceFix": "Run erasure across all SCD2 versions for the business key: replace PII with irreversible tokens, keep surrogate key and non-PII attributes, log completion, and validate with automated scans."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

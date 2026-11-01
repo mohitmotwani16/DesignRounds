@@ -107,6 +107,40 @@ body.is-resizing-panel, body.is-resizing-panel * { cursor: col-resize !important
 
 .system-node { position: relative; width: 178px; min-height: 58px; padding: 9px 12px 9px 10px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--bd-dfe3ea); border-radius: 10px; background: var(--bg-ffffff); box-shadow: 0 1px 2px rgba(30, 42, 60, .05), 0 4px 10px rgba(30, 42, 60, .04); transition: border-color .12s, box-shadow .12s; }
 .system-node:hover { border-color: var(--bd-cbd1dc); }
+.system-node.incident-pulse {
+  border-color: var(--danger, #c62828);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger, #c62828) 35%, transparent), 0 0 18px color-mix(in srgb, var(--danger, #c62828) 25%, transparent);
+  animation: incident-pulse 1.6s ease-in-out infinite;
+}
+@keyframes incident-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger, #c62828) 30%, transparent), 0 0 12px color-mix(in srgb, var(--danger, #c62828) 18%, transparent); }
+  50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger, #c62828) 55%, transparent), 0 0 22px color-mix(in srgb, var(--danger, #c62828) 35%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-node.incident-pulse { animation: none; }
+}
+.react-flow__edge-path.incident-edge {
+  stroke: var(--danger, #c62828) !important;
+  stroke-width: 2.5px;
+  stroke-dasharray: 6 4;
+  animation: incident-dash 1.2s linear infinite;
+}
+@keyframes incident-dash {
+  to { stroke-dashoffset: -20; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge-path.incident-edge { animation: none; }
+}
+.nugget-scenario-banner {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--danger, #c62828) 35%, var(--bd-dfe3ea));
+  background: color-mix(in srgb, var(--danger, #c62828) 8%, var(--bg-ffffff));
+  font-size: 13px;
+  line-height: 1.45;
+}
+.nugget-scenario-banner strong { display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--danger, #c62828); }
 .system-node-icon { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 9px; }
 .tech-node .system-node-icon { border: 1px solid var(--bd-edeff3); background: var(--bg-fafbfc); }
 .system-node-text { min-width: 0; flex: 1; }

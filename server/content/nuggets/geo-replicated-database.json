@@ -1,0 +1,690 @@
+{
+  "promptId": "geo-replicated-database",
+  "packVersion": "pack-316b1db6",
+  "inputsFingerprint": "259114ab6977e34aa8724f0142f23e384b15f0aa4b2fb6d5017b3fc75120c466",
+  "nuggets": [
+    {
+      "id": "geo-replicated-database/deep-conflict",
+      "title": "Concurrent Cross-Region Writes Fork User Profile",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.conflict",
+      "scenario": {
+        "symptoms": "Users in EU and APAC simultaneously update profile settings; merged record oscillates between conflicting values.",
+        "interviewerSetup": "Multi-master replication applies last-writer-wins using region-local clocks without vector clocks or CRDT merge."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-eu",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "EU Region DB"
+            }
+          },
+          {
+            "id": "node-apac",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "database",
+              "label": "APAC Region DB"
+            }
+          },
+          {
+            "id": "node-sync",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Replicator"
+            }
+          },
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "client",
+              "label": "Global Clients"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-eu",
+            "target": "node-sync",
+            "label": "Push writes"
+          },
+          {
+            "id": "e2",
+            "source": "node-apac",
+            "target": "node-sync",
+            "label": "Push writes"
+          },
+          {
+            "id": "e3",
+            "source": "node-sync",
+            "target": "node-eu",
+            "label": "Bidirectional"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-sync",
+          "node-eu",
+          "node-apac"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "LWW without causal ordering loses concurrent cross-region updates"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_conflict",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Resolve concurrent updates to the same key from different regions deterministically.",
+            "opener": "If users in Europe and Asia update the same record at the exact same millisecond, how does the system decide the final state?",
+            "evidence": {
+              "strong": "Evaluates Last-Write-Wins against CRDTs or application-specific merges, noting the inevitable data loss risk of LWW.",
+              "adequate": "Proposes LWW with timestamps but misses the nuances of clock skew across different physical servers.",
+              "weak": "Assumes the database magically merges conflicting business logic or claims multi-leader doesn't experience conflicts."
+            },
+            "misconceptions": [
+              {
+                "id": "auto-merge",
+                "pattern": "Assuming databases automatically know how to merge conflicting business data without a defined strategy.",
+                "challenge": "If one update increments a counter and another sets a boolean status, how does the database combine those underlying bytes?"
+              }
+            ],
+            "probes": [
+              "How do we know which write actually happened first across different regions?",
+              "What if the application cannot tolerate dropping either update?"
+            ],
+            "hints": [
+              "Is wall-clock time perfectly reliable across different servers globally?",
+              "Are there specialized data structures designed specifically to handle concurrent merges?"
+            ],
+            "referenceFix": "The candidate formulated a conflict resolution strategy."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "geo-replicated-database/deep-clocks",
+      "title": "Clock Skew Reorders Events Across Regions",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.clocks",
+      "scenario": {
+        "symptoms": "Audit log shows purchase B before purchase A despite A happening first globally; support refunds wrong orders.",
+        "interviewerSetup": "Events are ordered by wall-clock timestamps from each region's NTP without hybrid logical clocks."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-us",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "database",
+              "label": "US Primary"
+            }
+          },
+          {
+            "id": "node-eu",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "database",
+              "label": "EU Replica"
+            }
+          },
+          {
+            "id": "node-order",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 220
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Order Service"
+            }
+          },
+          {
+            "id": "node-log",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Event Log"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-order",
+            "target": "node-us",
+            "label": "Write US"
+          },
+          {
+            "id": "e2",
+            "source": "node-order",
+            "target": "node-eu",
+            "label": "Write EU"
+          },
+          {
+            "id": "e3",
+            "source": "node-us",
+            "target": "node-log",
+            "label": "Replicate timestamps"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-log",
+          "node-us"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Physical clock skew corrupts global event ordering"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_clocks",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Accurately order events across distinct regions despite physical clock skew.",
+            "opener": "Since regions are physically distant, how do we assign timestamps to events to guarantee a correct global order?",
+            "evidence": {
+              "strong": "Explains the unreliability of NTP and proposes Hybrid Logical Clocks or a TrueTime-like API with wait bounds.",
+              "adequate": "Mentions clock skew and suggests logical clocks, but struggles to explain how they track causality.",
+              "weak": "Relies entirely on standard system clocks and ignores the impact of clock drift on data consistency."
+            },
+            "misconceptions": [
+              {
+                "id": "ntp-perfect",
+                "pattern": "Assuming NTP synchronization eliminates all clock skew.",
+                "challenge": "What happens if a server experiences a temporary network partition from its NTP server and its local clock drifts by 50 milliseconds?"
+              }
+            ],
+            "probes": [
+              "How does a logical clock capture causality between events?",
+              "What happens to our latency if we have to wait out the clock uncertainty bound?"
+            ],
+            "hints": [
+              "Think about how we can use counters combined with physical time.",
+              "Look into how systems like Spanner handle time uncertainty."
+            ],
+            "referenceFix": "The candidate addressed physical clock skew using logical or synchronized clocks."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "geo-replicated-database/deep-consistency",
+      "title": "Read-Your-Writes Violated After Region Failover",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.consistency",
+      "scenario": {
+        "symptoms": "Users post content then immediately refresh and see empty feed; reads hit stale replica seconds after write ACK.",
+        "interviewerSetup": "Read traffic load-balances randomly across replicas without session stickiness or read-after-write tokens."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Read LB"
+            }
+          },
+          {
+            "id": "node-primary",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "database",
+              "label": "Write Primary"
+            }
+          },
+          {
+            "id": "node-replica",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 220
+            },
+            "data": {
+              "kind": "database",
+              "label": "Async Replica"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-primary",
+            "label": "Write"
+          },
+          {
+            "id": "e2",
+            "source": "node-client",
+            "target": "node-lb",
+            "label": "Read"
+          },
+          {
+            "id": "e3",
+            "source": "node-lb",
+            "target": "node-replica",
+            "label": "Stale read"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-lb",
+          "node-replica"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Random replica reads break read-your-writes after recent updates"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_consistency",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Define what users see when they read data shortly after it was written.",
+            "opener": "What specific read consistency guarantees does your system offer to a client making repeated requests?",
+            "evidence": {
+              "strong": "Defines strict models like bounded staleness, read-your-writes, or monotonic reads and explains how the system enforces them.",
+              "adequate": "Discusses eventual consistency generally but lacks specific mechanisms for preventing regression.",
+              "weak": "Confuses read consistency with replication durability, failing to answer what the client actually sees."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you ensure a user who just wrote data can immediately read it back from a replica?",
+              "What happens if a client reads from a replica that is lagging behind the leader?"
+            ],
+            "hints": [
+              "Could we track the latest write timestamp for a user session?",
+              "What if the read request is forced to wait until the replica catches up to a certain point?"
+            ],
+            "referenceFix": "The candidate detailed the read consistency models available to clients."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "geo-replicated-database/deep-replication",
+      "title": "Acknowledged Write Lost in Region Failure",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.replication",
+      "scenario": {
+        "symptoms": "Region outage loses 2 minutes of confirmed writes; customers report missing transactions after failover.",
+        "interviewerSetup": "Primary acknowledges writes before synchronous quorum replication to secondary region completes."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-primary",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "database",
+              "label": "Primary Region"
+            }
+          },
+          {
+            "id": "node-secondary",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 150
+            },
+            "data": {
+              "kind": "database",
+              "label": "Secondary Region"
+            }
+          },
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Application"
+            }
+          },
+          {
+            "id": "node-wal",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Cross-Region WAL"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-primary",
+            "label": "Write ACK early"
+          },
+          {
+            "id": "e2",
+            "source": "node-primary",
+            "target": "node-secondary",
+            "label": "Async replicate"
+          },
+          {
+            "id": "e3",
+            "source": "node-primary",
+            "target": "node-wal",
+            "label": "Delayed ship"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-primary",
+          "node-secondary"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Premature write ACK loses data on regional failure"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_replication",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure no acknowledged write is lost if the primary region suddenly vanishes.",
+            "opener": "How do we guarantee that a committed write survives a complete, permanent region outage?",
+            "evidence": {
+              "strong": "Discusses cross-region synchronous replication or quorum consensus, accurately noting the latency penalty on writes.",
+              "adequate": "Suggests asynchronous replication but corrects course to synchronous replication when reminded of the zero data loss rule.",
+              "weak": "Insists asynchronous replication prevents data loss or ignores the massive cross-region latency entirely."
+            },
+            "misconceptions": [
+              {
+                "id": "async-is-safe",
+                "pattern": "Believing asynchronous replication to another region prevents data loss on abrupt failure.",
+                "challenge": "If the region loses power a millisecond after acknowledging the write but before replicating it, what happens to that data?"
+              }
+            ],
+            "probes": [
+              "What exactly happens on the critical path of a write before we return success to the client?",
+              "What is the physical network round-trip time between these regions?"
+            ],
+            "hints": [
+              "If we return success immediately upon writing locally, where does that data live at that exact moment?",
+              "How many remote regions must possess the data before we can safely tell the user it succeeded?"
+            ],
+            "referenceFix": "The candidate designed a durable replication protocol to handle region failures."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "geo-replicated-database/deep-failover",
+      "title": "Automated Failover Promotes Split-Brain Secondary",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.failover",
+      "scenario": {
+        "symptoms": "Network blip triggers dual primaries in US and EU; duplicate charge IDs appear for 8 minutes.",
+        "interviewerSetup": "Failover automation promotes secondary without fencing old primary or verifying quorum."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-us",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "US Primary"
+            }
+          },
+          {
+            "id": "node-eu",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "database",
+              "label": "EU Secondary"
+            }
+          },
+          {
+            "id": "node-orch",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "service-discovery",
+              "label": "Failover Controller"
+            }
+          },
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Payment API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-orch",
+            "target": "node-eu",
+            "label": "Promote"
+          },
+          {
+            "id": "e2",
+            "source": "node-app",
+            "target": "node-us",
+            "label": "Still writing"
+          },
+          {
+            "id": "e3",
+            "source": "node-app",
+            "target": "node-eu",
+            "label": "Also writing"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-orch",
+          "node-us",
+          "node-eu"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Unfenced failover creates split-brain dual write primaries"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_failover",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Detect a region failure and safely resume serving traffic without human intervention.",
+            "opener": "Walk me through the automated recovery process from the exact second a region goes entirely offline.",
+            "evidence": {
+              "strong": "Describes heartbeats, leader election timeouts, and the redirection of client traffic, while acknowledging the delay before availability is restored.",
+              "adequate": "Mentions health checks and load balancer failover but glosses over the database's internal leader election mechanism.",
+              "weak": "Assumes the system instantaneously fails over with zero downtime or missing details on how failure is confirmed."
+            },
+            "misconceptions": [
+              {
+                "id": "instant-failover",
+                "pattern": "Believing failure detection and recovery happens in zero milliseconds.",
+                "challenge": "How long must a node miss heartbeats before we are certain it is dead rather than just slow?"
+              }
+            ],
+            "probes": [
+              "Who initiates the failover process?",
+              "How do you prevent a temporary network hiccup from triggering an unnecessary region failover?"
+            ],
+            "hints": [
+              "Think about timeouts and consensus among the remaining healthy nodes.",
+              "How does the global DNS or routing layer know the region is dead?"
+            ],
+            "referenceFix": "The candidate outlined the automated failover and health checking process."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import { guideFor } from "./ai/guides.js";
 import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
-import { changeMode, handleLearnerTurn, handleTick, presentV3State, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
+import { changeMode, conductorPackVersion, handleLearnerTurn, handleTick, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
 import { requireUser } from "./identity.js";
 import { needsDataModel } from "./pks/index.js";
 import { hasInterviewer, isPlus, limitsFor } from "./plans.js";
@@ -100,9 +100,9 @@ function presentTurn(row) {
 const TURNS_WITH_AUDIO = `select t.*, a.duration_ms as audio_duration_ms, a.delivery
   from interview_turns t left join interview_audio a on a.turn_id = t.id`;
 
-function presentState(state, promptId) {
-  if (state.engine === "v3") return presentV3State(state, promptId);
-  return { engine: "v2", stage: state.stage, hintsUsed: state.hints_used };
+function presentState(state, session) {
+  if (state.engine === "v3") return presentV3State(state, session);
+  return { engine: "v2", stage: state.stage, hintsUsed: state.hints_used, sessionKind: session.session_kind ?? "full" };
 }
 
 function forwardStage(current, proposed) {
@@ -112,6 +112,12 @@ function forwardStage(current, proposed) {
 async function ensureState(conn, session) {
   await conn.query("insert into interview_state (session_id, snapshot) values ($1, $2::jsonb) on conflict (session_id) do nothing", [session.id, JSON.stringify(snapshotOf(session.diagram))]);
   return conn.queryOne("select * from interview_state where session_id = $1", [session.id]);
+}
+
+async function clearInterviewRound(conn, sessionId) {
+  await conn.query("delete from interview_events where session_id = $1", [sessionId]);
+  await conn.query("delete from interview_agenda_items where session_id = $1", [sessionId]);
+  await conn.query("delete from interview_turns where session_id = $1", [sessionId]);
 }
 
 async function nextSeq(conn, sessionId) {
@@ -303,11 +309,16 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
   // call). A question with a published Problem Pack opens on the v3 Conductor, which
   // pins everything for the rest of the round; otherwise the v2 interviewer runs.
   if (session.status === "in_progress") {
-    const packVersion = await v3PackFor(session.prompt_id);
+    const packVersion = await conductorPackVersion(session);
     await transaction(async (conn) => {
       await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
-      await ensureState(conn, session);
-      if (!(await conn.queryOne("select 1 from interview_turns where session_id = $1 limit 1", [session.id]))) {
+      const stateRow = await ensureState(conn, session);
+      const hasTurns = Boolean(await conn.queryOne("select 1 from interview_turns where session_id = $1 limit 1", [session.id]));
+      const needsNuggetV3 = session.session_kind === "nugget" && packVersion && (!hasTurns || stateRow.engine !== "v3");
+      if (needsNuggetV3) {
+        if (hasTurns) await clearInterviewRound(conn, session.id);
+        await startNuggetRound(conn, { session, user: req.user });
+      } else if (!hasTurns) {
         if (packVersion) {
           await startRound(conn, { session, user: req.user, packVersion });
         } else {
@@ -326,7 +337,7 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
     aiAvailable: aiConfig.enabled,
     voice: voiceAvailable,
     turns: turns.map(presentTurn),
-    state: state ? presentState(state, session.prompt_id) : null,
+    state: state ? presentState(state, session) : null,
     allowance: await readAllowance(db, req.user, session, state),
   });
 }));
@@ -440,7 +451,7 @@ async function deliverLearnerReply(req, res, { session, reserved, hint = false }
     }
     return {
       turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
-      state: presentState(result.state, session.prompt_id),
+      state: presentState(result.state, session),
       allowance: await readAllowance(db, req.user, session, result.state),
     };
   };
@@ -603,7 +614,7 @@ async function v3Tick(req, res, session, state, body) {
     const result = await handleTick({ session, user: req.user, stateRow: state, body, reserveCredit, releaseCredit: release });
     if (result.action === "none") return none(result.reason);
     if (result.action === "closed") return res.json({ action: "closed" });
-    res.json({ action: result.action, turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session, result.state) });
+    res.json({ action: result.action, turn: presentTurn(result.turn), state: presentState(result.state, session), allowance: await readAllowance(db, req.user, session, result.state) });
   } catch (error) {
     console.error("[ai] tick failed:", error.code || error.message);
     return none("error");
@@ -692,7 +703,7 @@ async function v2Check(req, res, session, state, body) {
       return res.json({ action: "skip" });
     }
     const result = await saveInterviewerTurn({ session, state: reserved.state, output: { ...data, intent: data.intent === "answer" ? "question" : data.intent }, trigger: "proactive", design, creditId: reserved.creditId, hint: false });
-    res.json({ action: "ask", turn: presentTurn(result.turn), state: presentState(result.state, session.prompt_id), allowance: await readAllowance(db, req.user, session, result.state) });
+    res.json({ action: "ask", turn: presentTurn(result.turn), state: presentState(result.state, session), allowance: await readAllowance(db, req.user, session, result.state) });
   } catch (error) {
     await transaction(async (conn) => {
       await releaseCredit(conn, reserved.creditId);
@@ -719,7 +730,7 @@ interviewsRouter.post("/sessions/:sessionId/interview/mode", route(async (req, r
     return conn.queryOne("select * from interview_state where session_id = $1", [session.id]);
   });
   const turns = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [session.id]);
-  res.json({ mode, state: presentState(state, session.prompt_id), turns: turns.map(presentTurn) });
+  res.json({ mode, state: presentState(state, session), turns: turns.map(presentTurn) });
 }));
 
 // A thumbs-down on one interviewer message, with a reason. Works on v2 and v3 rounds,

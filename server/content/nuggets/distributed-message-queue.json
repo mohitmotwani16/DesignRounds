@@ -1,0 +1,696 @@
+{
+  "promptId": "distributed-message-queue",
+  "packVersion": "pack-6dd549bf",
+  "inputsFingerprint": "83fe6b424f925a4ef2003d967b51b32761e317c62affb98545e89d53689cdd1e",
+  "nuggets": [
+    {
+      "id": "distributed-message-queue/key-skew-hot-partition",
+      "title": "Hot customer id saturates one Kafka partition",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.partitioning",
+      "scenario": {
+        "symptoms": "Enterprise customer ingestion lagged hours while other partitions empty. Consumer lag dashboard showed partition 7 at 50M messages.",
+        "interviewerSetup": "Producer keys only on tenant id without salting; mega-tenant dominates one partition."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Producers"
+            }
+          },
+          {
+            "id": "n-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Topic"
+            }
+          },
+          {
+            "id": "n-p7",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Hot partition"
+            }
+          },
+          {
+            "id": "n-cons",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 200
+            },
+            "data": {
+              "kind": "service",
+              "label": "Consumer group"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-prod",
+            "target": "n-kafka",
+            "label": "Keyed produce"
+          },
+          {
+            "id": "e2",
+            "source": "n-kafka",
+            "target": "n-p7",
+            "label": "Skewed"
+          },
+          {
+            "id": "e3",
+            "source": "n-p7",
+            "target": "n-cons",
+            "label": "Lag"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-kafka",
+          "n-p7"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Partition key skew concentrates mega-tenant traffic"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Split topics into partitions to allow horizontal scaling while preserving local ordering by key.",
+            "opener": "One tenant stalled the whole topic—the partitioning strategy is highlighted. How do you fix throughput fairness?",
+            "evidence": {
+              "strong": "Splits topics into partitions distributed across brokers. Explains that producers hash a routing key to pick a partition, guaranteeing order per key but not globally.",
+              "adequate": "Mentions sharding the topic across brokers, but struggles to explain how ordering is maintained.",
+              "weak": "Fails to shard topics, creating a bottleneck on a single machine, or assumes global strict ordering is still possible at 10M qps."
+            },
+            "misconceptions": [
+              {
+                "id": "global-order",
+                "pattern": "Trying to maintain strict global ordering across a sharded topic.",
+                "challenge": "If we process writes on 50 different machines simultaneously, how do we establish a strict global sequence?"
+              }
+            ],
+            "probes": [
+              "If a user is updating their profile rapidly, how do we ensure those specific updates are processed in order?",
+              "Who decides which partition a message goes to?"
+            ],
+            "hints": [
+              "If we split a topic into 100 sub-queues, what happens to ordering?",
+              "What if the producer uses the user ID as a hash key to pick the sub-queue?"
+            ],
+            "referenceFix": "Compound keys with salt buckets for large tenants, dedicated topics for whales, adaptive partition count, and monitor per-partition lag SLOs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-message-queue/under-replicated-partition-writes",
+      "title": "Under-replicated partition accepted writes during rack failure",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.replication",
+      "scenario": {
+        "symptoms": "After a rack outage, brokers accepted produce acks with min.insync.replicas not met; consumers read truncated log losing 30 seconds of orders.",
+        "interviewerSetup": "Producer acks=1 during incident override; cluster policy allowed unclean leader election."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Order service"
+            }
+          },
+          {
+            "id": "n-lead",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 80
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Leader broker"
+            }
+          },
+          {
+            "id": "n-repl",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 200
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Offline replica"
+            }
+          },
+          {
+            "id": "n-cons",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Fulfillment consumer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-prod",
+            "target": "n-lead",
+            "label": "acks=1"
+          },
+          {
+            "id": "e2",
+            "source": "n-lead",
+            "target": "n-repl",
+            "label": "Under-replicated"
+          },
+          {
+            "id": "e3",
+            "source": "n-lead",
+            "target": "n-cons",
+            "label": "Truncated log"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-lead",
+          "n-repl"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Weak acks and under-replication allowed data loss on failover"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure durability through replication and explicit acknowledgment policies.",
+            "opener": "Orders vanished after failover—the replication and ack path is highlighted. What settings failed?",
+            "evidence": {
+              "strong": "Describes leader-follower replication per partition. Introduces an In-Sync Replica (ISR) set and explains that the leader only acks the producer after a quorum or all ISR members have written the data.",
+              "adequate": "Mentions data must be replicated before returning an ack, but lacks details on leader election or managing slow followers.",
+              "weak": "Assumes async replication is fine, completely missing the data loss requirement, or doesn't replicate at all."
+            },
+            "misconceptions": [
+              {
+                "id": "async-ack",
+                "pattern": "Acking the producer as soon as the data hits the leader's memory.",
+                "challenge": "If we ack the producer immediately, what happens if the leader loses power before replicating?"
+              }
+            ],
+            "probes": [
+              "What happens if one of our 3 replicas is experiencing a severe network slowdown?",
+              "Does the leader wait for that slow replica before acking the producer?"
+            ],
+            "hints": [
+              "We need copies on multiple machines. Who coordinates the write?",
+              "If the producer requires a guarantee, the leader must wait for some followers to confirm the write. What if we maintain a list of 'healthy' followers?"
+            ],
+            "referenceFix": "Enforce acks=all with min.insync.replicas, disable unclean election, alert on under-replicated partitions, and pause producers when ISR too small."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-message-queue/flapping-leader-rebalances",
+      "title": "Broker leader flapping triggers constant rebalance",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.leaderelection",
+      "scenario": {
+        "symptoms": "Consumer processing stalled 40% of the day as group rebalanced every few minutes when partition leaders oscillated between two brokers.",
+        "interviewerSetup": "Unstable network between racks triggers repeated leader election; consumers use long session timeout but rebalance on metadata change."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-b1",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 80
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Broker 1"
+            }
+          },
+          {
+            "id": "n-b2",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 200
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Broker 2"
+            }
+          },
+          {
+            "id": "n-zk",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-etcd",
+              "label": "Controller"
+            }
+          },
+          {
+            "id": "n-cons",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Consumer group"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-b1",
+            "target": "n-zk",
+            "label": "Leader fight"
+          },
+          {
+            "id": "e2",
+            "source": "n-b2",
+            "target": "n-zk",
+            "label": "Leader fight"
+          },
+          {
+            "id": "e3",
+            "source": "n-zk",
+            "target": "n-cons",
+            "label": "Rebalance storm"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-zk",
+          "n-cons"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Leader instability cascades to consumer rebalance storms"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Manage cluster state, detect failures, and reassign partition leaders safely.",
+            "opener": "Leaders keep flipping and consumers never catch up—the election path is highlighted. How do you stabilize?",
+            "evidence": {
+              "strong": "Uses a metadata consensus store (like ZooKeeper or etcd) or a designated controller broker to track broker heartbeats and manage leader elections.",
+              "adequate": "Mentions heartbeats and electing a new leader from the followers, but is vague on split-brain prevention.",
+              "weak": "Assumes brokers somehow magically know who the leader is, or uses a centralized database that becomes a single point of failure."
+            },
+            "misconceptions": [
+              {
+                "id": "db-for-metadata",
+                "pattern": "Using a standard SQL database to track leaders.",
+                "challenge": "What happens if that single SQL database goes down? How does the cluster survive?"
+              }
+            ],
+            "probes": [
+              "How do we prevent two brokers from both thinking they are the leader of a partition?",
+              "Where is the 'source of truth' for which broker owns which partition?"
+            ],
+            "hints": [
+              "We need a highly available way to store cluster configuration.",
+              "Have you heard of systems like ZooKeeper, etcd, or Raft consensus?"
+            ],
+            "referenceFix": "Fix network and broker GC, tune election backoff, use cooperative sticky assignor, increase replica lag monitoring, and isolate flaky brokers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-message-queue/duplicate-processing-after-reset",
+      "title": "Manual offset reset duplicated week of charges",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.offsets",
+      "scenario": {
+        "symptoms": "Operator reset consumer group offset to earliest during debugging; billing service reprocessed seven days of events duplicating invoices.",
+        "interviewerSetup": "No guardrails on offset admin API; billing consumer not idempotent."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-op",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "admin",
+              "label": "Operator"
+            }
+          },
+          {
+            "id": "n-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Topic"
+            }
+          },
+          {
+            "id": "n-cons",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Billing consumer"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "database",
+              "label": "Invoices"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-op",
+            "target": "n-kafka",
+            "label": "Reset offsets"
+          },
+          {
+            "id": "e2",
+            "source": "n-kafka",
+            "target": "n-cons",
+            "label": "Replay week"
+          },
+          {
+            "id": "e3",
+            "source": "n-cons",
+            "target": "n-db",
+            "label": "Duplicate rows"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-kafka",
+          "n-cons"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2",
+          "e3"
+        ],
+        "headline": "Unsafe offset reset on non-idempotent consumer"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Track consumer progress so they can resume safely after a crash.",
+            "opener": "Resetting offsets doubled charges—the consumer offset path is highlighted. How do you prevent and recover?",
+            "evidence": {
+              "strong": "Explains consumers commit numerical offsets per partition. Stores these offsets in an internal compacted topic or a fast KV store, not on the consumer itself.",
+              "adequate": "Mentions storing a 'cursor' or index in a database so the consumer knows where it was.",
+              "weak": "Suggests deleting messages as soon as they are read, breaking the multi-consumer requirement."
+            },
+            "misconceptions": [
+              {
+                "id": "broker-push-state",
+                "pattern": "The broker maintains the state of every individual message for every consumer.",
+                "challenge": "If we have 10M messages a second and 50 consumers, updating individual message statuses will be 500M writes/sec. Can we simplify this?"
+              }
+            ],
+            "probes": [
+              "Where exactly is the consumer's current position stored?",
+              "If a partition is just an array of messages, what is the cheapest way to track where we are?"
+            ],
+            "hints": [
+              "Instead of tracking every single message, could we just track a single number?",
+              "Where should we store this number so it survives a consumer crash?"
+            ],
+            "referenceFix": "RBAC and confirmation on offset changes, idempotent processing with business keys, dry-run replay in shadow, and compacted dedupe store."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "distributed-message-queue/at-least-once-without-idempotency",
+      "title": "Retry storm duplicates shipment events",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.semantics",
+      "scenario": {
+        "symptoms": "Warehouse shipped duplicate packages after consumer retries on transient DB errors. Exactly-once claim but no idempotency keys on write path.",
+        "interviewerSetup": "Consumer auto-commit offsets before downstream DB commit; on crash replays last batch."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Ship events"
+            }
+          },
+          {
+            "id": "n-cons",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Consumer"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Shipments DB"
+            }
+          },
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Fulfillment"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-kafka",
+            "target": "n-cons",
+            "label": "Poll batch"
+          },
+          {
+            "id": "e2",
+            "source": "n-cons",
+            "target": "n-db",
+            "label": "Insert twice"
+          },
+          {
+            "id": "e3",
+            "source": "n-db",
+            "target": "n-wh",
+            "label": "Duplicate picks"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-cons",
+          "n-db"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "At-least-once consumption without idempotent writes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle the realities of network retries and duplicate messages.",
+            "opener": "Retries duplicated shipments—the delivery semantics path is highlighted. What guarantee do you actually have?",
+            "evidence": {
+              "strong": "Defines at-least-once delivery. Explains that exactly-once is hard and typically requires idempotent consumers or transactional writes across the queue and the consumer's database.",
+              "adequate": "Understands the risk of duplicates and suggests making the consumer logic idempotent.",
+              "weak": "Believes the queue can easily guarantee a message is processed exactly once without any special consumer design."
+            },
+            "misconceptions": [
+              {
+                "id": "magic-exactly-once",
+                "pattern": "Assuming TCP or the broker simply prevents duplicate processing.",
+                "challenge": "If the consumer's database commit succeeds but the network drops the offset commit to the broker, the broker thinks it failed. What happens next?"
+              }
+            ],
+            "probes": [
+              "What happens if a producer sends a message, but the ack is lost in the network? What does the producer do?",
+              "How can the consumer application defend itself against seeing the same message twice?"
+            ],
+            "hints": [
+              "Think about network timeouts. The sender has to retry.",
+              "If you receive a 'charge credit card' message twice, how do you avoid double charging?"
+            ],
+            "referenceFix": "Transactional outbox or consume-transform-produce with EOS where supported, idempotency keys on shipment id, commit offsets after commit, and dedupe table."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

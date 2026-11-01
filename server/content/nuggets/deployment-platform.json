@@ -1,0 +1,694 @@
+{
+  "promptId": "deployment-platform",
+  "packVersion": "pack-684e8017",
+  "inputsFingerprint": "b722c50b9e49e004cd62621c8794735f52b4370e649363d267ccd37f42fb131f",
+  "nuggets": [
+    {
+      "id": "deployment-platform/canary-missing-rollback-auto",
+      "title": "Bad canary promoted before error budget burned",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.progressive",
+      "scenario": {
+        "symptoms": "A memory leak canary reached 50% fleet before anyone noticed RSS climb; auto-promotion continued because HTTP 500 rate stayed flat while OOM kills rose.",
+        "interviewerSetup": "Progressive delivery gates only on 5xx, ignoring process restarts and memory; promotion cron runs regardless of canary health."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-ci",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "CI pipeline"
+            }
+          },
+          {
+            "id": "n-dep",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 120
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Progressive controller"
+            }
+          },
+          {
+            "id": "n-can",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Canary pods"
+            }
+          },
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 200
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Stable pods"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-ci",
+            "target": "n-dep",
+            "label": "Release v42"
+          },
+          {
+            "id": "e2",
+            "source": "n-dep",
+            "target": "n-can",
+            "label": "Advance %"
+          },
+          {
+            "id": "e3",
+            "source": "n-dep",
+            "target": "n-prod",
+            "label": "Auto promote"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-dep"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Promotion relied on incomplete health signals"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a progressive rollout strategy that limits blast radius by deploying in increments and checking health.",
+            "opener": "The canary should never have promoted—the progressive delivery controller is highlighted. What signals were missing?",
+            "evidence": {
+              "strong": "Defines a state machine for rollouts with staggered waves, bake times, and automated pauses based on health signals.",
+              "adequate": "Mentions progressive rollout or canary, but lacks clear progression rules or relies on manual approval between waves.",
+              "weak": "Updates all instances at once or uses a simple rolling restart without health gating."
+            },
+            "misconceptions": [
+              {
+                "id": "tiny-canary",
+                "pattern": "Deploying to one instance is a complete canary analysis.",
+                "challenge": "If we deploy to just one instance out of thousands, will it receive enough traffic to confidently detect a small increase in error rates?"
+              }
+            ],
+            "probes": [
+              "How do we decide the size of each deployment wave?",
+              "What happens if a wave fails halfway through?"
+            ],
+            "hints": [
+              "We shouldn't deploy to the entire fleet at once. How can we break it up?",
+              "Once a small subset has the new version, how long do we wait before moving forward?"
+            ],
+            "referenceFix": "Multi-signal gates (OOM, restarts, latency, custom metrics), automatic halt and rollback, manual approval for large steps, and compare canary to stable cohort."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "deployment-platform/migrate-job-blocks-deploy",
+      "title": "Long DB migration blocked all deploys for six hours",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.database",
+      "scenario": {
+        "symptoms": "Engineering could not ship hotfixes because deployment pipeline waits on a synchronous additive column migration on a 40 TB table.",
+        "interviewerSetup": "Platform runs expand migration in deploy hook with global lock; no expand-contract pattern or online schema change tool."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-dep",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 140
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Deploy controller"
+            }
+          },
+          {
+            "id": "n-mig",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Migration job"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Primary DB"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Waiting services"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-dep",
+            "target": "n-mig",
+            "label": "Gate deploy"
+          },
+          {
+            "id": "e2",
+            "source": "n-mig",
+            "target": "n-db",
+            "label": "Table rewrite"
+          },
+          {
+            "id": "e3",
+            "source": "n-dep",
+            "target": "n-app",
+            "label": "Blocked rollout"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-dep",
+          "n-mig"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Synchronous migration on critical path blocks releases"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle stateful rollbacks, ensuring database schema changes do not break old application versions.",
+            "opener": "Hotfixes stuck behind a migration—the deploy and database path is highlighted. How do you unblock?",
+            "evidence": {
+              "strong": "Explains the expand-and-contract pattern for schema migrations, ensuring backward compatibility so the database is never rolled back.",
+              "adequate": "Recognizes the problem of schema rollbacks and suggests applying changes before code, but lacks a formal pattern for backward compatibility.",
+              "weak": "Suggests restoring the database from a backup or rolling back the schema directly, causing data loss."
+            },
+            "misconceptions": [
+              {
+                "id": "schema-rollback",
+                "pattern": "Rolling back the database schema along with the code.",
+                "challenge": "If we roll back the schema, what happens to all the user data written during the time the new version was active?"
+              }
+            ],
+            "probes": [
+              "If we drop a column in the new version, what happens to the application if we roll back?",
+              "How do we coordinate the timing of the schema migration and the application rollout?"
+            ],
+            "hints": [
+              "Can we make the database change in a way that both the old and new application versions understand?",
+              "Think about separating adding a column from removing a column into different deployment cycles."
+            ],
+            "referenceFix": "Expand-contract migrations, online schema change tools, decouple app deploy from backfill, run heavy migrations asynchronously with feature flags."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "deployment-platform/bad-analysis-promotes-regression",
+      "title": "Automated analysis promoted a latency regression",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.analysis",
+      "scenario": {
+        "symptoms": "Release analysis compared canary p99 latency to the wrong baseline window (deploy day vs prior week), green-lighting a 40 ms regression.",
+        "interviewerSetup": "Analysis service uses calendar day baseline without excluding holidays or deploy noise; statistical test underpowered."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-can",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Canary"
+            }
+          },
+          {
+            "id": "n-metrics",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Metrics store"
+            }
+          },
+          {
+            "id": "n-an",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Release analysis"
+            }
+          },
+          {
+            "id": "n-dep",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Promote"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-can",
+            "target": "n-metrics",
+            "label": "Latency series"
+          },
+          {
+            "id": "e2",
+            "source": "n-metrics",
+            "target": "n-an",
+            "label": "Wrong baseline"
+          },
+          {
+            "id": "e3",
+            "source": "n-an",
+            "target": "n-dep",
+            "label": "Approve"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-an"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Flawed baseline selection hid latency regression"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Automate the decision to promote or roll back a release based on system metrics.",
+            "opener": "Stats said ship but latency regressed—the analysis path is highlighted. What went wrong?",
+            "evidence": {
+              "strong": "Compares canary metrics against a baseline using statistical checks on error rates and latency.",
+              "adequate": "Looks at hardcoded thresholds rather than comparing against a baseline of the current production version.",
+              "weak": "Relies on manual metric inspection or generic endpoint health checks."
+            },
+            "misconceptions": [
+              {
+                "id": "compare-historical",
+                "pattern": "Comparing canary metrics to historical metrics from yesterday.",
+                "challenge": "Traffic patterns change day to day. How can we compare the canary to what the old version is doing right now?"
+              }
+            ],
+            "probes": [
+              "Which specific metrics are most important to watch?",
+              "How do you distinguish a bad release from a general traffic spike?"
+            ],
+            "hints": [
+              "Instead of fixed thresholds, what should we compare the canary's performance against?",
+              "What are the golden signals we should monitor during a rollout?"
+            ],
+            "referenceFix": "Compare to stable cohort and pre-deploy window, use sequential testing with minimum sample, human review for large shifts, and block promote on SLO burn."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "deployment-platform/unknown-artifact-in-prod",
+      "title": "Mystery container digest running in production",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.provenance",
+      "scenario": {
+        "symptoms": "Security audit found 12 pods running an image digest with no build record. Incident response cannot map artifact to git commit or SBOM.",
+        "interviewerSetup": "Emergency manual deploy pushed `:latest` tag bypassing provenance signing and attestation store."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-dev",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "user",
+              "label": "Engineer"
+            }
+          },
+          {
+            "id": "n-reg",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 120
+            },
+            "data": {
+              "kind": "storage",
+              "label": "Image registry"
+            }
+          },
+          {
+            "id": "n-prov",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 260
+            },
+            "data": {
+              "kind": "service",
+              "label": "Provenance store"
+            }
+          },
+          {
+            "id": "n-k8s",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 120
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Production"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-dev",
+            "target": "n-reg",
+            "label": "Push latest"
+          },
+          {
+            "id": "e2",
+            "source": "n-reg",
+            "target": "n-k8s",
+            "label": "Deploy"
+          },
+          {
+            "id": "e3",
+            "source": "n-reg",
+            "target": "n-prov",
+            "label": "No attestation"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-reg",
+          "n-prov"
+        ],
+        "edgeIds": [
+          "e1",
+          "e3"
+        ],
+        "headline": "Deploy bypassed signed provenance requirements"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Secure the deployment pipeline by ensuring only trusted, unmodified artifacts reach production.",
+            "opener": "Prod runs an untraceable image—the provenance chain is highlighted. How do you prevent this?",
+            "evidence": {
+              "strong": "Implements cryptographic signing of artifacts in CI, validates signatures at deployment time, and ensures strict immutability in the registry.",
+              "adequate": "Mentions hashing or checksums to verify artifacts, or relies entirely on registry access controls.",
+              "weak": "Assumes artifacts are safe by default or relies on file naming conventions."
+            },
+            "misconceptions": [
+              {
+                "id": "trust-registry-name",
+                "pattern": "Re-building the docker image for production using the same git commit.",
+                "challenge": "If a dependency changes in the registry between the staging build and the prod build, how do we know the prod build is identical?"
+              }
+            ],
+            "probes": [
+              "What prevents an attacker from overwriting an image in the registry?",
+              "How does the deployment controller verify the artifact?"
+            ],
+            "hints": [
+              "How do we normally prove the authenticity of a digital document?",
+              "Can the CI pipeline attach a cryptographic proof to the artifact?"
+            ],
+            "referenceFix": "Require signed images and SBOM in admission controller, immutable digests only, link digest to git SHA in deploy API, block manual tag pushes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "deployment-platform/controller-reconcile-storm",
+      "title": "Deploy controller falls behind during large rollout",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.scale",
+      "scenario": {
+        "symptoms": "Updating 8,000 microservices caused reconcile queue depth of 2M; new deploys stuck pending for hours while controller CPU pegged.",
+        "interviewerSetup": "Single-threaded reconcile loop lists all objects every tick; no sharding or work queue prioritization."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-api",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Deploy API"
+            }
+          },
+          {
+            "id": "n-ctrl",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Controller"
+            }
+          },
+          {
+            "id": "n-q",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Reconcile queue"
+            }
+          },
+          {
+            "id": "n-agents",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Cluster agents"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-api",
+            "target": "n-ctrl",
+            "label": "Bulk update"
+          },
+          {
+            "id": "e2",
+            "source": "n-ctrl",
+            "target": "n-q",
+            "label": "Enqueue all"
+          },
+          {
+            "id": "e3",
+            "source": "n-q",
+            "target": "n-agents",
+            "label": "Slow apply"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-ctrl",
+          "n-q"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unsharded reconcile queue cannot keep up with fleet size"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Scale the deployment control plane to handle hundreds of concurrent deployments safely.",
+            "opener": "Fleet-wide rollout choked the controller—the reconcile loop is highlighted. How do you scale control?",
+            "evidence": {
+              "strong": "Decouples the control plane using async workers, queues, or a distributed state machine to handle concurrent deployments without blocking.",
+              "adequate": "Suggests horizontal scaling of the controller but doesn't detail how state or locks are managed.",
+              "weak": "Uses a single synchronous script or database lock that bottlenecks."
+            },
+            "misconceptions": [
+              {
+                "id": "sync-deployments",
+                "pattern": "Running all deployments synchronously in a single process.",
+                "challenge": "If a canary bake takes 30 minutes, what happens to the controller's memory and connection pools if 500 deployments are running?"
+              }
+            ],
+            "probes": [
+              "How do we keep track of the state of a long-running deployment?",
+              "What happens if the deployment controller crashes halfway through a rollout?"
+            ],
+            "hints": [
+              "A deployment is a long-running process. How do we store its state?",
+              "How can we distribute the orchestration work across multiple machines?"
+            ],
+            "referenceFix": "Shard controllers by namespace/region, level-triggered events instead of full scans, priority queues for hotfixes, backoff and rate limits, horizontal scale with leader election."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

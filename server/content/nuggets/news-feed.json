@@ -1,0 +1,137 @@
+{
+  "promptId": "news-feed",
+  "nuggets": [
+    {
+      "id": "news-feed/celebrity-fanout-storm",
+      "title": "Celebrity post stalls fan-out workers",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.fanout",
+      "scenario": {
+        "symptoms": "Posting for a user with 80M followers timed out after 30 s. Fan-out worker queue depth hit 2M jobs and normal users’ feeds lagged 45 minutes behind.",
+        "interviewerSetup": "The design fan-outs on write synchronously before acknowledging the post API. Celebrity accounts use the same push path as everyone else."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-api", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "api-gateway", "label": "Post API" } },
+          { "id": "n-fanout", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "worker", "label": "Fan-out workers" } },
+          { "id": "n-q", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "queue", "label": "Fan-out queue" } },
+          { "id": "n-cache", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "cache", "label": "Feed caches" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-api", "target": "n-fanout", "label": "Sync fan-out" },
+          { "id": "e2", "source": "n-fanout", "target": "n-q", "label": "80M jobs" },
+          { "id": "e3", "source": "n-fanout", "target": "n-cache", "label": "Write timelines" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-fanout", "n-q"], "edgeIds": ["e1", "e2"], "headline": "Synchronous fan-out for a celebrity post floods the worker queue" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Distribute posts without blocking writers or starving normal users.",
+          "opener": "One celebrity post backed up feeds for everyone—what fan-out strategy would you use instead?",
+          "evidence": {
+            "strong": "Hybrid fan-out: push for normal accounts, pull/merge at read for celebrities, async queue with priority tiers.",
+            "adequate": "Async queue for all fan-out but still attempts full push for celebrities.",
+            "weak": "Synchronous push to all followers before POST returns 200."
+          },
+          "misconceptions": [{ "id": "fanout.sync_ok", "pattern": "Waiting to finish fan-out before responding to the poster.", "challenge": "At one millisecond per follower, how long is the HTTP request for 80M followers?" }],
+          "probes": ["How does a follower’s read path fetch a celebrity post that was not pushed?", "Where do you store the list of high-follower accounts?"],
+          "hints": ["Fan-out on write vs read is a classic tradeoff.", "Celebrities are a tiny fraction of users but most of the fan-out cost."],
+          "referenceFix": "Acknowledge posts immediately, async fan-out for normal users, treat mega-influencers as pull-at-read merged with cached timelines, and isolate celebrity jobs into a low-priority queue shard."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "news-feed/deleted-post-ghost",
+      "title": "Deleted posts still appear in feeds",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.deletion",
+      "scenario": {
+        "symptoms": "Moderation removed a harmful post, but millions of precomputed feeds still show it 12 hours later. Mobile pull-to-refresh intermittently surfaces the deleted content from edge cache.",
+        "interviewerSetup": "Feed caches store denormalized post bodies. Deletes update the post service DB but do not invalidate fan-out copies or CDN keys."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-mod", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Moderation service" } },
+          { "id": "n-post", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "database", "label": "Post store" } },
+          { "id": "n-feed", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "cache", "label": "Materialized feeds" } },
+          { "id": "n-cdn", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "cdn", "label": "CDN edge" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-mod", "target": "n-post", "label": "Soft delete flag" },
+          { "id": "e2", "source": "n-post", "target": "n-feed", "label": "No invalidation" },
+          { "id": "e3", "source": "n-feed", "target": "n-cdn", "label": "Stale bodies" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-feed", "n-cdn"], "edgeIds": ["e2", "e3"], "headline": "Tombstone delete never reaches precomputed feed caches" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Propagate deletes/takedowns to all feed materializations quickly.",
+          "opener": "Moderation deleted a post but feeds still show it—how do you fix deletion in this architecture?",
+          "evidence": {
+            "strong": "Store post IDs in feeds with hydration, broadcast delete events to trim IDs, purge CDN keys, and filter tombstones on read path.",
+            "adequate": "TTL-based expiry without targeted invalidation.",
+            "weak": "Only deletes row in post DB assuming feeds self-heal."
+          },
+          "misconceptions": [{ "id": "delete.db_only", "pattern": "Believing deleting the canonical row instantly hides content everywhere.", "challenge": "Where else was the full post body copied?" }],
+          "probes": ["How do you remove one post ID from millions of feed caches?", "What happens if invalidation events are delayed?"],
+          "hints": ["Reference feeds by ID to limit blast radius.", "Event bus fan-out can carry delete/tombstone messages."],
+          "referenceFix": "Emit delete events, strip post IDs from feed caches asynchronously, purge hydration/CDN entries, and enforce tombstone filtering on every read until propagation completes."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "news-feed/feed-cache-hydration-miss",
+      "title": "Feed cache stores full posts and OOMs",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.cache",
+      "scenario": {
+        "symptoms": "Redis memory usage climbed 3x after enabling rich media previews in feeds. Editing one viral post required scanning millions of feed keys to patch embedded JSON blobs.",
+        "interviewerSetup": "Each follower feed cache entry stores the entire post object. Post edits fan out to every copy."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-read", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "app-server", "label": "Feed read API" } },
+          { "id": "n-feed-cache", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "cache", "label": "Feed timeline cache" } },
+          { "id": "n-post-cache", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "cache", "label": "Post content cache" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "database", "label": "Post DB" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-read", "target": "n-feed-cache", "label": "Full JSON posts" },
+          { "id": "e2", "source": "n-read", "target": "n-post-cache", "label": "Unused" },
+          { "id": "e3", "source": "n-post-cache", "target": "n-db", "label": "Hydrate" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-feed-cache"], "edgeIds": ["e1"], "headline": "Denormalized post bodies in every feed explode memory and edit cost" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Keep feed caches small and make post updates cheap.",
+          "opener": "Redis ran out of memory after rich media—what should each user’s feed cache actually store?",
+          "evidence": {
+            "strong": "Caches ordered post IDs only, hydrates from post cache/DB, handles missing posts gracefully, and localizes edits to post cache.",
+            "adequate": "Stores IDs but still embeds large media metadata in feed entries.",
+            "weak": "Stores full post JSON per follower feed."
+          },
+          "misconceptions": [{ "id": "cache.full_post", "pattern": "Duplicating full post bodies into every follower feed.", "challenge": "How do you update or delete one field on a post copied millions of times?" }],
+          "probes": ["Walk me through read path latency with ID-only feeds.", "How do you batch-hydrate 50 post IDs per request?"],
+          "hints": ["Separate timeline structure from content payload.", "MGET on a post cache is cheaper than giant feed values."],
+          "referenceFix": "Store post IDs (and rank metadata) in feed caches, hydrate via post cache with batch fetch, and invalidate only post cache keys on edit/delete."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

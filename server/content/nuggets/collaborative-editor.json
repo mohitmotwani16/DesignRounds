@@ -1,0 +1,721 @@
+{
+  "promptId": "collaborative-editor",
+  "packVersion": "pack-67bbb30f",
+  "inputsFingerprint": "3be2ad2110ca50027d887e1edb06cbd3cba70e8c9d8999f44d9ad14b1f50cd6b",
+  "nuggets": [
+    {
+      "id": "collaborative-editor/convergence-split-brain",
+      "title": "Two users see different document text after offline edits",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.conflict",
+      "scenario": {
+        "symptoms": "Support tickets report divergent paragraph text for the same doc link. OT engine logs show conflicting transform branches without a single canonical snapshot.",
+        "interviewerSetup": "Clients apply local ops while offline, then reconnect with last-write-wins on server clock skew instead of CRDT/OT merge against authoritative history."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-a",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 80
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Client A"
+            }
+          },
+          {
+            "id": "n-b",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 200
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Client B"
+            }
+          },
+          {
+            "id": "n-ws",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "Sync service"
+            }
+          },
+          {
+            "id": "n-ot",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "OT engine"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 680,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Doc store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-a",
+            "target": "n-ws",
+            "label": "Ops stream"
+          },
+          {
+            "id": "e2",
+            "source": "n-b",
+            "target": "n-ws",
+            "label": "Offline replay"
+          },
+          {
+            "id": "e3",
+            "source": "n-ws",
+            "target": "n-ot",
+            "label": "Transform"
+          },
+          {
+            "id": "e4",
+            "source": "n-ot",
+            "target": "n-db",
+            "label": "Persist snapshot"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-ot",
+          "n-db"
+        ],
+        "edgeIds": [
+          "e3",
+          "e4"
+        ],
+        "headline": "Offline replay bypassed ordered operational transform"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Define a valid conflict resolution strategy (OT or CRDT) to ensure concurrent edits converge to the same state.",
+            "opener": "Two editors disagree on the same paragraph—the sync and history path is highlighted. What failed and how do you restore convergence?",
+            "evidence": {
+              "strong": "Explicitly compares OT (Operational Transformation) and CRDTs, selects one, and explains how operations are transformed or how vector clocks/tombstones ensure convergence.",
+              "adequate": "Mentions OT or CRDTs as the standard solution for text collaboration but is vague on the underlying mechanics of how index shifts are calculated.",
+              "weak": "Proposes last-writer-wins, standard database locks, or overwriting the full document on every keystroke."
+            },
+            "misconceptions": [
+              {
+                "id": "last.writer",
+                "pattern": "Sending the full document text on every edit and saving the last one received.",
+                "challenge": "If two users edit different paragraphs at the exact same time, won't one user's paragraph be deleted when the other's full document is saved?"
+              }
+            ],
+            "probes": [
+              "Can you walk me through an example where Alice types 'A' at index 0 and Bob types 'B' at index 0?",
+              "How do the clients agree on the final string if their local operations are applied out of order?"
+            ],
+            "hints": [
+              "Instead of sending the whole document, what if we just send 'Insert X at position Y'?",
+              "If Alice inserts at position 0, Bob's insertion at position 5 now needs to happen at position 6. What algorithm handles this shift?"
+            ],
+            "referenceFix": "Require server-assigned revision, replay client ops against canonical history with OT/CRDT, reject out-of-order snapshots, and expose merge diagnostics to users."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-editor/snapshot-bloat-slow-load",
+      "title": "Opening large docs takes minutes due to snapshot bloat",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.storage",
+      "scenario": {
+        "symptoms": "Enterprise docs above 2 MB take 90 s to open. Storage costs for document history grew 8× after switching to full snapshot on every keystroke batch.",
+        "interviewerSetup": "The doc store writes entire JSON snapshots every 500 ms instead of append-only ops with periodic compaction."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Editor"
+            }
+          },
+          {
+            "id": "n-api",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Doc API"
+            }
+          },
+          {
+            "id": "n-snap",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "storage",
+              "label": "Snapshot bucket"
+            }
+          },
+          {
+            "id": "n-oplog",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 260
+            },
+            "data": {
+              "kind": "database",
+              "label": "Op log"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-client",
+            "target": "n-api",
+            "label": "Open doc"
+          },
+          {
+            "id": "e2",
+            "source": "n-api",
+            "target": "n-snap",
+            "label": "Download full snapshot"
+          },
+          {
+            "id": "e3",
+            "source": "n-api",
+            "target": "n-oplog",
+            "label": "Unused tail"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-api",
+          "n-snap"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Full snapshot reads dominate open latency"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Persist an append-only operation log and periodically compact it into snapshots for fast read performance.",
+            "opener": "Load times exploded—the persistence path is highlighted. How should storage evolve without losing history?",
+            "evidence": {
+              "strong": "Designs an event-sourced architecture with an append-only operation log and a background worker that periodically compacts ops into a snapshot.",
+              "adequate": "Suggests storing all operations in a database, but only mentions snapshotting after being prompted about load times.",
+              "weak": "Saves the full document string on every single edit, generating massive write load and losing the operation history."
+            },
+            "misconceptions": [
+              {
+                "id": "no.snapshots",
+                "pattern": "Storing only the operation log and replaying it from the beginning every time a user opens the document.",
+                "challenge": "If a document has been edited thousands of times over a year, how long will it take to load for a fresh client?"
+              }
+            ],
+            "probes": [
+              "What happens when a new user opens a document that has 50,000 historical operations?",
+              "How do you ensure the snapshotting process doesn't block ongoing real-time edits?"
+            ],
+            "hints": [
+              "Replaying 50,000 edits is slow. Can we save a 'checkpoint' of the document?",
+              "Think about separating the real-time write path from a background compaction job."
+            ],
+            "referenceFix": "Store append-only ops, periodic compacted checkpoints, delta sync from last known revision, and cap snapshot frequency with background compaction jobs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-editor/reconnect-storm-duplicates",
+      "title": "Reconnect storm duplicates paragraphs after Wi-Fi flap",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.reconnect",
+      "scenario": {
+        "symptoms": "After a brief CDN outage, documents contain repeated bullet lists. Metrics show 40k reconnects/min replaying the same buffered ops twice.",
+        "interviewerSetup": "Clients resend all pending ops on reconnect without idempotency keys; server applies duplicates because acks were lost mid-flight."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile editor"
+            }
+          },
+          {
+            "id": "n-ws",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "Realtime gateway"
+            }
+          },
+          {
+            "id": "n-queue",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Inbound ops"
+            }
+          },
+          {
+            "id": "n-doc",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Document"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-client",
+            "target": "n-ws",
+            "label": "Reconnect burst"
+          },
+          {
+            "id": "e2",
+            "source": "n-ws",
+            "target": "n-queue",
+            "label": "Enqueue"
+          },
+          {
+            "id": "e3",
+            "source": "n-queue",
+            "target": "n-doc",
+            "label": "Apply twice"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-ws",
+          "n-queue"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Non-idempotent replay duplicates operations"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Buffer offline operations locally and synchronize them correctly with the server upon reconnection.",
+            "opener": "Wi-Fi blip left duplicate sections—the reconnect buffer path is highlighted. How do you make replay safe?",
+            "evidence": {
+              "strong": "Explains how the client buffers operations locally with logical timestamps or state vectors, and describes the reconciliation handshake upon reconnect.",
+              "adequate": "States the client saves edits locally and sends them in bulk on reconnect, but glosses over how the server resolves the retroactive conflicts.",
+              "weak": "Assumes offline edits are discarded, or suggests locking the document if the connection drops."
+            },
+            "misconceptions": [
+              {
+                "id": "overwrite.on.reconnect",
+                "pattern": "The reconnecting client simply pushes its full local document state to the server.",
+                "challenge": "What happens to the edits made by other users during those 5 minutes while this client was offline?"
+              }
+            ],
+            "probes": [
+              "What exact metadata does the client send when it reconnects?",
+              "How does the server know which operations the client missed while it was offline?"
+            ],
+            "hints": [
+              "The client has a local version, and the server has moved forward. How do they compare notes?",
+              "Could the client keep track of the last operation ID it received before going offline?"
+            ],
+            "referenceFix": "Client op ids with server dedupe table, ack cursors persisted before apply, at-least-once transport with idempotent merge, and rate-limit replay batches."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-editor/undo-cross-user-leak",
+      "title": "Undo stack reverts another user's edits",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.history",
+      "scenario": {
+        "symptoms": "Designers report undo removed a coworker's paragraph from an hour ago. Audit logs show shared global undo stack keyed only by document id.",
+        "interviewerSetup": "Undo metadata stored per document rather than per session; OT inverse ops applied without author scoping."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-a",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 80
+            },
+            "data": {
+              "kind": "user",
+              "label": "User A"
+            }
+          },
+          {
+            "id": "n-b",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 200
+            },
+            "data": {
+              "kind": "user",
+              "label": "User B"
+            }
+          },
+          {
+            "id": "n-srv",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Edit service"
+            }
+          },
+          {
+            "id": "n-hist",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Global undo stack"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-a",
+            "target": "n-srv",
+            "label": "Edit"
+          },
+          {
+            "id": "e2",
+            "source": "n-b",
+            "target": "n-srv",
+            "label": "Edit"
+          },
+          {
+            "id": "e3",
+            "source": "n-srv",
+            "target": "n-hist",
+            "label": "Push inverse"
+          },
+          {
+            "id": "e4",
+            "source": "n-a",
+            "target": "n-hist",
+            "label": "Undo pop"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-hist"
+        ],
+        "edgeIds": [
+          "e3",
+          "e4"
+        ],
+        "headline": "Shared undo stack crosses author boundaries"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Leverage the operation log and snapshots to view and restore past document versions.",
+            "opener": "Undo affected someone else's work—the history stack path is highlighted. What design fix prevents cross-user undo?",
+            "evidence": {
+              "strong": "Explains how to load the closest snapshot before the target timestamp and replay the operation log forward to the exact point in time.",
+              "adequate": "Suggests taking full backups of the document every few minutes, but lacks a way to view second-by-second history.",
+              "weak": "Has no mechanism for history, or assumes the database's internal backups can be exposed to end users."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How would you generate a view of the document exactly as it was at 2:15 PM yesterday?",
+              "Does storing history impact the real-time editing performance?"
+            ],
+            "hints": [
+              "You already have an append-only log of every edit. How can you use that to travel back in time?",
+              "If you have a snapshot from 2:00 PM and the logs, how do you get to 2:15 PM?"
+            ],
+            "referenceFix": "Per-client undo stacks referencing revision ids, scope undo to own ops or explicit lock regions, and store author id on every inverse op."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-editor/split-brain-primary",
+      "title": "Two primaries accept writes during network partition",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.failure",
+      "scenario": {
+        "symptoms": "Document corruption alerts fired in EU region. Two sync nodes both advertised primary, accepting conflicting writes for 90 seconds during a switch failover.",
+        "interviewerSetup": "Primary election uses a short lease without fencing tokens; stale primary kept accepting ops after partition healed."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-a",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 80
+            },
+            "data": {
+              "kind": "service",
+              "label": "Sync node A"
+            }
+          },
+          {
+            "id": "n-b",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 200
+            },
+            "data": {
+              "kind": "service",
+              "label": "Sync node B"
+            }
+          },
+          {
+            "id": "n-lock",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Lease store"
+            }
+          },
+          {
+            "id": "n-doc",
+            "type": "systemNode",
+            "position": {
+              "x": 540,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Doc shards"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-a",
+            "target": "n-lock",
+            "label": "Hold lease"
+          },
+          {
+            "id": "e2",
+            "source": "n-b",
+            "target": "n-lock",
+            "label": "Stale lease"
+          },
+          {
+            "id": "e3",
+            "source": "n-a",
+            "target": "n-doc",
+            "label": "Writes"
+          },
+          {
+            "id": "e4",
+            "source": "n-b",
+            "target": "n-doc",
+            "label": "Conflicting writes"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-a",
+          "n-b",
+          "n-lock"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "headline": "Stale primary kept writing without fencing"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle session server crashes without losing acknowledged edits or permanently dropping users.",
+            "opener": "We briefly had two writers—the election and doc store path is highlighted. How do you prevent split-brain writes?",
+            "evidence": {
+              "strong": "Clients detect the drop and reconnect; the load balancer assigns a new server, which safely rehydrates its in-memory state from the latest snapshot and op log.",
+              "adequate": "Mentions the load balancer will route clients to a new server, but misses the need for the new server to rebuild the active document state.",
+              "weak": "Assumes the system goes down for those users or that real-time state is irreparably lost."
+            },
+            "misconceptions": [
+              {
+                "id": "unacknowledged.edits",
+                "pattern": "Assuming edits sent just before the crash are safe because they reached the server.",
+                "challenge": "If the server crashed before writing an edit to the database log, how does the new server know about it?"
+              }
+            ],
+            "probes": [
+              "Where does the new server get the document's current state from?",
+              "What happens to the keystrokes that were in the crashed server's memory but not yet saved to the database?"
+            ],
+            "hints": [
+              "WebSockets disconnect when a server crashes. What should the client code do next?",
+              "If an edit wasn't acknowledged by the server before the crash, the client still has it in its offline buffer."
+            ],
+            "referenceFix": "Use consensus or lease with fencing tokens checked by storage, stop writes when lease lost, quiesce before promotion, and run reconciliation jobs after failover."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}
