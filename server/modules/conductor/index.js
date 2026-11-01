@@ -58,7 +58,7 @@ export async function conductorPackVersion(session) {
 
 function nuggetOpening(nugget) {
   const item = nugget.miniPack.agenda[0];
-  return `${nugget.scenario.symptoms}\n\n${item.opener}`;
+  return `${nugget.scenario.symptoms} ${item.opener}`.replace(/\s+/g, " ").trim();
 }
 
 export async function startNuggetRound(conn, { session, user }) {
@@ -114,7 +114,7 @@ export async function changeMode(conn, { session, state, mode }) {
   if (session.session_kind === "nugget" && session.nugget_id) {
     const record = getNuggetRecord(session.nugget_id);
     if (!record) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
-    openingText = mode === "guided" ? `${nuggetOpening(record.nugget)}\n\n${GUIDED_OPENING_LINE}` : nuggetOpening(record.nugget);
+    openingText = nuggetOpening(record.nugget);
   } else {
     const record = await getPack(session.prompt_id, state.pack_version);
     openingText = openingFor(record.pack, mode);
@@ -526,7 +526,7 @@ export function presentV3State(row, sessionOrPromptId) {
     stage: row.stage,
     hintsUsed: row.hints_used,
     mode: row.mode,
-    focusArea: FOCUS_AREAS[row.stage],
+    ...(session?.session_kind === "nugget" ? {} : { focusArea: FOCUS_AREAS[row.stage] }),
     clock: { elapsedMs: Number(row.active_ms), budgetMs },
     sessionKind: session?.session_kind ?? "full",
     nuggetId: session?.nugget_id ?? null,

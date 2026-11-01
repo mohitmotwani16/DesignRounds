@@ -54,7 +54,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
         ? (sessionKind === "nugget"
           ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} />
           : <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />)
-        : <InterviewerPanel interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} />}
+        : <InterviewerPanel sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} />}
     </aside>
   );
 }
