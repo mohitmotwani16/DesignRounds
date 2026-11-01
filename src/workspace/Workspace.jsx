@@ -15,7 +15,7 @@ import { navigate } from "../router.js";
 import { DATA_MODEL_TRACKS, getItem } from "./catalog.jsx";
 import { createNode, createPoint, POINT_SIZE, decorateEdge, entrySide, hydrateDiagram, newId, nodeCenter, routeCenter, serializeDiagram, snapTarget, strayPoints } from "./diagram.js";
 import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
-import { CanvasActions, edgeTypes, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
+import { CanvasActions, edgeTypes, IncidentOverlay, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
 import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from "./CanvasTour.jsx";
 import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
@@ -73,7 +73,14 @@ function writeSessionFlag(key, value) {
 }
 
 function Workspace({ session, prompt }) {
+  const isNugget = session.sessionKind === "nugget";
+  const nuggetMeta = session.nugget;
   const initial = useMemo(() => hydrateDiagram(session.diagram), [session]);
+  const defaultViewport = useMemo(() => {
+    const view = session.diagram?.viewport;
+    if (!view || typeof view.x !== "number" || typeof view.y !== "number" || typeof view.zoom !== "number") return undefined;
+    return view;
+  }, [session.diagram]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [status, setStatus] = useState(session.status);
@@ -235,6 +242,8 @@ function Workspace({ session, prompt }) {
     record();
     updateNodeData(id, patch);
   }, [record, updateNodeData]);
+
+  const canvasActions = useMemo(() => ({ commitNodeData, readOnly }), [commitNodeData, readOnly]);
 
   const updateEdge = useCallback((id, patch) => {
     if (readOnlyRef.current) return;
@@ -752,12 +761,17 @@ function Workspace({ session, prompt }) {
   }, []);
   const onIdleClose = useCallback(() => {
     setStatus("completed");
-    setPanelTab("review");
+    if (!isNugget) setPanelTab("review");
     setPanelOpen(true);
-  }, []);
+  }, [isNugget]);
   const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose });
   const inspectorAsk = inspectorAskMode(interview, status, user);
   useEffect(() => { if (panelOpen && panelTab === "interviewer") setUnread(0); }, [panelOpen, panelTab]);
+  useEffect(() => {
+    if (!isNugget || !initial.nodes.length) return undefined;
+    const timer = window.setTimeout(() => reactFlow.fitView({ padding: 0.25, duration: 300, maxZoom: 1 }), 80);
+    return () => window.clearTimeout(timer);
+  }, [isNugget, initial.nodes.length, reactFlow]);
 
   // ---- Derived view state --------------------------------------------------
 
@@ -765,7 +779,15 @@ function Workspace({ session, prompt }) {
   const outline = useMemo(() => nodesRef.current.filter((node) => node.type !== "pointNode").map((node) => ({ id: node.id, kind: node.data.kind, label: node.data.label })), [outlineKey]);
   const selectedKey = selectedNodes.map((node) => node.id).join(",");
   const selectedIds = useMemo(() => new Set(selectedKey ? selectedKey.split(",") : []), [selectedKey]);
-  const canvasActions = useMemo(() => ({ commitNodeData, readOnly }), [commitNodeData, readOnly]);
+  const incidentOverlay = useMemo(() => ({
+    nodeIds: new Set(nuggetMeta?.incident?.nodeIds ?? []),
+    edgeIds: new Set(nuggetMeta?.incident?.edgeIds ?? []),
+  }), [nuggetMeta]);
+  const displayEdges = useMemo(() => edges.map((edge) => (
+    incidentOverlay.edgeIds.has(edge.id)
+      ? { ...edge, className: `${edge.className ?? ""} incident-edge`.trim() }
+      : edge
+  )), [edges, incidentOverlay.edgeIds]);
   const labelFor = (id) => {
     const node = nodes.find((entry) => entry.id === id);
     return node?.type === "pointNode" ? "Open end" : node?.data.label || "Component";
@@ -865,11 +887,18 @@ function Workspace({ session, prompt }) {
               {!panelOpen && <button className="topbar-action button-chat-reopen" onClick={togglePanel}><MessageSquare size={13} /> {panelTab === "review" ? "Review" : "Interviewer"}{unread > 0 && <span className="tab-badge">{unread}</span>}</button>}
             </div>
           </div>
+          {isNugget && nuggetMeta && (
+            <div className="nugget-scenario-banner">
+              <strong>{nuggetMeta.incident?.headline ?? "Incident drill"} · {nuggetMeta.minutes} min</strong>
+              {nuggetMeta.symptoms}
+            </div>
+          )}
           <div className="canvas-content" data-tour="canvas" ref={canvasRef} onPointerDownCapture={(event) => { pointerDown.current = true; onEdgePointerDown(event); }}>
             <CanvasActions.Provider value={canvasActions}>
+              <IncidentOverlay.Provider value={incidentOverlay}>
               <ReactFlow
                 nodes={nodes}
-                edges={edges}
+                edges={displayEdges}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 onNodesChange={onNodesChange}
@@ -898,8 +927,9 @@ function Workspace({ session, prompt }) {
                 connectionRadius={28}
                 // Fit a saved design on open. An empty canvas keeps its view: fitting on the
                 // first added node would re-centre it under the editor panel.
-                fitView={initial.nodes.length > 0}
+                fitView={initial.nodes.length > 0 && !defaultViewport}
                 fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+                defaultViewport={defaultViewport}
                 minZoom={0.15}
                 maxZoom={2.5}
                 snapToGrid={snap}
@@ -919,6 +949,7 @@ function Workspace({ session, prompt }) {
                 <Controls showInteractive={false} position="bottom-left" />
                 {showMinimap && <MiniMap position="bottom-right" zoomable pannable nodeStrokeWidth={0} nodeColor={(node) => node.type === "pointNode" ? "transparent" : minimapColors[node.data.color || getItem(node.data.kind)?.color] || minimapColors.slate} maskColor={isDark ? "rgba(20,23,29,0.72)" : "rgba(248,249,251,0.72)"} />}
               </ReactFlow>
+              </IncidentOverlay.Provider>
             </CanvasActions.Provider>
 
             {nodes.length === 0 && !legacy && (
@@ -959,7 +990,8 @@ function Workspace({ session, prompt }) {
           {...SIDE_PANEL_WIDTH} defaultWidth={panelTab === "review" ? SIDE_PANEL_WIDTH.reviewWidth : SIDE_PANEL_WIDTH.defaultWidth} />}
         {panelOpen && (
           <SidePanel tab={panelTab} onTab={setPanelTab} onClose={togglePanel} interview={interview} unread={unread}
-            selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} promptTrack={prompt.track} />
+            selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} promptTrack={prompt.track}
+            sessionKind={session.sessionKind} nugget={nuggetMeta} promptId={session.promptId} />
         )}
       </div>
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}

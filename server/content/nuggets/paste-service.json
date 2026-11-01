@@ -1,0 +1,137 @@
+{
+  "promptId": "paste-service",
+  "nuggets": [
+    {
+      "id": "paste-service/viral-paste-hot-key",
+      "title": "Viral paste melts read path",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.viral",
+      "scenario": {
+        "symptoms": "A paste linked from a trending forum drove read QPS to 200k on a single short id. Origin DB CPU pegged at 100% despite Redis in front.",
+        "interviewerSetup": "Cache-aside with no request coalescing; hot key expired during a traffic spike and thousands of app servers stampeded the database."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-users", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "user", "label": "Readers" } },
+          { "id": "n-app", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "app-server", "label": "Read API" } },
+          { "id": "n-cache", "type": "systemNode", "position": { "x": 480, "y": 40 }, "data": { "kind": "cache", "label": "Redis" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 480, "y": 200 }, "data": { "kind": "database", "label": "Paste metadata DB" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-users", "target": "n-app", "label": "GET /abc" },
+          { "id": "e2", "source": "n-app", "target": "n-cache", "label": "cache-aside" },
+          { "id": "e3", "source": "n-app", "target": "n-db", "label": "stampede on miss" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-cache", "n-db"], "edgeIds": ["e2", "e3"], "headline": "Hot paste key expiry triggers cache stampede into the database" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Serve viral paste reads without collapsing origin storage.",
+          "opener": "One paste went viral and DB melted—what broke in caching and how would you fix it?",
+          "evidence": {
+            "strong": "Single-flight coalescing, TTL jitter, proactive refresh for hot ids, CDN for public pastes, local LRU on app nodes.",
+            "adequate": "Scale DB read replicas without coalescing.",
+            "weak": "Only add app servers."
+          },
+          "misconceptions": [{ "id": "viral.scale_app", "pattern": "More app servers fix viral read latency.", "challenge": "Every server still misses together—what happens to DB?" }],
+          "probes": ["What happens the instant a hot key expires?", "Would you CDN-cache public paste bodies?"],
+          "hints": ["Same thundering herd pattern as URL shorteners.", "Jitter + single-flight are key."],
+          "referenceFix": "Add request coalescing on miss, jittered TTL with proactive refresh for trending ids, optional CDN for public content, and monitor hot-key metrics."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "paste-service/expiry-sweep-lag",
+      "title": "Expired pastes linger for days",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.expiry",
+      "scenario": {
+        "symptoms": "Compliance audit found 1.2M pastes older than their TTL still downloadable. The nightly cron sweeper fell 18 hours behind after a DB migration.",
+        "interviewerSetup": "Expiry relies on a batch job scanning the table; there is no per-key TTL in storage or lazy delete on read."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-cron", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "worker", "label": "Expiry cron" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "database", "label": "Paste table" } },
+          { "id": "n-blob", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "object-store", "label": "Blob store" } },
+          { "id": "n-read", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "app-server", "label": "Read API" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-cron", "target": "n-db", "label": "Full table scan" },
+          { "id": "e2", "source": "n-read", "target": "n-db", "label": "No TTL check" },
+          { "id": "e3", "source": "n-db", "target": "n-blob", "label": "Orphan blobs" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-cron", "n-read"], "edgeIds": ["e1", "e2"], "headline": "Batch-only expiry falls behind and reads skip TTL enforcement" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Guarantee pastes become inaccessible promptly after TTL.",
+          "opener": "Expired pastes were still readable—how should expiry be enforced?",
+          "evidence": {
+            "strong": "Lazy delete on read with expires_at column, object-store lifecycle rules, incremental sweeper by expiry index, metrics on lag.",
+            "adequate": "Faster cron scan only.",
+            "weak": "Trust nightly job without read-path checks."
+          },
+          "misconceptions": [],
+          "probes": ["What index supports efficient expiry sweeps?", "Should blob deletion be synchronous with metadata delete?"],
+          "hints": ["Defense in depth: read path + background job.", "Store expires_at on every row."],
+          "referenceFix": "Check expires_at on every read, index expires_at for chunked sweeper, apply object-store lifecycle deletion, and alert when sweeper lag exceeds SLA."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "paste-service/abuse-scan-bypass",
+      "title": "Malware paste served before scan completes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.abuse",
+      "scenario": {
+        "symptoms": "Security team flagged malware download links served from new pastes for up to 90 seconds. Upload API returns 201 immediately while async scanning queues behind bulk uploads.",
+        "interviewerSetup": "Public pastes are readable before abuse scanner marks them blocked. Private pastes wait, but public ones optimistically serve content."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-up", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "api-gateway", "label": "Create API" } },
+          { "id": "n-store", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "object-store", "label": "Paste blobs" } },
+          { "id": "n-scan", "type": "systemNode", "position": { "x": 480, "y": 40 }, "data": { "kind": "worker", "label": "Abuse scanner" } },
+          { "id": "n-read", "type": "systemNode", "position": { "x": 480, "y": 200 }, "data": { "kind": "app-server", "label": "Public read API" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-up", "target": "n-store", "label": "Instant publish" },
+          { "id": "e2", "source": "n-read", "target": "n-store", "label": "Serve before scan" },
+          { "id": "e3", "source": "n-scan", "target": "n-store", "label": "Async block" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-read", "n-scan"], "edgeIds": ["e2"], "headline": "Public reads allowed before abuse scanning completes" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Block abusive paste content from being served publicly.",
+          "opener": "Malware pastes were live for 90 seconds—where should gating happen?",
+          "evidence": {
+            "strong": "Quarantine state until scan passes, hash blocklists, rate limits, and hold public URL until status=clean.",
+            "adequate": "Scan async but take down after detection only.",
+            "weak": "Serve immediately for UX."
+          },
+          "misconceptions": [],
+          "probes": ["Can private unlisted pastes use different policy?", "How do you prioritize scanner queue during attacks?"],
+          "hints": ["Treat unknown content as pending, not public.", "Return 404/403 until cleared."],
+          "referenceFix": "Write pastes as pending, expose public links only after scanner approval, fast-path known-good hashes, and prioritize scanner workers under abuse spikes."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

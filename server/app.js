@@ -22,6 +22,9 @@ import { guideFor } from "./modules/ai/guides.js";
 import { syncAnswerPools } from "./modules/answers/store.js";
 import { importPackFiles, syncPackJobs } from "./modules/pks/index.js";
 import { packsRouter } from "./modules/pks/routes.js";
+import { importNuggetFiles } from "./modules/nuggets/index.js";
+import { scheduleMissingNuggetFiles } from "./modules/nuggets/live.js";
+import { nuggetsRouter } from "./modules/nuggets/routes.js";
 import { persistUcsVersion, ucsVersion } from "./modules/ucs/index.js";
 import { prompts } from "../src/data/prompts.js";
 
@@ -74,6 +77,7 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use("/v1", maintenanceRouter);
   api.use(loadUser);
   api.use(requireCurrentHuman);
+  api.use("/v1", nuggetsRouter);
   // Before the routers that require sign-in: round content answers visitors too.
   api.use("/v1", roundsRouter);
   // Before the routers that require sign-in for everything: published articles are public.
@@ -143,6 +147,8 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   await persistUcsVersion();
   const imported = await importPackFiles();
   if (imported) console.log(`[pks] published ${imported} hand-authored pack(s)`);
+  importNuggetFiles();
+  scheduleMissingNuggetFiles();
   const queued = await syncPackJobs();
   if (queued) console.log(`[pks] queued ${queued} question(s) for a Problem Pack`);
   console.log(`[ucs] interviewer context ${ucsVersion()}`);

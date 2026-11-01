@@ -1,0 +1,139 @@
+{
+  "promptId": "notification-ranking",
+  "nuggets": [
+    {
+      "id": "notification-ranking/daily-cap-bypass",
+      "title": "Ranking ignores per-user send budget",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.budget",
+      "scenario": {
+        "symptoms": "Push opt-out rate spiked 12% after a marketing campaign. Some users received 28 pushes in one day despite a product policy of max 3 ranked notifications per day.",
+        "interviewerSetup": "Each vertical team runs its own ranker and sends directly to the delivery service. There is no global counter enforcing daily caps before send."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-soc", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "service", "label": "Social ranker" } },
+          { "id": "n-mkt", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "service", "label": "Marketing ranker" } },
+          { "id": "n-del", "type": "systemNode", "position": { "x": 300, "y": 140 }, "data": { "kind": "service", "label": "Delivery service" } },
+          { "id": "n-user", "type": "systemNode", "position": { "x": 560, "y": 140 }, "data": { "kind": "mobile", "label": "User device" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-soc", "target": "n-del", "label": "Uncoordinated sends" },
+          { "id": "e2", "source": "n-mkt", "target": "n-del", "label": "Campaign blast" },
+          { "id": "e3", "source": "n-del", "target": "n-user", "label": "28 pushes/day" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-del"], "edgeIds": ["e1", "e2"], "headline": "Multiple rankers bypass a global daily notification budget" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Enforce cross-channel notification budgets before delivery.",
+          "opener": "Users got 28 pushes in a day—where should the daily cap be enforced in this stack?",
+          "evidence": {
+            "strong": "Central budget service with atomic counters, unified ranking gate, priority tiers, and defer/drop rules with audit logs.",
+            "adequate": "Per-team caps without global coordination.",
+            "weak": "Trusts each ranker to self-limit sends."
+          },
+          "misconceptions": [{ "id": "budget.client", "pattern": "Relying on client-side notification settings only.", "challenge": "How do you stop server-side marketing sends from ignoring the cap?" }],
+          "probes": ["How do you choose which notification wins when three teams compete for the last slot?", "Where is the counter stored for idempotent retries?"],
+          "hints": ["Think centralized gate vs many writers.", "Redis INCR with TTL can track daily counts."],
+          "referenceFix": "Route all sends through a budget-aware orchestrator that decrements per-user/day counters, applies priority rules, and drops or schedules overflow."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "notification-ranking/timezone-misfire",
+      "title": "Quiet hours ignored for travelers",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.timing",
+      "scenario": {
+        "symptoms": "Complaints flooded support after users in Europe received shopping alerts at 3 a.m. local time. The ranker schedules on UTC hour buckets using signup timezone only.",
+        "interviewerSetup": "Users who traveled did not update profile timezone. The timing model uses a static table instead of recent device locale or IP hints."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-rank", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Timing ranker" } },
+          { "id": "n-profile", "type": "systemNode", "position": { "x": 280, "y": 40 }, "data": { "kind": "database", "label": "Static timezone profile" } },
+          { "id": "n-sched", "type": "systemNode", "position": { "x": 280, "y": 200 }, "data": { "kind": "queue", "label": "UTC send scheduler" } },
+          { "id": "n-apns", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "service", "label": "Push provider" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-rank", "target": "n-profile", "label": "Stale TZ" },
+          { "id": "e2", "source": "n-rank", "target": "n-sched", "label": "UTC bucket" },
+          { "id": "e3", "source": "n-sched", "target": "n-apns", "label": "3 a.m. local" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-profile", "n-sched"], "edgeIds": ["e1", "e2"], "headline": "Send-time model uses stale timezone so quiet hours fail" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Deliver ranked notifications in each user’s appropriate local window.",
+          "opener": "Users got pushes at 3 a.m.—how should timing features decide when to send?",
+          "evidence": {
+            "strong": "Combines device-reported timezone, decaying travel signals, quiet-hour constraints, and per-user send windows in the ranker.",
+            "adequate": "Uses profile timezone with manual update only.",
+            "weak": "Schedules purely on UTC without user locale."
+          },
+          "misconceptions": [],
+          "probes": ["What signal updates timezone when someone flies abroad?", "How do you back off if the user dismisses late-night pushes?"],
+          "hints": ["Mobile clients know local offset from the OS.", "Quiet hours are a hard constraint, not just a model feature."],
+          "referenceFix": "Ingest device timezone heartbeat, fall back to profile, enforce quiet-hour windows before scoring, and reschedule sends into the next allowed local slot."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "notification-ranking/duplicate-channel-spam",
+      "title": "Same event ranked on push and email",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.aggregation",
+      "scenario": {
+        "symptoms": "Users report duplicate alerts for the same order shipment on push, email, and SMS within two minutes. Engagement dropped because each channel ranker optimizes independently.",
+        "interviewerSetup": "There is no dedupe key across channels. Each channel model scores the event separately and sends if above threshold."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-events", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "event-bus", "label": "Order shipped event" } },
+          { "id": "n-orch", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Channel rankers (3x)" } },
+          { "id": "n-push", "type": "systemNode", "position": { "x": 520, "y": 40 }, "data": { "kind": "service", "label": "Push" } },
+          { "id": "n-email", "type": "systemNode", "position": { "x": 520, "y": 140 }, "data": { "kind": "service", "label": "Email" } },
+          { "id": "n-sms", "type": "systemNode", "position": { "x": 520, "y": 240 }, "data": { "kind": "service", "label": "SMS" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-events", "target": "n-orch" },
+          { "id": "e2", "source": "n-orch", "target": "n-push" },
+          { "id": "e3", "source": "n-orch", "target": "n-email" },
+          { "id": "e4", "source": "n-orch", "target": "n-sms" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-orch"], "edgeIds": ["e2", "e3", "e4"], "headline": "Independent channel rankers triple-send the same logical notification" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "tradeoffs", "weight": 3, "required": true,
+          "goal": "Pick the best channel mix without spamming users for one event.",
+          "opener": "Users got push, email, and SMS for one shipment—how would you coordinate ranking across channels?",
+          "evidence": {
+            "strong": "Unified decision layer with dedupe keys, channel preference model, mutual exclusion rules, and fallback only if primary undelivered.",
+            "adequate": "Caps per channel but still allows triple send.",
+            "weak": "Each channel optimizes CTR independently."
+          },
+          "misconceptions": [],
+          "probes": ["When is it OK to use two channels for the same event?", "How do you represent user channel preferences?"],
+          "hints": ["Treat event+user as a single decision.", "Delivery receipts can trigger fallback channel."],
+          "referenceFix": "Central orchestrator scores channels jointly, sends at most one primary notification per dedupe key, and uses async fallback if delivery fails."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

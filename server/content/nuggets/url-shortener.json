@@ -1,0 +1,138 @@
+{
+  "promptId": "url-shortener",
+  "nuggets": [
+    {
+      "id": "url-shortener/cache-stampede",
+      "title": "Redirect latency spikes after a viral link",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.cache",
+      "scenario": {
+        "symptoms": "A celebrity shared a short link and redirect p99 latency jumped from 20 ms to over 800 ms. The cache layer shows near 100% CPU and the database read IOPS tripled.",
+        "interviewerSetup": "The design uses a single Redis cluster with cache-aside but no request coalescing, no TTL jitter, and hot keys for the viral short code. The app servers stampede the database when the key expires."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-user", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "user", "label": "Users" } },
+          { "id": "n-gw", "type": "systemNode", "position": { "x": 220, "y": 120 }, "data": { "kind": "api-gateway", "label": "API / redirect" } },
+          { "id": "n-lb", "type": "systemNode", "position": { "x": 400, "y": 120 }, "data": { "kind": "load-balancer", "label": "Load balancer" } },
+          { "id": "n-app", "type": "systemNode", "position": { "x": 580, "y": 120 }, "data": { "kind": "app-server", "label": "Redirect service" } },
+          { "id": "n-cache", "type": "systemNode", "position": { "x": 760, "y": 40 }, "data": { "kind": "cache", "label": "Redis cache" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 760, "y": 200 }, "data": { "kind": "kv-store", "label": "Link store" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-gw", "label": "GET /abc" },
+          { "id": "e2", "source": "n-gw", "target": "n-lb" },
+          { "id": "e3", "source": "n-lb", "target": "n-app" },
+          { "id": "e4", "source": "n-app", "target": "n-cache", "label": "cache-aside" },
+          { "id": "e5", "source": "n-app", "target": "n-db", "label": "on miss" }
+        ]
+      },
+      "incident": {
+        "nodeIds": ["n-cache", "n-db"],
+        "edgeIds": ["e4", "e5"],
+        "headline": "Hot key expiry causes cache stampede into the database"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Stop correlated expiry and collapse thundering herds on a viral short code.",
+            "opener": "Look at the highlighted parts of the diagram. Redirects spiked to 800 ms p99 after one link went viral. What broke, and how would you fix it?",
+            "evidence": {
+              "strong": "Names hot-key stampede, TTL jitter or proactive refresh, request coalescing / single-flight, possibly local in-process cache for mega-hot keys, and measuring hit ratio and DB load.",
+              "adequate": "Says add more cache or scale DB without addressing correlated expiry or coalescing.",
+              "weak": "Only scales app servers or ignores the cache/database interaction."
+            },
+            "misconceptions": [
+              {
+                "id": "scale.app",
+                "pattern": "Believes more app servers alone fixes redirect latency.",
+                "challenge": "Every new app server still misses the same hot key at once—what happens to the database?"
+              }
+            ],
+            "probes": [
+              "What happens the millisecond that hot key expires?",
+              "How would you refresh a viral mapping before it falls out of cache?"
+            ],
+            "hints": [
+              "Think about many requests missing the same key at the same instant.",
+              "Jitter and single-flight are common tools for hot keys."
+            ],
+            "referenceFix": "Add TTL jitter and proactive refresh for hot codes, single-flight or request coalescing on cache miss, optional local LRU for top-N codes, monitor cache hit ratio and DB read IOPS, and consider splitting hot keys to a dedicated shard."
+          }
+        ],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "hand"
+    },
+    {
+      "id": "url-shortener/collision-handling",
+      "title": "Duplicate short codes under load",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.codegen",
+      "scenario": {
+        "symptoms": "Two API servers occasionally return the same short code for different long URLs. Support tickets mention wrong redirects after heavy create traffic.",
+        "interviewerSetup": "The design uses random 7-character codes with a check-then-insert pattern and no centralized id allocation. Race windows allow duplicates."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-user", "type": "systemNode", "position": { "x": 40, "y": 140 }, "data": { "kind": "user", "label": "Users" } },
+          { "id": "n-gw", "type": "systemNode", "position": { "x": 220, "y": 140 }, "data": { "kind": "api-gateway", "label": "Create API" } },
+          { "id": "n-app1", "type": "systemNode", "position": { "x": 420, "y": 80 }, "data": { "kind": "app-server", "label": "API server A" } },
+          { "id": "n-app2", "type": "systemNode", "position": { "x": 420, "y": 200 }, "data": { "kind": "app-server", "label": "API server B" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 640, "y": 140 }, "data": { "kind": "kv-store", "label": "Link store" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-user", "target": "n-gw", "label": "POST /shorten" },
+          { "id": "e2", "source": "n-gw", "target": "n-app1" },
+          { "id": "e3", "source": "n-gw", "target": "n-app2" },
+          { "id": "e4", "source": "n-app1", "target": "n-db", "label": "check + insert" },
+          { "id": "e5", "source": "n-app2", "target": "n-db", "label": "check + insert" }
+        ]
+      },
+      "incident": {
+        "nodeIds": ["n-app1", "n-app2", "n-db"],
+        "edgeIds": ["e4", "e5"],
+        "headline": "Race on check-then-insert allows duplicate short codes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Guarantee unique short codes across many writers.",
+            "opener": "We're seeing duplicate short codes when create traffic is high—the app servers and database path are highlighted. What's going wrong and how would you fix it?",
+            "evidence": {
+              "strong": "Identifies check-then-insert race, proposes unique constraint with retry, range/counter allocation, or Snowflake-style ids encoded to base62, with idempotent create handling.",
+              "adequate": "Mentions unique index but not how writers coordinate under load.",
+              "weak": "Suggests longer random strings without eliminating the race."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Two servers generate the same candidate code in the same millisecond—walk me through the database operations.",
+              "How would you allocate codes without a central bottleneck?"
+            ],
+            "hints": [
+              "Database uniqueness helps, but the write path still needs a story.",
+              "Range allocation per server is a classic pattern here."
+            ],
+            "referenceFix": "Enforce unique constraint on short_code with insert-only and retry on conflict, or use centralized/range-based counter allocation encoded to base62; avoid check-then-insert; make create idempotent with client keys."
+          }
+        ],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "hand"
+    }
+  ]
+}

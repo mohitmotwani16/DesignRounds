@@ -1,0 +1,680 @@
+{
+  "promptId": "config-control-plane",
+  "packVersion": "pack-b8e25205",
+  "inputsFingerprint": "a46a3e39e2bd0ca320aaa604ca89c0f4cd38ce2b432a1fc5faec84c1f6b2ca44",
+  "nuggets": [
+    {
+      "id": "config-control-plane/bad-config-takes-down-fleet",
+      "title": "Invalid config YAML crashes every edge agent",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.validation",
+      "scenario": {
+        "symptoms": "All CDN edge agents restarted in a loop after a config publish. Global error rate hit 40% until rollback; schema allowed a negative TTL field that agents parse as crash.",
+        "interviewerSetup": "Control plane accepts uploads without server-side schema validation or canary; agents hot-reload and panic on bad values."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-op",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "admin",
+              "label": "Operator"
+            }
+          },
+          {
+            "id": "n-cp",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 120
+            },
+            "data": {
+              "kind": "config",
+              "label": "Control plane"
+            }
+          },
+          {
+            "id": "n-val",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 260
+            },
+            "data": {
+              "kind": "service",
+              "label": "Validator"
+            }
+          },
+          {
+            "id": "n-agent",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 120
+            },
+            "data": {
+              "kind": "web-server",
+              "label": "Edge agents"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-op",
+            "target": "n-cp",
+            "label": "Publish"
+          },
+          {
+            "id": "e2",
+            "source": "n-cp",
+            "target": "n-agent",
+            "label": "Push unvalidated"
+          },
+          {
+            "id": "e3",
+            "source": "n-cp",
+            "target": "n-val",
+            "label": "Skipped"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-cp",
+          "n-agent"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unvalidated config propagated globally"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Prevent bad configuration from reaching the distribution phase.",
+            "opener": "One config edit brick the fleet—the validation and rollout path is highlighted. How do you prevent bad config from reaching everyone?",
+            "evidence": {
+              "strong": "Describes a pipeline of schema validation, semantic validation, and dry-runs against a shadow instance.",
+              "adequate": "Mentions JSON schema validation and rejecting malformed inputs.",
+              "weak": "Assumes configuration is always correct if the API accepts it."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What if the JSON is valid, but a timeout value is accidentally set to 0?",
+              "How can we validate configuration that depends on the current state of a database?"
+            ],
+            "hints": [
+              "Are there ways to check the 'meaning' of the config, not just the syntax?",
+              "Could we test the config on a real instance without serving user traffic?"
+            ],
+            "referenceFix": "Strict schema validation, semantic checks, signed bundles, canary cohorts, automatic rollback on agent health signals, and dry-run against shadow agents."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "config-control-plane/stuck-canary-never-promotes",
+      "title": "Canary stuck at 5% while bug fix waits days",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.rollout",
+      "scenario": {
+        "symptoms": "A critical TLS fix remains on 5% of agents for 72 hours. Promotion pipeline blocked because canary metrics compare to wrong baseline window.",
+        "interviewerSetup": "Rollout controller requires manual approval but alert noise hides the promotion gate; version skew causes mixed behavior on same POP."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-cp",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 140
+            },
+            "data": {
+              "kind": "config",
+              "label": "Control plane"
+            }
+          },
+          {
+            "id": "n-roll",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Rollout controller"
+            }
+          },
+          {
+            "id": "n-can",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Canary agents"
+            }
+          },
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 200
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Prod agents"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-cp",
+            "target": "n-roll",
+            "label": "New version"
+          },
+          {
+            "id": "e2",
+            "source": "n-roll",
+            "target": "n-can",
+            "label": "5% traffic"
+          },
+          {
+            "id": "e3",
+            "source": "n-roll",
+            "target": "n-prod",
+            "label": "Blocked promote"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-roll"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Promotion gate never clears on noisy canary metrics"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Safely deploy changes to a subset of nodes before a global rollout.",
+            "opener": "The fix is canaried but never promotes—the rollout controller path is highlighted. What's stuck?",
+            "evidence": {
+              "strong": "Designs a stateful rollout engine that targets a canary group, waits for a bake period, checks health, and then expands the rollout progressively (e.g., 1%, 10%, 100%).",
+              "adequate": "Mentions canary deployments or rolling out region by region.",
+              "weak": "Updates all instances simultaneously."
+            },
+            "misconceptions": [
+              {
+                "id": "instant-global",
+                "pattern": "Broadcasting the new version to all nodes at once.",
+                "challenge": "If this config causes a panic loop on startup, what happens to our global fleet?"
+              }
+            ],
+            "probes": [
+              "Where is the state of the rollout tracked?",
+              "How does a specific instance know whether it should apply version 2 or stick to version 1?"
+            ],
+            "hints": [
+              "Think of the rollout as a state machine.",
+              "How can you map an instance's identity (like its region or ID hash) to a specific config version?"
+            ],
+            "referenceFix": "Fix baseline comparisons, auto-promote on SLO with manual override, cap max canary duration, and alert on version skew per POP."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "config-control-plane/rollback-races-forward-deploy",
+      "title": "Rollback overwritten by overlapping deploy job",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.rollback",
+      "scenario": {
+        "symptoms": "Operators rolled back a bad release but five minutes later the broken version returned. Two CI jobs raced writing the same config channel.",
+        "interviewerSetup": "Rollback sets pointer without monotonic revision; forward deploy job lacked check on rollback flag."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-ci",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "CI publisher"
+            }
+          },
+          {
+            "id": "n-cp",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 120
+            },
+            "data": {
+              "kind": "config",
+              "label": "Config store"
+            }
+          },
+          {
+            "id": "n-ag",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 120
+            },
+            "data": {
+              "kind": "web-server",
+              "label": "Agents"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-ci",
+            "target": "n-cp",
+            "label": "Deploy v2"
+          },
+          {
+            "id": "e2",
+            "source": "n-cp",
+            "target": "n-ag",
+            "label": "Apply v2"
+          },
+          {
+            "id": "e3",
+            "source": "n-ci",
+            "target": "n-cp",
+            "label": "Race after rollback"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-cp"
+        ],
+        "edgeIds": [
+          "e1",
+          "e3"
+        ],
+        "headline": "Non-monotonic revisions allow rollback to be clobbered"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Automatically detect failure spikes caused by a bad config and revert the state.",
+            "opener": "Rollback didn't stick—the revision pointer path is highlighted. How do you make rollback win?",
+            "evidence": {
+              "strong": "Connects the rollout engine to the metrics/observability system, defining health gates. If errors spike, the engine automatically updates the target mapping back to the previous version.",
+              "adequate": "Mentions monitoring error rates and manually clicking a rollback button.",
+              "weak": "Has no mechanism to detect the failure or requires a forward-fix (writing a new config) instead of a fast revert."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How does the system distinguish a config error from a general network blip?",
+              "What is the exact mechanism to tell the broken instances to go back to the old version?"
+            ],
+            "hints": [
+              "Consider having the rollout orchestrator poll Prometheus or Datadog during the 'bake' period.",
+              "If instances are pulling config, what happens if we change their 'target version' back to the previous one in the database?"
+            ],
+            "referenceFix": "Monotonic config revision with compare-and-swap, freeze channel on rollback, require explicit unfreeze to forward deploy, audit trail of publishers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "config-control-plane/cp-outage-stops-data-plane",
+      "title": "Config service outage stalls all data plane requests",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.resilience",
+      "scenario": {
+        "symptoms": "When the control plane API blipped for three minutes, every API request blocked waiting for fresh route tables. p99 latency hit 12 s.",
+        "interviewerSetup": "Data plane fetches config synchronously per request with no local snapshot or TTL cache."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "n-dp",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Data plane"
+            }
+          },
+          {
+            "id": "n-cp",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 260
+            },
+            "data": {
+              "kind": "config",
+              "label": "Control plane"
+            }
+          },
+          {
+            "id": "n-backend",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 120
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Services"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-client",
+            "target": "n-dp",
+            "label": "Requests"
+          },
+          {
+            "id": "e2",
+            "source": "n-dp",
+            "target": "n-cp",
+            "label": "Sync lookup"
+          },
+          {
+            "id": "e3",
+            "source": "n-dp",
+            "target": "n-backend",
+            "label": "Blocked proxy"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-dp",
+          "n-cp"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Synchronous config lookup on hot path"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure instances can start and run using cached config if the control plane is down.",
+            "opener": "A brief control plane blip froze traffic—the fetch path is highlighted. How do you decouple?",
+            "evidence": {
+              "strong": "Describes an SDK or sidecar that caches the last-known-good configuration to the local disk, reading it on boot before attempting to contact the control plane.",
+              "adequate": "Mentions caching config in memory, but realizes disk is needed upon prompting about a restart.",
+              "weak": "Instance fails to start because it blocks indefinitely waiting for the control plane."
+            },
+            "misconceptions": [
+              {
+                "id": "redis-cache",
+                "pattern": "Relying on a centralized Redis cache for fallback.",
+                "challenge": "If a network partition cuts off the whole region from the control plane and your Redis cluster, how does the instance start?"
+              }
+            ],
+            "probes": [
+              "How do you ensure the local file isn't corrupted?",
+              "How does the service know that the local config is 'good' and not the broken one that just caused it to crash?"
+            ],
+            "hints": [
+              "Where is the only place data survives a container restart but remains isolated to that instance?",
+              "Think about writing to a local file only after the service has successfully started and served traffic."
+            ],
+            "referenceFix": "Last-known-good snapshot in memory with background refresh, push updates over stream, fail open on stale within bounds, separate liveness from config freshness metrics."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "config-control-plane/key-collision-overwrites-tenant",
+      "title": "Shared config key overwrites another tenant's routes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.datamodel",
+      "scenario": {
+        "symptoms": "Tenant B suddenly routed to Tenant A's payment service after an operator typo in a shared namespace key. Blast radius crossed isolation boundary.",
+        "interviewerSetup": "Flat key namespace without tenant prefix enforcement; UI allows editing global keys with insufficient RBAC."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-op",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "admin",
+              "label": "Operator"
+            }
+          },
+          {
+            "id": "n-cp",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "config",
+              "label": "Config API"
+            }
+          },
+          {
+            "id": "n-kv",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Config KV"
+            }
+          },
+          {
+            "id": "n-a",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 80
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Tenant A svc"
+            }
+          },
+          {
+            "id": "n-b",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 200
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Tenant B svc"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-op",
+            "target": "n-cp",
+            "label": "Edit key"
+          },
+          {
+            "id": "e2",
+            "source": "n-cp",
+            "target": "n-kv",
+            "label": "Write routes/payment"
+          },
+          {
+            "id": "e3",
+            "source": "n-kv",
+            "target": "n-a",
+            "label": "Wrong binding"
+          },
+          {
+            "id": "e4",
+            "source": "n-kv",
+            "target": "n-b",
+            "label": "Wrong binding"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-kv"
+        ],
+        "edgeIds": [
+          "e2",
+          "e4"
+        ],
+        "headline": "Flat namespace allows cross-tenant config overwrite"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a storage model that supports immutability, versioning, and fast lookups.",
+            "opener": "One typo crossed tenants—the config key model is highlighted. How do you enforce isolation?",
+            "evidence": {
+              "strong": "Designs immutable records with composite primary keys (service_id, version), includes metadata (author, timestamp, signature), and separates the 'target state' from the 'config history'.",
+              "adequate": "Proposes a single table with a JSON blob and a version column.",
+              "weak": "Updates rows in place, destroying the history of previous configurations."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you quickly find the 'active' version for a specific region?",
+              "If a security audit requires seeing who changed a value three months ago, how do we provide that?"
+            ],
+            "hints": [
+              "Is it better to update a row or insert a new one when a config changes?",
+              "Consider separating the table that stores the big JSON payloads from the table that tracks which version is currently active."
+            ],
+            "referenceFix": "Mandatory tenant-scoped keys, validation on write, RBAC per namespace, preview diff showing affected services, and audit on shared keys."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

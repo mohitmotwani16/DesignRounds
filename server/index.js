@@ -12,28 +12,34 @@ import { startAnswerPoolWorker } from "./modules/answers/worker.js";
 import { buildPacksEnabled, describePacks, startPackWorker } from "./modules/pks/worker.js";
 
 const port = Number(process.env.PORT || 8787);
+
+// Register before connecting so `node --watch` restarts close PGlite even during startup.
+let server;
+const SHUTDOWN_GRACE_MS = 8000;
+const shutdown = () => {
+  const finish = () => close().finally(() => process.exit(0));
+  if (!server) return finish();
+  const force = setTimeout(() => { server.closeAllConnections(); finish(); }, SHUTDOWN_GRACE_MS);
+  server.close(() => { clearTimeout(force); finish(); });
+  server.closeIdleConnections();
+};
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    stopAnswerPools?.();
+    stopPacks?.();
+    shutdown();
+  });
+}
+
 const app = await createApp();
 // Development only queues new questions. Building fetches public pages and may
 // call the model, so it runs in production, or locally when ANSWER_POOLS=build.
 const buildAnswerPools = process.env.ANSWER_POOLS === "build" || (isProduction && process.env.ANSWER_POOLS !== "off");
-const stopAnswerPools = buildAnswerPools ? startAnswerPoolWorker() : () => {};
-const stopPacks = buildPacksEnabled() ? startPackWorker() : () => {};
+let stopAnswerPools = () => {};
+let stopPacks = () => {};
+stopAnswerPools = buildAnswerPools ? startAnswerPoolWorker() : () => {};
+stopPacks = buildPacksEnabled() ? startPackWorker() : () => {};
 
-const server = app.listen(port, () => {
+server = app.listen(port, () => {
   console.log(`[api] listening on http://localhost:${port}  db=${driver()}  email=${deliveryMode()}  storage=${describeObjectStorage()}  ai=${describeAi()}  stt=${describeSpeech()}  turnstile=${describeTurnstile()}  packs=${describePacks()}${devToolsEnabled ? "  dev-tools=on" : ""}`);
 });
-
-// Graceful shutdown: stop accepting connections, let in-flight requests finish (up
-// to a limit), then close the database cleanly so the embedded Postgres doesn't need
-// crash recovery. Closing it first would fail requests that are still running.
-const SHUTDOWN_GRACE_MS = 8000;
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.once(signal, () => {
-    stopAnswerPools();
-    stopPacks();
-    const finish = () => close().finally(() => process.exit(0));
-    const force = setTimeout(() => { server.closeAllConnections(); finish(); }, SHUTDOWN_GRACE_MS);
-    server.close(() => { clearTimeout(force); finish(); });
-    server.closeIdleConnections();
-  });
-}

@@ -7,9 +7,33 @@ import { useEscape } from "../components/ui.jsx";
 import { InterviewerPanel } from "./InterviewerPanel.jsx";
 import { ReviewPanel } from "./ReviewPanel.jsx";
 
+import { Link } from "../router.js";
+
+function NuggetReviewPanel({ roundFinished, nugget, promptId }) {
+  if (!roundFinished) {
+    return (
+      <div className="interviewer-body interviewer-center">
+        <p className="interviewer-muted">Finish the incident conversation in the Interviewer tab. There is no full rubric review for drills.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="interviewer-body" style={{ padding: "1rem 1.1rem" }}>
+      <p className="interviewer-muted">This drill is complete. Check the interviewer chat for your mini debrief.</p>
+      <div className="modal-actions" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+        <Link className="button button-dark" to="/nuggets">Random nugget</Link>
+        {promptId && <Link className="button button-outline" to={`/nuggets?q=${encodeURIComponent(promptId)}`}>More from this question</Link>}
+        {promptId && <Link className="button button-outline" to={`/start/${promptId}`}>Full design round</Link>}
+      </div>
+    </div>
+  );
+}
+
 // Right-hand panel: the interviewer conversation and the round's final review.
-export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack }) {
-  const tabs = [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
+export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack, sessionKind = "full", nugget, promptId }) {
+  const tabs = sessionKind === "nugget"
+    ? [["interviewer", "Interviewer", MessageSquare]]
+    : [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
   // On free plans the interviewer is a Plus feature (or the one free round), and the tab says so.
   const interviewerLocked = interview.status === "ready" && interview.access !== "full";
   return (
@@ -27,7 +51,9 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
         <button className="panel-close" onClick={onClose} title="Hide panel (I)" aria-label="Hide panel"><X size={17} /></button>
       </div>
       {tab === "review"
-        ? <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />
+        ? (sessionKind === "nugget"
+          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} />
+          : <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />)
         : <InterviewerPanel interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} />}
     </aside>
   );

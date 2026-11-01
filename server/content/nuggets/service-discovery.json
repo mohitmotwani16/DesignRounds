@@ -1,0 +1,267 @@
+{
+  "promptId": "service-discovery",
+  "packVersion": "pack-ad2711ac",
+  "inputsFingerprint": "6398bce2e83d50edecc181e027ac28a2a15c2657373a04203832e880c6ab434e",
+  "nuggets": [
+    {
+      "id": "service-discovery/stale_client_cache_503",
+      "title": "Stale Instance List Routes Traffic to Drained Nodes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.caching",
+      "scenario": {
+        "symptoms": "After a deploy, 18% of checkout requests return HTTP 503 for 4 minutes. Clients still call pod IPs removed from the registry but cached locally.",
+        "interviewerSetup": "SDK caches the full instance list for 30 seconds without push updates. Old pods were SIGTERM'd immediately while the cache TTL had not expired."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-client", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "Calling Service" } },
+          { "id": "node-sdk", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "service-mesh", "label": "Discovery SDK Cache" } },
+          { "id": "node-registry", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "registry", "label": "Service Registry" } },
+          { "id": "node-dead", "type": "systemNode", "position": { "x": 460, "y": 300 }, "data": { "kind": "microservice", "label": "Drained Pods" } }
+        ],
+        "edges": [
+          { "id": "e-client-sdk", "source": "node-client", "target": "node-sdk", "label": "Pick instance" },
+          { "id": "e-sdk-dead", "source": "node-sdk", "target": "node-dead", "label": "Stale IP list" },
+          { "id": "e-sdk-reg", "source": "node-sdk", "target": "node-registry", "label": "Poll every 30s" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-sdk", "node-dead"],
+        "edgeIds": ["e-sdk-dead"],
+        "headline": "Client-side discovery cache continues routing to terminated instances after deploy"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_discovery_cache",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Keep client instance lists fresh with push/watch, jittered TTL, and health-aware routing.",
+          "opener": "Right after deploy our error rate spiked because clients kept hitting old pods. How does your service discovery cache stay correct?",
+          "evidence": {
+            "strong": "Long-lived watch/stream from registry, versioned service entries, short TTL with jitter, passive health checks on calls, subset selection to limit blast radius.",
+            "adequate": "Polling every few seconds without push or health checks.",
+            "weak": "Static config file of hostnames."
+          },
+          "misconceptions": [{ "id": "cache.registry", "pattern": "Assumes the registry is always consulted per request.", "challenge": "If you cache instances for 30s, what happens in second 5 after a pod dies?" }],
+          "probes": ["How do clients learn a pod was removed before TTL expires?", "What retry strategy avoids hammering a bad instance?"],
+          "hints": ["Watch beats poll for fast deploys.", "Combine registry events with client-side health."],
+          "referenceFix": "Registry watch pushing deltas, aggressive TTL on failures, outlier detection before retry storm."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-discovery/consul_raft_split_brain",
+      "title": "Registry Partition Serves Conflicting Instance Sets",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.state_store",
+      "scenario": {
+        "symptoms": "Two AZs report different instance counts for payment-service. Some clients see 12 healthy nodes, others see 4, during a network partition between control-plane nodes.",
+        "interviewerSetup": "The discovery backend uses a 3-node Raft cluster spanning two regions. A link flap split voters; both sides accepted writes briefly before quorum healed."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-a", "type": "systemNode", "position": { "x": 80, "y": 120 }, "data": { "kind": "registry", "label": "Registry AZ-A (Leader)" } },
+          { "id": "node-b", "type": "systemNode", "position": { "x": 80, "y": 240 }, "data": { "kind": "registry", "label": "Registry AZ-B (Split)" } },
+          { "id": "node-clients", "type": "systemNode", "position": { "x": 320, "y": 180 }, "data": { "kind": "client", "label": "Clients" } },
+          { "id": "node-partition", "type": "systemNode", "position": { "x": 200, "y": 180 }, "data": { "kind": "network", "label": "Network Partition" } }
+        ],
+        "edges": [
+          { "id": "e-a-cli", "source": "node-a", "target": "node-clients", "label": "List v1 (12 nodes)" },
+          { "id": "e-b-cli", "source": "node-b", "target": "node-clients", "label": "List v2 (4 nodes)" },
+          { "id": "e-part", "source": "node-partition", "target": "node-a", "label": "Split" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-a", "node-b"],
+        "edgeIds": ["e-part"],
+        "headline": "Split registry quorum yields divergent service membership during partition"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_registry_quorum",
+          "stage": "incident",
+          "dimension": "architecture",
+          "weight": 3,
+          "required": true,
+          "goal": "Run the registry on odd-quorum clusters within one region with clear failover, avoiding cross-region voting splits.",
+          "opener": "Clients in two AZs saw different numbers of healthy payment pods during a blip. How is registry state stored and kept consistent?",
+          "evidence": {
+            "strong": "Odd-member Raft in single region, automatic leader election, read consistency via quorum, regional failover with explicit promotion, anti-entropy after partition.",
+            "adequate": "Multi-region Raft without discussing quorum loss.",
+            "weak": "Single registry node with manual backup."
+          },
+          "misconceptions": [{ "id": "sd.eventual", "pattern": "Treats registry as eventually consistent like DNS with no quorum rules.", "challenge": "What happens if two leaders accept conflicting registrations?" }],
+          "probes": ["Where should Raft voters live relative to AZ failures?", "How do clients behave when registry is unavailable?"],
+          "hints": ["Majority quorum prevents dual writers.", "Cross-region voters increase partition risk."],
+          "referenceFix": "Regional quorum, stale read avoidance, client fallback to last-good snapshot with health checks."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-discovery/slow_propagation_cascade",
+      "title": "Delayed Deregistration Overloads Remaining Instances",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.propagation",
+      "scenario": {
+        "symptoms": "When 30% of catalog-service pods crash, latency on survivors jumps 5x. Load balancer still sends traffic to dead instances for 90 seconds.",
+        "interviewerSetup": "Health checks run every 60s; registry gossip propagates deregistration in two hops averaging 45s. No passive failure detection on the client."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-lb", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "load-balancer", "label": "Load Balancer" } },
+          { "id": "node-reg", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "registry", "label": "Service Registry" } },
+          { "id": "node-alive", "type": "systemNode", "position": { "x": 480, "y": 80 }, "data": { "kind": "microservice", "label": "Healthy Pods" } },
+          { "id": "node-dead", "type": "systemNode", "position": { "x": 480, "y": 220 }, "data": { "kind": "microservice", "label": "Crashed Pods (still listed)" } }
+        ],
+        "edges": [
+          { "id": "e-lb-reg", "source": "node-lb", "target": "node-reg", "label": "Poll membership" },
+          { "id": "e-lb-dead", "source": "node-lb", "target": "node-dead", "label": "Requests until TTL" },
+          { "id": "e-lb-alive", "source": "node-lb", "target": "node-alive", "label": "Overloaded traffic" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-reg", "node-dead"],
+        "edgeIds": ["e-lb-dead"],
+        "headline": "Slow health propagation keeps failed instances in rotation during partial outage"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_propagation_speed",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Detect failures quickly with active health checks, gossip, and client-side outlier ejection.",
+          "opener": "Half the pods died but the load balancer kept sending traffic to them for over a minute. How fast should discovery reflect reality?",
+          "evidence": {
+            "strong": "Sub-second app health endpoints, registry push on state change, client outlier detection, max connection limits per instance, gradual load shift.",
+            "adequate": "30s health check without client ejection.",
+            "weak": "Only TCP connect checks on long interval."
+          },
+          "misconceptions": [{ "id": "prop.reg", "pattern": "Believes registry alone guarantees healthy routing.", "challenge": "Who tells the registry a process died without graceful deregister?" }],
+          "probes": ["What happens between crash and deregister?", "How do surviving pods avoid overload?"],
+          "hints": ["Active health checks should be faster than user timeouts.", "Clients can eject bad endpoints immediately."],
+          "referenceFix": "Fast health checks, push deregister, client-side outlier detection and retry on other instances."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-discovery/outlier_detection_storm",
+      "title": "Aggressive Outlier Ejection Empties the Load Balancer Pool",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.outlier_detection",
+      "scenario": {
+        "symptoms": "During a downstream DB slowdown, the mesh ejects every recommendation-service instance within 30 seconds. The service appears entirely unavailable despite pods running.",
+        "interviewerSetup": "Outlier detection marks instances bad after 5 consecutive 500ms timeouts with no minimum pool size. All instances share the same dependency latency."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-mesh", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "service-mesh", "label": "Sidecar Proxy" } },
+          { "id": "node-pods", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "microservice", "label": "Service Pods" } },
+          { "id": "node-db", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "database", "label": "Shared Database" } },
+          { "id": "node-outlier", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "metrics", "label": "Outlier Detector" } }
+        ],
+        "edges": [
+          { "id": "e-mesh-pods", "source": "node-mesh", "target": "node-pods", "label": "Route requests" },
+          { "id": "e-pods-db", "source": "node-pods", "target": "node-db", "label": "Slow queries" },
+          { "id": "e-outlier-mesh", "source": "node-outlier", "target": "node-mesh", "label": "Eject all hosts" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-outlier", "node-mesh"],
+        "edgeIds": ["e-outlier-mesh"],
+        "headline": "Outlier detection confuses systemic dependency failure with bad instances"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_outlier_policy",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Tune outlier ejection with minimum healthy percentage, success-rate windows, and distinction from global outages.",
+          "opener": "Our mesh ejected every instance during a database slowdown and the service went fully dark. How should outlier detection behave?",
+          "evidence": {
+            "strong": "Ejection thresholds relative to cluster average, max ejection percent, panic mode when too few hosts remain, distinguish client vs server errors, circuit break dependency not all pods.",
+            "adequate": "Fixed consecutive error count without pool floor.",
+            "weak": "No outlier detection; retry forever."
+          },
+          "misconceptions": [{ "id": "out.all_bad", "pattern": "Assumes if all instances fail the same way, ejecting them helps.", "challenge": "Where will traffic go if every host is ejected?" }],
+          "probes": ["When should you stop ejecting instances?", "How do you detect a shared dependency failure?"],
+          "hints": ["Compare instance to cluster baseline.", "Keep a minimum healthy fraction."],
+          "referenceFix": "Outlier detection with max ejection ratio, panic threshold, upstream circuit breaker on DB."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-discovery/dns_ttl_stale_records",
+      "title": "Long DNS TTL Serves IPs After Kubernetes Rollout",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.dns_integration",
+      "scenario": {
+        "symptoms": "External partners hitting api.example.com via DNS still connect to decommissioned load balancer IPs 20 minutes after cutover.",
+        "interviewerSetup": "Legacy clients use DNS SRV with TTL 1800s. Kubernetes service changed external IP but DNS updates propagated slowly at resolvers."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-partner", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "External Clients" } },
+          { "id": "node-dns", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "dns", "label": "DNS (TTL 1800s)" } },
+          { "id": "node-old", "type": "systemNode", "position": { "x": 460, "y": 80 }, "data": { "kind": "load-balancer", "label": "Old LB IP" } },
+          { "id": "node-new", "type": "systemNode", "position": { "x": 460, "y": 220 }, "data": { "kind": "load-balancer", "label": "New LB IP" } }
+        ],
+        "edges": [
+          { "id": "e-partner-dns", "source": "node-partner", "target": "node-dns", "label": "Resolve api.example.com" },
+          { "id": "e-dns-old", "source": "node-dns", "target": "node-old", "label": "Cached answer" },
+          { "id": "e-dns-new", "source": "node-dns", "target": "node-new", "label": "Updated record" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-dns", "node-old"],
+        "edgeIds": ["e-dns-old"],
+        "headline": "High DNS TTL delays discovery of new endpoints for external callers"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_dns_ttl",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Integrate DNS with discovery using low TTL for volatile names, dual-stack cutover, and SRV/HTTP alternatives where needed.",
+          "opener": "Partners still hit our old load balancer IP long after we migrated. How does DNS fit your discovery story for external clients?",
+          "evidence": {
+            "strong": "Low TTL for dynamic records, gradual traffic shift with both IPs live, alias to stable anycast front door, document resolver behavior, prefer service mesh or API gateway stable hostname.",
+            "adequate": "TTL 300s without dual publishing.",
+            "weak": "TTL 24h on frequently changing services."
+          },
+          "misconceptions": [{ "id": "dns.instant", "pattern": "Assumes updating authoritative DNS instantly changes all clients.", "challenge": "What about resolvers that cache for the full TTL?" }],
+          "probes": ["What TTL is appropriate for internal vs external names?", "How do you run a zero-downtime IP migration?"],
+          "hints": ["Run old and new in parallel during TTL window.", "Stable anycast name hides backend IP churn."],
+          "referenceFix": "Short TTL, overlap period with both endpoints, monitor stale resolver caches."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

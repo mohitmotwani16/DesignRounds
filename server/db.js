@@ -73,16 +73,31 @@ export async function connect({ url = process.env.DATABASE_URL, migrate: runMigr
       throw new Error(`The local database folder ${dataDir} is read-only. Clear the flag and restart: on Windows run  attrib -R "${dataDir}" /S /D  (or set PGLITE_DIR to a folder outside OneDrive).`);
     }
     let db;
-    try {
-      db = new PGlite(dataDir);
-      await db.waitReady;
-    } catch (error) {
+    const openError = async (error) => {
       // PGlite can't open a data directory written by another Postgres major version.
       const createdBy = await readFile(path.join(dataDir, "PG_VERSION"), "utf8").then((text) => text.trim(), () => null);
       if (createdBy && createdBy !== PGLITE_PG_MAJOR) {
         throw new Error(`The local database in ${dataDir} was created by Postgres ${createdBy}, but this version of the app embeds Postgres ${PGLITE_PG_MAJOR}. Rename or delete that folder to start a fresh local database (local development data only).`);
       }
-      throw new Error(`Could not open the local database in ${dataDir}. If it was interrupted while being created, delete that folder to start fresh. (${error.message})`);
+      const hint = /Aborted/i.test(error.message)
+        ? " Another API process may still be shutting down (common after a file-watch restart), or the folder was left in a bad state."
+        : "";
+      throw new Error(`Could not open the local database in ${dataDir}. If it was interrupted while being created, delete that folder to start fresh.${hint} (${error.message})`);
+    };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        db = new PGlite(dataDir);
+        await db.waitReady;
+        break;
+      } catch (error) {
+        if (db) await db.close().catch(() => {});
+        db = undefined;
+        if (attempt < 4 && /Aborted/i.test(error.message)) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+          continue;
+        }
+        await openError(error);
+      }
     }
     client = {
       query: (sql, params) => db.query(sql, params),

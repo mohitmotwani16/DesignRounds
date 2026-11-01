@@ -1,0 +1,434 @@
+{
+  "promptId": "chatgpt-assistant",
+  "packVersion": "pack-f0bee31a",
+  "inputsFingerprint": "a480b8e9dde79f976bb64b193febc21c699665a4775f15c3a6d59d4ca35f60b8",
+  "nuggets": [
+    {
+      "id": "chatgpt-assistant/stuck-gpu-streams",
+      "title": "Inference GPUs Max Out KV Cache Due to Unpropagated Client Disconnects",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.streaming",
+      "scenario": {
+        "symptoms": "GPU cluster memory utilization reaches 100% capacity and queue depth increases rapidly, even though active user count remains steady. Users report pressing 'Stop Generating' or closing browser tabs, but generation latency continues to degrade.",
+        "interviewerSetup": "When users press the stop button or disconnect mid-stream, the HTTP connection between the client and the Chat Service breaks, but token generation on the underlying LLM inference server continues until completion."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "client",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Web / Mobile Client"
+            }
+          },
+          {
+            "id": "lb",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "API Gateway / LB"
+            }
+          },
+          {
+            "id": "chat_svc",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Chat Service (SSE)"
+            }
+          },
+          {
+            "id": "llm_serving",
+            "type": "systemNode",
+            "position": {
+              "x": 650,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "LLM Inference Engine"
+            }
+          },
+          {
+            "id": "gpu_cluster",
+            "type": "systemNode",
+            "position": {
+              "x": 850,
+              "y": 150
+            },
+            "data": {
+              "kind": "gpu",
+              "label": "GPU Worker Fleet"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "client",
+            "target": "lb",
+            "label": "HTTPS / SSE"
+          },
+          {
+            "id": "e2",
+            "source": "lb",
+            "target": "chat_svc",
+            "label": "gRPC Stream"
+          },
+          {
+            "id": "e3",
+            "source": "chat_svc",
+            "target": "llm_serving",
+            "label": "gRPC Generation Request"
+          },
+          {
+            "id": "e4",
+            "source": "llm_serving",
+            "target": "gpu_cluster",
+            "label": "Tensor Parallel Inference"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "chat_svc",
+          "llm_serving"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Client disconnects and cancellation events fail to signal the LLM serving cluster, locking up GPU KV cache memory."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Propagate stream cancellation down to the inference cluster to immediately release GPU batch slots and KV cache memory.",
+            "opener": "Users are stopping streams, but the GPUs keep generating tokens. How do you fix the pipeline so client disconnects free up compute?",
+            "evidence": {
+              "strong": "Establishes bi-directional streaming contexts (e.g., gRPC cancel signals/AbortController) between the gateway, chat service, and LLM serving engine. On cancellation, the engine aborts decoding, evicts the request KV cache, saves the generated partial answer to storage, and frees the active batch slot for waiting requests.",
+              "adequate": "Closes the streaming response from the chat server and sends an explicit cancel API request to the inference server.",
+              "weak": "Ignores the server-side generation and relies solely on client-side connection tear downs."
+            },
+            "misconceptions": [
+              {
+                "id": "stream.stop",
+                "pattern": "Thinks stopping means just closing the client connection.",
+                "challenge": "The client is gone but the GPU keeps generating. Who pays for those tokens?"
+              }
+            ],
+            "probes": [
+              "What mechanism notifies the model serving engine when a client TCP session is abruptly dropped?",
+              "How do you handle saving partial responses so the user sees what was generated up to the stop point?"
+            ],
+            "hints": [
+              "Cancellation must reach the GPU worker context.",
+              "The worker needs to clear the KV cache slot immediately upon cancellation."
+            ],
+            "referenceFix": "Implement explicit stream context cancellation propagation using gRPC stream cancellation hooks. When a client disconnects or triggers a stop event, the Chat Service cancels the upstream context. The LLM inference engine intercepts the cancellation signal, aborts the current decoding step, flushes the KV cache allocated for the request, and saves the partial output to the database for seamless user reconnects.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "chatgpt-assistant/prompt-cache-miss-storm",
+      "title": "Prompt Cache Misses Drive High Latency After Prompt Assembly Change",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.context",
+      "scenario": {
+        "symptoms": "Time-To-First-Token (TTFT) increases by 500% across the platform and GPU compute costs double following a minor update to conversation rendering logic.",
+        "interviewerSetup": "A recent code change placed dynamic chat history tokens (timestamps and turn indices) at the very top of the prompt payload before system instructions and user instructions."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "client",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Web Client"
+            }
+          },
+          {
+            "id": "chat_svc",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Chat Service"
+            }
+          },
+          {
+            "id": "context_builder",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Context Builder"
+            }
+          },
+          {
+            "id": "llm_serving",
+            "type": "systemNode",
+            "position": {
+              "x": 700,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "LLM Inference Engine"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "client",
+            "target": "chat_svc",
+            "label": "POST /chat"
+          },
+          {
+            "id": "e2",
+            "source": "chat_svc",
+            "target": "context_builder",
+            "label": "Build Prompt Payload"
+          },
+          {
+            "id": "e3",
+            "source": "context_builder",
+            "target": "llm_serving",
+            "label": "Prompt Request"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "context_builder"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Dynamic prefix tokens inserted at the beginning of prompts cause total failure of prefix KV caching."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "goal": "Re-order prompt assembly to place static, reusable prefixes first to restore prompt prefix caching benefits.",
+            "opener": "TTFT has skyrocketed after changing prompt templates. How do you re-architect context assembly to maximize prompt cache hits?",
+            "evidence": {
+              "strong": "Structures prompt payloads with immutable components first (system instructions, tools, static system prompts), followed by stable older conversation turns, and places dynamic volatile data (current timestamp, recent turn) at the end. Enforces token-based windowing and summarization.",
+              "adequate": "Puts system prompts at the beginning and moves dynamic values like timestamps to the end of the context.",
+              "weak": "Increases server timeout limits or adds more GPU instances without altering prompt structure."
+            },
+            "misconceptions": [
+              {
+                "id": "ctx.all",
+                "pattern": "Sends the entire conversation each time.",
+                "challenge": "Each turn resends everything before it. What happens to cost and latency by turn two hundred?"
+              }
+            ],
+            "probes": [
+              "How does token position in the prefix affect Radix Tree / Prefix Caching on the inference server?",
+              "What strategy do you use when conversation history exceeds the context window?"
+            ],
+            "hints": [
+              "Prefix caching requires an exact match on token sequences starting from position 0.",
+              "Static text must come before dynamic conversation history."
+            ],
+            "referenceFix": "Refactor context builder to construct prompts in strict order of prefix stability: 1) System Instructions & Tools, 2) Summarized past history, 3) Recent verbatim history turns, 4) Current user turn and dynamic metadata. Ensure exact token alignment across sessions to maximize GPU radix-tree prompt caching and reduce prefill latency.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "chatgpt-assistant/gpu-overload-cascading-timeouts",
+      "title": "GPU Overload Triggers Dead Request Execution and Cascading Timeouts",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.overload",
+      "scenario": {
+        "symptoms": "During a traffic peak, the API Gateway returns 504 Gateway Timeouts to 40% of incoming users. Meanwhile, GPU worker utilization is 100%, but processing throughput drops significantly.",
+        "interviewerSetup": "The system queued incoming generation requests indefinitely during a burst. Web API request timeouts are 15s, but requests sit in queue for 45s before reaching a GPU."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "client",
+            "type": "systemNode",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "User Clients"
+            }
+          },
+          {
+            "id": "gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway"
+            }
+          },
+          {
+            "id": "queue",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 150
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Inference Request Queue"
+            }
+          },
+          {
+            "id": "llm_fleet",
+            "type": "systemNode",
+            "position": {
+              "x": 700,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "LLM Serving Fleet"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "client",
+            "target": "gateway",
+            "label": "Requests"
+          },
+          {
+            "id": "e2",
+            "source": "gateway",
+            "target": "queue",
+            "label": "Enqueue Chat Job"
+          },
+          {
+            "id": "e3",
+            "source": "queue",
+            "target": "llm_fleet",
+            "label": "Dequeue for Prefill"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "queue"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Inference queues execute expired requests whose client connections have already timed out, wasting scarce GPU cycles."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "goal": "Implement priority queues, deadline-aware request expiration (TTL), and graceful degradation to smaller models under overload.",
+            "opener": "GPUs are burning compute processing requests that users already abandoned via HTTP timeout. How do you redesign load management?",
+            "evidence": {
+              "strong": "Enforces strict TTLs on queued requests matching client timeout context, prioritizes paid tier traffic over free tier via multi-level priority queues, implements load shedding (e.g., fallback to smaller models or lower max generation tokens), and limits queue depth.",
+              "adequate": "Adds request expiration checks before sending tasks to GPUs and rate limits incoming free tier traffic.",
+              "weak": "Attempts to autoscale GPU instances dynamically to solve real-time traffic spikes."
+            },
+            "misconceptions": [
+              {
+                "id": "ov.autoscale",
+                "pattern": "Believes autoscaling absorbs any spike.",
+                "challenge": "New GPU capacity takes many minutes to bring online. What happens in the meantime?"
+              }
+            ],
+            "probes": [
+              "How do you check request deadline validity prior to the expensive prefill step on the GPU?",
+              "What fallback mechanisms can preserve system availability for free users during extreme capacity constraints?"
+            ],
+            "hints": [
+              "Not all traffic is equally important when capacity is exhausted.",
+              "GPUs should never spend cycles on requests whose client connection is already dead."
+            ],
+            "referenceFix": "Implement context deadlines (TTLs) on queue items so expired requests are dropped prior to GPU prefill. Introduce tiered priority queues favoring paid users, and automatically trigger load shedding during high queue pressure by routing free-tier traffic to smaller, faster model instances or capping maximum response output length.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

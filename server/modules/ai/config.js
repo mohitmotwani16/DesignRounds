@@ -154,6 +154,8 @@ export const aiConfig = {
     // Offline Problem Pack builds (server/modules/pks): the strong model, never on a
     // learner's request path, so it gets room to think and a long deadline.
     pack_build: { model: model.review, effort: "medium", maxTokens: 32_000, timeoutMs: 280_000 },
+    // Offline nugget JSON generation (server/modules/nuggets/builder.js).
+    nugget_build: { model: model.review, effort: "medium", maxTokens: 24_000, timeoutMs: 240_000 },
     // Checks a built pack's hidden facts against its guide; a short, cheap call.
     pack_consistency: { model: model.chat, baseUrl: chatBaseUrl, effort: "low", maxTokens: 3_000, timeoutMs: 60_000 },
     // Evaluation only (scripts/interview-sim.js): plays a candidate persona.

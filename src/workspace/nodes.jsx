@@ -6,6 +6,7 @@ import { routeEdge } from "./diagram.js";
 
 // Lets nodes commit inline edits through the workspace (so they join undo history).
 export const CanvasActions = createContext({ commitNodeData: () => {}, readOnly: false });
+export const IncidentOverlay = createContext({ nodeIds: new Set(), edgeIds: new Set() });
 
 // Dispatched on window with a node id to start renaming that node (Enter / F2).
 export const RENAME_EVENT = "designrounds:rename-node";
@@ -69,8 +70,10 @@ export const SystemNode = memo(function SystemNode({ id, data, selected }) {
   const item = getItem(data.kind);
   const Icon = item?.icon || Server;
   const color = data.color || item?.color || "blue";
+  const incident = useContext(IncidentOverlay);
+  const pulsing = incident.nodeIds.has(id);
   return (
-    <div className={`system-node node-color-${color} ${selected ? "node-selected" : ""} ${item?.tech ? "tech-node" : ""}`}>
+    <div className={`system-node node-color-${color} ${selected ? "node-selected" : ""} ${item?.tech ? "tech-node" : ""} ${pulsing ? "incident-pulse" : ""}`}>
       <div className={`system-node-icon icon-${color}`}><Icon size={18} strokeWidth={1.9} /></div>
       <div className="system-node-text">
         <InlineLabel id={id} value={data.label} className="system-node-label" />

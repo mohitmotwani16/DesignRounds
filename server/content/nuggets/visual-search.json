@@ -1,0 +1,264 @@
+{
+  "promptId": "visual-search",
+  "packVersion": "pack-3550701e",
+  "inputsFingerprint": "8a864386611a8d0b02fb6abfe91c2922f2ad4af93c25b73118e06172ddad90e1",
+  "nuggets": [
+    {
+      "id": "visual-search/index_lag_new_catalog",
+      "title": "New Catalog Images Missing from Visual Search for 12 Hours",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.freshness",
+      "scenario": {
+        "symptoms": "Merchants upload inventory photos but visual search returns no matches until next day. Marketing campaign underperforms because index embedding pipeline batches nightly.",
+        "interviewerSetup": "Embedding workers run daily batch over object storage; no incremental index updates on upload webhook."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-upload", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "ingestion", "label": "Image Upload" } },
+          { "id": "node-batch", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "cron", "label": "Nightly Embed Job" } },
+          { "id": "node-index", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "embedding", "label": "Vector Index" } },
+          { "id": "node-query", "type": "systemNode", "position": { "x": 260, "y": 80 }, "data": { "kind": "search-service", "label": "Visual Search API" } }
+        ],
+        "edges": [
+          { "id": "e-upload-wait", "source": "node-upload", "target": "node-batch", "label": "Wait until batch" },
+          { "id": "e-batch-index", "source": "node-batch", "target": "node-index", "label": "Bulk upsert" },
+          { "id": "e-query-index", "source": "node-query", "target": "node-index", "label": "Stale corpus" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-batch", "node-index"],
+        "edgeIds": ["e-upload-wait"],
+        "headline": "Batch-only indexing pipeline leaves new product images unsearchable for hours"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_index_freshness",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Near-real-time embedding and index upsert on catalog changes with SLA on freshness.",
+          "opener": "Shoppers can't find products by photo until tomorrow. How fast do new images enter the visual index?",
+          "evidence": {
+            "strong": "Event-driven embed on upload, streaming upsert to vector DB, freshness SLA metrics, backfill plus incremental, dual write during model upgrades.",
+            "adequate": "Hourly batch micro-batches.",
+            "weak": "Daily batch only."
+          },
+          "misconceptions": [{ "id": "fresh.scan", "pattern": "Full re-scan of bucket is enough for updates.", "challenge": "How long to re-embed 100M images nightly?" }],
+          "probes": ["What triggers embedding?", "How do you update index without full rebuild?"],
+          "hints": ["Upload event should enqueue embed.", "Incremental upsert beats full rebuild."],
+          "referenceFix": "Streaming pipeline from upload to embed to vector upsert within minutes."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "visual-search/model_upgrade_reembed",
+      "title": "Embedding Model Upgrade Requires Full Reindex",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.reembed",
+      "scenario": {
+        "symptoms": "Team ships v2 vision model with incompatible embedding space; mixed v1/v2 vectors in same index collapse search relevance until full 5-day reembed completes.",
+        "interviewerSetup": "Single index accepts vectors from both models without version partition or query-time model tag."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-v1", "type": "systemNode", "position": { "x": 80, "y": 120 }, "data": { "kind": "vision", "label": "Embed Model v1" } },
+          { "id": "node-v2", "type": "systemNode", "position": { "x": 80, "y": 220 }, "data": { "kind": "vision", "label": "Embed Model v2" } },
+          { "id": "node-index", "type": "systemNode", "position": { "x": 300, "y": 170 }, "data": { "kind": "embedding", "label": "Shared Vector Index" } },
+          { "id": "node-query", "type": "systemNode", "position": { "x": 500, "y": 170 }, "data": { "kind": "search-service", "label": "Query (v2)" } }
+        ],
+        "edges": [
+          { "id": "e-v1-index", "source": "node-v1", "target": "node-index", "label": "Legacy vectors" },
+          { "id": "e-v2-index", "source": "node-v2", "target": "node-index", "label": "Mixed space" },
+          { "id": "e-query-index", "source": "node-query", "target": "node-index", "label": "Irrelevant NN" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-index", "node-v2"],
+        "edgeIds": ["e-v2-index"],
+        "headline": "Incompatible embedding models cohabiting one index destroy nearest-neighbor semantics"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_reembed_strategy",
+          "stage": "incident",
+          "dimension": "architecture",
+          "weight": 3,
+          "required": true,
+          "goal": "Plan model upgrades with separate index versions, dual-write reembed, and cutover once coverage met.",
+          "opener": "We upgraded the vision model and search quality collapsed mid-reindex. How do you roll out a new embedding model?",
+          "evidence": {
+            "strong": "Versioned indices, query uses matching model version, background reembed with progress, flip traffic at threshold, never mix spaces in one index.",
+            "adequate": "Big bang offline reindex with downtime.",
+            "weak": "In-place mix of old and new vectors."
+          },
+          "misconceptions": [{ "id": "re.norm", "pattern": "Assumes L2 normalize makes different models compatible.", "challenge": "Are v1 and v2 vectors in the same semantic space?" }],
+          "probes": ["When do you cut query traffic to v2 index?", "How track reembed progress?"],
+          "hints": ["Separate index per model version.", "Dual query during migration if needed."],
+          "referenceFix": "Build v2 index in parallel, reembed all items, cutover query when complete."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "visual-search/ann_index_stale_deleted",
+      "title": "Deleted Products Still Appear in Visual Matches",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.index",
+      "scenario": {
+        "symptoms": "Users tap visually similar items and land on 404 product pages for delisted SKUs. Vector index retains embeddings after catalog tombstone without delete propagation.",
+        "interviewerSetup": "Catalog service marks items deleted in SQL but vector DB upsert pipeline has no delete events."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-catalog", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "database", "label": "Product Catalog" } },
+          { "id": "node-stream", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "t-kafka", "label": "Change Events" } },
+          { "id": "node-index", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "embedding", "label": "Vector Index" } },
+          { "id": "node-api", "type": "systemNode", "position": { "x": 260, "y": 80 }, "data": { "kind": "search-service", "label": "Visual Search" } }
+        ],
+        "edges": [
+          { "id": "e-cat-stream", "source": "node-catalog", "target": "node-stream", "label": "Deletes" },
+          { "id": "e-stream-skip", "source": "node-stream", "target": "node-index", "label": "Delete not consumed" },
+          { "id": "e-api-index", "source": "node-api", "target": "node-index", "label": "Returns ghost SKUs" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-index", "node-stream"],
+        "edgeIds": ["e-stream-skip"],
+        "headline": "Vector index lacks delete propagation for delisted catalog items"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_index_lifecycle",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Keep visual index consistent with catalog via CDC deletes and post-filter on live catalog.",
+          "opener": "Visual search recommends products that no longer exist. How do removals flow to the index?",
+          "evidence": {
+            "strong": "CDC delete to vector DB, periodic consistency sweeps, filter NN results against catalog service, tombstone metadata in index.",
+            "adequate": "Weekly full rebuild only.",
+            "weak": "Insert-only index updates."
+          },
+          "misconceptions": [{ "id": "idx.add", "pattern": "Thinks index only needs inserts for new items.", "challenge": "What happens when SKU is delisted?" }],
+          "probes": ["Can you filter at query time?", "How verify index/catalog parity?"],
+          "hints": ["Deletes are first-class events.", "Post-filter catches lag."],
+          "referenceFix": "Consume delete events for vector removal plus live catalog filter on results."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "visual-search/rerank_latency_budget",
+      "title": "Heavy Cross-Encoder Rerank Blows Mobile Latency SLO",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.rerank",
+      "scenario": {
+        "symptoms": "Mobile visual search p99 hits 2.8s after adding cross-encoder rerank on 200 ANN candidates sequentially on CPU.",
+        "interviewerSetup": "Two-stage pipeline runs expensive reranker on full candidate list without top-k trim or GPU batching."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-mobile", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "mobile", "label": "Mobile Client" } },
+          { "id": "node-ann", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "embedding", "label": "ANN Retrieval" } },
+          { "id": "node-rerank", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "ml-serving", "label": "Cross-Encoder (200 pairs)" } }
+        ],
+        "edges": [
+          { "id": "e-mob-ann", "source": "node-mobile", "target": "node-ann", "label": "Query image" },
+          { "id": "e-ann-rerank", "source": "node-ann", "target": "node-rerank", "label": "200 candidates" },
+          { "id": "e-rerank-mob", "source": "node-rerank", "target": "node-mobile", "label": "Slow response" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-rerank", "node-ann"],
+        "edgeIds": ["e-ann-rerank"],
+        "headline": "Unbounded reranking stage exceeds mobile latency budget after retrieval"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_rerank_budget",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Rerank top-k with batched GPU inference and timeout fallback to ANN ordering.",
+          "opener": "Adding reranking made visual search feel sluggish on phones. How many candidates do you rerank under 300ms?",
+          "evidence": {
+            "strong": "ANN top 50 then batched GPU rerank, cascade lightweight model first, strict stage timeouts, skip rerank on slow path.",
+            "adequate": "Rerank top 20 sequentially on CPU.",
+            "weak": "Rerank entire catalog."
+          },
+          "misconceptions": [{ "id": "rer.all", "pattern": "Believes reranking all ANN hits always helps.", "challenge": "What is p99 if you score 200 pairs serially?" }],
+          "probes": ["What k is enough for quality?", "When skip rerank entirely?"],
+          "hints": ["Batch inference on GPU.", "Timeout to ANN order."],
+          "referenceFix": "Top-40 rerank batched on GPU with 150ms budget; degrade gracefully."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "visual-search/eval_offline_wearable_bias",
+      "title": "Offline Metric Looks Great on Studio Photos Only",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.eval",
+      "scenario": {
+        "symptoms": "Offline recall@10 improves 10% on benchmark but user-shot mirror selfies perform poorly in beta. Eval set lacks noisy real-world query images.",
+        "interviewerSetup": "Evaluation uses curated studio packshots as queries instead of logged user camera uploads."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-eval", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "evaluation", "label": "Offline Eval (studio)" } },
+          { "id": "node-prod", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "mobile", "label": "User Query Photos" } },
+          { "id": "node-model", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "vision", "label": "Visual Search Model" } }
+        ],
+        "edges": [
+          { "id": "e-eval-model", "source": "node-eval", "target": "node-model", "label": "Ship" },
+          { "id": "e-prod-model", "source": "node-prod", "target": "node-model", "label": "Poor real recall" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-eval", "node-prod"],
+        "edgeIds": ["e-eval-model"],
+        "headline": "Offline evaluation on studio queries misrepresents real-world visual search quality"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_visual_eval",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Evaluate on logged user queries with human labels plus slice metrics for noise, lighting, and category.",
+          "opener": "Benchmarks improved but beta users say results are wrong for phone photos. How do you evaluate visual search?",
+          "evidence": {
+            "strong": "Human-judged eval on sampled production queries, slice by capture conditions, A/B on click-through to product, hard negative mining from confusions.",
+            "adequate": "Studio dataset only.",
+            "weak": "Eyeball 10 examples."
+          },
+          "misconceptions": [{ "id": "eval.studio", "pattern": "Assumes catalog packshots represent user queries.", "challenge": "Do users photograph items in the same lighting as studio?" }],
+          "probes": ["Where do eval queries come from?", "Which slices matter most?"],
+          "hints": ["Log production queries for eval.", "Slice metrics expose weak domains."],
+          "referenceFix": "Production-sampled eval set with human relevance labels; gate releases on slice metrics."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

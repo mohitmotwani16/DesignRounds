@@ -1,0 +1,260 @@
+{
+  "promptId": "web-crawler",
+  "packVersion": "pack-6ec77a3c",
+  "inputsFingerprint": "bdc77e9e7e47df78da82a62090fadef92021c17350426b7ff4d0f78b35d183e6",
+  "nuggets": [
+    {
+      "id": "web-crawler/host_politeness_violation_ban",
+      "title": "Uncoordinated Workers Trigger Publisher IP Ban",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.frontier",
+      "scenario": {
+        "symptoms": "Major news site returns HTTP 403 for all crawler IPs. Rate limit logs show 40 concurrent connections to one host during sitemap burst.",
+        "interviewerSetup": "Global URL queue allows any worker to fetch any host; per-host delay stored in local memory only."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-q", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "queue", "label": "Global URL Queue" } },
+          { "id": "node-w1", "type": "systemNode", "position": { "x": 280, "y": 80 }, "data": { "kind": "worker", "label": "Worker 1" } },
+          { "id": "node-w2", "type": "systemNode", "position": { "x": 280, "y": 220 }, "data": { "kind": "worker", "label": "Worker 2" } },
+          { "id": "node-host", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "web-server", "label": "Publisher Site" } }
+        ],
+        "edges": [
+          { "id": "e-q-w1", "source": "node-q", "target": "node-w1", "label": "Same host URLs" },
+          { "id": "e-q-w2", "source": "node-q", "target": "node-w2", "label": "Same host URLs" },
+          { "id": "e-w-host", "source": "node-w1", "target": "node-host", "label": "40 parallel hits" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-q", "node-w1"],
+        "edgeIds": ["e-q-w1", "e-q-w2"],
+        "headline": "Global frontier without per-host ownership violates politeness and triggers site-wide block"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_frontier_politeness",
+          "stage": "incident",
+          "dimension": "architecture",
+          "weight": 3,
+          "required": true,
+          "goal": "Design a frontier that guarantees politeness (single worker ownership per host) and handles priorities.",
+          "opener": "We got banned because dozens of workers hammered one site at once. How do you ensure polite crawling at scale?",
+          "evidence": {
+            "strong": "Partition frontier by host hash with one owner, per-host back-queue enforcing delay, respect robots crawl-delay, central politeness state.",
+            "adequate": "Random jitter without ownership.",
+            "weak": "Global queue with hope for randomness."
+          },
+          "misconceptions": [{ "id": "global_queue", "pattern": "A single global Kafka topic or RabbitMQ queue can easily handle the frontier.", "challenge": "If 10 URLs for the same host are pulled by 10 different workers at the exact same time, how do you prevent hitting the host 10 times concurrently?" }],
+          "probes": ["Walk me through the lifecycle of a URL from the frontier to the worker.", "How do we handle a scenario where two different hostnames resolve to the same underlying IP address?"],
+          "hints": ["If any worker can pull any URL at random, enforcing global rate limits is very difficult.", "What if all URLs belonging to a specific host were always routed to the exact same worker?"],
+          "referenceFix": "Partitioned frontier by host hash with politeness back-queues."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "web-crawler/url_dedupe_db_bottleneck",
+      "title": "Database Lookup Per URL Crawl Grinds Throughput to a Halt",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.url_dedupe",
+      "scenario": {
+        "symptoms": "Crawl rate drops from 40k pages/sec to 2k after dedupe moved to Postgres primary. CPU on DB cluster saturates on SELECT by URL hash.",
+        "interviewerSetup": "Every discovered link triggers point lookup in relational DB; no Bloom filter or normalization before check."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-fetch", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "worker", "label": "Fetchers" } },
+          { "id": "node-dedupe", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "database", "label": "Postgres URL Table" } },
+          { "id": "node-bloom", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "cache", "label": "Bloom Filter (missing)" } }
+        ],
+        "edges": [
+          { "id": "e-fetch-dedupe", "source": "node-fetch", "target": "node-dedupe", "label": "SELECT per link" },
+          { "id": "e-bloom-skip", "source": "node-bloom", "target": "node-fetch", "label": "Not used" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-dedupe", "node-bloom"],
+        "edgeIds": ["e-fetch-dedupe"],
+        "headline": "Synchronous database dedupe becomes bottleneck at billion-URL crawl scale"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_url_dedupe",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Efficiently check if a URL has been crawled before without exhausting memory or database I/O.",
+          "opener": "Dedupe lookups crushed our database and crawl speed fell 20x. How do you check if a URL was already crawled?",
+          "evidence": {
+            "strong": "Bloom filter in memory with KV backing store, canonical URL normalization before hash, batch existence checks, sharded dedupe store.",
+            "adequate": "Redis set of all URLs without Bloom.",
+            "weak": "Postgres lookup every link."
+          },
+          "misconceptions": [{ "id": "db_lookup", "pattern": "Just query the database to see if the URL exists.", "challenge": "At 100,000 URLs discovered per second, can a standard relational database handle that many point reads?" }],
+          "probes": ["How much memory would storing a billion raw URLs take?", "What happens if two functionally identical URLs have different tracking query parameters?"],
+          "hints": ["Is there a data structure that trades a tiny false positive rate for massive memory savings?", "Before we hash a URL to check it, should 'example.com/' and 'example.com' be treated as different pages?"],
+          "referenceFix": "Bloom filter for fast seen-URL checks with URL normalisation."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "web-crawler/near_duplicate_storage_bloat",
+      "title": "Mirror Sites Fill Storage with Near-Duplicate Pages",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.content_dedupe",
+      "scenario": {
+        "symptoms": "Object storage costs jump 3x in a quarter; 60% of bytes are near-identical syndicated articles at different URLs.",
+        "interviewerSetup": "Crawler stores every 200 OK body keyed by URL without Simhash or checksum dedupe across content."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-fetch", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "worker", "label": "Fetch Pipeline" } },
+          { "id": "node-store", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "object-storage", "label": "Raw Page Store" } },
+          { "id": "node-dedupe", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "service", "label": "Content Fingerprint (off)" } }
+        ],
+        "edges": [
+          { "id": "e-fetch-store", "source": "node-fetch", "target": "node-store", "label": "Store all bodies" },
+          { "id": "e-dedupe-skip", "source": "node-dedupe", "target": "node-fetch", "label": "Not computed" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-store", "node-dedupe"],
+        "edgeIds": ["e-fetch-store"],
+        "headline": "URL-only identity stores duplicate and near-duplicate content repeatedly"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_content_dedupe",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Identify and discard duplicate or near-duplicate content across completely different URLs.",
+          "opener": "Storage costs exploded because we keep the same article from dozens of URLs. How do you dedupe content, not just URLs?",
+          "evidence": {
+            "strong": "Simhash or MinHash for near-dupe, SHA for exact, store canonical copy with aliases, skip indexing duplicates.",
+            "adequate": "Exact MD5 match only.",
+            "weak": "Store every fetch by URL."
+          },
+          "misconceptions": [],
+          "probes": ["How do you detect when a news article is exactly the same, but has a different timestamp or ad banner?", "Where are these content hashes stored and queried during the pipeline?"],
+          "hints": ["Can we generate a fingerprint of the text that stays similar if the text is mostly the same?", "What happens to a standard MD5 hash if a single character in the HTML changes?"],
+          "referenceFix": "Simhash or standard checksums for content deduplication."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "web-crawler/dns_resolver_saturation",
+      "title": "Central DNS Resolver Becomes Crawl Throughput Ceiling",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.dns",
+      "scenario": {
+        "symptoms": "Fetcher CPU idle at 30% while crawl QPS flatlines. Profiles show 70% of worker time blocked on getaddrinfo to corporate DNS.",
+        "interviewerSetup": "All workers use shared corporate resolver without local cache; high unique domain churn on web crawl."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-workers", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "worker", "label": "Fetch Workers" } },
+          { "id": "node-dns", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "dns", "label": "Corporate DNS" } },
+          { "id": "node-cache", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "cache", "label": "Local DNS Cache (missing)" } }
+        ],
+        "edges": [
+          { "id": "e-workers-dns", "source": "node-workers", "target": "node-dns", "label": "Per fetch lookup" },
+          { "id": "e-cache-skip", "source": "node-cache", "target": "node-workers", "label": "Not deployed" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-dns", "node-workers"],
+        "edgeIds": ["e-workers-dns"],
+        "headline": "Uncached DNS lookups dominate fetch latency and cap distributed crawler throughput"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_dns_caching",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Prevent DNS resolution from becoming a silent bottleneck for the fetchers.",
+          "opener": "Workers sit idle waiting on DNS while crawl QPS flatlines. How does your crawler handle millions of domain lookups?",
+          "evidence": {
+            "strong": "Local caching resolver on each worker with TTL respect, prefetch hot domains, async DNS library, monitor cache hit rate.",
+            "adequate": "Central Redis DNS cache with network hop.",
+            "weak": "OS resolver every request."
+          },
+          "misconceptions": [],
+          "probes": ["What happens if a domain's IP changes frequently due to round-robin load balancing?", "Where exactly does the DNS cache live in your architecture?"],
+          "hints": ["If every HTTP request requires a round trip to an external DNS server, what happens to our latency?", "Can we cache IP addresses locally on the fetcher machines themselves?"],
+          "referenceFix": "Local DNS caching on fetcher nodes."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "web-crawler/worker_crash_lost_frontier",
+      "title": "Crashed Worker Leaves URLs Stuck In-Flight Forever",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.fault_tolerance",
+      "scenario": {
+        "symptoms": "After spot instance reclaim, 2M URLs never finish crawling. Frontier marks them IN_PROGRESS with no lease expiry.",
+        "interviewerSetup": "Workers ACK URL batches only after full processing; no visibility timeout or heartbeats on claimed work."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-worker", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "worker", "label": "Fetcher (terminated)" } },
+          { "id": "node-frontier", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "database", "label": "Frontier Store" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "queue", "label": "Work Queue" } }
+        ],
+        "edges": [
+          { "id": "e-q-worker", "source": "node-queue", "target": "node-worker", "label": "In flight" },
+          { "id": "e-worker-frontier", "source": "node-worker", "target": "node-frontier", "label": "Stuck IN_PROGRESS" },
+          { "id": "e-frontier-q", "source": "node-frontier", "target": "node-queue", "label": "Never requeued" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-frontier", "node-worker"],
+        "edgeIds": ["e-worker-frontier"],
+        "headline": "Missing lease recovery leaves frontier URLs permanently in-flight after worker failure"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_crawler_fault_tolerance",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Ensure the crawler can recover from worker crashes without losing the frontier state or getting stuck.",
+          "opener": "Spot kills left millions of URLs stuck in progress. What happens to in-flight URLs when a worker dies?",
+          "evidence": {
+            "strong": "Visibility timeout on queue claims, heartbeats extend lease, checkpoint frontier to durable store, idempotent fetch processing, automatic requeue.",
+            "adequate": "Manual SQL reset of stuck rows.",
+            "weak": "In-memory frontier only."
+          },
+          "misconceptions": [],
+          "probes": ["How does the frontier definitively know a worker actually finished fetching a URL?", "Where is the massive state of the frontier saved if the whole data center restarts?"],
+          "hints": ["If a worker pulls a URL, what happens if it unplugs from the wall before finishing the fetch?", "Think about how message queues handle unacknowledged messages."],
+          "referenceFix": "Visibility timeouts and persistent frontier checkpointing."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

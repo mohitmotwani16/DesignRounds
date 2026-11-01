@@ -1,0 +1,693 @@
+{
+  "promptId": "collaborative-whiteboard",
+  "packVersion": "pack-ce0512a3",
+  "inputsFingerprint": "bc45fd0cfa7f213c0d0cc9cb34d132816eea2acd6d2137321b6385391adf51cd",
+  "nuggets": [
+    {
+      "id": "collaborative-whiteboard/criss-cross-strokes-lost",
+      "title": "Crossing strokes disappear for remote users",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.conflict",
+      "scenario": {
+        "symptoms": "Design review boards lose ink when two people draw overlapping lines. Remote clients see gaps while the local author still sees their stroke.",
+        "interviewerSetup": "CRDT layer uses last-writer-wins on bounding boxes instead of stroke-level merge; ordering depends on wall clock."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-a",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 100
+            },
+            "data": {
+              "kind": "tablet",
+              "label": "Tablet A"
+            }
+          },
+          {
+            "id": "n-b",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 220
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Desktop B"
+            }
+          },
+          {
+            "id": "n-realtime",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 160
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "Realtime hub"
+            }
+          },
+          {
+            "id": "n-crdt",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 160
+            },
+            "data": {
+              "kind": "service",
+              "label": "Stroke CRDT"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-a",
+            "target": "n-realtime",
+            "label": "Stroke ops"
+          },
+          {
+            "id": "e2",
+            "source": "n-b",
+            "target": "n-realtime",
+            "label": "Stroke ops"
+          },
+          {
+            "id": "e3",
+            "source": "n-realtime",
+            "target": "n-crdt",
+            "label": "LWW merge"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-crdt"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Last-writer-wins drops concurrent stroke segments"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Resolve concurrent mutations reliably without tearing the document state.",
+            "opener": "Overlapping drawing caused missing ink—the CRDT merge path is highlighted. How do you fix convergence for strokes?",
+            "evidence": {
+              "strong": "Evaluates Operational Transformation (OT) against Conflict-free Replicated Data Types (CRDTs), understanding that CRDTs allow peer merging while OT relies on server sequence.",
+              "adequate": "Proposes a Last-Writer-Wins (LWW) mechanism using timestamps or server-assigned sequence numbers.",
+              "weak": "Assumes events will just arrive in order or locks the entire shape during editing."
+            },
+            "misconceptions": [
+              {
+                "id": "conflict.locking",
+                "pattern": "Using pessimistic locking on shapes.",
+                "challenge": "If a user goes offline immediately after locking a shape, how do other users interact with it?"
+              }
+            ],
+            "probes": [
+              "What happens if one user's clock is minutes ahead of another user's clock?",
+              "How does the server enforce a consistent ordering of events?"
+            ],
+            "hints": [
+              "Client timestamps are notoriously unreliable.",
+              "Look into data structures designed specifically for concurrent decentralized updates."
+            ],
+            "referenceFix": "Stroke-id CRDT with causal ordering, lamport clocks, retain tombstones until all peers ack, and visual merge tests for overlapping paths."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-whiteboard/frame-drop-thousand-strokes",
+      "title": "Board freezes when importing a dense PDF overlay",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.rendering",
+      "scenario": {
+        "symptoms": "Importing a 200-page PDF to the whiteboard drops client FPS to 2 and WebGL context crashes on mid-tier laptops.",
+        "interviewerSetup": "Renderer draws every vector stroke each frame with no tiling, level-of-detail, or GPU batching; PDF vectors converted to individual paths."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 140
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Browser client"
+            }
+          },
+          {
+            "id": "n-canvas",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Render engine"
+            }
+          },
+          {
+            "id": "n-tile",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 80
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Tile cache"
+            }
+          },
+          {
+            "id": "n-store",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 220
+            },
+            "data": {
+              "kind": "storage",
+              "label": "PDF assets"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-client",
+            "target": "n-canvas",
+            "label": "Draw all strokes"
+          },
+          {
+            "id": "e2",
+            "source": "n-canvas",
+            "target": "n-store",
+            "label": "Load vectors"
+          },
+          {
+            "id": "e3",
+            "source": "n-canvas",
+            "target": "n-tile",
+            "label": "Skip tiling"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-client",
+          "n-canvas"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Full-scene redraw without tiling overloads the client"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a rendering pipeline that prevents the browser from freezing on massive boards.",
+            "opener": "PDF import killed performance—the render pipeline is highlighted. How would you keep pan/zoom smooth?",
+            "evidence": {
+              "strong": "Chooses Canvas or WebGL over DOM/SVG. Implements a spatial index (like an R-tree or quadtree) for viewport culling, and batches redraws using requestAnimationFrame.",
+              "adequate": "Mentions using Canvas API instead of DOM elements, but lacks a spatial indexing strategy for culling.",
+              "weak": "Renders each shape as a separate DOM or SVG element, which will bottleneck browser layout."
+            },
+            "misconceptions": [
+              {
+                "id": "render.dom",
+                "pattern": "Using React to render tens of thousands of SVG nodes.",
+                "challenge": "How will the browser's layout engine perform when updating the position of a massive number of separate DOM elements at 60 frames per second?"
+              }
+            ],
+            "probes": [
+              "If only a small fraction of the total shapes are visible on the screen, do we need to process the rest?",
+              "How do you quickly find which shapes intersect with the user's current viewport?"
+            ],
+            "hints": [
+              "The DOM is too slow for thousands of animated nodes. What lower-level APIs exist in the browser?",
+              "Think about data structures used in game engines to partition 2D space."
+            ],
+            "referenceFix": "Tile-based rendering with LOD, rasterize static PDF layer to textures, batch strokes in GPU buffers, and progressively load offscreen content."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-whiteboard/ghost-cursors-after-leave",
+      "title": "Ghost cursors linger after users leave the board",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.presence",
+      "scenario": {
+        "symptoms": "Workshops show 30+ cursors though only eight people are connected. Presence badges confuse facilitators about who is active.",
+        "interviewerSetup": "Presence heartbeats expire slowly and disconnect events are missed when tabs sleep; no server-side sweep on websocket close."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "users",
+              "label": "Participants"
+            }
+          },
+          {
+            "id": "n-ws",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "Board gateway"
+            }
+          },
+          {
+            "id": "n-pres",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "session-store",
+              "label": "Presence store"
+            }
+          },
+          {
+            "id": "n-bcast",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-pubsub",
+              "label": "Presence fanout"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-ws",
+            "label": "Heartbeats"
+          },
+          {
+            "id": "e2",
+            "source": "n-ws",
+            "target": "n-pres",
+            "label": "Update cursor"
+          },
+          {
+            "id": "e3",
+            "source": "n-pres",
+            "target": "n-bcast",
+            "label": "Stale entries"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-pres",
+          "n-bcast"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Stale presence entries never expire on missed disconnect"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle high-frequency, ephemeral data separately from durable state.",
+            "opener": "Facilitators see ghost cursors—the presence channel is highlighted. How do you keep presence accurate?",
+            "evidence": {
+              "strong": "Treats presence as ephemeral, non-persisted data. Throttles cursor updates on the client and drops stale cursor events without impacting the durable document.",
+              "adequate": "Transmits cursor events over the same WebSocket but doesn't explicitly throttle or separate them from database writes.",
+              "weak": "Writes cursor movements to the persistent database or operation log."
+            },
+            "misconceptions": [
+              {
+                "id": "presence.persist",
+                "pattern": "Saving cursor positions to the primary database.",
+                "challenge": "If dozens of users move their mice constantly, generating multiple events per second each, what happens to our database write capacity?"
+              }
+            ],
+            "probes": [
+              "Do we care about a cursor's position from several seconds ago?",
+              "How often should a client send its cursor position over the network?"
+            ],
+            "hints": [
+              "Cursor movements are high volume but low value.",
+              "If an event is lost, does it corrupt the whiteboard state?"
+            ],
+            "referenceFix": "Short TTL with websocket close hooks, server sweeper, versioned presence epoch on reconnect, and debounced broadcast diffs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-whiteboard/board-blank-after-resume",
+      "title": "Board appears empty after laptop sleep",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.reconnection",
+      "scenario": {
+        "symptoms": "Users returning from sleep see a blank canvas until hard refresh. Console shows websocket reconnected but snapshot fetch 404 on stale revision token.",
+        "interviewerSetup": "Client reconnect uses old revision cookie while server compacted history; fallback fetch not implemented."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "desktop",
+              "label": "Client"
+            }
+          },
+          {
+            "id": "n-ws",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "websocket",
+              "label": "Gateway"
+            }
+          },
+          {
+            "id": "n-snap",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "storage",
+              "label": "Board snapshots"
+            }
+          },
+          {
+            "id": "n-op",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 260
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Op stream"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-client",
+            "target": "n-ws",
+            "label": "Reconnect"
+          },
+          {
+            "id": "e2",
+            "source": "n-ws",
+            "target": "n-snap",
+            "label": "Fetch stale rev"
+          },
+          {
+            "id": "e3",
+            "source": "n-ws",
+            "target": "n-op",
+            "label": "Missing catch-up"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-client",
+          "n-snap"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Client cannot catch up after snapshot compaction"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle offline buffering and catch-up syncing seamlessly.",
+            "opener": "After sleep the board is empty—the reconnect and snapshot path is highlighted. What should happen on resume?",
+            "evidence": {
+              "strong": "Buffers local operations using IndexedDB. On reconnect, requests missing server operations via a version vector or last-known sequence, applies them, and flushes the local buffer.",
+              "adequate": "Queues operations in memory and sends them on reconnection, but struggles with interleaving server updates.",
+              "weak": "Requires the user to refresh the page, losing their offline work."
+            },
+            "misconceptions": [
+              {
+                "id": "reconnect.fullfetch",
+                "pattern": "Downloading the entire board state again on every brief disconnect.",
+                "challenge": "If a user flickers offline for a couple of seconds, do we want to download a heavy board payload again?"
+              }
+            ],
+            "probes": [
+              "How does the client know which events it missed while offline?",
+              "Where are the user's offline strokes stored so they survive an accidental page refresh?"
+            ],
+            "hints": [
+              "The client needs a way to tell the server what the last known state was.",
+              "Consider using browser storage mechanisms like IndexedDB for local persistence."
+            ],
+            "referenceFix": "Negotiate revision on reconnect, stream ops since last ack or send latest checkpoint, keep bounded op log per board, and client-side backoff with full reload fallback."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "collaborative-whiteboard/autosave-lost-on-tab-crash",
+      "title": "Hours of whiteboard work lost when browser tab crashes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.persistence",
+      "scenario": {
+        "symptoms": "Teachers report entire lessons missing after Chrome killed a tab. Autosave metrics show last successful persist was 45 minutes before crash.",
+        "interviewerSetup": "Persistence batches to server every 30 minutes; local IndexedDB buffer disabled to reduce complexity."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "client",
+              "label": "Browser"
+            }
+          },
+          {
+            "id": "n-local",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 260
+            },
+            "data": {
+              "kind": "t-sqlite",
+              "label": "Local buffer"
+            }
+          },
+          {
+            "id": "n-api",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Save API"
+            }
+          },
+          {
+            "id": "n-store",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "storage",
+              "label": "Board archive"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-client",
+            "target": "n-api",
+            "label": "30-min batch"
+          },
+          {
+            "id": "e2",
+            "source": "n-client",
+            "target": "n-local",
+            "label": "Disabled"
+          },
+          {
+            "id": "e3",
+            "source": "n-api",
+            "target": "n-store",
+            "label": "Write"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-client",
+          "n-api"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Infrequent server autosave with no local durability"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Efficiently save the board state to survive server restarts without overwhelming the database.",
+            "opener": "A tab crash wiped the board—the persistence path is highlighted. How do you bound data loss?",
+            "evidence": {
+              "strong": "Combines an append-only operation log for recent changes with periodic board snapshots stored in object storage or a document DB.",
+              "adequate": "Saves every single shape update directly to a relational database table.",
+              "weak": "Relies entirely on the in-memory state of the WebSocket server."
+            },
+            "misconceptions": [
+              {
+                "id": "persistence.relational",
+                "pattern": "Updating a row in a SQL database for every single shape movement.",
+                "challenge": "If multiple users are dragging shapes simultaneously, can the database handle that write throughput efficiently?"
+              }
+            ],
+            "probes": [
+              "If a board has been running for a year, do we need to replay a year's worth of operations to load it?",
+              "How frequently do you save the board to durable storage?"
+            ],
+            "hints": [
+              "Loading a massive amount of past operations is slow. How can we speed up the initial load?",
+              "Think about how Redis combines log appending with periodic snapshots."
+            ],
+            "referenceFix": "Enable IndexedDB write-through, debounced server saves every few seconds, op log tail on crash recovery, and visible save status for users."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

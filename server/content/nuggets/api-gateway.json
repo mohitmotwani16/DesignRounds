@@ -1,0 +1,456 @@
+{
+  "promptId": "api-gateway",
+  "packVersion": "pack-14e868af",
+  "inputsFingerprint": "7d8160e338f935ef33cd2e8b58de89dd3d2fab3e670e73ff32db815798e629a0",
+  "nuggets": [
+    {
+      "id": "api-gateway/control-plane-outage-cascading-failure",
+      "title": "Control Plane Outage Cascading into Data Plane Latency",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.data_plane_resilience",
+      "scenario": {
+        "symptoms": "All customer API requests are failing with HTTP 504 Gateway Timeout or timing out after 10 seconds. The control plane DB went offline during routine maintenance 5 minutes ago.",
+        "interviewerSetup": "Our API Gateway nodes are making synchronous REST calls to the Control Plane Config Service on every incoming API request to fetch tenant routing rules. Now that the Control Plane DB is down, Gateway nodes spend 10 seconds waiting for config lookup timeouts, exhausting their connection pools and bringing down the entire data plane."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "client",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "API Clients"
+            }
+          },
+          {
+            "id": "gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway Nodes"
+            }
+          },
+          {
+            "id": "control_plane",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 10
+            },
+            "data": {
+              "kind": "config",
+              "label": "Config Service"
+            }
+          },
+          {
+            "id": "db",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 10
+            },
+            "data": {
+              "kind": "database",
+              "label": "Control Plane DB"
+            }
+          },
+          {
+            "id": "backend",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Tenant Services"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "client",
+            "target": "gateway",
+            "label": "HTTP Requests"
+          },
+          {
+            "id": "e2",
+            "source": "gateway",
+            "target": "control_plane",
+            "label": "Sync Config Lookup"
+          },
+          {
+            "id": "e3",
+            "source": "control_plane",
+            "target": "db",
+            "label": "Fetch Tenant Rules"
+          },
+          {
+            "id": "e4",
+            "source": "gateway",
+            "target": "backend",
+            "label": "Proxy Traffic"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "control_plane",
+          "db"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Synchronous Control Plane Lookup Halts Data Plane Traffic During Database Outage"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Decouple data plane execution from control plane availability by serving cached configuration locally.",
+            "opener": "How can we re-architect the gateway nodes so that a complete failure of the config service or database does not impact live traffic?",
+            "evidence": {
+              "strong": "Proposes storing routing rules in local node memory with background async updates (push/pull via watcher), serving last-known-good configuration if the control plane fails.",
+              "adequate": "Suggests putting Redis between the gateway and DB, which reduces DB load but leaves an external dependency for the data plane.",
+              "weak": "Suggests increasing HTTP request timeouts or adding retry loops to the control plane lookup."
+            },
+            "misconceptions": [
+              {
+                "id": "synchronous_config_lookup",
+                "pattern": "Looking up routing rules in a database or external service for every incoming API request.",
+                "challenge": "Given our low latency budget and reliability goals, can we afford an external network call to the control plane on every request?"
+              }
+            ],
+            "probes": [
+              "How will gateway nodes get config updates if they rely on local memory?",
+              "What happens if a brand new gateway instance starts up while the control plane is completely down?"
+            ],
+            "hints": [
+              "Consider what data the gateway nodes actually need to evaluate routes for an incoming HTTP header.",
+              "Can the gateway load config locally into memory during startup and update it asynchronously?"
+            ],
+            "referenceFix": "Implement in-memory routing table caching inside each gateway node process. Config changes are pushed asynchronously (e.g. via gRPC stream or pub/sub) or polled periodically in the background. On control plane outage, the data plane continues routing using the last-known-good snapshot from memory or local disk backup.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "api-gateway/bad-config-global-outage",
+      "title": "Invalid Config Push Crashes All Gateway Instances",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.config_rollout",
+      "scenario": {
+        "symptoms": "100% of global API traffic is dropping with HTTP 500 errors immediately after an operator saved a updated route pattern in the management portal.",
+        "interviewerSetup": "An administrator published a config update containing a malformed regex pattern for path matching. The deployer immediately broadcast this update via Pub/Sub to all gateway instances globally, causing their routing engines to panic simultaneously."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "deployer",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 100
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Config Publisher"
+            }
+          },
+          {
+            "id": "pubsub",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 100
+            },
+            "data": {
+              "kind": "event-bus",
+              "label": "Config Channel (Pub/Sub)"
+            }
+          },
+          {
+            "id": "gateway_a",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 50
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Gateway Cluster A"
+            }
+          },
+          {
+            "id": "gateway_b",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Gateway Cluster B"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "deployer",
+            "target": "pubsub",
+            "label": "Publish Rules"
+          },
+          {
+            "id": "e2",
+            "source": "pubsub",
+            "target": "gateway_a",
+            "label": "Instant Push"
+          },
+          {
+            "id": "e3",
+            "source": "pubsub",
+            "target": "gateway_b",
+            "label": "Instant Push"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "pubsub",
+          "gateway_a",
+          "gateway_b"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Instant Global Config Fan-Out Distributes Malformed Configuration to All Gateways Simultaneously"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "goal": "Establish schema validation, versioning, canary rollouts, and instant automated rollback for gateway configuration updates.",
+            "opener": "How should configuration updates be validated and safely deployed across gateway nodes to prevent global outages from bad configs?",
+            "evidence": {
+              "strong": "Recommends strict schema/validation before publishing, versioned configurations, progressive canary rollouts (e.g. 1 node -> 1 region -> global), and automatic fallback to previous valid version upon error detection.",
+              "adequate": "Proposes validating config syntax before saving in DB and rolling back manually if metrics drop.",
+              "weak": "Suggests restarting the gateway cluster nodes one by one after a failure occurs."
+            },
+            "misconceptions": [
+              {
+                "id": "instant_global_update",
+                "pattern": "Forcing all gateway nodes to immediately update their routing tables at the exact same time.",
+                "challenge": "If the new configuration contains a subtle parsing error or invalid rule, what happens to global traffic?"
+              }
+            ],
+            "probes": [
+              "How does an individual gateway instance handle receiving a config update that it cannot parse?",
+              "What health checks or telemetry signals should trigger an automated rollback during a canary rollout?"
+            ],
+            "hints": [
+              "Think about configuration changes as code deployments—what testing and staged rollout techniques apply?",
+              "If a node receives an invalid config, should it apply it or retain the existing active config?"
+            ],
+            "referenceFix": "Implement strict JSON/YAML schema validation at the control plane ingest level. Require configurations to be versioned. Roll out config changes progressively using a canary strategy (e.g., canary cluster first, monitor HTTP 5xx error rate for 60 seconds, then roll out globally). If a gateway node fails validation on update, it retains the active version in memory and alerts.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "api-gateway/redis-rate-limiter-bottleneck",
+      "title": "Shared Redis Rate Limiter Saturated by Tenant Spike",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.rate_limiting",
+      "scenario": {
+        "symptoms": "Global gateway P99 request latency spiked from 4ms to 650ms. CPU utilization on the centralized Redis cluster reached 100%, causing request timeouts for all tenants.",
+        "interviewerSetup": "Our gateway nodes use a centralized Redis cluster to perform synchronous sliding-window rate limiting on every incoming request. Tenant X launched an unannounced load test generating 200,000 req/sec, saturating Redis CPU and degrading service for all other tenants."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "tenant_x",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 50
+            },
+            "data": {
+              "kind": "client",
+              "label": "Tenant X (200k RPS)"
+            }
+          },
+          {
+            "id": "tenant_y",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 180
+            },
+            "data": {
+              "kind": "client",
+              "label": "Tenant Y (1k RPS)"
+            }
+          },
+          {
+            "id": "gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 110
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway Cluster"
+            }
+          },
+          {
+            "id": "redis",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 50
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Centralized Redis Counter"
+            }
+          },
+          {
+            "id": "backend",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 180
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Backend Services"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "tenant_x",
+            "target": "gateway",
+            "label": "High Traffic Burst"
+          },
+          {
+            "id": "e2",
+            "source": "tenant_y",
+            "target": "gateway",
+            "label": "Normal Traffic"
+          },
+          {
+            "id": "e3",
+            "source": "gateway",
+            "target": "redis",
+            "label": "Sync Rate Limit Check"
+          },
+          {
+            "id": "e4",
+            "source": "gateway",
+            "target": "backend",
+            "label": "Forward Requests"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "redis"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Centralized Sync Redis Rate Limiter Saturated by High-Volume Tenant Traffic Spike"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "goal": "Reduce remote rate-limiting latency and protect the central counter layer using local token batching or async sync.",
+            "opener": "How can we restructure the rate limiting architecture so a traffic spike from one tenant does not exhaust our central counter store and impact all traffic?",
+            "evidence": {
+              "strong": "Proposes local memory token bucket caching with async batch updates to central Redis, or tenant-partitioned Redis keys with local early-drop shedding for tenants far over their limit.",
+              "adequate": "Suggests scaling up the Redis cluster size or sharding keys across more Redis master nodes.",
+              "weak": "Suggests turning off rate limiting entirely during high load events."
+            },
+            "misconceptions": [
+              {
+                "id": "local_only_limits",
+                "pattern": "Keeping rate limit counters strictly local to each node without any syncing.",
+                "challenge": "If we have 50 gateway nodes and rely purely on local counters, how do we prevent a tenant from exceeding their global limit by 50x?"
+              }
+            ],
+            "probes": [
+              "What trade-off between strict rate-limiting precision and request latency are you willing to accept?",
+              "If Redis becomes unresponsive or times out, should the gateway default to open (allow) or closed (reject)?"
+            ],
+            "hints": [
+              "Can gateway nodes reserve tokens in batches locally instead of making a Redis call per request?",
+              "What happens if a tenant is sending 100x their allowed quota? Can we reject them in local memory without hitting Redis?"
+            ],
+            "referenceFix": "Implement a two-tier rate limiting strategy: local node token buckets pre-allocate quota in batches from central Redis (e.g. reserving 100 tokens at a time). When a tenant's local rate greatly exceeds quota, the gateway drops requests locally in memory without querying Redis. Central Redis key sharding by tenant ID prevents noisy neighbor impact across tenants.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

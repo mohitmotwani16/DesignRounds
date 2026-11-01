@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { query, queryOne } from "../../db.js";
+import { HttpError } from "../../http.js";
 import { interviewerV3Enabled } from "../../flags.js";
 import { canvasNotes, diffSnapshots, snapshotOf } from "../ai/canvas.js";
 import { filterFillerWords, parseAnswerContext } from "../ai/communication.js";
@@ -11,6 +12,7 @@ import { AiError } from "../ai/errors.js";
 import { leadingFields, runTask, runTaskStream } from "../ai/run.js";
 import { formatTurns, summaryOutput } from "../ai/tasks/interviewer.js";
 import { getPack, publishedVersion, renderProblem } from "../pks/index.js";
+import { getNuggetRecord } from "../nuggets/index.js";
 import { limitsFor } from "../plans.js";
 import { promptById } from "../rounds.js";
 import { TOPICS } from "../../../src/learn/catalog.js";
@@ -37,6 +39,46 @@ const learnTitles = new Map(TOPICS.map((topic) => [topic.slug, topic.short ?? to
 export async function v3PackFor(promptId) {
   if (!interviewerV3Enabled) return null;
   return publishedVersion(promptId);
+}
+
+export function effectiveMinutes(session, prompt) {
+  if (session?.session_kind === "nugget" && session.nugget_id) {
+    return getNuggetRecord(session.nugget_id)?.nugget.minutes ?? 4;
+  }
+  return prompt?.minutes ?? 45;
+}
+
+export async function conductorPackVersion(session) {
+  if (session.session_kind === "nugget" && session.nugget_id) {
+    if (!interviewerV3Enabled) return null;
+    return getNuggetRecord(session.nugget_id)?.version ?? null;
+  }
+  return v3PackFor(session.prompt_id);
+}
+
+function nuggetOpening(nugget) {
+  const item = nugget.miniPack.agenda[0];
+  return `${nugget.scenario.symptoms}\n\n${item.opener}`;
+}
+
+export async function startNuggetRound(conn, { session, user }) {
+  const record = getNuggetRecord(session.nugget_id);
+  if (!record) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
+  const { nugget, pack, version } = record;
+  const prompt = promptById.get(session.prompt_id);
+  const completed = await conn.queryOne("select count(*)::int as n from practice_sessions where user_id = $1 and status = 'completed'", [user.id]);
+  const candidate = candidateSnapshot(user, { roundsCompleted: completed.n });
+  const mode = session.interview_mode ?? defaultMode({ difficulty: prompt?.difficulty ?? "Intermediate", candidate });
+  const agenda = pack.agenda;
+  const first = agenda[0]?.id ?? null;
+  await store.createRound(conn, {
+    session,
+    pins: { mode, ucsVersion: ucsVersion(), packVersion: version, route: `${aiConfig.vendor}/${aiConfig.tasks.interviewer.model}`, candidate },
+    agenda,
+    openingText: nuggetOpening(nugget),
+    firstItemId: first,
+    initialStage: "deep_dive",
+  });
 }
 
 export function openingFor(pack, mode) {
@@ -68,22 +110,49 @@ export async function startRound(conn, { session, user, packVersion }) {
 export async function changeMode(conn, { session, state, mode }) {
   await conn.query("update practice_sessions set interview_mode = $2 where id = $1", [session.id, mode]);
   if (state.engine !== "v3") return;
-  const record = await getPack(session.prompt_id, state.pack_version);
+  let openingText;
+  if (session.session_kind === "nugget" && session.nugget_id) {
+    const record = getNuggetRecord(session.nugget_id);
+    if (!record) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
+    openingText = mode === "guided" ? `${nuggetOpening(record.nugget)}\n\n${GUIDED_OPENING_LINE}` : nuggetOpening(record.nugget);
+  } else {
+    const record = await getPack(session.prompt_id, state.pack_version);
+    openingText = openingFor(record.pack, mode);
+  }
   await conn.query("update interview_state set mode = $2, updated_at = now() where session_id = $1", [session.id, mode]);
-  await conn.query("update interview_turns set content = $2 where session_id = $1 and seq = 1 and kind = 'opening'", [session.id, openingFor(record.pack, mode)]);
+  await conn.query("update interview_turns set content = $2 where session_id = $1 and seq = 1 and kind = 'opening'", [session.id, openingText]);
   await store.appendEvents(conn, session.id, [{ type: "mode_changed", payload: { mode } }]);
 }
 
 async function context({ session, user, stateRow }) {
   const round = store.toRound(stateRow);
   const prompt = promptById.get(session.prompt_id);
+  if (session.session_kind === "nugget" && session.nugget_id) {
+    const record = getNuggetRecord(session.nugget_id);
+    if (!record) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
+    const conventions = await ucsConventions({ version: round.ucsVersion, mode: round.mode, hintsPerRound: limitsFor(user, session).hintsPerRound });
+    round.activeMs = accrueActiveMs({ activeMs: round.activeMs, lastActivityAt: round.lastActivityAt, now: Date.now(), capMs: conventions.activityGapCapMs });
+    const items = await store.itemsFor(session.id);
+    const design = describeDiagram(session.diagram);
+    const agenda = new Map(record.pack.agenda.map((item) => [item.id, item]));
+    return {
+      round,
+      prompt,
+      record: { pack: record.pack, rendered: record.rendered, version: record.version, nugget: record.nugget },
+      conventions,
+      items,
+      design,
+      agenda,
+      isNugget: true,
+    };
+  }
   const record = await getPack(prompt.id, round.packVersion);
   const conventions = await ucsConventions({ version: round.ucsVersion, mode: round.mode, hintsPerRound: limitsFor(user, session).hintsPerRound });
   round.activeMs = accrueActiveMs({ activeMs: round.activeMs, lastActivityAt: round.lastActivityAt, now: Date.now(), capMs: conventions.activityGapCapMs });
   const items = await store.itemsFor(session.id);
   const design = describeDiagram(session.diagram);
   const agenda = new Map(record.pack.agenda.map((item) => [item.id, item]));
-  return { round, prompt, record, conventions, items, design, agenda };
+  return { round, prompt, record, conventions, items, design, agenda, isNugget: false };
 }
 
 const learnerText = (turn) => {
@@ -234,8 +303,9 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const { round, record, items, conventions, design, agenda, prompt } = ctx;
   const turns = await store.recentTurns(session.id, round.summarizedThrough);
   const trigger = hint ? "hint" : "reply";
+  const minutes = effectiveMinutes(session, prompt);
   const plan = makePlan({
-    items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes,
+    items, state: round, conventions, agenda, curveballs: record.pack.curveballs ?? [], pacing: record.pack.pacing, minutes,
     turn: { kind: reserved.learner.kind, text: learnerText(reserved.learner) }, trigger, addedKinds: addedKinds(round.snapshot, session.diagram),
     canvas: await signalsFor({ session, record, round, turns }),
     conversation: conversationOf(turns),
@@ -263,6 +333,12 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const result = applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: reserved.learner.seq, interviewerSeq: reserved.learner.seq + 1 } });
   result.events.push(...flags);
   if (poorResponseStreak >= 3) result.events.push({ type: "poor_response_redirect", payload: { itemId: plan.focusItemId, streak: poorResponseStreak, move: verified.move } });
+  if (ctx.isNugget && verified.move === "wrap_up") {
+    const reference = ctx.record.nugget?.miniPack?.agenda?.[0]?.referenceFix;
+    if (reference) {
+      verified.message = `${verified.message}\n\nQuick debrief: ${reference}`.slice(0, 4000);
+    }
+  }
   return store.saveTurn({
     session,
     before: items,
@@ -345,7 +421,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     const ctx = await context({ session, user, stateRow });
     const { round, record, items, conventions, design, agenda, prompt } = ctx;
     const now = Date.now();
-    const clock = clockOf({ state: round, pacing: record.pack.pacing, minutes: prompt.minutes });
+    const clock = clockOf({ state: round, pacing: record.pack.pacing, minutes: effectiveMinutes(session, prompt) });
     const current = snapshotOf(session.diagram);
     const diff = diffSnapshots(round.snapshot, current, session.diagram);
     const covered = new Set(round.covered);
@@ -411,7 +487,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     if (!creditId) return { action: "none", reason: "not_now" };
     try {
       const turns = await store.recentTurns(session.id, round.summarizedThrough);
-      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs, pacing: record.pack.pacing, minutes: prompt.minutes, trigger: "tick", turn: { kind: "tick", text: "" }, canvas: await signalsFor({ session, record, round, turns }) });
+      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs ?? [], pacing: record.pack.pacing, minutes: effectiveMinutes(session, prompt), trigger: "tick", turn: { kind: "tick", text: "" }, canvas: await signalsFor({ session, record, round, turns }) });
       const plan = tickPlan({ base, kind: decision.kind, itemId: decision.itemId, items });
       const changes = decision.kind === "canvas" && mapped ? partToAskAbout(mapped) : "";
       const { verified, flags } = await converse({ ctx, session, user, turns, plan, trigger: `tick:${decision.kind}`, learner: null, changes });
@@ -440,15 +516,20 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
 }
 
 // What the learner may see about the round's state: never item ids or goals.
-export function presentV3State(row, promptId) {
+export function presentV3State(row, sessionOrPromptId) {
+  const session = typeof sessionOrPromptId === "object" ? sessionOrPromptId : null;
+  const promptId = session?.prompt_id ?? sessionOrPromptId;
   const prompt = promptById.get(promptId);
+  const budgetMs = (session ? effectiveMinutes(session, prompt) : prompt?.minutes ?? 45) * 60_000;
   return {
     engine: "v3",
     stage: row.stage,
     hintsUsed: row.hints_used,
     mode: row.mode,
     focusArea: FOCUS_AREAS[row.stage],
-    clock: { elapsedMs: Number(row.active_ms), budgetMs: (prompt?.minutes ?? 45) * 60_000 },
+    clock: { elapsedMs: Number(row.active_ms), budgetMs },
+    sessionKind: session?.session_kind ?? "full",
+    nuggetId: session?.nugget_id ?? null,
   };
 }
 
@@ -470,6 +551,7 @@ export async function summarize({ round, previous, turns, userId, sessionId }) {
 export async function reviewLedger(sessionId, promptId) {
   const state = await queryOne("select engine, ucs_version, pack_version, mode from interview_state where session_id = $1", [sessionId]);
   if (state?.engine !== "v3") return null;
+  const session = await queryOne("select session_kind, nugget_id from practice_sessions where id = $1", [sessionId]);
   const items = await store.itemsFor(sessionId);
   const addendum = (await renderUniversal({ version: state.ucs_version, task: "review" })).map((block) => block.text).join("\n\n");
   const lines = items.map((item) => {
@@ -485,8 +567,13 @@ export async function reviewLedger(sessionId, promptId) {
     const band = credited && credited !== item.band ? `credited ${credited} (reached ${item.band} only with help)` : credited ?? "no band";
     return `- ${item.itemId} · ${item.stage} · ${item.dimension} · weight ${item.weight} · ${item.status} · ${band}${help ? ` · ${help}` : ""}${item.drawRequests ? ` · asked to draw ${item.drawRequests}x` : ""}${quotes ? ` · ${quotes}` : ""}`;
   });
-  const record = await getPack(promptId, state.pack_version);
-  const packReview = renderProblem(record, { task: "review" }).filter((entry) => entry.id === "pks.review").map((entry) => entry.text).join("\n\n");
+  let packReview = "";
+  if (session?.session_kind === "nugget" && session.nugget_id) {
+    // Nuggets use the mini debrief in chat, not a full pack review block.
+  } else {
+    const record = await getPack(promptId, state.pack_version);
+    packReview = renderProblem(record, { task: "review" }).filter((entry) => entry.id === "pks.review").map((entry) => entry.text).join("\n\n");
+  }
   // The structured items back the deterministic score checks (ai/scoring.js).
   const scoring = items.map((item) => ({ dimension: item.dimension, weight: item.weight, status: item.status, band: creditedBand(item), helped: creditedBand(item) !== item.band }));
   return { addendum, text: `<interview_ledger>\n${lines.join("\n")}\n</interview_ledger>`, packReview, packVersion: state.pack_version, mode: state.mode, items: scoring };
@@ -497,7 +584,11 @@ export async function reviewLedger(sessionId, promptId) {
 export async function debrief(sessionId, promptId) {
   const state = await queryOne("select engine, pack_version from interview_state where session_id = $1", [sessionId]);
   if (state?.engine !== "v3") return null;
-  const { pack } = await getPack(promptId, state.pack_version);
+  const session = await queryOne("select session_kind, nugget_id from practice_sessions where id = $1", [sessionId]);
+  const pack = session?.session_kind === "nugget" && session.nugget_id
+    ? getNuggetRecord(session.nugget_id)?.pack
+    : (await getPack(promptId, state.pack_version)).pack;
+  if (!pack) return null;
   const agenda = new Map(pack.agenda.map((item) => [item.id, item]));
   const items = await store.itemsFor(sessionId);
   return {

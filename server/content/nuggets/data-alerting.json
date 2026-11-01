@@ -1,0 +1,680 @@
+{
+  "promptId": "data-alerting",
+  "packVersion": "pack-17d85e55",
+  "inputsFingerprint": "54c1ebb80f668af13b069415995684c39f5fa639b199b9f095672201a9e83ace",
+  "nuggets": [
+    {
+      "id": "data-alerting/evaluator-storm-drops-alerts",
+      "title": "Metric flap triggers evaluator storm and dropped pages",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.evaluator",
+      "scenario": {
+        "symptoms": "During a deploy, CPU metric flapped every 30 s causing 12,000 alert evaluations per minute. PagerDuty throttled and real outages went unpageable.",
+        "interviewerSetup": "Evaluator reruns on every raw sample with no hysteresis or grouping window; state store writes synchronously on each flap."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-ts",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Time series DB"
+            }
+          },
+          {
+            "id": "n-eval",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Rule evaluator"
+            }
+          },
+          {
+            "id": "n-state",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "database",
+              "label": "Alert state"
+            }
+          },
+          {
+            "id": "n-page",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Pager"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-ts",
+            "target": "n-eval",
+            "label": "Raw samples"
+          },
+          {
+            "id": "e2",
+            "source": "n-eval",
+            "target": "n-state",
+            "label": "Flip each flap"
+          },
+          {
+            "id": "e3",
+            "source": "n-eval",
+            "target": "n-page",
+            "label": "Flood pages"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-eval",
+          "n-state"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "No hysteresis causes alert state thrashing"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design an evaluation engine that supports both time-based and event-based triggers.",
+            "opener": "Alerts stopped firing when metrics flapped—the evaluator loop is highlighted. What failed?",
+            "evidence": {
+              "strong": "Uses a hybrid approach: a scheduler for time-based rules and an event bus listening to pipeline completions for event-driven checks.",
+              "adequate": "Relies purely on a scheduler like Airflow or a cron service polling every few minutes.",
+              "weak": "Attempts to evaluate all rules sequentially in a single process."
+            },
+            "misconceptions": [
+              {
+                "id": "pure_polling",
+                "pattern": "Only uses cron to poll the warehouse constantly.",
+                "challenge": "If a pipeline finishes at 2:03 AM, how quickly does the cron job catch it without wasting warehouse compute by polling every minute?"
+              }
+            ],
+            "probes": [
+              "How do we prevent overloading the data warehouse if thousands of rules run at exactly midnight?",
+              "Can we trigger a check immediately when an ETL job finishes?"
+            ],
+            "hints": [
+              "Think about how an orchestrator might notify our system.",
+              "Could we use an event queue to decouple the trigger from the execution worker?"
+            ],
+            "referenceFix": "For-duration conditions, grouping windows, alert suppression during known deploys, rate-limit pages, and async state updates with debouncing."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-alerting/duplicate-pages-same-incident",
+      "title": "Same incident pages on-call twenty times",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.state_dedupe",
+      "scenario": {
+        "symptoms": "Database failover generated 22 identical PagerDuty incidents because each shard evaluator opened a new alert key instead of deduping on correlation id.",
+        "interviewerSetup": "Alert fingerprint excludes service and shard labels; dedupe TTL too short for long incidents."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-shards",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "DB shards"
+            }
+          },
+          {
+            "id": "n-eval",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Evaluators"
+            }
+          },
+          {
+            "id": "n-dedupe",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 120
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Dedupe store"
+            }
+          },
+          {
+            "id": "n-pd",
+            "type": "systemNode",
+            "position": {
+              "x": 680,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Paging API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-shards",
+            "target": "n-eval",
+            "label": "Errors"
+          },
+          {
+            "id": "e2",
+            "source": "n-eval",
+            "target": "n-dedupe",
+            "label": "New keys"
+          },
+          {
+            "id": "e3",
+            "source": "n-dedupe",
+            "target": "n-pd",
+            "label": "Duplicate incidents"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-dedupe"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Weak fingerprinting prevents incident deduplication"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Maintain an alert state machine to prevent noisy duplicate alerts for ongoing issues.",
+            "opener": "One DB incident woke everyone repeatedly—the dedupe path is highlighted. How do you correlate?",
+            "evidence": {
+              "strong": "Introduces a state store (like Redis or Postgres) to track alert status (OK, Firing, Resolved) and only notifies on state transitions or escalation intervals.",
+              "adequate": "Silences the specific rule ID for a hardcoded time window using a cache.",
+              "weak": "Relies entirely on the downstream tool (like PagerDuty) to handle deduplication."
+            },
+            "misconceptions": [
+              {
+                "id": "stateless_alerts",
+                "pattern": "Fires a notification every time the check returns false.",
+                "challenge": "Won't this create an alert storm and page the on-call engineer every 5 minutes for the same issue?"
+              }
+            ],
+            "probes": [
+              "Where exactly are you storing the fact that this alert is already active?",
+              "How does the system know when to send a 'Resolved' notification?"
+            ],
+            "hints": [
+              "We need to remember what happened in the previous run.",
+              "Think about using a key-value store to track the current state of each rule."
+            ],
+            "referenceFix": "Stable alert fingerprint on root cause labels, correlation ids from traces, merge windows, and inhibit rules linking shard alerts to parent."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-alerting/alert-fatigue-from-shard-sprawl",
+      "title": "On-call drowned in per-shard CPU alerts",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.grouping",
+      "scenario": {
+        "symptoms": "Night shift received 400 CPU alerts from individual Kafka brokers though cluster capacity was fine. Mean time to acknowledge rose above 30 minutes.",
+        "interviewerSetup": "Rules fire per broker without roll-up; no top-N or cluster-level aggregation."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-brokers",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 140
+            },
+            "data": {
+              "kind": "cluster",
+              "label": "Kafka brokers"
+            }
+          },
+          {
+            "id": "n-rules",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Alert rules"
+            }
+          },
+          {
+            "id": "n-group",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Grouping layer"
+            }
+          },
+          {
+            "id": "n-oncall",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "user",
+              "label": "On-call"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-brokers",
+            "target": "n-rules",
+            "label": "Per-host CPU"
+          },
+          {
+            "id": "e2",
+            "source": "n-rules",
+            "target": "n-group",
+            "label": "Bypassed"
+          },
+          {
+            "id": "e3",
+            "source": "n-rules",
+            "target": "n-oncall",
+            "label": "400 pages"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-rules"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Missing roll-up groups shard noise into fatigue"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Group related alerts by upstream root causes to prevent alert storms.",
+            "opener": "Brokers spammed pages but the cluster was healthy—the grouping path is highlighted. How do you roll up?",
+            "evidence": {
+              "strong": "Uses data lineage to identify the upstream root cause, suppresses downstream alerts, and sends one grouped notification detailing the blast radius.",
+              "adequate": "Batches alerts by team and time window, sending a single digest message.",
+              "weak": "Suggests aggressive global rate limiting, dropping notifications entirely."
+            },
+            "misconceptions": [
+              {
+                "id": "blind_rate_limit",
+                "pattern": "Just rate limit the team to 5 alerts per hour.",
+                "challenge": "If we drop alerts, how will the team know about the other 35 datasets that are currently broken once the first issue is fixed?"
+              }
+            ],
+            "probes": [
+              "How can the system programmatically know that these 40 tables depend on the same upstream table?",
+              "If we delay sending to group them, how long do we wait?"
+            ],
+            "hints": [
+              "Consider grouping alerts that happen in the same time window.",
+              "Does your metadata catalog track dependencies between tables?"
+            ],
+            "referenceFix": "Multi-level rules with cluster roll-up, inhibition when parent fires, dynamic top-N offenders, and on-call policies requiring grouped incidents."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-alerting/silent-rule-regression",
+      "title": "Deploy broke alert rule without anyone noticing",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.testing",
+      "scenario": {
+        "symptoms": "A typo in label matcher stopped all payment error alerts for six days until finance noticed reconciliation gaps. CI had no alert rule tests.",
+        "interviewerSetup": "Rules edited via UI without version control; staging environment lacks representative metrics for dry-run."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-op",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "admin",
+              "label": "Operator"
+            }
+          },
+          {
+            "id": "n-ui",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Rule editor"
+            }
+          },
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "metrics",
+              "label": "Prod metrics"
+            }
+          },
+          {
+            "id": "n-test",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Rule tester"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-op",
+            "target": "n-ui",
+            "label": "Edit matcher"
+          },
+          {
+            "id": "e2",
+            "source": "n-ui",
+            "target": "n-prod",
+            "label": "Deploy rule"
+          },
+          {
+            "id": "e3",
+            "source": "n-ui",
+            "target": "n-test",
+            "label": "Skipped"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-ui",
+          "n-prod"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Untested rule change silenced critical alerts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Provide a safe mechanism for teams to test new rules without causing false alarms.",
+            "opener": "Payment alerts silently stopped—the rule testing path is highlighted. How do you catch regressions?",
+            "evidence": {
+              "strong": "Proposes a shadow mode or dry-run evaluation that logs rule outcomes without triggering the notification pipeline.",
+              "adequate": "Suggests running rules against a staging environment or routing to a private test channel.",
+              "weak": "Assumes users will just test SQL queries manually before deploying."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Can we backtest a new rule against the last 7 days of data?"
+            ],
+            "hints": [
+              "What if the rule evaluates normally but skips the final sending step?",
+              "Could we add a 'status' field to the rule definition like 'testing' or 'active'?"
+            ],
+            "referenceFix": "Git-backed rules, unit tests with fixture time series, staging dry-run on replayed data, canary notifications, and synthetic alert probes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "data-alerting/seasonality-blind-anomaly",
+      "title": "Friday traffic spike pages false anomaly",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.anomaly",
+      "scenario": {
+        "symptoms": "Every Friday evening on-call gets paged for 'anomaly' on signups though pattern is normal weekly seasonality. Trust in anomaly alerts eroded.",
+        "interviewerSetup": "Anomaly detector uses fixed z-score without day-of-week baseline; training window too short."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-events",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Signup stream"
+            }
+          },
+          {
+            "id": "n-det",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Anomaly detector"
+            }
+          },
+          {
+            "id": "n-base",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "database",
+              "label": "Baseline store"
+            }
+          },
+          {
+            "id": "n-page",
+            "type": "systemNode",
+            "position": {
+              "x": 500,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Pager"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-events",
+            "target": "n-det",
+            "label": "Live counts"
+          },
+          {
+            "id": "e2",
+            "source": "n-det",
+            "target": "n-base",
+            "label": "Static mean"
+          },
+          {
+            "id": "e3",
+            "source": "n-det",
+            "target": "n-page",
+            "label": "False pages"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-det",
+          "n-base"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Baseline ignores weekly seasonality"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Support dynamic baselines and seasonality for metric evaluation.",
+            "opener": "Predictable Friday spikes page people—the anomaly model path is highlighted. How do you fix signal?",
+            "evidence": {
+              "strong": "Stores historical metric aggregates in a time-series DB and calculates z-scores or uses trailing windows with seasonality awareness to define the baseline.",
+              "adequate": "Compares the current value to a simple 7-day moving average.",
+              "weak": "Suggests adding 'weekend' hardcoded rules to every configuration."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Where are we storing the historical data needed to calculate this baseline?",
+              "How do we prevent a baseline from skewing if the data has been broken for 3 days?"
+            ],
+            "hints": [
+              "We need to compare today's value with previous days.",
+              "Think about storing historical check results in a fast timeseries database."
+            ],
+            "referenceFix": "Seasonal baselines by hour and weekday, robust statistics, alert only on residual after deseasoning, and feedback loop to tune sensitivity."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

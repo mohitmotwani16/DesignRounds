@@ -118,6 +118,7 @@ export function publicPaths() {
   return [
     "/",
     "/library",
+    "/nuggets",
     ...tracks.map((track) => trackPath(track.id)),
     ...prompts.map((prompt) => roundPath(prompt.id)),
     LEARN_PATH,
@@ -176,6 +177,15 @@ export function routeMeta(path) {
       title: "System Design Interview Questions to Practice | DesignRounds",
       description: "Practice system design interview questions by role and level: backend, data, ML, platform, distributed systems and frontend. Free rounds, with an AI review.",
       jsonLd: [{ "@context": "https://schema.org", "@type": "CollectionPage", name: "System design interview questions", url: absolute(path) }, breadcrumbs([["Home", "/"], ["Library", "/library"]])],
+    };
+  }
+
+  if (path === "/nuggets") {
+    return {
+      ...base,
+      title: "System Design Incident Drills (2–5 min) | DesignRounds",
+      description: "Short incident nuggets: a failing architecture on the canvas, a live AI interviewer, and a quick debrief. Random drills or pick a question.",
+      jsonLd: [{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Incident drills", url: absolute(path) }, breadcrumbs([["Home", "/"], ["Nuggets", "/nuggets"]])],
     };
   }
 

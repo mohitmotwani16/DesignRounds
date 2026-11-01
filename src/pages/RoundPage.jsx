@@ -8,6 +8,7 @@ import { AccessBadge, LevelMeter, RoundCard, SiteFooter } from "../components/si
 import { promptIcon } from "../components/ui.jsx";
 import { Link } from "../router.js";
 import { trackPath } from "../seo.js";
+import { nuggetCountFor } from "../data/nuggets.js";
 
 const shortTitle = (title) => title.replace(/^Design (a |an )?/i, "").replace(/^./, (char) => char.toUpperCase());
 
@@ -45,6 +46,7 @@ export default function RoundPage({ id, onStart }) {
   const Icon = promptIcon(prompt.icon);
   const related = prompts.filter((item) => item.track === prompt.track && item.id !== prompt.id);
   const alternative = related.find((item) => item.access === "free") ?? prompts.find((item) => item.access === "free");
+  const drillCount = nuggetCountFor(prompt.id);
   const unlocked = Boolean(content);
 
   const start = unlocked ? (
@@ -80,6 +82,11 @@ export default function RoundPage({ id, onStart }) {
           </div>
           <div className="rp-actions">
             {start}
+            {drillCount > 0 && (
+              <Link className="btn btn-outline btn-lg" to={`/nuggets?q=${encodeURIComponent(prompt.id)}`}>
+                Incident drills ({drillCount})
+              </Link>
+            )}
             <Link className="btn btn-ghost btn-lg" to={trackPath(track.id)}>More {track.shortLabel} questions</Link>
           </div>
         </header>

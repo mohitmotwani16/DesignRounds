@@ -1,0 +1,696 @@
+{
+  "promptId": "ecommerce-warehouse",
+  "packVersion": "pack-5574c858",
+  "inputsFingerprint": "6e30a9dd5a681ed24da50b1b1140149d90b5c749af841683df17c9a1c0f9dd8d",
+  "nuggets": [
+    {
+      "id": "ecommerce-warehouse/duplicate-order-lines-in-fact",
+      "title": "Duplicate order lines inflate revenue fact table",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.grain",
+      "scenario": {
+        "symptoms": "Daily revenue KPI jumped 12% without sales growth. Analysts found duplicate line items per order after replaying checkout events twice.",
+        "interviewerSetup": "Fact table grain is order line but ETL dedupes only on order id not line id; at-least-once ingest replay duplicated rows."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-checkout",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Checkout events"
+            }
+          },
+          {
+            "id": "n-etl",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Fact ETL"
+            }
+          },
+          {
+            "id": "n-fact",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "fact-table",
+              "label": "Order fact"
+            }
+          },
+          {
+            "id": "n-bi",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Revenue KPI"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-checkout",
+            "target": "n-etl",
+            "label": "Replay dupes"
+          },
+          {
+            "id": "e2",
+            "source": "n-etl",
+            "target": "n-fact",
+            "label": "Append lines"
+          },
+          {
+            "id": "e3",
+            "source": "n-fact",
+            "target": "n-bi",
+            "label": "Inflated sum"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-etl",
+          "n-fact"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Wrong dedupe key duplicated fact rows"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Declare the fact grain and handle order-level amounts without double counting.",
+            "opener": "Revenue KPI inflated—the fact grain and dedupe path is highlighted. What grain should the fact have?",
+            "evidence": {
+              "strong": "Declares one row per order line, keeps order-level amounts (shipping, order discounts) in an order-level fact or allocates them to lines with a stated rule, and shows why repeating them on each line overstates revenue.",
+              "adequate": "Picks the order-line grain but puts the shipping fee on every line or leaves header measures unresolved.",
+              "weak": "Never states a grain, or mixes order-level and line-level rows in one table."
+            },
+            "misconceptions": [
+              {
+                "id": "grain.repeat_header",
+                "pattern": "Thinks repeating the order's shipping fee on each line is harmless.",
+                "challenge": "An order has four items and a fee of one hundred rupees: what does summing the fee over your fact rows give?"
+              }
+            ],
+            "probes": [
+              "What happens to average order value if you compute it from line-level rows?",
+              "How would you allocate an order-wide discount across its items?"
+            ],
+            "hints": [
+              "Count what one row represents before choosing measures.",
+              "Order-level amounts either get their own table or a clear allocation rule."
+            ],
+            "referenceFix": "Define grain as order_line_id, idempotent merge on natural key, track ingest offsets, reconcile counts to OLTP, and assert uniqueness constraints."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ecommerce-warehouse/scd2-gap-lost-history",
+      "title": "Product rename broke historical reporting",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.history",
+      "scenario": {
+        "symptoms": "Category performance YoY report shows NULL category for half of last year after SKU merge. SCD2 effective dates have a gap day without overlap handling.",
+        "interviewerSetup": "Dimension update closed old row at midnight UTC but new row started next day leaving gap; reports use inner join."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-pim",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Product master"
+            }
+          },
+          {
+            "id": "n-etl",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "SCD2 loader"
+            }
+          },
+          {
+            "id": "n-dim",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "dimension-table",
+              "label": "Product dim"
+            }
+          },
+          {
+            "id": "n-rpt",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Category report"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-pim",
+            "target": "n-etl",
+            "label": "Rename SKU"
+          },
+          {
+            "id": "e2",
+            "source": "n-etl",
+            "target": "n-dim",
+            "label": "Gap day"
+          },
+          {
+            "id": "e3",
+            "source": "n-dim",
+            "target": "n-rpt",
+            "label": "NULL join"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-dim"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "SCD2 effective date gap lost dimension history"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Choose how dimension changes (product category, customer region) are kept, per reporting need.",
+            "opener": "Historical category report has holes—the SCD2 timeline is highlighted. How do you fix history?",
+            "evidence": {
+              "strong": "Asks which view the business wants, then uses SCD Type 2 with validity dates and a surrogate key per version where history matters and Type 1 overwrites where it doesn't, with facts pointing to the version at sale time.",
+              "adequate": "Knows SCD types but applies one type everywhere without tying it to the reports.",
+              "weak": "Overwrites the category in place without noticing past reports change."
+            },
+            "misconceptions": [
+              {
+                "id": "hist.always_overwrite",
+                "pattern": "Believes updating the dimension row in place is always fine.",
+                "challenge": "Finance closed last year's books by category. What do they see if the category is overwritten today?"
+              }
+            ],
+            "probes": [
+              "Which attributes need history and which don't?",
+              "How does a fact row find the right product version?"
+            ],
+            "hints": [
+              "Ask whether reports should use the category at time of sale or today's.",
+              "Versioned dimension rows with validity dates are one standard tool."
+            ],
+            "referenceFix": "Close prior row at T, open new row at T with no gaps, use inclusive/exclusive bounds consistently, test overlap queries, and backfill gap rows."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ecommerce-warehouse/incremental-miss-late-events",
+      "title": "Incremental load missed late-arriving returns",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.incremental",
+      "scenario": {
+        "symptoms": "Weekly inventory snapshot understated returns by $2M because incremental job cut off at warehouse close while returns arrived from stores until 3 a.m.",
+        "interviewerSetup": "Incremental watermark uses batch end time without lookback window for late events."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-pos",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Store returns"
+            }
+          },
+          {
+            "id": "n-inc",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Incremental job"
+            }
+          },
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Inventory mart"
+            }
+          },
+          {
+            "id": "n-clock",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "Cutoff watermark"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-pos",
+            "target": "n-inc",
+            "label": "Late events"
+          },
+          {
+            "id": "e2",
+            "source": "n-clock",
+            "target": "n-inc",
+            "label": "Hard cutoff"
+          },
+          {
+            "id": "e3",
+            "source": "n-inc",
+            "target": "n-wh",
+            "label": "Undercount"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-inc",
+          "n-clock"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Strict watermark excluded late-arriving facts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Make the daily load incremental, aware of late updates and deletes, and safe to rerun.",
+            "opener": "Returns after midnight never landed—the incremental watermark is highlighted. How do you handle lateness?",
+            "evidence": {
+              "strong": "Loads incrementally by updated_at with a lookback window (or CDC), catches hard deletes, and makes every step idempotent with MERGE on order_line_id or by overwriting whole date partitions; reruns give identical results.",
+              "adequate": "Uses MERGE or partition overwrite but ignores late updates or deletes, or full-reloads everything nightly without considering cost.",
+              "weak": "Appends each night's extract, so a rerun duplicates rows."
+            },
+            "misconceptions": [
+              {
+                "id": "inc.append_only",
+                "pattern": "Thinks appending each day's extract is enough.",
+                "challenge": "Yesterday's load ran twice after a retry. What does revenue for yesterday show now?"
+              },
+              {
+                "id": "inc.updated_at_complete",
+                "pattern": "Believes filtering on updated_at catches every change.",
+                "challenge": "A test order is hard-deleted from the source. How does an updated_at filter ever see that?"
+              }
+            ],
+            "probes": [
+              "How do you pick up an order whose status changed a week after purchase?",
+              "What makes rerunning the same day produce the same result?"
+            ],
+            "hints": [
+              "Think about what a rerun does to rows that already loaded.",
+              "Upserts on a stable key, or replacing a whole partition, are both rerun-safe."
+            ],
+            "referenceFix": "Sliding lookback window, merge job for corrections, event-time vs processing-time watermarks, and monitor lateness histogram."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ecommerce-warehouse/refund-double-count",
+      "title": "Refunds counted as revenue and adjustment",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.refunds",
+      "scenario": {
+        "symptoms": "Finance close double-subtracted refunds appearing in both gross revenue and refund fact without netting logic. Net revenue off by $800k for the month.",
+        "interviewerSetup": "Separate refund stream loaded into same metric column as positive orders; reports sum both without sign convention."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-orders",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Orders"
+            }
+          },
+          {
+            "id": "n-ref",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 240
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Refunds"
+            }
+          },
+          {
+            "id": "n-etl",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Transform"
+            }
+          },
+          {
+            "id": "n-fact",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "fact-table",
+              "label": "Sales fact"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-orders",
+            "target": "n-etl",
+            "label": "Positive"
+          },
+          {
+            "id": "e2",
+            "source": "n-ref",
+            "target": "n-etl",
+            "label": "Also positive column"
+          },
+          {
+            "id": "e3",
+            "source": "n-etl",
+            "target": "n-fact",
+            "label": "Double impact"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-etl",
+          "n-fact"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Refunds loaded with wrong sign and double counted"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Represent refunds and cancellations that arrive later without making past reports irreproducible.",
+            "opener": "Refunds hit revenue twice—the refund modeling path is highlighted. How should facts represent refunds?",
+            "evidence": {
+              "strong": "Records refunds and cancellations as their own fact rows (negative amounts with a refund date and reason) or a returns fact, so both gross and net revenue are reportable and closed periods stay reproducible; may add an order-status snapshot.",
+              "adequate": "Updates the original sale row's amount or status, losing when the refund happened.",
+              "weak": "Ignores refunds, or deletes the original order."
+            },
+            "misconceptions": [
+              {
+                "id": "ref.update_in_place",
+                "pattern": "Thinks updating the original sale row is the cleanest way to show a refund.",
+                "challenge": "Finance asks for revenue on the day of the sale as reported then, and refunds by refund date. Can your table answer both?"
+              }
+            ],
+            "probes": [
+              "Should refund revenue count on the sale date or the refund date?"
+            ],
+            "hints": [
+              "Something that happens later is often an event of its own.",
+              "Negative rows keyed to the original line let you net them out."
+            ],
+            "referenceFix": "Model refunds as negative facts or separate adjustment table with clear join keys, net metrics view, reconciliation to payments ledger, and unit tests on sign."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ecommerce-warehouse/wide-table-scan-cost",
+      "title": "Ad-hoc query scan cost exploded after wide denormalized table",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.layout",
+      "scenario": {
+        "symptoms": "Analyst query costs 10× after mart denormalized 300 columns into one table. BigQuery bytes scanned per dashboard refresh exceeded budget.",
+        "interviewerSetup": "Layout optimized for single-table convenience without clustering or column pruning; dashboards select star."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-bi",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Looker dashboards"
+            }
+          },
+          {
+            "id": "n-wide",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "fact-table",
+              "label": "Wide mart"
+            }
+          },
+          {
+            "id": "n-star",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 280
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Star schema"
+            }
+          },
+          {
+            "id": "n-engine",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-bigquery",
+              "label": "Query engine"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-bi",
+            "target": "n-engine",
+            "label": "SELECT *"
+          },
+          {
+            "id": "e2",
+            "source": "n-engine",
+            "target": "n-wide",
+            "label": "Full scan"
+          },
+          {
+            "id": "e3",
+            "source": "n-star",
+            "target": "n-wide",
+            "label": "Bypassed"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-wide"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Wide denormalized layout forced massive scans"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep common queries fast and cheap with layout and pre-aggregation.",
+            "opener": "Queries scan terabytes after the wide mart change—the table layout path is highlighted. How would you reorganize?",
+            "evidence": {
+              "strong": "Partitions or clusters the fact by order date and clusters by region or product so queries prune, and adds daily aggregate tables or materialised views for the hottest dashboards, with a refresh that follows the load.",
+              "adequate": "Mentions partitioning or indexes but not on the columns queries filter by, or adds aggregates without a refresh plan.",
+              "weak": "Relies on adding a bigger warehouse or more compute."
+            },
+            "misconceptions": [
+              {
+                "id": "layout.index_oltp",
+                "pattern": "Assumes row-store indexes are how warehouse queries get fast.",
+                "challenge": "In a columnar warehouse that scans by micro-partition, what actually lets a query skip data?"
+              }
+            ],
+            "probes": [
+              "Which columns do most queries filter on?",
+              "When would you build a pre-aggregated table?"
+            ],
+            "hints": [
+              "Queries that filter on date should only read those dates.",
+              "Small daily summary tables serve dashboards well."
+            ],
+            "referenceFix": "Return to star schema or nested records, partition and cluster on filter columns, expose curated narrow views, and enforce SELECT column lists in BI."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

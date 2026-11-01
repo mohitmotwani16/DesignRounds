@@ -1,0 +1,688 @@
+{
+  "promptId": "gdpr-deletion",
+  "packVersion": "pack-3c99abaf",
+  "inputsFingerprint": "4bc0c512d1c53a7313ec1f9fe02119ced0f3992abcd742c92d3bda4594db70a0",
+  "nuggets": [
+    {
+      "id": "gdpr-deletion/deep-lake",
+      "title": "User Erasure Request Misses 30-Day SLA on Petabyte Lake",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.lake",
+      "scenario": {
+        "symptoms": "Legal reports 12,000 overdue erasure tickets; lake scans rewrite entire Parquet partitions nightly at unsustainable cost.",
+        "interviewerSetup": "Deletion job rewrites every file in the lake for each user request instead of targeted partition pruning."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ticket",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Erasure Queue"
+            }
+          },
+          {
+            "id": "node-job",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Lake Rewrite Job"
+            }
+          },
+          {
+            "id": "node-lake",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Parquet Lake"
+            }
+          },
+          {
+            "id": "node-catalog",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Data Catalog"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-ticket",
+            "target": "node-job",
+            "label": "Per-user rewrite"
+          },
+          {
+            "id": "e2",
+            "source": "node-job",
+            "target": "node-lake",
+            "label": "Full scan"
+          },
+          {
+            "id": "e3",
+            "source": "node-catalog",
+            "target": "node-job",
+            "label": "Partition map"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-job",
+          "node-lake"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Whole-lake rewrite strategy cannot meet erasure deadlines at scale"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_lake",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Delete from a petabyte lake of immutable files at reasonable cost within the deadline.",
+            "opener": "How do you delete one user from a lake of immutable Parquet files, and how often do you rewrite files?",
+            "evidence": {
+              "strong": "Explains that deleting a row means rewriting files; batches all pending requests (daily or weekly), uses the table format's row-level deletes (merge-on-read delete files, later compaction) and partition pruning via the identity map or an index of which partitions hold each user, completing well within the deadline.",
+              "adequate": "Uses row-level deletes but runs them per request, or doesn't know which partitions to touch.",
+              "weak": "Runs a DELETE per request across the whole lake, or forgets the lake."
+            },
+            "misconceptions": [
+              {
+                "id": "lake.per_request",
+                "pattern": "Thinks running a delete per request is fine.",
+                "challenge": "Thousands of requests a day, each rewriting files across every date partition: how much data do you rewrite?"
+              }
+            ],
+            "probes": [
+              "How do you find which partitions contain a user's rows without scanning everything?",
+              "When does the physical file actually disappear?"
+            ],
+            "hints": [
+              "Requests can wait a few days and be done together.",
+              "Table formats can record deletes before rewriting files."
+            ],
+            "referenceFix": "Batch pending requests and use row-level deletes with partition targeting, then compaction, within the deadline."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "gdpr-deletion/deep-snapshots",
+      "title": "Time Travel Still Returns Deleted User Rows",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.snapshots",
+      "scenario": {
+        "symptoms": "Privacy review shows deleted accounts visible via table time travel queries used by support tooling.",
+        "interviewerSetup": "Logical delete flags rows in current snapshot but historical snapshots and manifest files retain raw PII."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-delete",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Delete Worker"
+            }
+          },
+          {
+            "id": "node-table",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "User Table"
+            }
+          },
+          {
+            "id": "node-snap",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Snapshot Storage"
+            }
+          },
+          {
+            "id": "node-support",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Support Query UI"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-delete",
+            "target": "node-table",
+            "label": "Soft delete"
+          },
+          {
+            "id": "e2",
+            "source": "node-table",
+            "target": "node-snap",
+            "label": "Retain history"
+          },
+          {
+            "id": "e3",
+            "source": "node-support",
+            "target": "node-table",
+            "label": "Time travel"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-snap",
+          "node-table"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Snapshot retention preserves PII after delete commits"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_snapshots",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Make sure deleted rows don't survive in old snapshots and file versions.",
+            "opener": "The delete committed, but time travel still shows the user's rows. Why, and what do you do?",
+            "evidence": {
+              "strong": "Explains that older snapshots still reference the old files; expires snapshots older than the window after deletes, removes orphan files and object versions, aligns time-travel retention with the deadline, and documents the policy.",
+              "adequate": "Expires snapshots but forgets object-storage versioning or orphan files.",
+              "weak": "Doesn't know old snapshots keep data."
+            },
+            "misconceptions": [
+              {
+                "id": "snap.delete_done",
+                "pattern": "Believes a committed delete removes the data physically.",
+                "challenge": "Which files does last week's snapshot point to?"
+              }
+            ],
+            "probes": [
+              "How long can you keep time travel and still meet the deadline?"
+            ],
+            "hints": [
+              "A snapshot is a pointer to files that still exist.",
+              "Retention policies decide when old files go."
+            ],
+            "referenceFix": "Expire snapshots and remove orphan files and object versions after deletes, with retention inside the deadline."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "gdpr-deletion/deep-backups",
+      "title": "DB Restore Resurrects Erased Users",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.backups",
+      "scenario": {
+        "symptoms": "Disaster recovery restore from last week's backup reintroduces 4,000 users who completed GDPR erasure.",
+        "interviewerSetup": "Erasure tombstones live only in primary DB; backups and replicas are restored without replaying delete ledger."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-primary",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "database",
+              "label": "Primary DB"
+            }
+          },
+          {
+            "id": "node-backup",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Backup Vault"
+            }
+          },
+          {
+            "id": "node-ledger",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Delete Ledger"
+            }
+          },
+          {
+            "id": "node-restore",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Restore Job"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-primary",
+            "target": "node-backup",
+            "label": "Nightly backup"
+          },
+          {
+            "id": "e2",
+            "source": "node-ledger",
+            "target": "node-primary",
+            "label": "Not in backup"
+          },
+          {
+            "id": "e3",
+            "source": "node-restore",
+            "target": "node-backup",
+            "label": "Full restore"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-restore",
+          "node-ledger"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Backup restore without delete ledger replay resurrects erased users"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_backups",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Stop backups, replays and re-ingestion from bringing deleted users back.",
+            "opener": "You restore a database from last week's backup. How do deleted users stay deleted?",
+            "evidence": {
+              "strong": "Lets backups age out within the deadline rather than editing them, keeps a suppression list of deleted ids (hashed) that is re-applied after any restore, replay or backfill, and makes ingestion pipelines drop records for suppressed ids.",
+              "adequate": "Lets backups expire but has no plan for restores or backfills.",
+              "weak": "Doesn't consider backups."
+            },
+            "misconceptions": [
+              {
+                "id": "back.edit",
+                "pattern": "Thinks you must edit every backup to delete the user.",
+                "challenge": "Backups are immutable and kept for weeks. Is rewriting each one practical, and is it needed?"
+              }
+            ],
+            "probes": [
+              "What stops a backfill from the raw zone re-creating the user?"
+            ],
+            "hints": [
+              "Backups can expire; restores must re-apply what happened since.",
+              "Keep a list of who must stay deleted."
+            ],
+            "referenceFix": "Let backups expire, keep a hashed suppression list re-applied after restores and backfills, and filter ingestion."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "gdpr-deletion/deep-shred",
+      "title": "Cold Archive Makes Crypto-Shred the Only Option",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.shred",
+      "scenario": {
+        "symptoms": "Erasure team cannot rewrite immutable glacier archives within regulatory window; legal asks for cryptographic deletion.",
+        "interviewerSetup": "Years of backups are WORM-locked; per-row rewrite is impossible within 30 days."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-app",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App Tier"
+            }
+          },
+          {
+            "id": "node-kms",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "secrets-platform",
+              "label": "Key Management"
+            }
+          },
+          {
+            "id": "node-archive",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Immutable Archive"
+            }
+          },
+          {
+            "id": "node-erase",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Erasure Orchestrator"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-app",
+            "target": "node-archive",
+            "label": "Encrypted blobs"
+          },
+          {
+            "id": "e2",
+            "source": "node-kms",
+            "target": "node-app",
+            "label": "DEK per user"
+          },
+          {
+            "id": "e3",
+            "source": "node-erase",
+            "target": "node-kms",
+            "label": "Revoke keys"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-archive",
+          "node-kms"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Immutable archives require crypto-shred rather than physical rewrite"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_shred",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Use encryption or pseudonymisation where rewriting data is impractical.",
+            "opener": "Where would you avoid rewriting data altogether, and how?",
+            "evidence": {
+              "strong": "Encrypts personal fields with per-user keys (envelope encryption, keys in a key store) so destroying the key makes all copies unreadable, including archives and backups; replaces user ids with pseudonymous ids in analytics so deleting one mapping row unlinks the data; notes key-management cost and that aggregates may need no change.",
+              "adequate": "Mentions encryption but not per-user keys or the cost of managing them.",
+              "weak": "Doesn't consider alternatives to rewriting."
+            },
+            "misconceptions": [
+              {
+                "id": "shred.one_key",
+                "pattern": "Thinks encrypting the whole dataset with one key helps per-user deletion.",
+                "challenge": "Destroying that one key deletes whom?"
+              }
+            ],
+            "probes": [
+              "How many keys would you need, and where do they live?"
+            ],
+            "hints": [
+              "Destroying a key can make data unreadable everywhere at once.",
+              "Analytics rarely needs the real identity."
+            ],
+            "referenceFix": "Per-user keys for personal fields (crypto-shredding) and pseudonymous ids in analytics avoid most rewrites."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "gdpr-deletion/deep-retain",
+      "title": "Invoice Retention Keeps Deleted User PII",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.retain",
+      "scenario": {
+        "symptoms": "Finance compliance requires 7-year invoices but erasure pipeline deletes entire customer records including billing artifacts.",
+        "interviewerSetup": "Deletion job cascades to invoices table without pseudonymizing legally retained fields."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-erase",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "GDPR Worker"
+            }
+          },
+          {
+            "id": "node-users",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Users DB"
+            }
+          },
+          {
+            "id": "node-inv",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 260
+            },
+            "data": {
+              "kind": "database",
+              "label": "Invoices DB"
+            }
+          },
+          {
+            "id": "node-legal",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Retention Policy"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-erase",
+            "target": "node-users",
+            "label": "Hard delete"
+          },
+          {
+            "id": "e2",
+            "source": "node-erase",
+            "target": "node-inv",
+            "label": "Cascade delete"
+          },
+          {
+            "id": "e3",
+            "source": "node-legal",
+            "target": "node-inv",
+            "label": "7yr retain rule"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-erase",
+          "node-inv"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Blanket delete violates finance retention while keeping PII on invoices"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_retain",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep legally required records without keeping the person.",
+            "opener": "Finance must keep invoices for years. How do you keep them without keeping the person?",
+            "evidence": {
+              "strong": "Separates what the law requires (amounts, dates, tax ids of the business) from identifying fields, removes or tokenises names, emails and addresses where allowed, restricts access to what must stay, and records the legal basis; legal holds pause deletion until released.",
+              "adequate": "Keeps invoices untouched because they're exempt.",
+              "weak": "Deletes invoices anyway, or ignores holds."
+            },
+            "misconceptions": [
+              {
+                "id": "retain.all_exempt",
+                "pattern": "Believes exempt records can be kept in full.",
+                "challenge": "Does tax law require the customer's browsing history attached to the invoice?"
+              }
+            ],
+            "probes": [
+              "What happens to a request for an account under legal hold?"
+            ],
+            "hints": [
+              "Keep only what the law actually requires.",
+              "A hold delays deletion; it doesn't cancel it."
+            ],
+            "referenceFix": "Keep only legally required fields, strip or tokenise the rest, restrict access and honour holds."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

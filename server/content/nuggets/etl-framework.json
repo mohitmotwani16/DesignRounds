@@ -1,0 +1,687 @@
+{
+  "promptId": "etl-framework",
+  "packVersion": "pack-72342151",
+  "inputsFingerprint": "64a6b4040ba5950b4c7b9c834c5a8834afbd5c8ff4929597d3708b7e426b49c9",
+  "nuggets": [
+    {
+      "id": "etl-framework/retry-duplicates-fact-rows",
+      "title": "Framework retry duplicated warehouse rows",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.idempotency",
+      "scenario": {
+        "symptoms": "Job retry after worker kill inserted duplicate fact rows doubling inventory counts. Framework marks stage complete before commit flush.",
+        "interviewerSetup": "ETL framework retries entire batch without idempotent write keys; destination lacks merge semantics."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-worker",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "ETL worker"
+            }
+          },
+          {
+            "id": "n-fw",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "ETL framework"
+            }
+          },
+          {
+            "id": "n-stage",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "database",
+              "label": "Stage table"
+            }
+          },
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Fact table"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-fw",
+            "target": "n-worker",
+            "label": "Retry batch"
+          },
+          {
+            "id": "e2",
+            "source": "n-worker",
+            "target": "n-stage",
+            "label": "Write"
+          },
+          {
+            "id": "e3",
+            "source": "n-stage",
+            "target": "n-wh",
+            "label": "Append dupes"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-fw",
+          "n-worker"
+        ],
+        "edgeIds": [
+          "e1",
+          "e3"
+        ],
+        "headline": "Non-idempotent retry duplicated committed facts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure failed tasks can be safely retried without duplicating data.",
+            "opener": "A retry doubled rows—the idempotent write path is highlighted. How should the framework behave?",
+            "evidence": {
+              "strong": "Explicitly designs partition-based writes or MERGE operations; ensures tasks overwrite their specific logical partition.",
+              "adequate": "Mentions idempotency and suggests deleting before inserting, but misses the mechanics of how partitions are isolated.",
+              "weak": "Suggests append-only loads and relies on the execution logic to simply not fail twice."
+            },
+            "misconceptions": [
+              {
+                "id": "idempotency.append",
+                "pattern": "Just insert the new data; the database will handle deduplication automatically.",
+                "challenge": "If the task inserts half the rows and fails, what happens when the retry inserts them again?"
+              }
+            ],
+            "probes": [
+              "How does the pipeline know which records belong to the current run?",
+              "What if a task is writing to a data lake storage bucket instead of a database?"
+            ],
+            "hints": [
+              "If a task runs twice, how do we avoid doubling the data?",
+              "Consider how data is logically organized by time in the storage layer."
+            ],
+            "referenceFix": "Exactly-once semantics via merge on run id and natural keys, two-phase commit, mark job complete only after publish, and dedupe tests in framework."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "etl-framework/backfill-starves-live-jobs",
+      "title": "Historical backfill starved live SLA jobs",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.backfilling",
+      "scenario": {
+        "symptoms": "Same-day sales mart missed SLA while backfill consumed all Spark executors for 48 hours. Live jobs queued behind low-priority backfill flag mis-set.",
+        "interviewerSetup": "Shared cluster without fair scheduler; backfill submitted with default high priority."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-live",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Live ETL jobs"
+            }
+          },
+          {
+            "id": "n-back",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 240
+            },
+            "data": {
+              "kind": "service",
+              "label": "Backfill job"
+            }
+          },
+          {
+            "id": "n-sched",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Cluster scheduler"
+            }
+          },
+          {
+            "id": "n-spark",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-spark",
+              "label": "Spark cluster"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-back",
+            "target": "n-sched",
+            "label": "High priority"
+          },
+          {
+            "id": "e2",
+            "source": "n-live",
+            "target": "n-sched",
+            "label": "Starved"
+          },
+          {
+            "id": "e3",
+            "source": "n-sched",
+            "target": "n-spark",
+            "label": "All executors"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-sched"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Backfill priority starved live ETL on shared cluster"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design a mechanism to process historical data efficiently without starving current runs.",
+            "opener": "Live pipelines missed SLA during backfill—the scheduler path is highlighted. How do you isolate workloads?",
+            "evidence": {
+              "strong": "Treats backfills as a series of parameterized executions; isolates them into lower-priority queues or dedicated resource pools.",
+              "adequate": "Understands the need to parameterize runs by date, but struggles with the resource contention aspect.",
+              "weak": "Suggests creating a massive one-off script for the two years, breaking the standard pipeline contract."
+            },
+            "misconceptions": [
+              {
+                "id": "backfill.script",
+                "pattern": "We just run a special script to dump the history.",
+                "challenge": "How do we ensure the historical data follows the exact same transformation logic as the daily runs?"
+              }
+            ],
+            "probes": [
+              "How are the historical runs scheduled compared to today's run?",
+              "What happens to the execution cluster when 700 backfill tasks are submitted at once?"
+            ],
+            "hints": [
+              "How do we normally tell a task which day of data to process?",
+              "Think about how we can separate the compute resources used for backfills from daily jobs."
+            ],
+            "referenceFix": "Separate pools or queues, cap backfill concurrency, preemptible lower priority, schedule backfill off-peak, and SLO alerts on live job wait time."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "etl-framework/noisy-neighbor-oom",
+      "title": "Noisy neighbor job OOM killed critical pipeline",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.isolation",
+      "scenario": {
+        "symptoms": "Payments fact job killed when adjacent team's experimental job spiked memory on shared Kubernetes node without limits.",
+        "interviewerSetup": "ETL workers share nodes without resource quotas or cgroup limits; framework spawns unlimited Python workers per job."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-pay",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "service",
+              "label": "Payments ETL"
+            }
+          },
+          {
+            "id": "n-exp",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 240
+            },
+            "data": {
+              "kind": "service",
+              "label": "Experimental job"
+            }
+          },
+          {
+            "id": "n-k8s",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-kubernetes",
+              "label": "Worker node"
+            }
+          },
+          {
+            "id": "n-fw",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "ETL framework"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-exp",
+            "target": "n-k8s",
+            "label": "Memory spike"
+          },
+          {
+            "id": "e2",
+            "source": "n-pay",
+            "target": "n-k8s",
+            "label": "OOM killed"
+          },
+          {
+            "id": "e3",
+            "source": "n-fw",
+            "target": "n-k8s",
+            "label": "No limits"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-k8s"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Missing resource isolation allowed noisy neighbor failure"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Prevent one team's massive job from consuming all execution resources and starving others.",
+            "opener": "A sandbox job took down payments ETL—the isolation path is highlighted. How do you isolate tenants?",
+            "evidence": {
+              "strong": "Implements resource quotas, separate execution queues, and isolated worker pools per tenant.",
+              "adequate": "Identifies the noisy neighbor problem and suggests separate queues, but lacks a clear mechanism for enforcing limits.",
+              "weak": "Puts all tasks into a single global queue with shared workers, allowing one team to consume everything."
+            },
+            "misconceptions": [
+              {
+                "id": "isolation.autoscaling",
+                "pattern": "The cluster will just autoscale to handle everything.",
+                "challenge": "What if the cloud provider has an account limit, or autoscaling takes too long?"
+              }
+            ],
+            "probes": [
+              "How does the orchestrator decide whose task gets an execution slot?",
+              "Can we place hard limits on how much compute a specific team can use?"
+            ],
+            "hints": [
+              "If we have 100 workers, how do we make sure Team B always has at least 10 available?",
+              "Consider grouping tasks into different logical buckets before assigning them to workers."
+            ],
+            "referenceFix": "Per-job CPU/memory limits, separate node pools for prod vs sandbox, OOM retry with backoff, and quota enforcement in framework submit API."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "etl-framework/unknown-upstream-change",
+      "title": "Silent upstream rename broke downstream KPI",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.lineage",
+      "scenario": {
+        "symptoms": "Marketing funnel KPI flatlined after upstream renamed event field. ETL framework lineage graph outdated; no impact analysis ran on schema change.",
+        "interviewerSetup": "Lineage captured once at deploy; producer schema evolved without notification hook to framework."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Event producer"
+            }
+          },
+          {
+            "id": "n-line",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Lineage graph"
+            }
+          },
+          {
+            "id": "n-etl",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "ETL job"
+            }
+          },
+          {
+            "id": "n-kpi",
+            "type": "systemNode",
+            "position": {
+              "x": 660,
+              "y": 140
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Funnel KPI"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-prod",
+            "target": "n-etl",
+            "label": "Renamed field"
+          },
+          {
+            "id": "e2",
+            "source": "n-prod",
+            "target": "n-line",
+            "label": "Not updated"
+          },
+          {
+            "id": "e3",
+            "source": "n-etl",
+            "target": "n-kpi",
+            "label": "Null funnel"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-line"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stale lineage missed downstream impact of schema rename"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Track data dependencies across pipelines to provide visibility and impact analysis.",
+            "opener": "A renamed field zeroed a KPI—the lineage and impact path is highlighted. How do you prevent surprise breaks?",
+            "evidence": {
+              "strong": "Captures dataset inputs/outputs automatically via platform hooks or query parsing, storing it in a metadata graph.",
+              "adequate": "Suggests manual tagging of upstream/downstream dependencies by the pipeline authors in their configuration.",
+              "weak": "Assumes dependencies are just implicit in the scheduling order and provides no queryable view."
+            },
+            "misconceptions": [
+              {
+                "id": "lineage.manual",
+                "pattern": "Developers will manually update a wiki page for lineage.",
+                "challenge": "What happens when a developer changes a table dependency in code but forgets to update the docs?"
+              }
+            ],
+            "probes": [
+              "How can we extract this information without relying on developers to manually document it?",
+              "Where would we store this dependency graph to make it queryable?"
+            ],
+            "hints": [
+              "Can we extract dependencies directly from the pipeline definition?",
+              "If a task executes a SQL query, is there a way to parse the query to find its inputs?"
+            ],
+            "referenceFix": "Live lineage from registry webhooks, automated impact reports on schema change, contract tests in framework CI, and block producer deploy breaking subscribers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "etl-framework/rotated-secret-broke-jobs",
+      "title": "Credential rotation broke all nightly jobs",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.credentials",
+      "scenario": {
+        "symptoms": "Every warehouse load failed at midnight after DB password rotation. Framework still mounted old secret volume until manual pod restart.",
+        "interviewerSetup": "Long-lived pods cache credentials at startup; secret manager rotated but Kubernetes secret update not wired to reload."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-vault",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-vault",
+              "label": "Secret store"
+            }
+          },
+          {
+            "id": "n-k8s",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "t-kubernetes",
+              "label": "Job pods"
+            }
+          },
+          {
+            "id": "n-fw",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "ETL framework"
+            }
+          },
+          {
+            "id": "n-db",
+            "type": "systemNode",
+            "position": {
+              "x": 460,
+              "y": 280
+            },
+            "data": {
+              "kind": "database",
+              "label": "Warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-vault",
+            "target": "n-k8s",
+            "label": "New secret"
+          },
+          {
+            "id": "e2",
+            "source": "n-k8s",
+            "target": "n-fw",
+            "label": "Cached old pwd"
+          },
+          {
+            "id": "e3",
+            "source": "n-fw",
+            "target": "n-db",
+            "label": "Auth fail"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-k8s",
+          "n-fw"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Long-lived workers kept stale DB credentials after rotation"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure that teams cannot access data or systems they don't own by isolating execution credentials.",
+            "opener": "Password rotated and every job failed—the credentials path is highlighted. How should ETL pick up rotation?",
+            "evidence": {
+              "strong": "Integrates a secrets manager and uses dynamic role assumption, injecting only necessary credentials into specific task containers.",
+              "adequate": "Stores credentials securely but loads them globally, risking cross-team access within the same worker.",
+              "weak": "Hardcodes credentials in pipeline code or stores them in plain text configuration files."
+            },
+            "misconceptions": [],
+            "probes": [
+              "If Team A's job is running on a shared worker, what prevents them from reading Team B's database password?",
+              "How do the secrets get from the storage system into the actual running task?"
+            ],
+            "hints": [
+              "How do we normally handle secrets in Kubernetes or containerized environments?",
+              "Think about giving each task its own identity rather than sharing one."
+            ],
+            "referenceFix": "Fetch credentials per job or reload on SIGHUP, use short-lived tokens, restart workers on secret version change, and canary job after rotation."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

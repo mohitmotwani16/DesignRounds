@@ -1,0 +1,261 @@
+{
+  "promptId": "video-streaming",
+  "packVersion": "pack-79043531",
+  "inputsFingerprint": "bfc2b173d339c1d8f59a16ea05d5c33d4095a9b98156d53916987ac64d7ef96c",
+  "nuggets": [
+    {
+      "id": "video-streaming/transcode_backlog_launch",
+      "title": "Launch Day Transcode Backlog Blocks New 4K Titles",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.transcoding",
+      "scenario": {
+        "symptoms": "Major series premiere shows 'format unavailable' on TV apps for 6 hours. Transcode queue depth exceeds 50k jobs while only SD renditions exist.",
+        "interviewerSetup": "Single FIFO transcode pool without priority for launch titles or pre-warming; mezzanine uploaded 30 minutes before go-live."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-ingest", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "ingestion", "label": "Mezzanine Upload" } },
+          { "id": "node-queue", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "queue", "label": "Transcode Queue" } },
+          { "id": "node-workers", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "gpu", "label": "Transcode Workers" } },
+          { "id": "node-cdn", "type": "systemNode", "position": { "x": 460, "y": 300 }, "data": { "kind": "cdn", "label": "CDN Origin" } }
+        ],
+        "edges": [
+          { "id": "e-ingest-queue", "source": "node-ingest", "target": "node-queue", "label": "Late submit" },
+          { "id": "e-queue-workers", "source": "node-queue", "target": "node-workers", "label": "Backlog" },
+          { "id": "e-workers-cdn", "source": "node-workers", "target": "node-cdn", "label": "Missing renditions" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-queue", "node-workers"],
+        "edgeIds": ["e-ingest-queue"],
+        "headline": "Under-provisioned transcoding with no launch priority leaves premiere titles undeliverable"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_transcode_scale",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Scale transcoding with priority lanes, pre-warm before release, and parallel profiles per title.",
+          "opener": "Our big premiere wasn't playable in 4K for hours because transcodes weren't ready. How does transcoding keep up with catalog and launches?",
+          "evidence": {
+            "strong": "Priority queues for launch windows, autoscale transcode fleet, pre-transcode mezzanine early, parallel ladder generation, SLA alerts on queue depth.",
+            "adequate": "More workers without priority.",
+            "weak": "On-demand transcode at playback time only."
+          },
+          "misconceptions": [{ "id": "tx.play", "pattern": "Assumes transcode can always happen at play click.", "challenge": "Can you generate all ABR rungs in seconds at request time?" }],
+          "probes": ["When must mezzanine arrive before release?", "Which renditions are mandatory at go-live?"],
+          "hints": ["Pre-warm before marketing push.", "Priority beats FIFO for launches."],
+          "referenceFix": "Launch priority queue, pre-scale workers, block go-live until required rungs exist."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-streaming/abr_buffer_stall_live",
+      "title": "ABR Algorithm Oscillates Quality on Live Sports",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.abr",
+      "scenario": {
+        "symptoms": "Live match viewers see quality ping-pong between 1080p and 360p every 10 seconds with frequent rebuffering on stable 50 Mbps links.",
+        "interviewerSetup": "Player uses throughput-only ABR without buffer occupancy target; CDN token bucket throttling misread as network drop."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-player", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "Video Player" } },
+          { "id": "node-abr", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "service", "label": "ABR Controller" } },
+          { "id": "node-cdn", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "cdn", "label": "CDN Edge" } }
+        ],
+        "edges": [
+          { "id": "e-player-abr", "source": "node-player", "target": "node-abr", "label": "Switch rung" },
+          { "id": "e-abr-cdn", "source": "node-abr", "target": "node-cdn", "label": "Aggressive downgrade" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-abr", "node-player"],
+        "edgeIds": ["e-player-abr"],
+        "headline": "Naive throughput-based ABR causes quality oscillation and rebuffer on live streams"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_abr",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Use buffer-based ABR with hysteresis, live latency target, and CDN-aware throughput estimation.",
+          "opener": "Viewers on fast Wi-Fi still see quality bouncing during live sports. How does your player pick bitrates?",
+          "evidence": {
+            "strong": "Buffer occupancy target (BOLA/LL), hysteresis to prevent oscillation, separate live ladder, cap max ramp speed, consider segment download time variance.",
+            "adequate": "Throughput estimate with fixed safety margin only.",
+            "weak": "Always max quality until buffer empty."
+          },
+          "misconceptions": [{ "id": "abr.tp", "pattern": "Uses last segment throughput as sole signal.", "challenge": "What if CDN briefly delivers faster than sustainable rate?" }],
+          "probes": ["How do you handle live low-latency targets?", "What prevents up-down ping-pong?"],
+          "hints": ["Buffer level predicts stalls better than last throughput.", "Add hysteresis when switching up."],
+          "referenceFix": "Buffer-based ABR with live-tuned parameters and oscillation damping."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-streaming/cdn_origin_thundering_herd",
+      "title": "Cache Miss Storm Melts Origin During Viral Clip",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.cdn",
+      "scenario": {
+        "symptoms": "Viral clip triggers 900 Gbps origin egress; origin error rate 40% while edges show low hit ratio on new URL variants with unique query params.",
+        "interviewerSetup": "Players request segments with per-session cache-busting query strings preventing CDN cache key reuse."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-viewers", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Viewers" } },
+          { "id": "node-edge", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "cdn", "label": "CDN Edge" } },
+          { "id": "node-origin", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "object-storage", "label": "Origin Storage" } }
+        ],
+        "edges": [
+          { "id": "e-view-edge", "source": "node-viewers", "target": "node-edge", "label": "Unique URLs" },
+          { "id": "e-edge-origin", "source": "node-edge", "target": "node-origin", "label": "Miss storm" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-edge", "node-origin"],
+        "edgeIds": ["e-edge-origin"],
+        "headline": "Cache key fragmentation causes thundering herd on origin during viral traffic"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_cdn_caching",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Maximize edge hit ratio with stable cache keys, prefetch, shield origin, and signed URLs without busting cache.",
+          "opener": "A viral clip melted our origin despite having a CDN. Why weren't segments cached at the edge?",
+          "evidence": {
+            "strong": "Cache-friendly URLs, strip auth to cookie/header, origin shield, prefetch hot titles, tiered storage near origin, monitor hit ratio per title.",
+            "adequate": "CDN enabled but unique query params per user.",
+            "weak": "Origin serves every segment request."
+          },
+          "misconceptions": [{ "id": "cdn.auto", "pattern": "Assumes adding CDN guarantees cache hits.", "challenge": "If every URL is unique, what is the hit ratio?" }],
+          "probes": ["What belongs in cache key vs auth header?", "How do you warm cache for a launch?"],
+          "hints": ["Auth should not fragment segment keys.", "Origin shield collapses fetches."],
+          "referenceFix": "Normalize cache keys, signed cookies, prefetch viral content, alert on hit ratio drop."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-streaming/qoe_beacon_loss",
+      "title": "Missing QoE Beacons Blind Playback Failure Analysis",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.analytics",
+      "scenario": {
+        "symptoms": "Support hears playback complaints but dashboards show 99.9% success. Client QoE beacons dropped on ad blocker and batch flush failures during background mobile.",
+        "interviewerSetup": "Analytics relies on client-side batch POST without server-side CDN log correlation or session heartbeat."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-player", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "client", "label": "Player SDK" } },
+          { "id": "node-beacon", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "ingestion", "label": "QoE Beacon API" } },
+          { "id": "node-dash", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "metrics", "label": "Success Dashboard" } },
+          { "id": "node-cdn", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "cdn", "label": "CDN Logs (unused)" } }
+        ],
+        "edges": [
+          { "id": "e-player-beacon", "source": "node-player", "target": "node-beacon", "label": "Dropped events" },
+          { "id": "e-beacon-dash", "source": "node-beacon", "target": "node-dash", "label": "Incomplete" },
+          { "id": "e-cdn-skip", "source": "node-cdn", "target": "node-dash", "label": "Not joined" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-beacon", "node-cdn"],
+        "edgeIds": ["e-player-beacon"],
+        "headline": "Client-only QoE pipeline under-reports playback failures visible to users"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_streaming_analytics",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Measure QoE with reliable beacons plus CDN/server logs joined by session id.",
+          "opener": "Users complain about buffering but metrics look fine. How do you know real playback quality?",
+          "evidence": {
+            "strong": "Dual collection client+CDN, session id in URLs, retry beacons, RUM sampling, rebuffer and startup metrics, join in warehouse.",
+            "adequate": "Client beacons only with retry.",
+            "weak": "Server 200 OK as success proxy."
+          },
+          "misconceptions": [{ "id": "an.ok", "pattern": "Equates segment HTTP 200 with good UX.", "challenge": "Can player stall while segments return 200?" }],
+          "probes": ["What if beacons are blocked?", "Which metrics define a bad session?"],
+          "hints": ["CDN logs see every segment.", "Session id links client and edge."],
+          "referenceFix": "Join client QoE with CDN access logs; alert on rebuffer rate not just errors."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "video-streaming/egress_cost_4k_default",
+      "title": "Default 4K Autoplay Burns Egress Budget",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.cost",
+      "scenario": {
+        "symptoms": "Monthly CDN egress bill jumps 35% after UI change defaults mobile autoplay to highest rung. Most phones never switch down on cellular.",
+        "interviewerSetup": "Player starts at top bitrate in ladder without data-saver policy or device-aware cap."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-ui", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "mobile", "label": "Mobile App" } },
+          { "id": "node-player", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "client", "label": "Player (4K default)" } },
+          { "id": "node-cdn", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "cdn", "label": "CDN Egress" } }
+        ],
+        "edges": [
+          { "id": "e-ui-player", "source": "node-ui", "target": "node-player", "label": "Autoplay" },
+          { "id": "e-player-cdn", "source": "node-player", "target": "node-cdn", "label": "Max bitrate" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-player", "node-cdn"],
+        "edgeIds": ["e-player-cdn"],
+        "headline": "Aggressive default bitrate selection inflates CDN egress without quality benefit on small screens"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_streaming_cost",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Control cost with device-aware defaults, capped ladders, and efficient codecs while preserving QoE targets.",
+          "opener": "CDN costs spiked after we defaulted everyone to 4K on mobile. How do you balance quality and egress spend?",
+          "evidence": {
+            "strong": "Start on middle rung, cap cellular bitrate, AV1/HEVC where supported, per-title encoding optimization, data saver setting, monitor cost per stream hour.",
+            "adequate": "ABR without caps relies on algorithm alone.",
+            "weak": "Always serve highest rung."
+          },
+          "misconceptions": [{ "id": "cost.quality", "pattern": "Assumes highest bitrate always means better UX on mobile.", "challenge": "Can users see 4K on a 6-inch screen?" }],
+          "probes": ["What default rung on cellular?", "How does codec choice affect bill?"],
+          "hints": ["Device class should cap ladder.", "Per-title encoding saves bits."],
+          "referenceFix": "Cellular-aware defaults, optimized ladders, monitor egress per cohort."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

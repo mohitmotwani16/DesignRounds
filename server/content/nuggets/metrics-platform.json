@@ -1,0 +1,667 @@
+{
+  "promptId": "metrics-platform",
+  "packVersion": "pack-7e90b447",
+  "inputsFingerprint": "c814d3cb9be6ba0e2a2523e30441ae6710b04e56f7a14b89f7955e2ab9b94e93",
+  "nuggets": [
+    {
+      "id": "metrics-platform/deep-cardinality",
+      "title": "user_id Label Explodes TSDB Memory",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.cardinality",
+      "scenario": {
+        "symptoms": "Metrics cluster OOM after deploy adds user_id label; active series jump from 2M to 180M.",
+        "interviewerSetup": "Prometheus accepts high-cardinality labels without enforcement or automatic series dropping."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Services"
+            }
+          },
+          {
+            "id": "node-agent",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Scrape Agents"
+            }
+          },
+          {
+            "id": "node-tsdb",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Metrics TSDB"
+            }
+          },
+          {
+            "id": "node-guard",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Cardinality Limiter"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-svc",
+            "target": "node-agent",
+            "label": "Expose metrics"
+          },
+          {
+            "id": "e2",
+            "source": "node-agent",
+            "target": "node-tsdb",
+            "label": "Ingest all"
+          },
+          {
+            "id": "e3",
+            "source": "node-guard",
+            "target": "node-tsdb",
+            "label": "Bypassed"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-tsdb",
+          "node-agent"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "High-cardinality labels exhaust metrics storage memory"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_cardinality",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Protect the storage layer from unbounded label combinations that exhaust memory and index space.",
+            "opener": "A team accidentally adds a 'user_id' label to their request rate metric. What happens, and how do we prevent it from breaking the system?",
+            "evidence": {
+              "strong": "You implement cardinality limits at the collector/ingestion layer, dropping or aggregating offending metrics before they reach the TSDB, and enforcing per-team quotas.",
+              "adequate": "You mention rate limiting or quotas, but apply them only at the database level after the data has already consumed ingestion resources.",
+              "weak": "You assume the database can simply scale to absorb the extra labels, ignoring the exponential explosion of time series."
+            },
+            "misconceptions": [
+              {
+                "id": "limit_at_db",
+                "pattern": "Assuming the database can handle high cardinality if scaled up enough.",
+                "challenge": "What happens to our index memory and query latency if a metric suddenly spawns 10 million unique label combinations?"
+              }
+            ],
+            "probes": [
+              "How does the system detect that a metric has too many unique labels?",
+              "Where exactly should we block these metrics to protect the core infrastructure?"
+            ],
+            "hints": [
+              "Consider what happens to the number of time series if a UUID is used as a label.",
+              "Think about placing guardrails in the collectors or API gateway to drop bad data early."
+            ],
+            "referenceFix": "You placed cardinality limits and label-dropping rules in the ingestion pipeline."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "metrics-platform/deep-retention",
+      "title": "One-Year Retention on Raw Resolution Bankrupts Storage",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.retention",
+      "scenario": {
+        "symptoms": "Metrics storage bill up 6x; SRE asked to keep 15s resolution for a year on all series.",
+        "interviewerSetup": "No downsampling or tiered retention; single long-retention bucket for all resolutions."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-tsdb",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Primary TSDB"
+            }
+          },
+          {
+            "id": "node-compact",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Downsample Jobs"
+            }
+          },
+          {
+            "id": "node-cold",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-s3",
+              "label": "Cold Archive"
+            }
+          },
+          {
+            "id": "node-query",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Query API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-tsdb",
+            "target": "node-query",
+            "label": "Long range"
+          },
+          {
+            "id": "e2",
+            "source": "node-tsdb",
+            "target": "node-cold",
+            "label": "Raw forever"
+          },
+          {
+            "id": "e3",
+            "source": "node-compact",
+            "target": "node-tsdb",
+            "label": "Not run"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-tsdb",
+          "node-cold"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing downsampling tier makes year-long raw retention unsustainable"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_retention",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Manage long-term storage costs while keeping historical data queryable.",
+            "opener": "If we need to keep this data for a year to analyze trends, how do we do that without bankrupting the company on SSD storage?",
+            "evidence": {
+              "strong": "You design retention tiers, using batch jobs to downsample older metrics and move them from hot SSDs to cheap object storage like S3.",
+              "adequate": "You mention moving data to cold storage but miss the downsampling step required to make long-term queries performant.",
+              "weak": "You suggest keeping all data at full resolution for a year on standard disk storage."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When querying a year of data, how do you prevent the query from scanning billions of points and timing out?",
+              "How and when does the downsampling happen?"
+            ],
+            "hints": [
+              "Do we need second-by-second resolution for data that is 6 months old?",
+              "Consider moving older data chunks into object storage and running a compaction process."
+            ],
+            "referenceFix": "You set up rollups and tiered storage to manage long-term retention costs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "metrics-platform/deep-routing",
+      "title": "Service A Alerts Page Wrong On-Call Team",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.routing",
+      "scenario": {
+        "symptoms": "Database outage pages mobile team; alert routing rules stale after service ownership migration.",
+        "interviewerSetup": "Alertmanager routes by static label service name without synced ownership catalog."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-alert",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "alerting",
+              "label": "Alertmanager"
+            }
+          },
+          {
+            "id": "node-rules",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "rules-engine",
+              "label": "Routing Rules"
+            }
+          },
+          {
+            "id": "node-pager",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "notification-service",
+              "label": "Pager"
+            }
+          },
+          {
+            "id": "node-catalog",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Ownership Catalog"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-alert",
+            "target": "node-rules",
+            "label": "Route alert"
+          },
+          {
+            "id": "e2",
+            "source": "node-rules",
+            "target": "node-pager",
+            "label": "Wrong team"
+          },
+          {
+            "id": "e3",
+            "source": "node-catalog",
+            "target": "node-rules",
+            "label": "Out of sync"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-rules",
+          "node-catalog"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stale alert routing sends incidents to incorrect on-call rotation"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_routing",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure alerts dynamically reach the correct team with actionable context.",
+            "opener": "Once an alert fires for 'Service A', how do you ensure it reaches the right team with the associated runbook?",
+            "evidence": {
+              "strong": "You integrate the alerting engine with a service catalog or registry that holds dynamic mappings of services to on-call schedules and runbooks.",
+              "adequate": "You route alerts to an on-call tool like PagerDuty but rely on static configuration files for the routing rules.",
+              "weak": "You hardcode email addresses or Slack channels into the alert rules themselves."
+            },
+            "misconceptions": [],
+            "probes": [
+              "If a team renames themselves or changes their PagerDuty schedule, how does the metric system know?",
+              "Where is the mapping between a service and its runbook stored?"
+            ],
+            "hints": [
+              "We have thousands of services. Managing routing manually won't scale.",
+              "Consider introducing a service registry or ownership database that the alert router queries."
+            ],
+            "referenceFix": "You integrated alert routing with a service ownership registry."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "metrics-platform/deep-bursts",
+      "title": "Restart Storm Dropped Metrics Samples",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.bursts",
+      "scenario": {
+        "symptoms": "Mass pod restart emits metric burst; remote write drops 30% samples and SLO dashboards go blank.",
+        "interviewerSetup": "Remote write buffer fixed size with drop-on-full during spikes without backoff or aggregation."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-k8s",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Pod Fleet"
+            }
+          },
+          {
+            "id": "node-agent",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Metric Agents"
+            }
+          },
+          {
+            "id": "node-buffer",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "queue",
+              "label": "Remote Write Buffer"
+            }
+          },
+          {
+            "id": "node-tsdb",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Central TSDB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-k8s",
+            "target": "node-agent",
+            "label": "Burst emit"
+          },
+          {
+            "id": "e2",
+            "source": "node-agent",
+            "target": "node-buffer",
+            "label": "Overflow"
+          },
+          {
+            "id": "e3",
+            "source": "node-buffer",
+            "target": "node-tsdb",
+            "label": "Drop samples"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-buffer",
+          "node-agent"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Fixed ingest buffers drop samples during legitimate metric bursts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_bursts",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle sudden spikes in metric emissions without losing data or crashing the database.",
+            "opener": "If several massive services restart simultaneously and emit a huge burst of metrics, how does your ingestion pipeline cope?",
+            "evidence": {
+              "strong": "You decouple ingestion from storage using a highly available message queue like Kafka to absorb the burst and apply backpressure.",
+              "adequate": "You rely on memory buffers in the collectors, which might OOM or lose data if the database slows down.",
+              "weak": "You pass the burst directly to the TSDB, risking a cascading failure."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What happens to the metrics if the database cannot write as fast as the burst arrives?",
+              "How do you ensure we don't drop critical alerts during this burst?"
+            ],
+            "hints": [
+              "If the database slows down, we need somewhere to hold the data temporarily.",
+              "Consider putting a durable streaming platform in front of the database writers."
+            ],
+            "referenceFix": "You added a message queue to absorb ingestion bursts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "metrics-platform/deep-flapping",
+      "title": "CPU Alert Pages Every Two Minutes",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.flapping",
+      "scenario": {
+        "symptoms": "On-call flooded with resolve/reopen cycles on noisy CPU alert during batch cron overlap.",
+        "interviewerSetup": "Alert fires on single 1-minute spike without hysteresis, grouping, or multi-window burn rate."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-svc",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "API Service"
+            }
+          },
+          {
+            "id": "node-tsdb",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Metrics"
+            }
+          },
+          {
+            "id": "node-alert",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "alerting",
+              "label": "Alert Rules"
+            }
+          },
+          {
+            "id": "node-pager",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "notification-service",
+              "label": "Pager"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-svc",
+            "target": "node-tsdb",
+            "label": "CPU spikes"
+          },
+          {
+            "id": "e2",
+            "source": "node-tsdb",
+            "target": "node-alert",
+            "label": "Evaluate"
+          },
+          {
+            "id": "e3",
+            "source": "node-alert",
+            "target": "node-pager",
+            "label": "Flap notify"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-alert"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Sensitive threshold alerts without dampening cause fatigue flapping"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_flapping",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design mechanisms to prevent alert fatigue from transient spikes.",
+            "opener": "How do you ensure an alert doesn't trigger and resolve repeatedly within a few minutes?",
+            "evidence": {
+              "strong": "You implement a 'for' duration in the rule engine, requiring the threshold to be breached continuously for a time window before firing.",
+              "adequate": "You mention debounce logic or smoothing the metric but don't define where this state is held during evaluation.",
+              "weak": "You ignore the flapping risk, assuming any threshold breach should instantly page an engineer."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Where is the state kept to know how long a metric has been over the threshold?",
+              "Does the evaluator look at a single data point or a time window?"
+            ],
+            "hints": [
+              "Think about adding a time condition to the alert rule.",
+              "We could require the metric to stay above the threshold for 5 consecutive minutes."
+            ],
+            "referenceFix": "You used evaluation windows to debounce flapping alerts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

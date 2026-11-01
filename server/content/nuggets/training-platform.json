@@ -1,0 +1,259 @@
+{
+  "promptId": "training-platform",
+  "packVersion": "pack-c1fe0b4c",
+  "inputsFingerprint": "16862d0d428b04b06924a2f4cfe598a35a8f25062b9b67a6632188cfd23f91a0",
+  "nuggets": [
+    {
+      "id": "training-platform/gang_scheduler_deadlock",
+      "title": "Gang Scheduling Deadlock Leaves 80 GPUs Idle",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.scheduling",
+      "scenario": {
+        "symptoms": "Cluster shows 80 free GPUs while 15 large training jobs stay pending for 6 hours. Each job needs 8 GPUs simultaneously but cluster fragments into 7-GPU islands.",
+        "interviewerSetup": "Scheduler allocates GPUs one at a time without gang scheduling or backfill; partial placements never start."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-jobs", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "ml-training", "label": "8-GPU Jobs (pending)" } },
+          { "id": "node-sched", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "kubernetes", "label": "GPU Scheduler" } },
+          { "id": "node-cluster", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "gpu", "label": "Fragmented GPU Nodes" } }
+        ],
+        "edges": [
+          { "id": "e-jobs-sched", "source": "node-jobs", "target": "node-sched", "label": "Request 8 GPUs" },
+          { "id": "e-sched-cluster", "source": "node-sched", "target": "node-cluster", "label": "Partial alloc only" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-sched", "node-cluster"],
+        "edgeIds": ["e-sched-cluster"],
+        "headline": "Non-gang GPU scheduling fragments cluster and deadlocks large distributed training jobs"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_gang_schedule",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Schedule multi-GPU jobs with gang/all-or-nothing placement, queueing, and optional backfill policies.",
+          "opener": "We had free GPUs but big training jobs never started. How does your platform schedule jobs that need 8 GPUs at once?",
+          "evidence": {
+            "strong": "Gang scheduler with minAvailable, coscheduling plugin, reservation pools, preemption rules, topology-aware placement on same NVLink domain.",
+            "adequate": "Manual reservation without automation.",
+            "weak": "Independent single-GPU allocation."
+          },
+          "misconceptions": [{ "id": "sched.util", "pattern": "Equates cluster utilization with successful job starts.", "challenge": "If seven GPUs are free on seven nodes, can an 8-GPU job run?" }],
+          "probes": ["When do you preempt smaller jobs?", "How is topology considered?"],
+          "hints": ["All-or-nothing placement avoids partial deadlocks.", "Queue until gang fits."],
+          "referenceFix": "Gang scheduling with queue, topology constraints, preemption for small jobs when configured."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "training-platform/checkpoint_corruption_resume",
+      "title": "Partial Checkpoint Write Corrupts Week-Long Training Run",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.checkpoint_recovery",
+      "scenario": {
+        "symptoms": "Job resumed from checkpoint after node failure diverges immediately with NaN loss. Object store contains truncated shard files from crash mid-upload.",
+        "interviewerSetup": "Checkpoints written directly to shared bucket without atomic rename or step validation on resume."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-train", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "ml-training", "label": "Training Worker" } },
+          { "id": "node-store", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "object-storage", "label": "Checkpoint Bucket" } },
+          { "id": "node-resume", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "ml-training", "label": "Replacement Worker" } }
+        ],
+        "edges": [
+          { "id": "e-train-store", "source": "node-train", "target": "node-store", "label": "Partial write on crash" },
+          { "id": "e-store-resume", "source": "node-store", "target": "node-resume", "label": "Load corrupt ckpt" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-store", "node-train"],
+        "edgeIds": ["e-train-store"],
+        "headline": "Non-atomic checkpoint persistence serves corrupted state after worker failure"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_checkpoint_atomic",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Write checkpoints atomically with step metadata, keep last N good checkpoints, validate on resume.",
+          "opener": "Resuming from checkpoint after a node death produced NaNs. How do you checkpoint long training jobs safely?",
+          "evidence": {
+            "strong": "Write to temp prefix then commit pointer, fsync/complete multipart, store step and hash manifest, resume validates before delete old, frequent incremental checkpoints.",
+            "adequate": "Single checkpoint path overwritten.",
+            "weak": "No checkpointing."
+          },
+          "misconceptions": [{ "id": "ckpt.freq", "pattern": "Assumes less frequent checkpoints are always cheaper overall.", "challenge": "What is the cost of restarting a 7-day run from scratch?" }],
+          "probes": ["How do you detect a bad checkpoint before training continues?", "Where is the pointer to latest good step?"],
+          "hints": ["Atomic swap of checkpoint manifest.", "Keep previous generation."],
+          "referenceFix": "Atomic checkpoint commits, manifest with step id, validation on load, retain last two steps."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "training-platform/shared_nfs_metadata_storm",
+      "title": "Shared NFS Metadata Storm Slows All Jobs",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.data_storage",
+      "scenario": {
+        "symptoms": "Input pipeline stalls; GPU utilization drops to 30% cluster-wide. NFS metadata ops/sec peg while thousands of workers list same dataset directory.",
+        "interviewerSetup": "All training jobs read shards via POSIX on shared NFS with small files per sample instead of object store or localized cache."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-workers", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "ml-training", "label": "DataLoader Workers" } },
+          { "id": "node-nfs", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "file-storage", "label": "Shared NFS" } },
+          { "id": "node-gpu", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "gpu", "label": "GPUs (idle)" } }
+        ],
+        "edges": [
+          { "id": "e-workers-nfs", "source": "node-workers", "target": "node-nfs", "label": "LIST/GET storm" },
+          { "id": "e-workers-gpu", "source": "node-workers", "target": "node-gpu", "label": "Starved" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-nfs", "node-workers"],
+        "edgeIds": ["e-workers-nfs"],
+        "headline": "POSIX metadata bottleneck on shared filesystem starves GPU training pipelines"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_training_io",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Serve training data from object storage with shard manifests, local NVMe cache, and sequential read patterns.",
+          "opener": "GPUs sit idle while NFS melts from dataloader metadata ops. Where should training data live and how is it read?",
+          "evidence": {
+            "strong": "Parquet/WebDataset shards on object storage, node-local cache, prefetch pipeline, manifest files not per-file listing, high-throughput parallel reads.",
+            "adequate": "NFS with fewer larger files.",
+            "weak": "Millions of small files on NFS."
+          },
+          "misconceptions": [{ "id": "io.shared", "pattern": "Treats shared POSIX as scalable data lake for ML.", "challenge": "What happens when 2000 workers stat the same directory?" }],
+          "probes": ["How are shards assigned to workers?", "When do you cache locally on GPU nodes?"],
+          "hints": ["Sequential large objects beat random small files.", "Keep GPUs fed with prefetch."],
+          "referenceFix": "Object store + shard format, local cache on training nodes, dataloader prefetch tuned to GPU."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "training-platform/lineage_missing_dataset_version",
+      "title": "Production Model Deployed Without Dataset Version Trace",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.lineage",
+      "scenario": {
+        "symptoms": "Regulator asks which training snapshot produced model v3.2; team cannot reproduce metrics because dataset was overwritten in place with same path.",
+        "interviewerSetup": "Jobs log git commit but not immutable dataset snapshot id; data team updated labels under s3://training/latest/ without bumping version."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-data", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "object-storage", "label": "Dataset (mutable path)" } },
+          { "id": "node-train", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "ml-training", "label": "Training Job" } },
+          { "id": "node-registry", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "registry", "label": "Model Registry" } },
+          { "id": "node-lineage", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "metadata", "label": "Lineage (code only)" } }
+        ],
+        "edges": [
+          { "id": "e-data-train", "source": "node-data", "target": "node-train", "label": "Unversioned read" },
+          { "id": "e-train-reg", "source": "node-train", "target": "node-registry", "label": "Register v3.2" },
+          { "id": "e-train-lineage", "source": "node-train", "target": "node-lineage", "label": "Git SHA only" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-lineage", "node-data"],
+        "edgeIds": ["e-data-train"],
+        "headline": "Missing immutable dataset lineage prevents reproducing or auditing trained models"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_lineage",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Capture end-to-end lineage: code, data snapshot, hyperparameters, metrics, and artifacts with immutable ids.",
+          "opener": "We cannot prove which data trained model v3.2 after the dataset path was overwritten. What lineage do you record per job?",
+          "evidence": {
+            "strong": "Immutable dataset snapshots with content hash, MLflow/W&B run ids linked to registry, config as code, artifact signing, block promote without lineage fields.",
+            "adequate": "Git commit hash logged manually.",
+            "weak": "Only final model weights stored."
+          },
+          "misconceptions": [{ "id": "lin.path", "pattern": "Uses mutable 'latest' dataset paths.", "challenge": "If data at the path changes tomorrow, what trained yesterday?" }],
+          "probes": ["What must be immutable before training starts?", "How does registry block incomplete lineage?"],
+          "hints": ["Snapshot data before job starts.", "Treat data like code releases."],
+          "referenceFix": "Versioned dataset snapshots, mandatory lineage metadata on model promotion."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "training-platform/nccl_timeout_straggler",
+      "title": "Single Straggler GPU Kills Distributed Training Step",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.network_failure",
+      "scenario": {
+        "symptoms": "128-GPU job hangs every 20 minutes at all-reduce; NCCL timeouts fire after one worker on a noisy network link slows collective.",
+        "interviewerSetup": "No automatic straggler detection or elastic shrink; job fails entirely on NCCL timeout instead of isolating bad node."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-gpus", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "gpu", "label": "128 GPU Workers" } },
+          { "id": "node-straggler", "type": "systemNode", "position": { "x": 80, "y": 280 }, "data": { "kind": "gpu", "label": "Straggler Node" } },
+          { "id": "node-nccl", "type": "systemNode", "position": { "x": 300, "y": 200 }, "data": { "kind": "network", "label": "NCCL All-Reduce" } }
+        ],
+        "edges": [
+          { "id": "e-gpus-nccl", "source": "node-gpus", "target": "node-nccl", "label": "Collective" },
+          { "id": "e-strag-nccl", "source": "node-straggler", "target": "node-nccl", "label": "Slow link" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-straggler", "node-nccl"],
+        "edgeIds": ["e-strag-nccl"],
+        "headline": "Network straggler on one GPU node stalls entire synchronous distributed training step"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_network_straggler",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Handle slow/failed nodes with health checks, elastic training, backup communicators, and automatic replace.",
+          "opener": "One bad network link hung our 128-GPU job repeatedly. How does the platform handle failures during distributed training?",
+          "evidence": {
+            "strong": "Node health preflight, NCCL async error handling, elastic/deep speed restart, exclude bad nodes, RDMA/network topology placement, checkpoint resume on shrink.",
+            "adequate": "Restart whole job on timeout.",
+            "weak": "No failure handling."
+          },
+          "misconceptions": [{ "id": "net.gpu", "pattern": "Assumes GPU count alone defines training reliability.", "challenge": "What happens to all-reduce if one participant is 10x slower?" }],
+          "probes": ["When do you shrink world size vs restart?", "How fast can you replace a bad node?"],
+          "hints": ["Synchronous steps wait for slowest.", "Elastic frameworks reduce blast radius."],
+          "referenceFix": "Straggler detection, automatic node replacement, elastic resume from checkpoint with smaller world size."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

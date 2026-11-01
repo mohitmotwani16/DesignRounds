@@ -1,0 +1,689 @@
+{
+  "promptId": "experimentation-analytics",
+  "packVersion": "pack-2c8aa7a1",
+  "inputsFingerprint": "cce53ec73778c1366f0619f9bc1d64a57ee51b50251c04e5c7b471a7394da646",
+  "nuggets": [
+    {
+      "id": "experimentation-analytics/exposure-logging-gap",
+      "title": "Experiment exposure undercounted breaking analysis",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.exposure",
+      "scenario": {
+        "symptoms": "Launch review showed neutral results but product saw lift. Exposure logs dropped 35% of mobile sessions after SDK upgrade missed assignment callback.",
+        "interviewerSetup": "Analysis joins outcomes to exposure table with inner join; missing exposure rows treated as never exposed."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Mobile app"
+            }
+          },
+          {
+            "id": "n-assign",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Assignment svc"
+            }
+          },
+          {
+            "id": "n-exp",
+            "type": "systemNode",
+            "position": {
+              "x": 260,
+              "y": 280
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Exposure log"
+            }
+          },
+          {
+            "id": "n-an",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Experiment analysis"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-app",
+            "target": "n-assign",
+            "label": "Bucket"
+          },
+          {
+            "id": "e2",
+            "source": "n-assign",
+            "target": "n-exp",
+            "label": "Missing callback"
+          },
+          {
+            "id": "e3",
+            "source": "n-exp",
+            "target": "n-an",
+            "label": "Inner join bias"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-exp"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Under-logged exposure biased experiment analysis"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Count users from their first exposure and only if they were exposed.",
+            "opener": "Results look flat but product metrics moved—the exposure logging path is highlighted. What bias crept in?",
+            "evidence": {
+              "strong": "Logs an exposure event where the variant is rendered, takes each user's first exposure per experiment, counts only events after that exposure, and explains dilution from counting assigned-but-unexposed users.",
+              "adequate": "Uses exposures but counts events from before exposure, or doesn't take the first one.",
+              "weak": "Counts every assigned user."
+            },
+            "misconceptions": [
+              {
+                "id": "exp.assigned",
+                "pattern": "Thinks counting all assigned users is safer.",
+                "challenge": "If nine out of ten assigned users never see the change, what happens to the measured effect size and the power?"
+              }
+            ],
+            "probes": [
+              "What if a user is exposed on several days?"
+            ],
+            "hints": [
+              "The variant matters only once the user sees it.",
+              "Events before exposure can't be caused by the change."
+            ],
+            "referenceFix": "Log exposure at assignment time with retry, monitor exposure/outcome ratio, use intent-to-treat analysis, and alert when exposure rate drops vs traffic."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "experimentation-analytics/wrong-ratio-metric",
+      "title": "Click-through computed with wrong denominator",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.aggregates",
+      "scenario": {
+        "symptoms": "Experiment declared winner on 20% CTR lift but metric divided clicks by sessions instead of impressions, overstating lift for heavy users.",
+        "interviewerSetup": "Aggregate job reused session-level rollup for an impression-based metric; analysts did not validate definition."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-events",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Click events"
+            }
+          },
+          {
+            "id": "n-agg",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Aggregate job"
+            }
+          },
+          {
+            "id": "n-wh",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Experiment mart"
+            }
+          },
+          {
+            "id": "n-dash",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Results dashboard"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-events",
+            "target": "n-agg",
+            "label": "Rollup"
+          },
+          {
+            "id": "e2",
+            "source": "n-agg",
+            "target": "n-wh",
+            "label": "Wrong ratio"
+          },
+          {
+            "id": "e3",
+            "source": "n-wh",
+            "target": "n-dash",
+            "label": "False winner"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-agg",
+          "n-wh"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Incorrect denominator inflated treatment lift"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Compute results for hundreds of experiments without scanning raw events per experiment.",
+            "opener": "The winning variant looks too good—the aggregate definition is highlighted. Is CTR computed correctly?",
+            "evidence": {
+              "strong": "Builds daily per-user per-metric aggregates once from raw events (incremental, partitioned by date) and reuses them for all experiments; joins with exposures and reduces to per-variant sufficient statistics (count, sum, sum of squares) from which means and variances follow cheaply.",
+              "adequate": "Pre-aggregates per experiment, or per user but recomputes all history each day.",
+              "weak": "Runs a separate query over raw events for each experiment and metric."
+            },
+            "misconceptions": [
+              {
+                "id": "agg.per_experiment",
+                "pattern": "Believes each experiment needs its own pass over raw events.",
+                "challenge": "A user is in twenty experiments. How many times does your design read their events each day?"
+              }
+            ],
+            "probes": [
+              "What is the minimum you need to store per variant to compute a mean and a variance?",
+              "How do you update cumulative results daily without recomputing from the start?"
+            ],
+            "hints": [
+              "Many experiments share the same users and metrics.",
+              "Mean and variance only need a few running totals."
+            ],
+            "referenceFix": "Document metric definitions, unit tests on sample data, separate impression and session grains, peer review before launch readout, and reconcile to source counts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "experimentation-analytics/sample-ratio-mismatch",
+      "title": "Sample ratio mismatch invalidated experiment",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.srm",
+      "scenario": {
+        "symptoms": "After launch, chi-square test shows 54/46 split instead of 50/50 with p-value 0.001. Browser bug sent more Chrome users to treatment.",
+        "interviewerSetup": "Assignment hash accidentally included user-agent in salt for one variant bucket; SRM check ran manually weekly not continuously."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-user",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "client",
+              "label": "Browsers"
+            }
+          },
+          {
+            "id": "n-assign",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Assignment"
+            }
+          },
+          {
+            "id": "n-log",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "stream",
+              "label": "Exposure log"
+            }
+          },
+          {
+            "id": "n-check",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "service",
+              "label": "SRM monitor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-user",
+            "target": "n-assign",
+            "label": "Skewed hash"
+          },
+          {
+            "id": "e2",
+            "source": "n-assign",
+            "target": "n-log",
+            "label": "Imbalanced"
+          },
+          {
+            "id": "e3",
+            "source": "n-log",
+            "target": "n-check",
+            "label": "Late detect"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-assign"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Biased assignment hash caused sample ratio mismatch"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Detect broken experiments automatically.",
+            "opener": "Traffic split isn't 50/50—the assignment path is highlighted. How do you detect and handle SRM?",
+            "evidence": {
+              "strong": "Runs a sample ratio mismatch check (chi-square on exposure counts versus planned split) daily, flags and hides results for failing experiments, and lists causes: exposure logged differently per variant, bots, redirects or crashes in one variant, assignment bugs; also checks pre-period bias and data freshness.",
+              "adequate": "Notices imbalance but treats it as noise or only checks manually.",
+              "weak": "Has no health checks."
+            },
+            "misconceptions": [
+              {
+                "id": "srm.noise",
+                "pattern": "Thinks a small imbalance in a large experiment is just randomness.",
+                "challenge": "With millions of users, how likely is a two-point imbalance by chance alone?"
+              }
+            ],
+            "probes": [
+              "Should results still be shown for an experiment that fails the check?"
+            ],
+            "hints": [
+              "With large samples, small imbalances are rarely chance.",
+              "Compare observed counts with the planned split."
+            ],
+            "referenceFix": "Stable hash on user id only, automated continuous SRM tests, halt experiment on mismatch, and root-cause assignment bugs before trusting lifts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "experimentation-analytics/peeking-stopped-early",
+      "title": "Peeking at results stopped experiment too early",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.peeking",
+      "scenario": {
+        "symptoms": "Team stopped experiment at 95% significance day three; effect disappeared by week two. No sequential testing correction applied.",
+        "interviewerSetup": "Dashboard refreshes p-values daily; PM instructed to ship on first significant day."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-dash",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "data": {
+              "kind": "dashboard",
+              "label": "Live results"
+            }
+          },
+          {
+            "id": "n-stats",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Stats engine"
+            }
+          },
+          {
+            "id": "n-exp",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "experiment",
+              "label": "Experiment"
+            }
+          },
+          {
+            "id": "n-pm",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 280
+            },
+            "data": {
+              "kind": "user",
+              "label": "PM"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-exp",
+            "target": "n-stats",
+            "label": "Daily p-value"
+          },
+          {
+            "id": "e2",
+            "source": "n-stats",
+            "target": "n-dash",
+            "label": "Significant day 3"
+          },
+          {
+            "id": "e3",
+            "source": "n-dash",
+            "target": "n-pm",
+            "label": "Stop early"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-stats",
+          "n-dash"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Repeated peeking without correction inflated false positive rate"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle daily looks at results without inflating false positives.",
+            "opener": "You peeked daily and shipped early—the analysis policy path is highlighted. Why is that dangerous?",
+            "evidence": {
+              "strong": "Explains that repeated looks with fixed-horizon tests inflate false positives; uses sequential or always-valid confidence intervals, or shows results as provisional until the planned end, while guardrails use their own stopping rules.",
+              "adequate": "Knows peeking is risky but only adds a warning.",
+              "weak": "Doesn't see a problem with checking p-values daily."
+            },
+            "misconceptions": [
+              {
+                "id": "peek.fine",
+                "pattern": "Believes checking significance every day is harmless.",
+                "challenge": "If you check twenty times and stop the first time p is below the threshold, what's your real false positive rate?"
+              }
+            ],
+            "probes": [
+              "How do guardrails differ from primary metrics here?"
+            ],
+            "hints": [
+              "Each look is another chance for noise to look significant.",
+              "Some methods stay valid under continuous monitoring."
+            ],
+            "referenceFix": "Pre-register fixed horizon or sequential methods, hide daily p-values from decision makers, require minimum runtime, and use holdout validation after ship."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "experimentation-analytics/cross-device-double-count",
+      "title": "Same user counted twice across devices",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.identity",
+      "scenario": {
+        "symptoms": "Experiment exposure counts exceeded unique users by 22% because assignment used device id while outcomes joined on account id created after login.",
+        "interviewerSetup": "Anonymous browsing assigns bucket on device; conversion logged on account without stable identity bridge."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.85
+        },
+        "nodes": [
+          {
+            "id": "n-dev",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 120
+            },
+            "data": {
+              "kind": "mobile",
+              "label": "Device id"
+            }
+          },
+          {
+            "id": "n-acct",
+            "type": "systemNode",
+            "position": {
+              "x": 60,
+              "y": 240
+            },
+            "data": {
+              "kind": "user",
+              "label": "Account id"
+            }
+          },
+          {
+            "id": "n-id",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Identity graph"
+            }
+          },
+          {
+            "id": "n-an",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 140
+            },
+            "data": {
+              "kind": "service",
+              "label": "Analysis"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-dev",
+            "target": "n-an",
+            "label": "Exposure"
+          },
+          {
+            "id": "e2",
+            "source": "n-acct",
+            "target": "n-an",
+            "label": "Outcomes"
+          },
+          {
+            "id": "e3",
+            "source": "n-id",
+            "target": "n-an",
+            "label": "Not used"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-an"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Mismatched identity keys biased experiment joins"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep assignment and analysis consistent when users move from logged out to logged in.",
+            "opener": "Exposure and outcomes don't line up on identity—the join path is highlighted. How do you unify users?",
+            "evidence": {
+              "strong": "Chooses the assignment unit per experiment (device for logged-out flows, account for logged-in ones), keeps assignment stable by hashing the chosen id, records the mapping at login, and analyses at the same unit as assignment.",
+              "adequate": "Reassigns at login or analyses at a different unit than assignment.",
+              "weak": "Doesn't consider identity changes."
+            },
+            "misconceptions": [
+              {
+                "id": "id.reassign",
+                "pattern": "Thinks switching the user to their account's variant at login is harmless.",
+                "challenge": "The user saw variant B for two days, then A. Which effect are you measuring?"
+              }
+            ],
+            "probes": [
+              "Which unit would you randomise on for a signup-page test?"
+            ],
+            "hints": [
+              "Analyse at the same unit you randomised on.",
+              "Login creates a link between two ids."
+            ],
+            "referenceFix": "Assign on stable user id with anonymous cookie bridge, identity graph linking device to account, intent-to-treat on assignment id, and monitor join rates."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

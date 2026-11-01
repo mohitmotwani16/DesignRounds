@@ -1,0 +1,137 @@
+{
+  "promptId": "ride-hailing",
+  "nuggets": [
+    {
+      "id": "ride-hailing/dispatch-double-assign",
+      "title": "Two drivers assigned one ride",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.concurrency",
+      "scenario": {
+        "symptoms": "Riders reported two drivers arriving for the same trip during surge. Support logs show two ACCEPT transitions on one ride id within 200 ms in different regions.",
+        "interviewerSetup": "Dispatch uses read-modify-write on ride status in SQL without row-level locking or compare-and-set. Mobile retries race on accept."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-d1", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "mobile", "label": "Driver A app" } },
+          { "id": "n-d2", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "mobile", "label": "Driver B app" } },
+          { "id": "n-dispatch", "type": "systemNode", "position": { "x": 300, "y": 140 }, "data": { "kind": "service", "label": "Dispatch service" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 560, "y": 140 }, "data": { "kind": "database", "label": "Rides DB" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-d1", "target": "n-dispatch", "label": "Accept" },
+          { "id": "e2", "source": "n-d2", "target": "n-dispatch", "label": "Accept" },
+          { "id": "e3", "source": "n-dispatch", "target": "n-db", "label": "Racy update" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-dispatch", "n-db"], "edgeIds": ["e3"], "headline": "Concurrent accept requests assign multiple drivers to one ride" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Ensure exactly one driver wins assignment for a given ride.",
+          "opener": "Two drivers were dispatched for one trip—what concurrency bug allowed that?",
+          "evidence": {
+            "strong": "Optimistic locking on ride version, single-row UPDATE … WHERE status=REQUESTED, idempotent accept tokens, and transactional outbox to notify loser.",
+            "adequate": "Application-level mutex on one server only.",
+            "weak": "Last accept wins without checking prior assignee."
+          },
+          "misconceptions": [{ "id": "dispatch.serial", "pattern": "Assuming mobile taps are naturally serialized.", "challenge": "Two drivers tap accept within milliseconds—what does the database see?" }],
+          "probes": ["Write the SQL or CAS operation for accept.", "How do you notify the losing driver?"],
+          "hints": ["State machine transitions must be atomic.", "Compare-and-set on status field."],
+          "referenceFix": "Atomic UPDATE ride SET driver_id=?, status=ASSIGNED WHERE id=? AND status=REQUESTED; if 0 rows, reject second accept and push ride taken event to loser."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ride-hailing/geo-index-stale-drivers",
+      "title": "Nearby drivers list is stale",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.geoindex",
+      "scenario": {
+        "symptoms": "Riders waited 12 minutes while the app showed three drivers ‘2 min away’. Those drivers had gone offline or moved neighborhoods; location index TTL was 5 minutes with 30s update interval.",
+        "interviewerSetup": "Geo index stores last ping without availability flag coupling. Offline events are processed asynchronously."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-rider", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Rider app" } },
+          { "id": "n-match", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Match API" } },
+          { "id": "n-geo", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "cache", "label": "Geo index (Redis)" } },
+          { "id": "n-drivers", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "mobile", "label": "Driver pings" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-rider", "target": "n-match", "label": "Find nearby" },
+          { "id": "e2", "source": "n-match", "target": "n-geo", "label": "Stale entries" },
+          { "id": "e3", "source": "n-drivers", "target": "n-geo", "label": "Delayed offline" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-geo", "n-match"], "edgeIds": ["e2", "e3"], "headline": "Geo index retains offline drivers with outdated locations" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Show only available drivers with fresh locations.",
+          "opener": "App showed nearby drivers who were not actually there—how should the geo index stay accurate?",
+          "evidence": {
+            "strong": "Short TTL on geo cells, heartbeat + availability bit, remove on offline event, verify with dispatch lock before confirm ETA.",
+            "adequate": "Longer ping interval without TTL eviction.",
+            "weak": "Static last-known location forever."
+          },
+          "misconceptions": [],
+          "probes": ["What happens if driver app loses network mid-ride?", "How fresh must location be for ETA quotes?"],
+          "hints": ["Geo entry should include available flag.", "Evict entries without recent heartbeat."],
+          "referenceFix": "Store driver_id with lat/lon, available flag, and timestamp; evict after 60–90s without ping; on match, revalidate availability before presenting ETA."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "ride-hailing/surge-regional-spike",
+      "title": "Surge pricing stuck after event ends",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.regional_spikes",
+      "scenario": {
+        "symptoms": "After a stadium concert, surge multiplier stayed at 3.5x for 90 minutes in a geohash that no longer had demand. Drivers avoided the area while riders still saw high prices.",
+        "interviewerSetup": "Surge computed on 15-minute sliding demand/supply ratio without decay when supply returns; geohash granularity too coarse."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-demand", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "stream-processor", "label": "Demand signals" } },
+          { "id": "n-surge", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Surge calculator" } },
+          { "id": "n-cache", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "cache", "label": "Geohash multipliers" } },
+          { "id": "n-apps", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "mobile", "label": "Rider/driver apps" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-demand", "target": "n-surge" },
+          { "id": "e2", "source": "n-surge", "target": "n-cache", "label": "Sticky 3.5x" },
+          { "id": "e3", "source": "n-cache", "target": "n-apps" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-surge", "n-cache"], "edgeIds": ["e2"], "headline": "Surge multipliers fail to decay after localized demand spike ends" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "tradeoffs", "weight": 3, "required": true,
+          "goal": "Localize surge to real-time supply/demand imbalance.",
+          "opener": "Surge stayed high long after the concert crowd left—what would you fix in pricing signals?",
+          "evidence": {
+            "strong": "Finer geohashes, exponential decay on multiplier, cap ramp-down speed, blend supply online counts, and manual ops override hooks.",
+            "adequate": "Shorter window but same coarse cells.",
+            "weak": "Fixed multiplier until manual reset."
+          },
+          "misconceptions": [],
+          "probes": ["How do you prevent surge oscillation?", "What inputs besides ride requests matter?"],
+          "hints": ["Supply returning should drop multiplier.", "Too-large geohashes smear spikes."],
+          "referenceFix": "Recompute surge every minute on fine geohashes with decay toward 1.0 when supply/demand ratio normalizes, and expose staleness timestamp to clients."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

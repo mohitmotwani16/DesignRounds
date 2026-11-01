@@ -1,0 +1,691 @@
+{
+  "promptId": "llm-gateway",
+  "packVersion": "pack-cccc8fb4",
+  "inputsFingerprint": "1707dec491c5c74a9a2e8f6ce87626839ca5df7151dd73954c90a11b2e1a5267",
+  "nuggets": [
+    {
+      "id": "llm-gateway/deep-fallback",
+      "title": "Retry Storm Amplifies Provider A Outage",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.fallback",
+      "scenario": {
+        "symptoms": "Provider A at 50% errors becomes 100% unavailable as gateway retries double traffic with no jitter.",
+        "interviewerSetup": "Fallback logic immediately retries same provider three times before switching models."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Apps"
+            }
+          },
+          {
+            "id": "node-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "LLM Gateway"
+            }
+          },
+          {
+            "id": "node-a",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 80
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Provider A"
+            }
+          },
+          {
+            "id": "node-b",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Provider B"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-gw",
+            "label": "Requests"
+          },
+          {
+            "id": "e2",
+            "source": "node-gw",
+            "target": "node-a",
+            "label": "Triple retry"
+          },
+          {
+            "id": "e3",
+            "source": "node-gw",
+            "target": "node-b",
+            "label": "Delayed fallback"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-gw",
+          "node-a"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Aggressive retries without backoff worsen provider failure cascade"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_fallback",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Survive provider failures without making them worse.",
+            "opener": "Provider A starts failing half its requests. Walk me through what the gateway does.",
+            "evidence": {
+              "strong": "Retries only retryable errors (timeouts, rate limits, server errors) with backoff and jitter, opens a circuit breaker for the failing provider, falls back along an ordered chain with prompt variants tuned per model, alerts when primary and fallback both fail, and evaluates fallback paths like releases.",
+              "adequate": "Retries and falls back without breakers or per-model prompts.",
+              "weak": "Returns errors."
+            },
+            "misconceptions": [
+              {
+                "id": "fb.retry_all",
+                "pattern": "Retries every failed request.",
+                "challenge": "The request has an invalid parameter. What do retries achieve?"
+              }
+            ],
+            "probes": [
+              "Which errors are worth retrying?",
+              "Does the same prompt work on the fallback model?"
+            ],
+            "hints": [
+              "Some failures will never succeed.",
+              "Different models need different prompts."
+            ],
+            "referenceFix": "Retries on retryable errors with backoff, circuit breakers, ordered fallbacks with per-model prompts, and alerts on cascading failure."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-gateway/deep-limits",
+      "title": "Team Blows Token Budget Mid-Request",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.limits",
+      "scenario": {
+        "symptoms": "Long streaming completion finishes at 2x token budget; finance cannot attribute overage until after response ends.",
+        "interviewerSetup": "Budget enforcement checks quota only at request start, not incrementally during stream."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-team",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Team App"
+            }
+          },
+          {
+            "id": "node-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Gateway"
+            }
+          },
+          {
+            "id": "node-meter",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Budget Counters"
+            }
+          },
+          {
+            "id": "node-llm",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Model API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-team",
+            "target": "node-gw",
+            "label": "Stream request"
+          },
+          {
+            "id": "e2",
+            "source": "node-gw",
+            "target": "node-meter",
+            "label": "Pre-check only"
+          },
+          {
+            "id": "e3",
+            "source": "node-gw",
+            "target": "node-llm",
+            "label": "Long stream"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-meter",
+          "node-gw"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Post-hoc budget accounting allows runaway streaming token usage"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_limits",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Enforce token rate limits and spend budgets.",
+            "opener": "How do you enforce a team's budget when a request's cost isn't known until it finishes?",
+            "evidence": {
+              "strong": "Limits by tokens and spend, not request counts, at organisation, team, tenant and user levels; estimates and reserves input tokens before the call, reconciles actual input and output afterwards; counters in a shared fast store with atomic updates; alerts at thresholds; reserved capacity for critical traffic; smooths bursts against provider limits.",
+              "adequate": "Request-count limits per team.",
+              "weak": "No limits."
+            },
+            "misconceptions": [
+              {
+                "id": "lim.requests",
+                "pattern": "Rate-limits by number of requests.",
+                "challenge": "One request uses a hundred tokens, another a hundred thousand. Are they equal?"
+              }
+            ],
+            "probes": [
+              "When do you charge for output tokens?",
+              "What happens at a hundred percent of budget?"
+            ],
+            "hints": [
+              "Reserve, then reconcile.",
+              "Tokens are the real unit."
+            ],
+            "referenceFix": "Token and spend limits at several levels, reserve-then-reconcile, atomic shared counters, threshold alerts and reserved capacity."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-gateway/deep-streaming",
+      "title": "Streaming Connections Exhaust Gateway File Descriptors",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.streaming",
+      "scenario": {
+        "symptoms": "Gateway stops accepting traffic at 10k concurrent streams; long-lived SSE ties up worker threads.",
+        "interviewerSetup": "Each streaming request holds dedicated thread and socket without async multiplexing or idle timeouts."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-clients",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Gateway Pool"
+            }
+          },
+          {
+            "id": "node-llm",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Upstream LLM"
+            }
+          },
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Edge LB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-clients",
+            "target": "node-lb",
+            "label": "SSE connections"
+          },
+          {
+            "id": "e2",
+            "source": "node-lb",
+            "target": "node-gw",
+            "label": "Pin threads"
+          },
+          {
+            "id": "e3",
+            "source": "node-gw",
+            "target": "node-llm",
+            "label": "Proxy stream"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-gw"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Thread-per-stream gateway design hits connection ceiling"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_streaming",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Proxy long streaming responses reliably at scale.",
+            "opener": "Most responses stream for several seconds. What does that mean for the gateway?",
+            "evidence": {
+              "strong": "Estimates concurrent open streams from request rate times duration, uses async I/O, falls back only before the first token reaches the client, restarts visibly if a stream fails later, propagates client cancellations upstream, and handles backpressure.",
+              "adequate": "Supports streaming without failure handling.",
+              "weak": "Buffers whole responses."
+            },
+            "misconceptions": [
+              {
+                "id": "str.switch",
+                "pattern": "Plans to switch providers silently mid-stream.",
+                "challenge": "The user has seen half an answer from model A. What does continuing with model B look like?"
+              }
+            ],
+            "probes": [
+              "How many open connections at peak?",
+              "What happens when the client disconnects?"
+            ],
+            "hints": [
+              "Streams are long-lived.",
+              "Once tokens are delivered, you can't take them back."
+            ],
+            "referenceFix": "Async streaming sized for concurrent connections, fallback only before the first token, visible restarts, cancellation propagation and backpressure."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-gateway/deep-observability",
+      "title": "Debug Logs Leak Prompt PII to Shared Index",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.observability",
+      "scenario": {
+        "symptoms": "Security scan finds user emails and medical prompts in centralized log index used by all teams.",
+        "interviewerSetup": "Gateway logs full request/response bodies at INFO level to shared Elasticsearch cluster."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "LLM Gateway"
+            }
+          },
+          {
+            "id": "node-log",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Log Pipeline"
+            }
+          },
+          {
+            "id": "node-es",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "search-index",
+              "label": "Shared Log Index"
+            }
+          },
+          {
+            "id": "node-redact",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Redaction Filter"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-gw",
+            "target": "node-log",
+            "label": "Full bodies"
+          },
+          {
+            "id": "e2",
+            "source": "node-log",
+            "target": "node-es",
+            "label": "Index all"
+          },
+          {
+            "id": "e3",
+            "source": "node-redact",
+            "target": "node-log",
+            "label": "Bypassed"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-gw",
+          "node-log"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Verbose gateway logging exposes sensitive prompt content"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_observability",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Make every call traceable and attributable without leaking data.",
+            "opener": "How do finance and engineers see what's happening, without logging personal data everywhere?",
+            "evidence": {
+              "strong": "Usage events (team, feature, model, tokens, cost, latency, cache hit) written to a queue and aggregated asynchronously; traces with redacted prompts and restricted access; retention limits; dashboards for cost, latency percentiles, errors and fallback rates by provider.",
+              "adequate": "Logs everything synchronously.",
+              "weak": "No metering."
+            },
+            "misconceptions": [
+              {
+                "id": "obs.sync",
+                "pattern": "Writes usage records synchronously on every request.",
+                "challenge": "The metering database slows down. What happens to every AI feature?"
+              }
+            ],
+            "probes": [
+              "How does a team see its spend?",
+              "What do you store from prompts?"
+            ],
+            "hints": [
+              "Metering shouldn't block requests.",
+              "Redact before you store."
+            ],
+            "referenceFix": "Async usage events for attribution, redacted access-controlled traces, retention limits, and dashboards per provider and team."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-gateway/deep-caching",
+      "title": "Semantic Cache Returns Wrong Answer for Similar Prompt",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.caching",
+      "scenario": {
+        "symptoms": "Support bot gives outdated policy answer; cache key fuzzy-matches distinct user questions.",
+        "interviewerSetup": "Gateway caches responses by embedding similarity threshold 0.85 without tenant or tool context in key."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Apps"
+            }
+          },
+          {
+            "id": "node-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "Gateway"
+            }
+          },
+          {
+            "id": "node-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Semantic Cache"
+            }
+          },
+          {
+            "id": "node-llm",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "LLM"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-gw",
+            "label": "Query"
+          },
+          {
+            "id": "e2",
+            "source": "node-gw",
+            "target": "node-cache",
+            "label": "Near-duplicate hit"
+          },
+          {
+            "id": "e3",
+            "source": "node-gw",
+            "target": "node-llm",
+            "label": "Skipped call"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-cache",
+          "node-gw"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Over-broad semantic cache keys serve incorrect stale answers"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_caching",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Cache safely to save cost and latency.",
+            "opener": "Which requests could the gateway answer from a cache?",
+            "evidence": {
+              "strong": "Exact caches keyed by model, prompt version, parameters and input for deterministic requests; semantic caching only for opted-in, non-personal intents with high thresholds and false-hit measurement; ordering prompts to benefit from provider prompt caching; per-tenant isolation.",
+              "adequate": "Caches all responses by prompt text.",
+              "weak": "No caching."
+            },
+            "misconceptions": [
+              {
+                "id": "cache.semantic",
+                "pattern": "Applies semantic caching to everything.",
+                "challenge": "'Cancel my order' and 'don't cancel my order' look similar. What could a semantic cache return?"
+              }
+            ],
+            "probes": [
+              "What goes into the cache key?",
+              "Which teams should opt in to semantic caching?"
+            ],
+            "hints": [
+              "Versions belong in the key.",
+              "Similar isn't the same."
+            ],
+            "referenceFix": "Versioned exact caches, opt-in semantic caching with thresholds, prompt-cache-friendly ordering, and tenant isolation."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

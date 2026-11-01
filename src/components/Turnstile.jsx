@@ -81,7 +81,11 @@ export function TurnstileWidget({ siteKey, resetKey = 0, action = "sign-in", inv
         "error-callback": (errorCode) => {
           report("widget-error", errorCode);
           onTokenRef.current("");
-          setProblem(withReference(`Human verification failed${errorCode ? ` (error ${errorCode})` : ""}. Refresh the page and try again.`));
+          const code = String(errorCode ?? "");
+          const domainHint = code === "110200"
+            ? " This hostname is not allowed for your Turnstile site key. On localhost, restart the API after setting production keys in .env (it should log turnstile=dummy-local), add localhost in Cloudflare Turnstile hostname settings, or use the dummy keys in .env.example."
+            : "";
+          setProblem(withReference(`Human verification failed${code ? ` (error ${code})` : ""}.${domainHint} Refresh the page and try again.`));
           onErrorRef.current?.();
         },
       });

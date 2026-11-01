@@ -1,0 +1,138 @@
+{
+  "promptId": "multi-region",
+  "nuggets": [
+    {
+      "id": "multi-region/split-brain-writes",
+      "title": "Split-brain writes after network partition",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.fencing_split_brain",
+      "scenario": {
+        "symptoms": "After a cross-region network blip, two regions both accepted write traffic for 90 seconds. Order IDs collided and inventory counts diverged by 1,200 units.",
+        "interviewerSetup": "Active-active deployment uses async replication with last-writer-wins. Failover detection relied on heartbeat timeouts without fencing tokens, so both regions believed they were primary."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-us", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "service", "label": "Region US (primary?)" } },
+          { "id": "n-eu", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "service", "label": "Region EU (primary?)" } },
+          { "id": "n-db-us", "type": "systemNode", "position": { "x": 280, "y": 80 }, "data": { "kind": "database", "label": "US DB writer" } },
+          { "id": "n-db-eu", "type": "systemNode", "position": { "x": 280, "y": 200 }, "data": { "kind": "database", "label": "EU DB writer" } },
+          { "id": "n-clients", "type": "systemNode", "position": { "x": 520, "y": 140 }, "data": { "kind": "client", "label": "Global clients" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-us", "target": "n-db-us", "label": "Writes during partition" },
+          { "id": "e2", "source": "n-eu", "target": "n-db-eu", "label": "Writes during partition" },
+          { "id": "e3", "source": "n-clients", "target": "n-us" },
+          { "id": "e4", "source": "n-clients", "target": "n-eu" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-db-us", "n-db-eu"], "edgeIds": ["e1", "e2"], "headline": "Both regions accepted writes without fencing after partition healed" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Prevent dual-primary writes and reconcile safely after partitions.",
+          "opener": "Inventory diverged after a short network split—how did split brain happen and how do you prevent it?",
+          "evidence": {
+            "strong": "Single writer via consensus or primary lease with fencing tokens, sticky routing during failover, and conflict repair playbook.",
+            "adequate": "Mentions primary/secondary failover but not fencing or write quarantine during ambiguity.",
+            "weak": "Active-active LWW on all rows without merge semantics."
+          },
+          "misconceptions": [{ "id": "mr.both_primary", "pattern": "Running two writable primaries for availability.", "challenge": "What happens to uniqueness constraints when both sides mint IDs?" }],
+          "probes": ["How do you fence the old primary when failover promotes EU?", "Which workloads can be active-active vs single-writer?"],
+          "hints": ["Leases need monotonic fencing tokens checked by storage.", "Ambiguous epochs should reject writes."],
+          "referenceFix": "Use a global primary with lease + fencing, route writes through a control plane that revokes old primaries, queue cross-region reads, and run deterministic merge jobs for the conflict window."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "multi-region/stale-read-failover",
+      "title": "Stale reads right after regional failover",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.failover_detection",
+      "scenario": {
+        "symptoms": "Failover to the secondary region succeeded in DNS, but users saw account balances from six hours ago for 20 minutes. Payment retries caused duplicate holds.",
+        "interviewerSetup": "Read replicas in the DR region lagged behind the former primary. Traffic was shifted as soon as the health check on the app layer passed, before replication caught up."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-dns", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "dns", "label": "Global DNS" } },
+          { "id": "n-dr-app", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "DR app region" } },
+          { "id": "n-replica", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "database", "label": "Async replica (lagging)" } },
+          { "id": "n-primary", "type": "systemNode", "position": { "x": 480, "y": 240 }, "data": { "kind": "database", "label": "Failed primary" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-dns", "target": "n-dr-app", "label": "Failover flip" },
+          { "id": "e2", "source": "n-dr-app", "target": "n-replica", "label": "Reads" },
+          { "id": "e3", "source": "n-primary", "target": "n-replica", "label": "6h replication lag" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-replica", "n-dns"], "edgeIds": ["e1", "e2"], "headline": "Traffic routed to DR before replica caught up with last primary writes" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Fail over reads and writes only after data safety criteria are met.",
+          "opener": "Users saw stale balances immediately after failover—what signal should have blocked traffic shift?",
+          "evidence": {
+            "strong": "Checks replication lag / LSN catch-up, promotes replica only after quorum, uses read-only mode until consistent, and idempotent payment APIs.",
+            "adequate": "Mentions replication lag metric but no gating on DNS flip.",
+            "weak": "Flips DNS when app health passes regardless of data lag."
+          },
+          "misconceptions": [{ "id": "failover.app_only", "pattern": "Treating app health as sufficient for failover.", "challenge": "App can be up while database is hours stale—what do users read?" }],
+          "probes": ["What replication metric do you watch before serving writes in DR?", "How do clients retry safely during ambiguity?"],
+          "hints": ["Promotion and traffic shift are separate steps.", "Idempotency keys prevent duplicate financial side effects."],
+          "referenceFix": "Gate failover on replica lag below RPO, keep DR read-only until caught up or promoted cleanly, then shift DNS; enforce idempotent money APIs through the transition."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "multi-region/cross-region-dependency",
+      "title": "DR region still calls failed primary",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.dependencies",
+      "scenario": {
+        "symptoms": "Regional failover appeared successful, but checkout still failed because the DR stack synchronously called an identity service that remained pinned to the down region.",
+        "interviewerSetup": "Hard-coded regional endpoints and a shared control plane in us-east-1 meant DR apps could not authenticate users after the primary region outage."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-dr", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Checkout (DR)" } },
+          { "id": "n-id-down", "type": "systemNode", "position": { "x": 300, "y": 40 }, "data": { "kind": "service", "label": "Identity (us-east-1)" } },
+          { "id": "n-id-dr", "type": "systemNode", "position": { "x": 300, "y": 200 }, "data": { "kind": "service", "label": "Identity replica (unused)" } },
+          { "id": "n-cp", "type": "systemNode", "position": { "x": 560, "y": 120 }, "data": { "kind": "service", "label": "Regional config" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-dr", "target": "n-id-down", "label": "Hard-coded RPC" },
+          { "id": "e2", "source": "n-cp", "target": "n-dr", "label": "Static endpoints" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-dr", "n-id-down"], "edgeIds": ["e1"], "headline": "DR checkout depends on identity service in the failed region" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "requirements", "weight": 3, "required": true,
+          "goal": "Make regional failover work end-to-end including dependencies.",
+          "opener": "App failover succeeded but checkout still errors—what dependency did we miss?",
+          "evidence": {
+            "strong": "Regional service discovery, dependency maps, active/passive pairs per critical service, and failover drills that test auth/payments not just edge apps.",
+            "adequate": "Lists dependencies but keeps single-region shared services without HA story.",
+            "weak": "Assumes only the main app tier needs multi-region."
+          },
+          "misconceptions": [],
+          "probes": ["Which dependencies must be multi-homed vs globally shared?", "How does config propagate local endpoints during failover?"],
+          "hints": ["Draw a dependency graph before designing failover.", "Shared control planes are a common hidden single point of failure."],
+          "referenceFix": "Run critical dependencies in each region with health-aware discovery, eliminate hard-coded region URLs, and automate config flip as part of the failover runbook."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

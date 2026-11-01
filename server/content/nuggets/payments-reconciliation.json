@@ -1,0 +1,137 @@
+{
+  "promptId": "payments-reconciliation",
+  "nuggets": [
+    {
+      "id": "payments-reconciliation/duplicate-payout-file",
+      "title": "Payout file processed twice",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.idempotent",
+      "scenario": {
+        "symptoms": "Merchants received duplicate bank transfers for the same settlement batch. Ops re-uploaded a CSV after a timeout, and both runs inserted payout rows with different batch ids.",
+        "interviewerSetup": "Reconciliation job keys batches by upload filename timestamp, not by settlement period hash. Replays are not detected."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-ops", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "user", "label": "Finance ops" } },
+          { "id": "n-ingest", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "Payout ingest" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "database", "label": "Payout ledger" } },
+          { "id": "n-bank", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "service", "label": "Bank API" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-ops", "target": "n-ingest", "label": "Re-upload CSV" },
+          { "id": "e2", "source": "n-ingest", "target": "n-db", "label": "Second insert" },
+          { "id": "e3", "source": "n-ingest", "target": "n-bank", "label": "Duplicate ACH" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-ingest", "n-db"], "edgeIds": ["e2", "e3"], "headline": "Non-idempotent payout ingest doubles settlements on retry" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Make payout and reconciliation jobs safe to retry.",
+          "opener": "Merchants were paid twice after ops re-ran a file—how do you idempotent payout processing?",
+          "evidence": {
+            "strong": "Deterministic batch id from settlement period + file hash, unique constraints, status machine, and replay returns prior result.",
+            "adequate": "Manual checklist before re-upload.",
+            "weak": "New batch id every upload attempt."
+          },
+          "misconceptions": [],
+          "probes": ["What natural key identifies a settlement batch?", "How do bank APIs support idempotent transfers?"],
+          "hints": ["Hash file contents for idempotency.", "Store PROCESSING/COMPLETE states."],
+          "referenceFix": "Derive idempotency key from settlement window and file hash, enforce unique payout batch id, skip or no-op duplicates, and use bank idempotency tokens on ACH calls."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "payments-reconciliation/timing-mismatch",
+      "title": "Ledger and processor totals disagree by a day",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.timing",
+      "scenario": {
+        "symptoms": "Daily reconciliation report shows a persistent $1.8M mismatch that disappears tomorrow. Processor settles on UTC midnight while internal ledger cuts off at US/Pacific business close.",
+        "interviewerSetup": "Batch jobs compare totals without aligning settlement windows or handling in-flight captures near boundary."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-ledger", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "database", "label": "Internal ledger" } },
+          { "id": "n-proc", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Processor report" } },
+          { "id": "n-job", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "worker", "label": "Recon job" } },
+          { "id": "n-dash", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "dashboard", "label": "Finance dashboard" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-ledger", "target": "n-job", "label": "Pacific close" },
+          { "id": "e2", "source": "n-proc", "target": "n-job", "label": "UTC window" },
+          { "id": "e3", "source": "n-job", "target": "n-dash", "label": "False mismatch" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-job"], "edgeIds": ["e1", "e2"], "headline": "Misaligned settlement windows create phantom reconciliation gaps" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Compare processor and ledger totals on consistent time boundaries.",
+          "opener": "Recon shows millions off by one day—what timing bug causes that?",
+          "evidence": {
+            "strong": "Explicit settlement window config, tie-break rules for in-flight txns, rolling pending bucket, and timezone-aware reports.",
+            "adequate": "Shift cron schedule without documenting boundary rules.",
+            "weak": "Compare raw daily totals with mixed timezones."
+          },
+          "misconceptions": [{ "id": "timing.midnight", "pattern": "Assuming everyone uses the same midnight cutoff.", "challenge": "Processor UTC vs finance Pacific— which transactions land in which day?" }],
+          "probes": ["How do you handle captures still clearing at window end?", "What report do auditors need?"],
+          "hints": ["Define settlement window in one canonical timezone.", "Track in-flight separately."],
+          "referenceFix": "Align recon windows to processor settlement reports, carry in-flight transactions forward, document cutoffs, and alert only on true mismatches after pending adjustment."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "payments-reconciliation/cent-rounding-drift",
+      "title": "Penny drift breaks audit trail",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.money",
+      "scenario": {
+        "symptoms": "Auditors flagged thousands of 1-cent variances between order totals, fee splits, and processor settlements after introducing floating-point math in a fee service.",
+        "interviewerSetup": "Fees computed as double precision before persisting; currency amounts should use integer minor units end-to-end."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-orders", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Orders (cents)" } },
+          { "id": "n-fees", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Fee calc (float)" } },
+          { "id": "n-ledger", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "database", "label": "Ledger" } },
+          { "id": "n-recon", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "worker", "label": "Recon matcher" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-orders", "target": "n-fees" },
+          { "id": "e2", "source": "n-fees", "target": "n-ledger", "label": "Rounding drift" },
+          { "id": "e3", "source": "n-ledger", "target": "n-recon", "label": "1¢ gaps" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-fees", "n-ledger"], "edgeIds": ["e2"], "headline": "Floating-point fee math introduces systematic penny reconciliation errors" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Represent and reconcile money without precision loss.",
+          "opener": "Recon fails on penny differences—what money representation fixes this?",
+          "evidence": {
+            "strong": "Integer minor units (cents), explicit rounding policy per line item, decimal library in services, and balanced double-entry checks.",
+            "adequate": "Round at display only while storing floats.",
+            "weak": "Use float/double for currency throughout."
+          },
+          "misconceptions": [],
+          "probes": ["Where should rounding happen when splitting fees across parties?", "How do you prove ledger balances tie out?"],
+          "hints": ["Never use binary floats for money.", "Sum of parts must equal whole."],
+          "referenceFix": "Store amounts as int64 minor units, use banker's rounding rules in fee splits, migrate float columns, and add invariant checks that debits equal credits per batch."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

@@ -1,0 +1,677 @@
+{
+  "promptId": "feature-store",
+  "packVersion": "pack-6f9dc9bd",
+  "inputsFingerprint": "e8953531bfa1d84f37d8d9930b21a36482e1ff6afa0b7276d63aa3ee59a6e104",
+  "nuggets": [
+    {
+      "id": "feature-store/deep-pit_joins",
+      "title": "Training Pipeline Leakage Inflates Offline AUC by 12 Points",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.pit_joins",
+      "scenario": {
+        "symptoms": "A new fraud model shows 0.98 offline AUC but only 0.71 in shadow traffic. Data science suspects label leakage in the historical training join.",
+        "interviewerSetup": "The batch training job joins purchase labels to user features using the latest row per user_id, ignoring when the label event occurred."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-labels",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Label Table"
+            }
+          },
+          {
+            "id": "node-features",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Offline Feature History"
+            }
+          },
+          {
+            "id": "node-join",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 220
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Training Dataset Builder"
+            }
+          },
+          {
+            "id": "node-registry",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 380
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Feature Registry"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-labels",
+            "source": "node-labels",
+            "target": "node-join",
+            "label": "All historical labels"
+          },
+          {
+            "id": "e-features",
+            "source": "node-features",
+            "target": "node-join",
+            "label": "Latest value per user"
+          },
+          {
+            "id": "e-reg",
+            "source": "node-registry",
+            "target": "node-join",
+            "label": "Feature definitions"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-join",
+          "node-features"
+        ],
+        "edgeIds": [
+          "e-features"
+        ],
+        "headline": "Non point-in-time feature join leaks future user state into historical labels"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_pit_joins",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Explain how to construct historical training data without leaking future feature values.",
+            "opener": "When generating a training dataset, how do we join labels to features to ensure we don't leak future data into the model?",
+            "evidence": {
+              "strong": "Explains point-in-time correctness, detailing how each feature record needs an event timestamp, and queries use 'AS OF' joins or window functions to find the latest feature value prior to the label's timestamp.",
+              "adequate": "Mentions joining on timestamps to avoid leakage but struggles to explain the actual SQL or logic required to fetch the most recent prior value.",
+              "weak": "Joins labels directly to the latest available feature values, ignoring the label's temporal context."
+            },
+            "misconceptions": [
+              {
+                "id": "latest_value_join",
+                "pattern": "Joining a historical label (e.g., from last month) to the current latest feature value.",
+                "challenge": "If a user made a purchase last month, and we train on that event today, will the model see the user's features as they are today or as they were last month?"
+              }
+            ],
+            "probes": [
+              "What exact columns must exist on every feature row in the offline store to make this work?",
+              "How do you handle a scenario where the feature was updated three days before the label event, and then again one day after?"
+            ],
+            "hints": [
+              "Think about what information you need to attach to a feature value to know exactly when it became true.",
+              "Consider how you would write a SQL query to find the single most recent feature update that happened *before* a specific target timestamp."
+            ],
+            "referenceFix": "Resolved point-in-time joins by ensuring all offline features have event timestamps and using time-aware join logic."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feature-store/deep-online_store",
+      "title": "Inference P99 Spikes to 800ms During Flash Sale",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.online_store",
+      "scenario": {
+        "symptoms": "Checkout recommendation models miss latency SLO: P99 feature fetch latency jumps from 12ms to 800ms during a flash sale while online store CPU pegs at 100%.",
+        "interviewerSetup": "The online store is a sharded relational database executing multi-table joins per inference request instead of flat key lookups."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-serving",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Model Serving"
+            }
+          },
+          {
+            "id": "node-fs",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Online Feature Store"
+            }
+          },
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 300
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Stream Ingest"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Feature Updates"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-serve",
+            "source": "node-serving",
+            "target": "node-fs",
+            "label": "Feature GET per request"
+          },
+          {
+            "id": "e-stream",
+            "source": "node-kafka",
+            "target": "node-stream",
+            "label": "Realtime updates"
+          },
+          {
+            "id": "e-write",
+            "source": "node-stream",
+            "target": "node-fs",
+            "label": "Upsert features"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-fs"
+        ],
+        "edgeIds": [
+          "e-serve"
+        ],
+        "headline": "Online store join-heavy reads blow inference latency budget at peak QPS"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_online_store",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Design the online storage layer to meet strict latency and scale requirements.",
+            "opener": "Given the traffic and latency budgets you estimated, how are you structuring the online store to guarantee fast reads?",
+            "evidence": {
+              "strong": "Chooses an in-memory or fast SSD key-value store, designs a flat key structure (e.g., entity_id:feature_name), and discusses replication, partitioning, and TTLs.",
+              "adequate": "Proposes Redis or similar but doesn't detail the key schema or how it scales to handle the read throughput.",
+              "weak": "Uses a relational database with complex joins for the online serving path."
+            },
+            "misconceptions": [
+              {
+                "id": "online_joins",
+                "pattern": "Executing SQL joins across multiple tables during the online inference request.",
+                "challenge": "How will running multiple table joins per request impact the strict latency budget at your estimated scale?"
+              }
+            ],
+            "probes": [
+              "What does the exact key and value look like in this database?",
+              "How do we prevent the online store from running out of memory over time?"
+            ],
+            "hints": [
+              "For the fastest possible reads, what database paradigm should we use?",
+              "If a model only needs the absolute latest value of a feature, do we need to store historical versions in the online store?"
+            ],
+            "referenceFix": "Designed a partitioned key-value store with flattened keys and TTLs for low-latency online serving."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feature-store/deep-parity",
+      "title": "Production CTR Drops After Batch Logic Hotfix",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.parity",
+      "scenario": {
+        "symptoms": "Click-through rate on the home feed drops 18% after a data engineer fixed a batch aggregation bug without updating the streaming pipeline.",
+        "interviewerSetup": "Batch Spark jobs and Flink stream jobs maintain separate Python and Java implementations of the same user-engagement feature."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Daily Spark Job"
+            }
+          },
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "t-flink",
+              "label": "Flink Stream Job"
+            }
+          },
+          {
+            "id": "node-offline",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 120
+            },
+            "data": {
+              "kind": "data-lake",
+              "label": "Offline Store"
+            }
+          },
+          {
+            "id": "node-online",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 260
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Online Store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-b",
+            "source": "node-batch",
+            "target": "node-offline",
+            "label": "Batch features"
+          },
+          {
+            "id": "e-s",
+            "source": "node-stream",
+            "target": "node-online",
+            "label": "Live features"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-batch",
+          "node-stream"
+        ],
+        "edgeIds": [],
+        "headline": "Dual batch/stream implementations diverge causing training-serving skew"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_parity",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 3,
+            "required": true,
+            "goal": "Ensure offline and online feature calculation logic is identical.",
+            "opener": "How do we guarantee that the logic computing features for historical offline training is exactly the same as the logic processing live streaming events?",
+            "evidence": {
+              "strong": "Uses a unified engine (like Spark or Flink) or a feature abstraction framework so data scientists write logic once, which is compiled to both batch and stream execution.",
+              "adequate": "Identifies the risk of training-serving skew but accepts maintaining dual implementations (e.g., Python for batch, Java for stream) with strict testing.",
+              "weak": "Ignores the discrepancy, assuming models will perform fine even if stream processing behaves slightly differently from batch."
+            },
+            "misconceptions": [
+              {
+                "id": "copy_paste_code",
+                "pattern": "Assuming rewriting Pandas code into Flink SQL manually is sufficient and risk-free.",
+                "challenge": "If a developer updates the batch logic but forgets to update the streaming service, how will the system prevent the model from degrading in production?"
+              }
+            ],
+            "probes": [
+              "If a data scientist writes feature logic in SQL, how does that execute against a live Kafka stream?",
+              "What is training-serving skew, and how does this design prevent it?"
+            ],
+            "hints": [
+              "Is there a way for a user to declare a feature's transformation once, and let the platform decide how to execute it?",
+              "Look into modern unified processing frameworks that can handle both bounded and unbounded data."
+            ],
+            "referenceFix": "Addressed offline/online parity by proposing a unified execution framework or abstracted feature definitions."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feature-store/deep-versioning",
+      "title": "Silent In-Place Feature Rewrite Breaks Live Model Scores",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.versioning",
+      "scenario": {
+        "symptoms": "Fraud scores swing wildly for all traffic after a team redeployed feature logic by overwriting rows in the online store without versioning.",
+        "interviewerSetup": "The feature platform allows in-place updates to feature definitions; production models still expect v1 scale and semantics."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-registry",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "registry",
+              "label": "Feature Registry"
+            }
+          },
+          {
+            "id": "node-backfill",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Backfill Job"
+            }
+          },
+          {
+            "id": "node-online",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 220
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Online Store"
+            }
+          },
+          {
+            "id": "node-serving",
+            "type": "systemNode",
+            "position": {
+              "x": 560,
+              "y": 220
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Inference Service"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-reg",
+            "source": "node-registry",
+            "target": "node-backfill",
+            "label": "New logic v2"
+          },
+          {
+            "id": "e-write",
+            "source": "node-backfill",
+            "target": "node-online",
+            "label": "Overwrite keys"
+          },
+          {
+            "id": "e-read",
+            "source": "node-serving",
+            "target": "node-online",
+            "label": "Fetch latest"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-online",
+          "node-registry"
+        ],
+        "edgeIds": [
+          "e-write"
+        ],
+        "headline": "In-place feature mutation desynchronizes live models from training semantics"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_versioning",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Manage feature updates safely without disrupting live models.",
+            "opener": "If a team discovers a bug in their feature logic and changes it, what happens to the models already using that feature in production?",
+            "evidence": {
+              "strong": "Implements immutable feature versions. New logic creates a new feature version (e.g., v2), triggers a historical backfill, and models explicitly pin to the version they were trained on.",
+              "adequate": "Discusses backfilling data but struggles with how models coordinate the transition safely without downtime or mismatched predictions.",
+              "weak": "Overwrites the existing feature in-place, which would immediately feed differently scaled or structured data to live models."
+            },
+            "misconceptions": [
+              {
+                "id": "in_place_update",
+                "pattern": "Updating the data in the online store in-place without notifying the model.",
+                "challenge": "If the new feature logic changes the average output from 1.0 to 100.0, what will the currently deployed model predict?"
+              }
+            ],
+            "probes": [
+              "How do we calculate the historical values for this newly updated feature?",
+              "How does the model inference service know which definition of the feature it should be fetching?"
+            ],
+            "hints": [
+              "If changing a feature breaks a model, perhaps we shouldn't change the feature. What could we create instead?",
+              "Think about how you manage dependencies in software packages. How does semantic versioning apply here?"
+            ],
+            "referenceFix": "Handled feature updates using immutable versioning and coordinated backfills."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "feature-store/deep-freshness",
+      "title": "Stale Engagement Features Go Unnoticed for 36 Hours",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.freshness",
+      "scenario": {
+        "symptoms": "Personalization quality degrades silently; dashboards show healthy Kafka lag but online engagement features are 36 hours old for 12% of users.",
+        "interviewerSetup": "Monitoring only tracks consumer lag, not end-to-end freshness of values written to the online store."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Event Stream"
+            }
+          },
+          {
+            "id": "node-flink",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-flink",
+              "label": "Stream Processor"
+            }
+          },
+          {
+            "id": "node-online",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Online Store"
+            }
+          },
+          {
+            "id": "node-mon",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "monitoring-dashboard",
+              "label": "Freshness Monitor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-kafka",
+            "target": "node-flink",
+            "label": "Consume"
+          },
+          {
+            "id": "e2",
+            "source": "node-flink",
+            "target": "node-online",
+            "label": "Write features"
+          },
+          {
+            "id": "e3",
+            "source": "node-online",
+            "target": "node-mon",
+            "label": "Sample timestamps"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-mon",
+          "node-online"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Missing serving-layer freshness checks hide stalled online feature writes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_freshness",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Monitor and ensure the online store is receiving data within SLAs.",
+            "opener": "How do you monitor that online features are actually fresh and that our streaming pipelines haven't fallen behind?",
+            "evidence": {
+              "strong": "Emits watermarks or tracks ingestion timestamps vs event timestamps in the online store, firing alerts if the delta exceeds the feature's specific SLA.",
+              "adequate": "Monitors the streaming pipeline lag generally, but doesn't track end-to-end freshness from the model's perspective.",
+              "weak": "Relies entirely on basic infrastructure metrics like CPU usage rather than data-level freshness metrics."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How does the system distinguish between a pipeline that is down versus a user who genuinely hasn't had any activity for a week?",
+              "Where exactly is the metric calculated to prove the online store is up-to-date?"
+            ],
+            "hints": [
+              "If every feature record in the online store includes the time it was generated, how could a monitoring job use that?",
+              "What happens if Kafka is processing messages, but the writer to the online store is failing silently?"
+            ],
+            "referenceFix": "Established freshness monitoring by comparing event timestamps to current time at the serving layer."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

@@ -1,0 +1,693 @@
+{
+  "promptId": "llm-eval-platform",
+  "packVersion": "pack-200f6659",
+  "inputsFingerprint": "2791428e1188f10144287cc808b589f17f02a00f88f1994c26d10b6e4c9901bb",
+  "nuggets": [
+    {
+      "id": "llm-eval-platform/deep-graders",
+      "title": "LLM Judge Scores Drift Without Calibration",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.graders",
+      "scenario": {
+        "symptoms": "Release quality gate flips pass/fail on identical prompts week to week; grader model updated silently.",
+        "interviewerSetup": "Automated eval uses raw LLM judge scores without golden-set calibration or human anchor checks."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-eval",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Eval Runner"
+            }
+          },
+          {
+            "id": "node-judge",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Grader Model"
+            }
+          },
+          {
+            "id": "node-golden",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "database",
+              "label": "Golden Answers"
+            }
+          },
+          {
+            "id": "node-dash",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "monitoring-dashboard",
+              "label": "Score Dashboard"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-eval",
+            "target": "node-judge",
+            "label": "Score outputs"
+          },
+          {
+            "id": "e2",
+            "source": "node-eval",
+            "target": "node-golden",
+            "label": "Compare"
+          },
+          {
+            "id": "e3",
+            "source": "node-judge",
+            "target": "node-dash",
+            "label": "Unstable metrics"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-judge",
+          "node-eval"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Uncalibrated LLM grader produces non-reproducible eval scores"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_graders",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Grade outputs reliably.",
+            "opener": "How do you grade open-ended outputs, and how do you know your grader is right?",
+            "evidence": {
+              "strong": "Code checks wherever possible (schema, required facts, tool calls), reference comparisons, LLM judges with specific rubrics and binary or few-level scales, calibrated against a few hundred human labels per dimension and slice, controlled for position, length and self-preference bias, versioned and re-calibrated on change; humans for high-stakes slices.",
+              "adequate": "An LLM judge with a general quality score.",
+              "weak": "Exact string match only."
+            },
+            "misconceptions": [
+              {
+                "id": "gr.trust",
+                "pattern": "Trusts an LLM judge out of the box.",
+                "challenge": "The judge prefers longer answers. What happens to teams' prompts over time?"
+              }
+            ],
+            "probes": [
+              "How do you measure judge agreement with people?",
+              "Which checks don't need a model at all?"
+            ],
+            "hints": [
+              "Cheap, exact checks first.",
+              "Compare judges with human labels."
+            ],
+            "referenceFix": "Code checks first, rubric-based judges calibrated on human labels with bias controls, versioned judges, humans for high stakes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-eval-platform/deep-trials",
+      "title": "Single-Run Pass Masks Regressive Model Change",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.trials",
+      "scenario": {
+        "symptoms": "New prompt template passes eval once then fails in production; eval runs each case only once.",
+        "interviewerSetup": "Stochastic decoding with temperature 0.7 but no repeated trials or confidence intervals."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ci",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "CI Pipeline"
+            }
+          },
+          {
+            "id": "node-eval",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Eval Harness"
+            }
+          },
+          {
+            "id": "node-model",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Candidate Model"
+            }
+          },
+          {
+            "id": "node-stats",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "warehouse",
+              "label": "Results Store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-ci",
+            "target": "node-eval",
+            "label": "Gate release"
+          },
+          {
+            "id": "e2",
+            "source": "node-eval",
+            "target": "node-model",
+            "label": "One sample"
+          },
+          {
+            "id": "e3",
+            "source": "node-eval",
+            "target": "node-stats",
+            "label": "Store pass"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-eval",
+          "node-model"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Single-trial eval accepts flaky stochastic model outputs"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_trials",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Make comparisons trustworthy despite variable outputs.",
+            "opener": "The same case passes on one run and fails on the next. How do you decide whether a change is better?",
+            "evidence": {
+              "strong": "Runs each case several times, reports pass rates with confidence intervals, compares candidate and baseline on the same cases (paired comparison), breaks results down by slice, and sets minimum detectable differences before declaring wins.",
+              "adequate": "Averages scores from one run.",
+              "weak": "Eyeballs results."
+            },
+            "misconceptions": [
+              {
+                "id": "tr.once",
+                "pattern": "Runs each case once.",
+                "challenge": "A change improves the score by one point on a single run. Is that real?"
+              }
+            ],
+            "probes": [
+              "How many runs per case are enough?",
+              "How do you compare two versions fairly?"
+            ],
+            "hints": [
+              "Variance needs repetition.",
+              "Same cases, both versions."
+            ],
+            "referenceFix": "Repeated trials, pass rates with confidence intervals, paired comparisons with the baseline and slice breakdowns."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-eval-platform/deep-agents",
+      "title": "Agent Eval Accidentally Issues Real Refunds",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.agents",
+      "scenario": {
+        "symptoms": "Staging eval run processes 200 live refund API calls totaling $18k during tool-use agent test.",
+        "interviewerSetup": "Agent eval environment points at production payment sandbox keys that still settle real money."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-eval",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Agent Eval"
+            }
+          },
+          {
+            "id": "node-agent",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Tool Agent"
+            }
+          },
+          {
+            "id": "node-tools",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "microservice",
+              "label": "Refund API"
+            }
+          },
+          {
+            "id": "node-mock",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Mock Sandbox"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-eval",
+            "target": "node-agent",
+            "label": "Run cases"
+          },
+          {
+            "id": "e2",
+            "source": "node-agent",
+            "target": "node-tools",
+            "label": "Live calls"
+          },
+          {
+            "id": "e3",
+            "source": "node-mock",
+            "target": "node-agent",
+            "label": "Bypassed"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-agent",
+          "node-tools"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Agent evaluation wired to real side-effecting production tools"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_agents",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Evaluate agents without touching real systems.",
+            "opener": "How do you evaluate an agent that issues refunds, without refunding anyone?",
+            "evidence": {
+              "strong": "Sandboxed copies or mocks of tools and data, simulated users, outcome checks in the sandbox (correct refund, nothing unauthorised), trajectory checks (right tools, valid arguments, no forbidden actions, reasonable steps and cost), repeated runs and resettable environments.",
+              "adequate": "Grades the agent's final message.",
+              "weak": "Tests in production."
+            },
+            "misconceptions": [
+              {
+                "id": "ag.text",
+                "pattern": "Grades only what the agent says.",
+                "challenge": "The agent says 'refund issued' but issued it to the wrong order. Does a text grader notice?"
+              }
+            ],
+            "probes": [
+              "How do you reset the environment between runs?",
+              "What makes a trajectory bad even if the outcome is right?"
+            ],
+            "hints": [
+              "Check the system, not the words.",
+              "How it got there matters too."
+            ],
+            "referenceFix": "Sandboxed tools and data, simulated users, outcome and trajectory checks, repeated runs and resettable environments."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-eval-platform/deep-ci",
+      "title": "Eval Regression Bypasses Broken Quality Gate",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.ci",
+      "scenario": {
+        "symptoms": "Known-bad model ships after eval job fails but CI treats eval step as advisory only.",
+        "interviewerSetup": "Pipeline continues on eval failure; developers override without mandatory score delta review."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-dev",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Developers"
+            }
+          },
+          {
+            "id": "node-ci",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "CI/CD"
+            }
+          },
+          {
+            "id": "node-eval",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Eval Service"
+            }
+          },
+          {
+            "id": "node-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Production"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-dev",
+            "target": "node-ci",
+            "label": "Merge PR"
+          },
+          {
+            "id": "e2",
+            "source": "node-ci",
+            "target": "node-eval",
+            "label": "Fail ignored"
+          },
+          {
+            "id": "e3",
+            "source": "node-ci",
+            "target": "node-prod",
+            "label": "Deploy anyway"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-ci",
+          "node-eval"
+        ],
+        "edgeIds": [
+          "e2",
+          "e3"
+        ],
+        "headline": "Non-blocking eval gate allows regressions into production"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_ci",
+            "stage": "incident",
+            "dimension": "requirements",
+            "weight": 3,
+            "required": true,
+            "goal": "Gate releases on evaluation results.",
+            "opener": "How do evaluation results actually stop a bad change from shipping?",
+            "evidence": {
+              "strong": "CI runs the relevant suites on every change to prompts, models, retrieval or tools; gates per slice (critical slices such as safety must not regress at all) plus overall thresholds and cost and latency limits; clear reports in the pull request; documented overrides with approval; canaries after passing.",
+              "adequate": "A single overall threshold.",
+              "weak": "Reports that nobody has to read."
+            },
+            "misconceptions": [
+              {
+                "id": "ci.average",
+                "pattern": "Gates on the overall average only.",
+                "challenge": "The average improves while refunds for one customer type break. Does the gate stop it?"
+              }
+            ],
+            "probes": [
+              "Which slices have zero tolerance?",
+              "Who can override a failing gate?"
+            ],
+            "hints": [
+              "Averages hide regressions.",
+              "Make the failure visible where people work."
+            ],
+            "referenceFix": "CI suites on every relevant change, per-slice and cost and latency gates, reports in pull requests, approved overrides, then canaries."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-eval-platform/deep-cost",
+      "title": "Eval Spend Blows Monthly Budget in One Day",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.cost",
+      "scenario": {
+        "symptoms": "Finance alerts on $40k LLM eval charges after teams rerun full suites with expensive judge models.",
+        "interviewerSetup": "No caching, stratified sampling, or per-team budget caps on eval orchestrator."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-teams",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Product Teams"
+            }
+          },
+          {
+            "id": "node-orch",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Eval Orchestrator"
+            }
+          },
+          {
+            "id": "node-judge",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Judge Models"
+            }
+          },
+          {
+            "id": "node-cache",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "cache",
+              "label": "Result Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-teams",
+            "target": "node-orch",
+            "label": "Full matrix"
+          },
+          {
+            "id": "e2",
+            "source": "node-orch",
+            "target": "node-judge",
+            "label": "Repeat calls"
+          },
+          {
+            "id": "e3",
+            "source": "node-cache",
+            "target": "node-orch",
+            "label": "Unused"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-orch",
+          "node-judge"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unbounded eval matrix exhausts LLM judge budget"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_cost",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep evaluation fast and within budget.",
+            "opener": "Twenty teams running thousands of cases several times, with model judges: what does that cost, and how do you control it?",
+            "evidence": {
+              "strong": "Estimates calls per run (cases times trials times system plus judge calls), budgets per team, smaller quick suites on every commit and full suites before release, caching outputs for unchanged configurations, cheaper judges where calibrated, concurrency limits to respect provider rate limits, and off-peak scheduling.",
+              "adequate": "Limits runs per day.",
+              "weak": "No cost view."
+            },
+            "misconceptions": [
+              {
+                "id": "cost.full",
+                "pattern": "Runs the full suite on every commit.",
+                "challenge": "Each full run costs a few hundred dollars and teams commit dozens of times a day. What's the monthly bill?"
+              }
+            ],
+            "probes": [
+              "What runs on every commit versus before release?",
+              "What can be reused between runs?"
+            ],
+            "hints": [
+              "Tier the suites.",
+              "Unchanged inputs give cacheable outputs."
+            ],
+            "referenceFix": "Per-run cost estimates, team budgets, tiered suites, cached outputs, calibrated cheaper judges, concurrency limits and scheduling."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

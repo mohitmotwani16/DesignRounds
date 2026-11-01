@@ -1,0 +1,397 @@
+{
+  "promptId": "rate-limiter",
+  "packVersion": "pack-4e48839c",
+  "inputsFingerprint": "8cf342d8e00ec8b111d2592c10aadfd334056e2578c0be6a5e4e2db68cacd4a1",
+  "nuggets": [
+    {
+      "id": "rate-limiter/redis-outage-fail-closed",
+      "title": "Centralized Redis Outage Causes Total API Blackout",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.reliability",
+      "scenario": {
+        "symptoms": "API Gateway endpoints return 500 Internal Server Errors across all routes. Upstream services report 0 incoming requests while overall API availability drops to zero.",
+        "interviewerSetup": "The primary Redis cluster hosting rate limit counters experienced a network split and stopped responding to queries. Because the API Gateway was configured to fail closed on counter lookup failures, all incoming client traffic is dropped."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "n-client",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "API Clients"
+            }
+          },
+          {
+            "id": "n-gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway Fleet"
+            }
+          },
+          {
+            "id": "n-redis",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Redis Counter Cluster"
+            }
+          },
+          {
+            "id": "n-backend",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 150
+            },
+            "data": {
+              "kind": "web-server",
+              "label": "Backend Services"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-client-gw",
+            "source": "n-client",
+            "target": "n-gateway",
+            "label": "HTTP Requests"
+          },
+          {
+            "id": "e-gw-redis",
+            "source": "n-gateway",
+            "target": "n-redis",
+            "label": "Check / Increment"
+          },
+          {
+            "id": "e-gw-backend",
+            "source": "n-gateway",
+            "target": "n-backend",
+            "label": "Forward Traffic"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "n-redis"
+        ],
+        "edgeIds": [
+          "e-gw-redis"
+        ],
+        "headline": "Redis cluster outage causes API Gateway to fail closed, dropping 100% of legitimate customer traffic."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "goal": "Implement fail-open behavior coupled with local gateway fallback counters to ensure high API availability during store outages.",
+            "opener": "Our central Redis counter store is unreachable and the gateway is blocking all incoming traffic. How do you restore traffic immediately and structurally solve this failure mode?",
+            "evidence": {
+              "strong": "Proposes toggling the gateway to fail-open with short connect timeouts, while implementing an in-memory local fallback counter (e.g. Guava/Caffeine cache) on each gateway instance to prevent backend DB overload.",
+              "adequate": "Suggests changing gateway configuration to fail-open so traffic passes through, but misses adding local fallback rate limiting to protect backend databases.",
+              "weak": "Suggests restarting Redis or adding more nodes without addressing the fail-closed code logic in the gateway."
+            },
+            "misconceptions": [
+              {
+                "id": "rel.fail_closed_safe",
+                "pattern": "Believing failing closed is safer because it protects the backend at all costs.",
+                "challenge": "If failing closed turns a localized Redis outage into a total API blackout for 100% of users, is that acceptable for business availability SLAs?"
+              }
+            ],
+            "probes": [
+              "How do you protect backend services from being flooded when failing open during an attack?",
+              "What connect and read timeouts should the gateway enforce when querying Redis?"
+            ],
+            "hints": [
+              "Consider what is worse: serving slightly un-ratelimited requests or rejecting all valid customers.",
+              "Can the gateway maintain an approximate counter locally in RAM when Redis does not respond in under 5ms?"
+            ],
+            "referenceFix": "Configure gateway to fail-open on Redis timeout (>5ms threshold). Fall back to in-memory local token buckets per gateway instance during Redis failure to enforce soft limits and shield backend DBs.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "rate-limiter/hotkey-redis-shard-saturation",
+      "title": "Hot API Key Saturates Single Redis Shard",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.scale_hotspots",
+      "scenario": {
+        "symptoms": "Latency spikes to 1,500ms for high-tier API users. CPU usage on a single Redis cluster shard hits 100%, while adjacent shards remain under 5% utilization.",
+        "interviewerSetup": "A large enterprise client started a massive data ingestion job sending 60,000 requests per second. All requests for this client's API key hash to Shard 3 of the Redis cluster, creating an execution bottleneck."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "n-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Load Balancer"
+            }
+          },
+          {
+            "id": "n-gw fleet",
+            "type": "systemNode",
+            "position": {
+              "x": 220,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateways"
+            }
+          },
+          {
+            "id": "n-shard-hot",
+            "type": "systemNode",
+            "position": {
+              "x": 420,
+              "y": 80
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Redis Shard 3 (Hot Key)"
+            }
+          },
+          {
+            "id": "n-shard-idle",
+            "type": "systemNode",
+            "position": {
+              "x": 420,
+              "y": 220
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Redis Shard 1 & 2"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-lb-gw",
+            "source": "n-lb",
+            "target": "n-gw fleet",
+            "label": "Ingress Requests"
+          },
+          {
+            "id": "e-gw-hot",
+            "source": "n-gw fleet",
+            "target": "n-shard-hot",
+            "label": "60k QPS (Key: enterprise_123)"
+          },
+          {
+            "id": "e-gw-idle",
+            "source": "n-gw fleet",
+            "target": "n-shard-idle",
+            "label": "Normal Traffic"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "n-shard-hot"
+        ],
+        "edgeIds": [
+          "e-gw-hot"
+        ],
+        "headline": "Single hot API key concentrates traffic onto one Redis shard, creating single-thread CPU bottleneck."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "goal": "Mitigate hot key saturation using local gateway batching or split-key counter sharding.",
+            "opener": "Adding more nodes to our Redis cluster didn't help because all requests for customer 'enterprise_123' hash to the same shard. How do you solve this hot-key bottleneck?",
+            "evidence": {
+              "strong": "Proposes either local memory batching (aggregating counts in gateway instances and syncing to Redis every 50-100ms) or sub-sharding hot keys (e.g., enterprise_123:shard_N) with periodic aggregation.",
+              "adequate": "Suggests local in-memory caching of decision state on the gateway fleet, but lacks clear mechanism on how counter sync occurs across instances.",
+              "weak": "Recommends expanding the Redis cluster size or adding read replicas, ignoring that Redis writes/eval scripts for a single key hit one primary node."
+            },
+            "misconceptions": [
+              {
+                "id": "scale.shard_hotkey",
+                "pattern": "Assuming consistent hashing or cluster expansion resolves single-key bottlenecks.",
+                "challenge": "If consistent hashing maps key 'enterprise_123' to Shard 3, will adding 10 more shards change where key 'enterprise_123' lands?"
+              }
+            ],
+            "probes": [
+              "If you aggregate local counts in gateway RAM before sending to Redis, how do you handle strict window limits?",
+              "How would key splitting (e.g. enterprise_123_sub1) change the execution pattern on Redis?"
+            ],
+            "hints": [
+              "Can individual API gateway instances batch counter updates locally for 50 milliseconds before writing to Redis?",
+              "What if a hot key's counter is split across N sub-keys distributed randomly across shards?"
+            ],
+            "referenceFix": "Implement local micro-batching on API Gateways: count requests in local memory for 50ms windows and issue atomic bulk INCRBY calls to Redis, reducing Redis ops by 90%+ for hot keys.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "rate-limiter/race-condition-over-quota",
+      "title": "Non-Atomic Counter Read-Write Allows Quota Bypass",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.storage",
+      "scenario": {
+        "symptoms": "Audit logs show a client with a strict tier limit of 1,000 requests/minute successfully executed over 12,000 requests in a single second without receiving HTTP 429.",
+        "interviewerSetup": "The gateway rate limiter code performs a GET for the user key, checks if key < limit in application code, and then issues INCR. Under extreme concurrency, hundreds of gateway threads read the old counter before any thread writes the increment."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "n-clients",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Concurrent API Callers"
+            }
+          },
+          {
+            "id": "n-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway Workers"
+            }
+          },
+          {
+            "id": "n-redis",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 150
+            },
+            "data": {
+              "kind": "t-redis",
+              "label": "Redis Database"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-concurrent",
+            "source": "n-clients",
+            "target": "n-gw",
+            "label": "10k Parallel Requests"
+          },
+          {
+            "id": "e-get-set",
+            "source": "n-gw",
+            "target": "n-redis",
+            "label": "GET key -> check -> INCR key"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "n-gw"
+        ],
+        "edgeIds": [
+          "e-get-set"
+        ],
+        "headline": "Race condition in non-atomic GET-and-INCR check allows concurrent requests to bypass rate limits."
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "goal": "Eliminate race conditions by executing counter read, increment, and expiration check atomically in Redis.",
+            "opener": "Our logs show thousands of requests bypassing limits during concurrent bursts because gateway instances execute separate GET and INCR operations. How do you fix this data race?",
+            "evidence": {
+              "strong": "Replaces separate GET and write calls with atomic Redis Lua scripts or Redis EVALSHA commands executing atomic token bucket / window logic server-side.",
+              "adequate": "Recommends using atomic Redis commands like INCRBY, but struggles to explain how window creation/TTL setting is executed atomically alongside increment.",
+              "weak": "Suggests adding application-level locking (like Java synchronized locks) across distributed gateway instances."
+            },
+            "misconceptions": [
+              {
+                "id": "store.race",
+                "pattern": "Assuming separate Redis calls are atomic across distributed worker processes.",
+                "challenge": "If 100 worker threads issue GET key at millisecond 0, what value do all 100 threads read before issuing INCR?"
+              }
+            ],
+            "probes": [
+              "How does a Lua script guarantee atomicity inside Redis?",
+              "What is the network footprint difference between executing 1 Lua script vs 3 round-trip Redis commands?"
+            ],
+            "hints": [
+              "Can we move the counter conditional check into Redis itself so network round-trips don't interleave?",
+              "How can Redis Lua scripts run complex token bucket calculations atomically?"
+            ],
+            "referenceFix": "Refactor rate limit evaluation into an atomic Redis Lua script that checks capacity, updates timestamp/tokens, and returns a binary allowed/rejected flag in a single atomic execution.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

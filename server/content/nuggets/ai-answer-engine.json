@@ -1,0 +1,322 @@
+{
+  "promptId": "ai-answer-engine",
+  "packVersion": "pack-b919de24",
+  "inputsFingerprint": "ca5410554a10848c3a80c6bc2f78b9d7748df0b2db842393b6af73774b980fdb",
+  "nuggets": [
+    {
+      "id": "ai-answer-engine/slow-external-fetch-cascade",
+      "title": "External Fetch Unbounded Timeouts",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.latency",
+      "scenario": {
+        "symptoms": "P99 answer latency jumped from 1.5s to 14s. LLM latency remains low, but web search and page fetch threads are starving the application pool.",
+        "interviewerSetup": "A subset of target domain hostnames are tarpitting HTTP requests during scraping. Worker threads hang indefinitely waiting for body bytes, backing up the task queue."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "client",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Web Client"
+            }
+          },
+          {
+            "id": "gateway",
+            "type": "systemNode",
+            "position": {
+              "x": 220,
+              "y": 150
+            },
+            "data": {
+              "kind": "api-gateway",
+              "label": "API Gateway"
+            }
+          },
+          {
+            "id": "planner",
+            "type": "systemNode",
+            "position": {
+              "x": 400,
+              "y": 150
+            },
+            "data": {
+              "kind": "ai-agent",
+              "label": "Query Planner"
+            }
+          },
+          {
+            "id": "fetcher",
+            "type": "systemNode",
+            "position": {
+              "x": 600,
+              "y": 150
+            },
+            "data": {
+              "kind": "worker",
+              "label": "Page Scraper Worker"
+            }
+          },
+          {
+            "id": "cache",
+            "type": "systemNode",
+            "position": {
+              "x": 600,
+              "y": 300
+            },
+            "data": {
+              "kind": "distributed-cache",
+              "label": "URL Extract Cache"
+            }
+          },
+          {
+            "id": "external_web",
+            "type": "systemNode",
+            "position": {
+              "x": 800,
+              "y": 150
+            },
+            "data": {
+              "kind": "external-api",
+              "label": "Target Web Host"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "client",
+            "target": "gateway",
+            "label": "POST /answer"
+          },
+          {
+            "id": "e2",
+            "source": "gateway",
+            "target": "planner",
+            "label": "Orchestrate"
+          },
+          {
+            "id": "e3",
+            "source": "planner",
+            "target": "fetcher",
+            "label": "Fetch Top URLs"
+          },
+          {
+            "id": "e4",
+            "source": "fetcher",
+            "target": "cache",
+            "label": "Lookup Cached HTML"
+          },
+          {
+            "id": "e5",
+            "source": "fetcher",
+            "target": "external_web",
+            "label": "HTTP GET"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "fetcher"
+        ],
+        "edgeIds": [
+          "e5"
+        ],
+        "headline": "Web scraper workers hanging on slow external hosts due to missing HTTP read timeouts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "goal": "Isolate slow external web requests to prevent user latency spikes and worker exhaustion.",
+            "opener": "Our P99 latency spiked to 14 seconds because external pages hang on fetch. How do you mitigate this right now and architect to prevent it permanently?",
+            "evidence": {
+              "strong": "Applies hard per-request deadlines (e.g., 800ms) with context cancellation, executes fetches concurrently in parallel fan-out, drops URLs that exceed the latency budget, and caches pre-rendered page extracts by canonical URL.",
+              "adequate": "Enforces a global timeout on the scraper service and logs slow domains.",
+              "weak": "Increases worker pool capacity or recommends blocking slow websites manually."
+            },
+            "misconceptions": [
+              {
+                "id": "lat.wait_all",
+                "pattern": "Waits for all target URLs to respond before passing text to the model prompt.",
+                "challenge": "If 1 of 5 selected search results takes 10 seconds to load, what happens to the overall request latency?"
+              }
+            ],
+            "probes": [
+              "What is your target overall latency budget breakdown across planning, scraping, reranking, and LLM generation?",
+              "How do you handle page cache fallback when an external site times out?"
+            ],
+            "hints": [
+              "Consider imposing a strict deadline per fetch sub-task.",
+              "Can the system proceed with answer generation using only the pages that responded within 500ms?"
+            ],
+            "referenceFix": "Implement strict per-hostname circuit breakers and a hard 800ms read timeout per fetch. Run all page fetches concurrently in parallel coroutines, continuing answer generation as soon as at least K top passages return or when the 1s gather deadline expires.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    },
+    {
+      "id": "ai-answer-engine/hallucinated-citation-bypass",
+      "title": "Bypassed Citation Faithfulness Verification",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.grounding",
+      "scenario": {
+        "symptoms": "User reports show answers containing fabricated statistics attributed to real source links, causing factual drift in answers.",
+        "interviewerSetup": "To cut cost and latency, the guardrail step verifying claim-to-source mapping was bypassed for standard tier queries, relying entirely on system prompt directives."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "user",
+            "type": "systemNode",
+            "position": {
+              "x": 50,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Client Application"
+            }
+          },
+          {
+            "id": "retriever",
+            "type": "systemNode",
+            "position": {
+              "x": 250,
+              "y": 150
+            },
+            "data": {
+              "kind": "retriever",
+              "label": "Passage Retriever"
+            }
+          },
+          {
+            "id": "llm",
+            "type": "systemNode",
+            "position": {
+              "x": 450,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Generator LLM"
+            }
+          },
+          {
+            "id": "verifier",
+            "type": "systemNode",
+            "position": {
+              "x": 650,
+              "y": 150
+            },
+            "data": {
+              "kind": "evaluation",
+              "label": "Claim Verifier Guardrail"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "user",
+            "target": "retriever",
+            "label": "Query"
+          },
+          {
+            "id": "e2",
+            "source": "retriever",
+            "target": "llm",
+            "label": "Numbered Context"
+          },
+          {
+            "id": "e3",
+            "source": "llm",
+            "target": "verifier",
+            "label": "Draft + Citations"
+          },
+          {
+            "id": "e4",
+            "source": "verifier",
+            "target": "user",
+            "label": "Verified Answer"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "verifier"
+        ],
+        "edgeIds": [
+          "e3",
+          "e4"
+        ],
+        "headline": "Bypassed verification model resulting in hallucinatory claim-citation attribution"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "goal": "Ensure answer statements are strictly grounded in cited source passages without introducing severe latency.",
+            "opener": "Users are receiving hallucinated facts attached to real citations because the verifier was turned off. How do you enforce grounding reliably?",
+            "evidence": {
+              "strong": "Re-enables asynchronous or fast-path natural language inference (NLI) sentence-level verification, strips claims that fail passage alignment, forces structured output format with explicit bracketed source IDs, and logs hallucination rates.",
+              "adequate": "Re-enables the full judge LLM call for all queries regardless of latency or cost.",
+              "weak": "Tweaks the generation system prompt asking the model to be more careful."
+            },
+            "misconceptions": [
+              {
+                "id": "gr.prompt_alone",
+                "pattern": "Assumes system prompt instructions alone prevent model hallucinations.",
+                "challenge": "If the prompt explicitly tells the model never to fabricate citations, why do hallucinations still occur under complex contexts?"
+              }
+            ],
+            "probes": [
+              "How would you verify sentence-level support efficiently without running a heavy full-LLM evaluation on every response?",
+              "What action should the pipeline take when a claim cannot be verified against its cited source?"
+            ],
+            "hints": [
+              "Think about using small, specialized NLI cross-encoders specifically trained for claim verification.",
+              "Consider stripping or flagging unsupported sentences before streaming output to the client."
+            ],
+            "referenceFix": "Re-engage a lightweight NLI model or small fine-tuned verifier to validate each (claim, passage) pair in parallel. Automatically excise or rewrite sentences whose confidence score falls below strict thresholds before rendering to the user.",
+            "required": true
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "generated"
+    }
+  ]
+}

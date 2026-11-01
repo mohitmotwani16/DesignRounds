@@ -1,0 +1,137 @@
+{
+  "promptId": "playback-sessionization",
+  "nuggets": [
+    {
+      "id": "playback-sessionization/session-gap-split",
+      "title": "One movie counted as dozens of sessions",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.sessions",
+      "scenario": {
+        "symptoms": "Analytics shows average session length of 4 minutes for a 2-hour film. Heartbeat events every 30s create a new session whenever mobile OS pauses the app briefly.",
+        "interviewerSetup": "Sessionization uses a rigid 5-minute inactivity gap with no merge logic for background audio or casting handoffs."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-client", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Player app" } },
+          { "id": "n-collect", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "ingestion", "label": "Event collector" } },
+          { "id": "n-sess", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "stream-processor", "label": "Session job" } },
+          { "id": "n-dash", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "dashboard", "label": "Engagement metrics" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-client", "target": "n-collect", "label": "Heartbeats" },
+          { "id": "e2", "source": "n-collect", "target": "n-sess", "label": "Gap splits" },
+          { "id": "e3", "source": "n-sess", "target": "n-dash", "label": "Short sessions" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-sess"], "edgeIds": ["e2"], "headline": "Aggressive inactivity timeout fragments continuous viewing into many sessions" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Define playback sessions that match real viewing behavior.",
+          "opener": "A single movie became 30 sessions—how should session boundaries be defined?",
+          "evidence": {
+            "strong": "Tune gap by content type, merge on same content id, handle cast/background states, and use explicit session end events.",
+            "adequate": "Increase timeout globally without content-aware rules.",
+            "weak": "Every app open is a new session regardless of playback."
+          },
+          "misconceptions": [{ "id": "sess.fixed_gap", "pattern": "One global inactivity gap for all surfaces.", "challenge": "Background audio may pause heartbeats—is that a new session?" }],
+          "probes": ["What events mark session start vs continuation?", "How do you sessionize offline downloads playing later?"],
+          "hints": ["Same content + user + device may continue one session.", "Explicit pause/stop events help."],
+          "referenceFix": "Use content-aware timeouts, continue sessions across brief gaps on same asset, emit session_end on stop, and validate against known runtime distributions."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "playback-sessionization/watchtime-double-count",
+      "title": "Watch time inflated on seek/scrub",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.watchtime",
+      "scenario": {
+        "symptoms": "Reported watch minutes exceed available content duration by 3x for binge watchers. Scrubbing backward generates overlapping progress events summed naively.",
+        "interviewerSetup": "Watch time aggregator sums delta position without capping at content length or deduping overlapping intervals."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-player", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "client", "label": "Player" } },
+          { "id": "n-events", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "ingestion", "label": "Progress events" } },
+          { "id": "n-agg", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "stream-processor", "label": "Watch time job" } },
+          { "id": "n-wh", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "warehouse", "label": "Metrics warehouse" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-player", "target": "n-events", "label": "Seek/scrub" },
+          { "id": "e2", "source": "n-events", "target": "n-agg", "label": "Sum deltas" },
+          { "id": "e3", "source": "n-agg", "target": "n-wh", "label": "3x duration" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-agg"], "edgeIds": ["e2"], "headline": "Naive delta summing double-counts time when users seek backward" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Compute accurate unique watch time per user and asset.",
+          "opener": "Watch minutes exceed movie length—what is wrong with the aggregation logic?",
+          "evidence": {
+            "strong": "Interval merge on timeline, cap at asset duration, heartbeat max jump, and QoE-validated playhead monotonic segments.",
+            "adequate": "Ignore negative deltas only.",
+            "weak": "Sum all reported progress deltas."
+          },
+          "misconceptions": [],
+          "probes": ["How do you count rewatched segments?", "What if heartbeats arrive out of order?"],
+          "hints": ["Think interval coverage on a timeline.", "Rewatch may count separately if product requires."],
+          "referenceFix": "Build merged intervals per session capped to content runtime, discard out-of-order noise, and document whether rewatches add to unique watch time."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "playback-sessionization/late-event-reorder",
+      "title": "Late mobile events corrupt session order",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.late",
+      "scenario": {
+        "symptoms": "Session funnels show impossible sequences: ‘complete’ before ‘start’. Devices offline for hours upload buffered events that land out of order in the stream processor.",
+        "interviewerSetup": "Flink job uses processing time windows without event-time watermarks or client timestamps."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-mobile", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Offline player" } },
+          { "id": "n-bus", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "t-kafka", "label": "Playback events" } },
+          { "id": "n-job", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "stream-processor", "label": "Sessionizer" } },
+          { "id": "n-store", "type": "systemNode", "position": { "x": 760, "y": 120 }, "data": { "kind": "warehouse", "label": "Session table" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-mobile", "target": "n-bus", "label": "Buffered burst" },
+          { "id": "e2", "source": "n-bus", "target": "n-job", "label": "Processing time" },
+          { "id": "e3", "source": "n-job", "target": "n-store", "label": "Out-of-order rows" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-job"], "edgeIds": ["e2"], "headline": "Processing-time sessionization misorders late-arriving playback events" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Sessionize using event time with tolerance for offline buffering.",
+          "opener": "Sessions show end before start after offline sync—how should the pipeline handle late events?",
+          "evidence": {
+            "strong": "Event-time watermarks, client event timestamps, allowed lateness, and idempotent upserts keyed by session id.",
+            "adequate": "Sort batch replay only without streaming watermarks.",
+            "weak": "Drop late events silently."
+          },
+          "misconceptions": [],
+          "probes": ["How long should allowed lateness be for mobile offline?", "What id keys tie events to one session?"],
+          "hints": ["Processing time != when user watched.", "Watermarks bound lateness."],
+          "referenceFix": "Use client event timestamps with watermarks and allowed lateness, reorder within session key, and upsert session state idempotently when late events arrive."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

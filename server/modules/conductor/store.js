@@ -120,7 +120,7 @@ async function writeItems(conn, sessionId, items, before) {
 
 // The opening, inside the caller's transaction: pin everything, copy the agenda, say
 // the pack's opening line and open the first requirements item silently.
-export async function createRound(conn, { session, pins, agenda, openingText, firstItemId }) {
+export async function createRound(conn, { session, pins, agenda, openingText, firstItemId, initialStage = "requirements" }) {
   for (const [position, item] of agenda.entries()) {
     await conn.query(
       `insert into interview_agenda_items (session_id, item_id, position, stage, dimension, weight, required, status, opened_seq)
@@ -131,9 +131,9 @@ export async function createRound(conn, { session, pins, agenda, openingText, fi
   await conn.query(
     `update interview_state
         set engine = 'v3', mode = $2, ucs_version = $3, pack_version = $4, ai_route = $5, candidate_snapshot = $6::jsonb,
-            focus_item_id = $7, stage = 'requirements', stage_started_ms = 0, active_ms = 0, last_activity_at = now(), updated_at = now()
+            focus_item_id = $7, stage = $8, stage_started_ms = 0, active_ms = 0, last_activity_at = now(), updated_at = now()
       where session_id = $1`,
-    [session.id, pins.mode, pins.ucsVersion, pins.packVersion, pins.route, JSON.stringify(pins.candidate), firstItemId]
+    [session.id, pins.mode, pins.ucsVersion, pins.packVersion, pins.route, JSON.stringify(pins.candidate), firstItemId, initialStage]
   );
   await conn.query(
     "insert into interview_turns (session_id, user_id, seq, role, kind, trigger, content, move, agenda_item_id) values ($1, $2, 1, 'interviewer', 'opening', 'opening', $3, 'open', $4)",

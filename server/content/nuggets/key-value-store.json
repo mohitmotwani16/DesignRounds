@@ -1,0 +1,683 @@
+{
+  "promptId": "key-value-store",
+  "packVersion": "pack-f1037e49",
+  "inputsFingerprint": "4ccfa9b4f3a7bb53def0b2c20a071b83cb4dfdd5ea50164c947c3db063d4dc9d",
+  "nuggets": [
+    {
+      "id": "key-value-store/deep-partitioning",
+      "title": "Cluster Rebalance Drops 15% of Keys During Scale-Out",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.partitioning",
+      "scenario": {
+        "symptoms": "Adding nodes during peak causes GET misses and 404 spikes; clients hit wrong owners after ring change.",
+        "interviewerSetup": "Consistent hash ring rebalances without virtual nodes; only minimal key migration protocol implemented."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-client",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-router",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Client Library"
+            }
+          },
+          {
+            "id": "node-a",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 80
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Node A"
+            }
+          },
+          {
+            "id": "node-b",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Node B"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-client",
+            "target": "node-router",
+            "label": "GET key"
+          },
+          {
+            "id": "e2",
+            "source": "node-router",
+            "target": "node-a",
+            "label": "Stale route"
+          },
+          {
+            "id": "e3",
+            "source": "node-router",
+            "target": "node-b",
+            "label": "New owner"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-router",
+          "node-a"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Improper consistent hashing migration routes reads to wrong nodes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_partitioning",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Explain consistent hashing with virtual nodes to distribute data and enable scaling.",
+            "opener": "How do you decide which node stores the data for a given key?",
+            "evidence": {
+              "strong": "Explains consistent hashing and virtual nodes, showing how adding a node only affects neighbours.",
+              "adequate": "Mentions consistent hashing but struggles to explain how data rebalances when a node is added.",
+              "weak": "Suggests modulo hashing, requiring a full cluster reshuffle on scaling."
+            },
+            "misconceptions": [
+              {
+                "id": "modulo",
+                "pattern": "Using key hash modulo N to find the node.",
+                "challenge": "What happens to existing data when we add a new node to the cluster?"
+              }
+            ],
+            "probes": [
+              "How do we prevent hot spots if one node happens to get a much larger range of the hash space?"
+            ],
+            "hints": [
+              "What if each physical machine appeared on the ring in multiple different places?"
+            ],
+            "referenceFix": "The candidate used consistent hashing with virtual nodes for partitioning."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "key-value-store/deep-replication",
+      "title": "Single Replica Loss Causes Durability Incident",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.replication",
+      "scenario": {
+        "symptoms": "Disk failure on one node permanently loses writes that were acknowledged with W=1.",
+        "interviewerSetup": "Replication factor is 3 but coordinator acknowledges after first local write without quorum."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-coord",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Coordinator"
+            }
+          },
+          {
+            "id": "node-r1",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica 1"
+            }
+          },
+          {
+            "id": "node-r2",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 220
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica 2"
+            }
+          },
+          {
+            "id": "node-r3",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica 3"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-coord",
+            "target": "node-r1",
+            "label": "W=1 ACK"
+          },
+          {
+            "id": "e2",
+            "source": "node-coord",
+            "target": "node-r2",
+            "label": "Async"
+          },
+          {
+            "id": "e3",
+            "source": "node-coord",
+            "target": "node-r3",
+            "label": "Async"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-coord",
+          "node-r1"
+        ],
+        "edgeIds": [
+          "e1"
+        ],
+        "headline": "Sub-quorum writes acknowledged before durable replication"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_replication",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Describe replication factor, preference lists, and reading/writing to a quorum.",
+            "opener": "How does the system ensure data survives if the node holding it goes down?",
+            "evidence": {
+              "strong": "Defines replication factor N, explains tunable R and W quorums, and calculates R+W>N for strong consistency.",
+              "adequate": "Suggests replicating data to multiple nodes but does not articulate how reads and writes coordinate across them.",
+              "weak": "Has the coordinator ack the write before replicating, risking data loss on failure."
+            },
+            "misconceptions": [
+              {
+                "id": "sync-all",
+                "pattern": "Writing synchronously to all replicas before acknowledging.",
+                "challenge": "If one replica has a failed disk and cannot write, does the entire put request fail?"
+              }
+            ],
+            "probes": [
+              "How many nodes need to acknowledge a write before we return success to the client?",
+              "What if we want to prioritize latency over consistency?"
+            ],
+            "hints": [
+              "Have you heard of the terms read quorum and write quorum?"
+            ],
+            "referenceFix": "The candidate defined a replication scheme using R and W quorums."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "key-value-store/deep-conflict",
+      "title": "Concurrent Puts Last-Writer-Wins Loses Updates",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.conflict",
+      "scenario": {
+        "symptoms": "Cart counters intermittently revert; two clients increment same key and one update vanishes.",
+        "interviewerSetup": "Conflict resolution uses blind last-write-wins without vector clocks or merge functions."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-c1",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "client",
+              "label": "Client A"
+            }
+          },
+          {
+            "id": "node-c2",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "client",
+              "label": "Client B"
+            }
+          },
+          {
+            "id": "node-coord",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Coordinator"
+            }
+          },
+          {
+            "id": "node-r1",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica Set"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-c1",
+            "target": "node-coord",
+            "label": "PUT v=3"
+          },
+          {
+            "id": "e2",
+            "source": "node-c2",
+            "target": "node-coord",
+            "label": "PUT v=4"
+          },
+          {
+            "id": "e3",
+            "source": "node-coord",
+            "target": "node-r1",
+            "label": "LWW overwrite"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-coord",
+          "node-r1"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Last-write-wins conflict policy drops concurrent counter updates"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_conflict",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle concurrent writes using vector clocks or timestamps and explain how conflicts are resolved.",
+            "opener": "What happens if two clients write to the same key at exactly the same time?",
+            "evidence": {
+              "strong": "Proposes vector clocks to detect concurrent updates and passes both versions to the client to resolve.",
+              "adequate": "Chooses last-writer-wins with timestamps, explicitly acknowledging that some data will be lost.",
+              "weak": "Assumes a centralized lock or database will prevent conflicts, missing the distributed nature of the system."
+            },
+            "misconceptions": [
+              {
+                "id": "wall-clock",
+                "pattern": "Assuming physical timestamps across nodes are perfectly synchronized.",
+                "challenge": "What if the clock on node A is running 50 milliseconds faster than node B?"
+              }
+            ],
+            "probes": [
+              "If we accept both writes to remain available, how do we merge them later?"
+            ],
+            "hints": [
+              "Instead of relying on timestamps, can we track the history of updates using version numbers per node?"
+            ],
+            "referenceFix": "The candidate addressed conflict resolution using vector clocks."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "key-value-store/deep-repair",
+      "title": "Anti-Entropy Never Runs; Replica Divergence Grows",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.repair",
+      "scenario": {
+        "symptoms": "Weekly consistency audit finds 0.3% key mismatch across replicas; manual rebuild required.",
+        "interviewerSetup": "Read repair is off and background Merkle-tree anti-entropy jobs are disabled to save CPU."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-r1",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica 1"
+            }
+          },
+          {
+            "id": "node-r2",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica 2"
+            }
+          },
+          {
+            "id": "node-r3",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Replica 3"
+            }
+          },
+          {
+            "id": "node-repair",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Repair Scheduler"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-r1",
+            "target": "node-r2",
+            "label": "Divergent"
+          },
+          {
+            "id": "e2",
+            "source": "node-repair",
+            "target": "node-r1",
+            "label": "Disabled"
+          },
+          {
+            "id": "e3",
+            "source": "node-repair",
+            "target": "node-r3",
+            "label": "Disabled"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-repair",
+          "node-r1"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Disabled repair paths allow silent long-term replica divergence"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_repair",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Explain how nodes catch up after a failure using hinted handoff and anti-entropy.",
+            "opener": "If a node is down for a few hours and then comes back up, how does it get the writes it missed?",
+            "evidence": {
+              "strong": "Combines hinted handoff for quick transient failure recovery with Merkle trees for background anti-entropy sync.",
+              "adequate": "Suggests a background process to compare data but does not optimize how the comparison is done.",
+              "weak": "Assumes the node just stays empty or relies entirely on read-repair."
+            },
+            "misconceptions": [
+              {
+                "id": "full-scan",
+                "pattern": "Scanning and comparing all keys between two nodes to find differences.",
+                "challenge": "If the nodes hold a terabyte of data each, how much network bandwidth will comparing all keys take?"
+              }
+            ],
+            "probes": [
+              "How can we quickly check if two nodes have exactly the same data without sending the data itself?"
+            ],
+            "hints": [
+              "Is there a data structure that hashes ranges of data into a tree to easily spot differences?"
+            ],
+            "referenceFix": "The candidate proposed Merkle trees and hinted handoff for replica repair."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "key-value-store/deep-membership",
+      "title": "Gossip Failure Leaves Phantom Nodes in Ring",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.membership",
+      "scenario": {
+        "symptoms": "New nodes never receive traffic; routing table still lists decommissioned hosts as alive.",
+        "interviewerSetup": "Membership gossip stops after network partition; no centralized seed or failure detector cleanup."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-seed",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "service-discovery",
+              "label": "Seed Nodes"
+            }
+          },
+          {
+            "id": "node-gossip",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Gossip Protocol"
+            }
+          },
+          {
+            "id": "node-new",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 80
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "New Node"
+            }
+          },
+          {
+            "id": "node-dead",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "Dead Node"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-seed",
+            "target": "node-gossip",
+            "label": "Bootstrap"
+          },
+          {
+            "id": "e2",
+            "source": "node-gossip",
+            "target": "node-dead",
+            "label": "Still alive"
+          },
+          {
+            "id": "e3",
+            "source": "node-gossip",
+            "target": "node-new",
+            "label": "Unknown"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-gossip",
+          "node-dead"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stale membership gossip routes requests to dead nodes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_membership",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Explain how nodes discover each other and detect failures using a gossip protocol.",
+            "opener": "How does the cluster know which nodes are currently healthy and participating?",
+            "evidence": {
+              "strong": "Explains a decentralized gossip protocol where nodes exchange state and detect failures via missing heartbeats.",
+              "adequate": "Mentions heartbeats but relies on a central coordinator to manage cluster state.",
+              "weak": "Assumes static configuration where all nodes always know each other."
+            },
+            "misconceptions": [
+              {
+                "id": "central-registry",
+                "pattern": "Using a single registry database for all node health checks.",
+                "challenge": "If that single registry goes down, how do nodes know who is alive?"
+              }
+            ],
+            "probes": [
+              "How can nodes share this information without a central server?"
+            ],
+            "hints": [
+              "How does a rumor spread in a crowd without a central announcement?"
+            ],
+            "referenceFix": "The candidate explained cluster membership using a gossip protocol."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

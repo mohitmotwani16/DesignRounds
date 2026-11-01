@@ -1,0 +1,139 @@
+{
+  "promptId": "model-serving",
+  "nuggets": [
+    {
+      "id": "model-serving/batch-timeout-tail",
+      "title": "Dynamic batching blows p99 latency",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.batching",
+      "scenario": {
+        "symptoms": "Image classification p99 latency jumped from 120 ms to 2.1 s during a traffic spike. GPU utilization is healthy at 85%, but clients time out at 500 ms.",
+        "interviewerSetup": "The serving layer waits up to 50 ms to fill micro-batches. Under load, batches fill quickly but small straggler requests wait for the batch window to close, stacking queue delay."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-gw", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "api-gateway", "label": "Inference gateway" } },
+          { "id": "n-batch", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "service", "label": "Batch aggregator" } },
+          { "id": "n-gpu", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "service", "label": "GPU workers" } },
+          { "id": "n-client", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "client", "label": "Mobile clients" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-client", "target": "n-gw", "label": "Predict RPC" },
+          { "id": "e2", "source": "n-gw", "target": "n-batch", "label": "Queue" },
+          { "id": "e3", "source": "n-batch", "target": "n-gpu", "label": "50 ms wait" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-batch"], "edgeIds": ["e3"], "headline": "Fixed batch wait window adds queue delay under high concurrency" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Improve tail latency while keeping GPU batch efficiency.",
+          "opener": "GPU looks busy but p99 latency exploded—what is wrong with batching here and how would you fix it?",
+          "evidence": {
+            "strong": "Adaptive batch windows, max batch size caps, priority/latency-sensitive bypass path, and separate queues for small vs large payloads.",
+            "adequate": "Mentions tuning batch size but not tail latency or adaptive deadlines.",
+            "weak": "Turns off batching entirely or only adds more GPU nodes."
+          },
+          "misconceptions": [{ "id": "batch.always_good", "pattern": "Bigger batches always improve latency.", "challenge": "Who pays the wait time while the batch window is open?" }],
+          "probes": ["How would you serve a single urgent request during a full batch queue?", "What metrics tell you batching helps vs hurts?"],
+          "hints": ["Tail latency often comes from waiting, not compute.", "Consider a max wait budget per request."],
+          "referenceFix": "Use adaptive batching with a tight max wait (e.g. 5–10 ms under load), cap batch size, allow single-request fast path for SLO-critical traffic, and monitor queue time vs GPU time separately."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "model-serving/canary-traffic-skew",
+      "title": "Canary serves wrong model version",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.rollout",
+      "scenario": {
+        "symptoms": "A/B test shows new model v3 underperforming v2, but shadow metrics on v3 look excellent. Support reports specific enterprise tenants always get v2 scores labeled as v3 in logs.",
+        "interviewerSetup": "Rollout uses header-based routing to canary pods, but the model artifact path is baked into the container image. A stale ConfigMap left v2 weights on canary replicas while traffic labels say v3."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-router", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "load-balancer", "label": "Traffic router" } },
+          { "id": "n-stable", "type": "systemNode", "position": { "x": 280, "y": 60 }, "data": { "kind": "service", "label": "Stable pods (v2)" } },
+          { "id": "n-canary", "type": "systemNode", "position": { "x": 280, "y": 180 }, "data": { "kind": "service", "label": "Canary pods (mislabeled v3)" } },
+          { "id": "n-registry", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "registry", "label": "Model registry" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-router", "target": "n-stable", "label": "90% traffic" },
+          { "id": "e2", "source": "n-router", "target": "n-canary", "label": "10% canary" },
+          { "id": "e3", "source": "n-canary", "target": "n-registry", "label": "Stale artifact ref" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-canary", "n-registry"], "edgeIds": ["e3"], "headline": "Canary pods run stale weights while logs report the new version id" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Ensure routed traffic, loaded artifacts, and observability tags refer to the same model version.",
+          "opener": "The experiment says v3 is bad, but shadow metrics disagree—what rollout bug could explain that?",
+          "evidence": {
+            "strong": "Immutable versioned artifacts from a registry, startup validation hashing weights, automatic rollback on mismatch, and logging actual artifact digest not just route label.",
+            "adequate": "Mentions blue/green deploy without verifying artifact binding per pod.",
+            "weak": "Relies on traffic percentage alone without artifact provenance."
+          },
+          "misconceptions": [{ "id": "rollout.header_only", "pattern": "Believing the canary header alone guarantees the new model is loaded.", "challenge": "What if the pod still mounts yesterday’s object storage path?" }],
+          "probes": ["How do you detect a pod serving the wrong artifact before shifting more traffic?", "What do you log on each prediction to debug version skew?"],
+          "hints": ["Treat model binaries like code releases with digests.", "Health checks can compare loaded hash to expected version."],
+          "referenceFix": "Pull versioned artifacts from a model registry at startup, verify checksum against the intended release, expose version digest in metrics/logs, and halt rollout if canary digest != target."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "model-serving/autoscale-cold-gpu",
+      "title": "Autoscale lag during viral spike",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.scaling",
+      "scenario": {
+        "symptoms": "A trending product launch drove QPS from 200 to 3,000 in three minutes. Error rate hit 40% with HTTP 503 while cluster autoscaler added GPU nodes over eight minutes.",
+        "interviewerSetup": "HPA targets average GPU utilization. New nodes require image pull, CUDA init, and model download from object storage before accepting traffic."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-clients", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "client", "label": "Clients" } },
+          { "id": "n-lb", "type": "systemNode", "position": { "x": 220, "y": 120 }, "data": { "kind": "load-balancer", "label": "Load balancer" } },
+          { "id": "n-pool", "type": "systemNode", "position": { "x": 420, "y": 120 }, "data": { "kind": "service", "label": "Warm GPU pool" } },
+          { "id": "n-hpa", "type": "systemNode", "position": { "x": 620, "y": 40 }, "data": { "kind": "service", "label": "Cluster autoscaler" } },
+          { "id": "n-s3", "type": "systemNode", "position": { "x": 620, "y": 200 }, "data": { "kind": "object-store", "label": "Model artifacts" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-clients", "target": "n-lb", "label": "15x spike" },
+          { "id": "e2", "source": "n-lb", "target": "n-pool", "label": "Saturated" },
+          { "id": "e3", "source": "n-hpa", "target": "n-pool", "label": "Slow scale-out" },
+          { "id": "e4", "source": "n-pool", "target": "n-s3", "label": "Cold start download" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-pool", "n-hpa"], "edgeIds": ["e2", "e3"], "headline": "GPU cold starts cannot absorb a sub-minute traffic step function" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Handle sharp inference spikes before new GPU capacity becomes ready.",
+          "opener": "Traffic 15x’d in minutes and autoscaler couldn’t keep up—what would you change in serving and scaling?",
+          "evidence": {
+            "strong": "Maintains warm buffer capacity, queue with backpressure, pre-warmed images, predictive scaling on queue depth, and graceful degradation (smaller model tier).",
+            "adequate": "Raises HPA max replicas without addressing cold start or queueing.",
+            "weak": "Assumes autoscaling reacts instantly to spikes."
+          },
+          "misconceptions": [{ "id": "scale.instant", "pattern": "Believing HPA adds usable GPU capacity within seconds.", "challenge": "Model download plus CUDA init often takes minutes—what serves traffic meanwhile?" }],
+          "probes": ["Which metric should HPA use: GPU util or request queue depth?", "How do you protect the service while new nodes boot?"],
+          "hints": ["Keep a minimum warm pool ahead of known launches.", "Queue + 429/backpressure beats unbounded 503s."],
+          "referenceFix": "Scale on queue depth/RPS with headroom buffer, use pre-baked images and local artifact cache, shed load with retry-after, and maintain standby warm replicas for flash events."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

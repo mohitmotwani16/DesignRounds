@@ -1,0 +1,267 @@
+{
+  "promptId": "support-ai-agent",
+  "packVersion": "pack-d090fd8d",
+  "inputsFingerprint": "b699f0b17e3807724cbc902e2826cd55690c9f9e091b93fb4f6a0e480a5b79a7",
+  "nuggets": [
+    {
+      "id": "support-ai-agent/refund_without_authz",
+      "title": "Agent Issues Refund After Customer Social-Engineering Prompt",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.authz",
+      "scenario": {
+        "symptoms": "Finance reports $120k in unauthorized refunds in 48 hours traced to the support chatbot. Logs show the model called RefundOrder with full amount after user claimed to be the CEO.",
+        "interviewerSetup": "Tool endpoints trust any session authenticated as a logged-in user without step-up auth or policy checks on monetary actions."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-user", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Customer Chat" } },
+          { "id": "node-agent", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "llm", "label": "Support Agent" } },
+          { "id": "node-tools", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "api-gateway", "label": "Refund Tool API" } },
+          { "id": "node-policy", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "policy", "label": "AuthZ (missing)" } }
+        ],
+        "edges": [
+          { "id": "e-user-agent", "source": "node-user", "target": "node-agent", "label": "Jailbreak prompt" },
+          { "id": "e-agent-tools", "source": "node-agent", "target": "node-tools", "label": "RefundOrder()" },
+          { "id": "e-agent-policy", "source": "node-agent", "target": "node-policy", "label": "Not consulted" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-tools", "node-agent"],
+        "edgeIds": ["e-agent-tools"],
+        "headline": "Support agent tools execute financial actions without authorization policy or human approval"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_tool_authz",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Enforce least-privilege tool access with policy engine, step-up auth, and human approval for high-impact actions.",
+          "opener": "Our bot refunded orders because a customer convinced it they were the CEO. How do you authorize what the agent can do with tools?",
+          "evidence": {
+            "strong": "Policy layer per tool with amount limits, identity verification for account changes, human-in-loop above threshold, separate read vs write scopes, audit every tool call.",
+            "adequate": "Same permissions as human support login without extra checks.",
+            "weak": "Model decides freely when to call refund API."
+          },
+          "misconceptions": [{ "id": "authz.login", "pattern": "Equates user login with permission for all support actions.", "challenge": "Should a logged-in user be able to refund any order via chat without limits?" }],
+          "probes": ["Which actions require human approval?", "How are tool arguments validated server-side?"],
+          "hints": ["Policy outside the model decides allow/deny.", "High-impact tools need step-up."],
+          "referenceFix": "OPA/policy on tool gateway, approval workflow for refunds over limit, server-side validation not model-only."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "support-ai-agent/eval_regression_shipped",
+      "title": "Prompt Change Passes Vibes Check but Fails Safety Eval",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.eval",
+      "scenario": {
+        "symptoms": "After a Friday prompt tweak, CSAT rises slightly but regulated-topic hallucinations jump 3x. Compliance flags incorrect legal advice in 40 conversations.",
+        "interviewerSetup": "Team shipped prompt v47 based on manual spot checks; offline eval suite was skipped because latency looked fine in staging."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-prompt", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "config", "label": "Prompt v47" } },
+          { "id": "node-agent", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "llm", "label": "Support Agent" } },
+          { "id": "node-eval", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "evaluation", "label": "Offline Eval Suite (skipped)" } },
+          { "id": "node-prod", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "client", "label": "Production Chats" } }
+        ],
+        "edges": [
+          { "id": "e-prompt-agent", "source": "node-prompt", "target": "node-agent", "label": "Deploy" },
+          { "id": "e-agent-prod", "source": "node-agent", "target": "node-prod", "label": "Live traffic" },
+          { "id": "e-eval-skip", "source": "node-eval", "target": "node-prompt", "label": "Not gating release" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-eval", "node-prompt"],
+        "edgeIds": ["e-eval-skip"],
+        "headline": "Missing offline eval gate allows prompt regressions on regulated topics into production"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_agent_eval",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Gate prompt and model changes on offline task suites, safety sets, and shadow traffic before full rollout.",
+          "opener": "CSAT improved but legal hallucinations spiked after a prompt deploy. How do you evaluate agent changes before production?",
+          "evidence": {
+            "strong": "Golden conversation sets, tool-call accuracy metrics, safety classifiers on holdout, shadow mode A/B, regression thresholds block release.",
+            "adequate": "Manual review of 20 chats.",
+            "weak": "Ship when latency looks fine."
+          },
+          "misconceptions": [{ "id": "eval.csat", "pattern": "Uses CSAT alone as quality signal.", "challenge": "Can CSAT rise while incorrect legal advice increases?" }],
+          "probes": ["Which metrics catch tool misuse?", "What is shadow traffic for agents?"],
+          "hints": ["Regulated topics need dedicated test sets.", "Automate eval in CI."],
+          "referenceFix": "Offline eval gating in deploy pipeline, canary on 5% with safety monitors."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "support-ai-agent/handoff_context_loss",
+      "title": "Human Agent Receives Empty Context After Escalation",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.handoff",
+      "scenario": {
+        "symptoms": "Customers repeat their issue three times after bot escalation. Average handle time for escalations rises 40%. CRM ticket shows only 'Transferred from bot'.",
+        "interviewerSetup": "Handoff passes conversationId but not structured summary, tool results, or verified customer facts gathered by the agent."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-bot", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "llm", "label": "Support Bot" } },
+          { "id": "node-handoff", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "service", "label": "Handoff API" } },
+          { "id": "node-crm", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "crm", "label": "Agent Desktop" } },
+          { "id": "node-history", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "database", "label": "Full Chat Log (not linked)" } }
+        ],
+        "edges": [
+          { "id": "e-bot-hand", "source": "node-bot", "target": "node-handoff", "label": "Escalate" },
+          { "id": "e-hand-crm", "source": "node-handoff", "target": "node-crm", "label": "Ticket stub only" },
+          { "id": "e-history-bot", "source": "node-history", "target": "node-bot", "label": "Stored but not passed" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-handoff", "node-crm"],
+        "edgeIds": ["e-hand-crm"],
+        "headline": "Escalation handoff omits structured context, forcing customers to restate issues to humans"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_handoff",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Pass verified facts, tool outcomes, sentiment, and transcript link to human agents on escalation.",
+          "opener": "Customers hate repeating themselves after the bot gives up. What should the human agent see when they take over?",
+          "evidence": {
+            "strong": "Structured handoff payload with issue summary, attempted resolutions, order IDs verified via tools, deep link to transcript, customer consent flags.",
+            "adequate": "Paste last 3 bot messages into ticket.",
+            "weak": "Only transfer phone queue position."
+          },
+          "misconceptions": [{ "id": "hand.raw", "pattern": "Dumps entire raw token log into CRM.", "challenge": "Can a human find the order number in 200 messages of tool JSON?" }],
+          "probes": ["Which fields must be verified before handoff?", "How is PII handled in the summary?"],
+          "hints": ["Structured summary beats raw chat.", "Include what the bot already tried."],
+          "referenceFix": "Handoff schema with verified entities, summary generation, CRM widget rendering transcript."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "support-ai-agent/duplicate_tool_side_effects",
+      "title": "Retry Storm Creates Duplicate Ticket Updates",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.idempotency",
+      "scenario": {
+        "symptoms": "Customers receive three shipping-label emails for one request. Tool logs show UpdateTicket invoked multiple times with identical arguments after LLM retries.",
+        "interviewerSetup": "Tool API has no idempotency keys; agent framework retries on timeout even when backend succeeded."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-agent", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "llm", "label": "Agent Runtime" } },
+          { "id": "node-tools", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "api-gateway", "label": "Ticket Tool API" } },
+          { "id": "node-ticket", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "database", "label": "Ticket Store" } },
+          { "id": "node-retry", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "service", "label": "Auto Retry on Timeout" } }
+        ],
+        "edges": [
+          { "id": "e-agent-tools", "source": "node-agent", "target": "node-tools", "label": "UpdateTicket" },
+          { "id": "e-retry-agent", "source": "node-retry", "target": "node-agent", "label": "Retry x3" },
+          { "id": "e-tools-ticket", "source": "node-tools", "target": "node-ticket", "label": "Duplicate writes" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-retry", "node-tools"],
+        "edgeIds": ["e-retry-agent", "e-tools-ticket"],
+        "headline": "Non-idempotent tool calls combined with agent retries duplicate customer-facing side effects"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_tool_idempotency",
+          "stage": "incident",
+          "dimension": "data",
+          "weight": 3,
+          "required": true,
+          "goal": "Make tool mutations idempotent with client keys and dedupe store; distinguish retry-safe reads from writes.",
+          "opener": "Users got three label emails because the agent retried a slow tool call. How do you prevent duplicate side effects?",
+          "evidence": {
+            "strong": "Idempotency-Key per tool invocation stored server-side 24h, at-most-once semantics, agent passes stable key per planned action, read tools retry freely.",
+            "adequate": "Check ticket state before update without formal keys.",
+            "weak": "Unlimited retries on all tools."
+          },
+          "misconceptions": [{ "id": "idem.read", "pattern": "Treats read and write tool retries the same.", "challenge": "Is it safe to retry GetOrder twice?" }],
+          "probes": ["Where is the idempotency key generated?", "What happens on duplicate key with different body?"],
+          "hints": ["Keys should be deterministic per user intent.", "Store response for replay."],
+          "referenceFix": "Idempotency keys on mutating tools, agent runtime stops retry after success uncertainty without key."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "support-ai-agent/unbounded_context_cost",
+      "title": "Long Threads Blow Token Budget and Latency SLO",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.cost",
+      "scenario": {
+        "symptoms": "P99 agent response time hits 25s on threads over 80 turns. Monthly LLM spend doubles while containment rate stays flat.",
+        "interviewerSetup": "Every message resends full chat history plus all tool JSON verbatim without summarization or truncation policy."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-chat", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "client", "label": "Long Chat Thread" } },
+          { "id": "node-context", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "llm", "label": "Context Builder" } },
+          { "id": "node-model", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "llm-gateway", "label": "LLM API" } },
+          { "id": "node-bill", "type": "systemNode", "position": { "x": 280, "y": 300 }, "data": { "kind": "metrics", "label": "Token Meter" } }
+        ],
+        "edges": [
+          { "id": "e-chat-ctx", "source": "node-chat", "target": "node-context", "label": "Full history" },
+          { "id": "e-ctx-model", "source": "node-context", "target": "node-model", "label": "100k+ tokens" },
+          { "id": "e-ctx-bill", "source": "node-context", "target": "node-bill", "label": "Cost spike" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-context", "node-model"],
+        "edgeIds": ["e-ctx-model"],
+        "headline": "Unbounded context assembly drives runaway token cost and latency on long support threads"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_context_cost",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Control cost with rolling summarization, retrieval of relevant turns, tool result compression, and model routing.",
+          "opener": "Long chats made the bot slow and doubled our LLM bill. How do you manage context window and cost?",
+          "evidence": {
+            "strong": "Summarize older turns, RAG over transcript, strip verbose tool payloads, cap history turns, route simple intents to smaller model, per-session budget.",
+            "adequate": "Truncate last N messages only.",
+            "weak": "Always send full history to largest model."
+          },
+          "misconceptions": [{ "id": "cost.model", "pattern": "Assumes only model choice affects cost.", "challenge": "What if you send 50k tokens of tool JSON every turn?" }],
+          "probes": ["What must never be dropped from context?", "When do you summarize vs retrieve?"],
+          "hints": ["Compress tool outputs to facts.", "Summarize early, retrieve on demand."],
+          "referenceFix": "Rolling summary + retrieval, tool output schema with concise fields, token budget per session."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

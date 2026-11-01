@@ -51,7 +51,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   const load = useCallback(async () => {
     try {
       const result = await api.getInterview(sessionId);
-      setData({ status: "ready", ...result, receivedAt: Date.now() });
+      setData({ status: "ready", turns: [], ...result, receivedAt: Date.now() });
     } catch (error) {
       setData((current) => (current.status === "ready" ? current : { status: "error", error }));
     }
@@ -60,8 +60,9 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   useEffect(() => { load(); }, [load, plan, roundActive]);
 
   const appendTurns = (turns, extra = {}) => setData((current) => {
-    const known = new Set(current.turns.map((turn) => turn.id));
-    return { ...current, ...extra, ...(extra.state ? { receivedAt: Date.now() } : {}), turns: [...current.turns, ...turns.filter((turn) => !known.has(turn.id))] };
+    const prior = current.turns ?? [];
+    const known = new Set(prior.map((turn) => turn.id));
+    return { ...current, ...extra, ...(extra.state ? { receivedAt: Date.now() } : {}), turns: [...prior, ...turns.filter((turn) => !known.has(turn.id))] };
   });
 
   // The chime plays as the interviewer starts replying (the first streamed text), or
@@ -201,13 +202,17 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
   }, [enabled, v3, tick]);
 
   const setMode = useCallback(async (mode) => {
-    const result = await api.setInterviewMode(sessionId, mode);
-    setData((current) => ({ ...current, state: result.state, turns: result.turns }));
+    try {
+      const result = await api.setInterviewMode(sessionId, mode);
+      setData((current) => ({ ...current, state: result.state, turns: result.turns ?? current.turns ?? [] }));
+    } catch (error) {
+      setSendError({ message: error.message, retryable: false });
+    }
   }, [sessionId]);
 
   const sendFeedback = useCallback((turnId, reason) => api.interviewFeedback(sessionId, turnId, { rating: "down", reason }), [sessionId]);
 
-  return { ...data, sessionId, pending, pendingAudio, outgoing, replyText, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load, setMode, sendFeedback, receivedAt: data.receivedAt };
+  return { ...data, sessionId, pending, pendingAudio, outgoing, replyText, sendError, clearError: () => setSendError(null), send, sendAudio, typingRef, reload: load, setMode, sendFeedback, receivedAt: data.receivedAt, turns: data.turns ?? [] };
 }
 
 function blobToBase64(blob) {

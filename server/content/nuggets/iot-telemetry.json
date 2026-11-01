@@ -1,0 +1,689 @@
+{
+  "promptId": "iot-telemetry",
+  "packVersion": "pack-2146e970",
+  "inputsFingerprint": "39fe216ce9290a6bf5623ed88ed10b46fc1db6e0d82e6c12632941a4b4442335",
+  "nuggets": [
+    {
+      "id": "iot-telemetry/deep-late",
+      "title": "Late Bulk Upload Rewrites Historical Rollups Wrong",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.late",
+      "scenario": {
+        "symptoms": "Temperature charts show impossible spikes after devices reconnect; hourly rollups double-count late batches.",
+        "interviewerSetup": "Rollup jobs treat ingestion time as event time and append instead of upserting by device event timestamp."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-device",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "IoT Devices"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingest Gateway"
+            }
+          },
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Rollup Job"
+            }
+          },
+          {
+            "id": "node-ts",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Time Series DB"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-device",
+            "target": "node-ingest",
+            "label": "Bulk backlog"
+          },
+          {
+            "id": "e2",
+            "source": "node-ingest",
+            "target": "node-stream",
+            "label": "Process"
+          },
+          {
+            "id": "e3",
+            "source": "node-stream",
+            "target": "node-ts",
+            "label": "Append only"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-stream",
+          "node-ts"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Ingestion-time rollups corrupt charts when events arrive late"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_late",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Place late and out-of-order readings correctly and update derived data.",
+            "opener": "A device is offline for hours, then uploads everything at once. What happens to its charts and rollups?",
+            "evidence": {
+              "strong": "Keys readings by device time and sequence, writes raw points idempotently, recomputes only the affected rollup windows, keeps live views from going backwards, and bounds lateness so stragglers go through a batch correction.",
+              "adequate": "Stores late readings but never updates rollups, or reprocesses everything.",
+              "weak": "Stamps readings with arrival time, so a day of readings lands in one minute."
+            },
+            "misconceptions": [
+              {
+                "id": "late.arrival_time",
+                "pattern": "Thinks using the time a reading arrives is good enough.",
+                "challenge": "A day's buffered readings arrive in one burst. What does the device's chart look like?"
+              }
+            ],
+            "probes": [
+              "How do you avoid storing the same reading twice if the upload is retried?",
+              "Which rollups need recomputing, and how do you find them?"
+            ],
+            "hints": [
+              "The reading's own timestamp and sequence say where it belongs.",
+              "Only windows that received new points need recomputing."
+            ],
+            "referenceFix": "Event-time placement with sequence-number dedupe, idempotent raw writes and recomputation of only the affected rollup windows."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "iot-telemetry/deep-rollups",
+      "title": "One-Year Chart Query Times Out",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.rollups",
+      "scenario": {
+        "symptoms": "Dashboard year-view queries exceed 60s timeout; raw 1-second samples scanned for single device chart.",
+        "interviewerSetup": "Long-range queries hit raw high-resolution table without downsampled tier or pre-aggregated rollups."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-ui",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Dashboard UI"
+            }
+          },
+          {
+            "id": "node-query",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Query API"
+            }
+          },
+          {
+            "id": "node-raw",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 80
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Raw Samples"
+            }
+          },
+          {
+            "id": "node-roll",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Downsampled Tier"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-ui",
+            "target": "node-query",
+            "label": "1yr range"
+          },
+          {
+            "id": "e2",
+            "source": "node-query",
+            "target": "node-raw",
+            "label": "Full scan"
+          },
+          {
+            "id": "e3",
+            "source": "node-roll",
+            "target": "node-query",
+            "label": "Unused tier"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-query",
+          "node-raw"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing downsampling tier makes long-range charts non-viable"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_rollups",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Serve long-range charts fast with downsampled data and keep storage proportional.",
+            "opener": "How do you serve a one-year chart for one device in under a second?",
+            "evidence": {
+              "strong": "Precomputes rollups (min, max, average, count per minute and per hour) as readings arrive, queries the coarsest resolution that fits the range, and uses columnar compression; raw data expires after its retention period.",
+              "adequate": "Mentions downsampling but computes it at query time or keeps only averages.",
+              "weak": "Reads every raw point for the year at query time."
+            },
+            "misconceptions": [
+              {
+                "id": "roll.avg_only",
+                "pattern": "Believes storing only averages is enough for rollups.",
+                "challenge": "A pressure spike lasts ten seconds. Does an hourly average show it?"
+              }
+            ],
+            "probes": [
+              "Which statistics would you keep per bucket?",
+              "How does the query choose a resolution?"
+            ],
+            "hints": [
+              "A chart only has so many pixels.",
+              "Keep more than the mean so spikes stay visible."
+            ],
+            "referenceFix": "Precomputed multi-resolution rollups with min, max, average and count, chosen by query range."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "iot-telemetry/deep-storm",
+      "title": "Regional Power Restore Triggers Ingestion Storm",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.storm",
+      "scenario": {
+        "symptoms": "After outage, 200k devices reconnect within 60s; ingest gateway returns 503 and drops telemetry batches.",
+        "interviewerSetup": "Devices upload full offline backlog immediately with no jitter; gateway has fixed connection limits."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-devices",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Device Fleet"
+            }
+          },
+          {
+            "id": "node-gw",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Ingest LB"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingest Workers"
+            }
+          },
+          {
+            "id": "node-kafka",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 300
+            },
+            "data": {
+              "kind": "t-kafka",
+              "label": "Telemetry Bus"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-devices",
+            "target": "node-gw",
+            "label": "Simultaneous reconnect"
+          },
+          {
+            "id": "e2",
+            "source": "node-gw",
+            "target": "node-ingest",
+            "label": "Overload"
+          },
+          {
+            "id": "e3",
+            "source": "node-ingest",
+            "target": "node-kafka",
+            "label": "Produce"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-gw",
+          "node-ingest"
+        ],
+        "edgeIds": [
+          "e1",
+          "e2"
+        ],
+        "headline": "Mass reconnect without backoff overwhelms ingest tier"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_storm",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Survive a mass reconnect after a regional outage.",
+            "opener": "A power cut ends and a huge number of devices reconnect within a minute, each uploading a backlog. What protects the pipeline?",
+            "evidence": {
+              "strong": "Devices reconnect with randomised exponential backoff; gateways admit connections at a controlled rate and push back; the log absorbs the burst, consumers catch up with autoscaling, and live data is prioritised over backlog.",
+              "adequate": "Scales the gateways but ignores client backoff or prioritisation.",
+              "weak": "Assumes autoscaling handles it instantly."
+            },
+            "misconceptions": [
+              {
+                "id": "storm.autoscale",
+                "pattern": "Thinks autoscaling alone absorbs a reconnect storm.",
+                "challenge": "New gateway instances take minutes to start. What happens to the devices connecting in the first minute?"
+              }
+            ],
+            "probes": [
+              "Should backlog uploads compete with live readings?"
+            ],
+            "hints": [
+              "Clients can spread their own retries out.",
+              "A durable log lets you accept fast and process later."
+            ],
+            "referenceFix": "Jittered backoff on devices, rate-limited admission at gateways, the log as a buffer, and live data before backlog."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "iot-telemetry/deep-clock",
+      "title": "Drifted Device Clocks Scatter Metrics on Timeline",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.clock",
+      "scenario": {
+        "symptoms": "Fleet dashboard shows future-dated readings and negative durations; alerting misfires on clock-skewed devices.",
+        "interviewerSetup": "Server trusts device-reported timestamps without skew detection or server-side normalization."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-device",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Devices"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingest"
+            }
+          },
+          {
+            "id": "node-ts",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "time-series-db",
+              "label": "Metrics Store"
+            }
+          },
+          {
+            "id": "node-alert",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "alerting",
+              "label": "Alert Engine"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-device",
+            "target": "node-ingest",
+            "label": "Bad timestamps"
+          },
+          {
+            "id": "e2",
+            "source": "node-ingest",
+            "target": "node-ts",
+            "label": "Store as-is"
+          },
+          {
+            "id": "e3",
+            "source": "node-ts",
+            "target": "node-alert",
+            "label": "Evaluate rules"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-ingest",
+          "node-ts"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Uncorrected device clock skew corrupts time-series ordering"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_clock",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Handle device clocks that are wrong.",
+            "opener": "A device's clock is well off. What does that do to your data, and how do you handle it?",
+            "evidence": {
+              "strong": "Stores device time, server receive time and sequence; estimates skew per device from receive time on live readings, corrects or flags readings, rejects impossible timestamps, and keeps raw values for audit.",
+              "adequate": "Replaces device time with server time, losing correct offline timestamps.",
+              "weak": "Trusts device time blindly."
+            },
+            "misconceptions": [
+              {
+                "id": "clock.server_time",
+                "pattern": "Believes overwriting device time with server receive time fixes skew.",
+                "challenge": "A device uploads yesterday's buffered readings now. What timestamps do they get?"
+              }
+            ],
+            "probes": [
+              "How would you even detect that a clock is wrong?"
+            ],
+            "hints": [
+              "Compare the device's time with when you received live readings.",
+              "Keep both timestamps rather than choosing one."
+            ],
+            "referenceFix": "Keep device time, receive time and sequence; estimate and correct skew per device and flag bad timestamps."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "iot-telemetry/deep-alerts",
+      "title": "Silent Devices Not Detected Within SLA",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.alerts",
+      "scenario": {
+        "symptoms": "Critical freezer sensors stop reporting for 45 minutes before anyone notices; SLA requires 1-minute detection.",
+        "interviewerSetup": "Alerting evaluates threshold rules only on incoming points with no heartbeat or absence detection."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-device",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Sensors"
+            }
+          },
+          {
+            "id": "node-ingest",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "ingestion",
+              "label": "Ingest"
+            }
+          },
+          {
+            "id": "node-stream",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Rule Engine"
+            }
+          },
+          {
+            "id": "node-alert",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 300
+            },
+            "data": {
+              "kind": "alerting",
+              "label": "PagerDuty Bridge"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-device",
+            "target": "node-ingest",
+            "label": "Telemetry"
+          },
+          {
+            "id": "e2",
+            "source": "node-ingest",
+            "target": "node-stream",
+            "label": "Evaluate"
+          },
+          {
+            "id": "e3",
+            "source": "node-stream",
+            "target": "node-alert",
+            "label": "Fire alerts"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-stream"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Missing absence detection delays silent device alerts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_alerts",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Evaluate threshold rules and detect silent devices within a minute.",
+            "opener": "How do you notice that a device has stopped reporting, and how do threshold alerts fire quickly?",
+            "evidence": {
+              "strong": "Evaluates rules in the stream per device with keyed state, deduplicates and debounces alerts, and detects silence with a per-device timer that fires when no reading arrives within the expected interval; sends to a notification service.",
+              "adequate": "Fires threshold alerts in the stream but detects silence with a periodic database scan.",
+              "weak": "Checks alerts by querying the database every few minutes for every device."
+            },
+            "misconceptions": [
+              {
+                "id": "alert.scan",
+                "pattern": "Thinks scanning all devices periodically is the way to find silent ones.",
+                "challenge": "Scanning millions of devices every minute: what does that cost, and how fast is it?"
+              }
+            ],
+            "probes": [
+              "How do you stop one flapping sensor from sending hundreds of alerts?"
+            ],
+            "hints": [
+              "Absence of data is an event you can schedule a timer for.",
+              "Debounce alerts that flip on and off."
+            ],
+            "referenceFix": "Stream-side rule evaluation with keyed state, per-device timers for silence, and debounced notifications."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

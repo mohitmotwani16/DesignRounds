@@ -4,15 +4,39 @@ import { HttpError } from "./http.js";
 
 // Cloudflare's published dummy credentials. They only prove the wiring:
 // https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+const TEST_SITE_KEY = "3x00000000000000000000FF";
 const TEST_SECRET = "1x0000000000000000000000000000000AA";
 const TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
-function credentials() {
+function configuredCredentials() {
   return {
     siteKey: (process.env.TURNSTILE_SITE_KEY || "").trim(),
     secret: (process.env.TURNSTILE_SECRET_KEY || "").trim(),
   };
+}
+
+function isPublishedTestSiteKey(siteKey) {
+  return siteKey.startsWith("1x") || siteKey.startsWith("2x") || siteKey.startsWith("3x");
+}
+
+// Production Turnstile keys are hostname-locked. On localhost that yields widget
+// error 110200 unless "localhost" is on the widget in Cloudflare. In local
+// development, swap to Cloudflare's dummy pair so sign-in keeps working while
+// keeping real keys in .env for production deploys. Set TURNSTILE_DUMMY_LOCAL=false
+// to exercise the real widget after adding localhost to the widget hostnames.
+function useDummyLocal() {
+  if (isProduction) return false;
+  if (process.env.TURNSTILE_DUMMY_LOCAL === "false") return false;
+  if (process.env.TURNSTILE_DUMMY_LOCAL === "true") return true;
+  const { siteKey, secret } = configuredCredentials();
+  if (!siteKey || !secret || isPublishedTestSiteKey(siteKey)) return false;
+  return true;
+}
+
+function credentials() {
+  if (useDummyLocal()) return { siteKey: TEST_SITE_KEY, secret: TEST_SECRET };
+  return configuredCredentials();
 }
 
 // Public site key for the sign-in widget. Null until both keys are set, so the
@@ -47,8 +71,9 @@ export function networkKey(ip) {
 }
 
 export function describeTurnstile() {
-  const { siteKey, secret } = credentials();
-  if (siteKey && secret) return siteKey.startsWith("1x") || siteKey.startsWith("2x") || siteKey.startsWith("3x") ? "test" : "on";
+  if (useDummyLocal()) return "dummy-local";
+  const { siteKey, secret } = configuredCredentials();
+  if (siteKey && secret) return isPublishedTestSiteKey(siteKey) ? "test" : "on";
   if (!siteKey && !secret) return isProduction ? "missing" : "off";
   return "misconfigured";
 }

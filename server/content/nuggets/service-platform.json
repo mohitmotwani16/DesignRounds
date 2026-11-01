@@ -1,0 +1,267 @@
+{
+  "promptId": "service-platform",
+  "packVersion": "pack-e3305b70",
+  "inputsFingerprint": "12e99d084d2c52bcb41888524bea09043515f390d8df6e56c0083add5ea6751c",
+  "nuggets": [
+    {
+      "id": "service-platform/template_drift_prod_incident",
+      "title": "Hand-Edited Production Service Drifts from Golden Template",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.templates",
+      "scenario": {
+        "symptoms": "On-call cannot reproduce payments-service prod config from the standard template. Missing metrics sidecar and wrong autoscaling limits caused a 2-hour outage.",
+        "interviewerSetup": "An engineer hot-fixed production YAML six months ago; changes were never backported to the scaffold template. New deploys from template overwrite critical prod-only patches unpredictably."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-template", "type": "systemNode", "position": { "x": 80, "y": 120 }, "data": { "kind": "config", "label": "Golden Template" } },
+          { "id": "node-prod", "type": "systemNode", "position": { "x": 320, "y": 120 }, "data": { "kind": "microservice", "label": "payments-service Prod" } },
+          { "id": "node-git", "type": "systemNode", "position": { "x": 200, "y": 260 }, "data": { "kind": "git", "label": "Service Repo" } },
+          { "id": "node-cd", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "deployment", "label": "Deploy Pipeline" } }
+        ],
+        "edges": [
+          { "id": "e-tmpl-cd", "source": "node-template", "target": "node-cd", "label": "Scaffold defaults" },
+          { "id": "e-git-prod", "source": "node-git", "target": "node-prod", "label": "Manual prod edits" },
+          { "id": "e-cd-prod", "source": "node-cd", "target": "node-prod", "label": "Redeploy overwrites" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-prod", "node-template"],
+        "edgeIds": ["e-git-prod"],
+        "headline": "Production services diverge from templates, causing fragile redeploys and missing platform defaults"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_template_drift",
+          "stage": "incident",
+          "dimension": "architecture",
+          "weight": 3,
+          "required": true,
+          "goal": "Keep services aligned with versioned golden templates via codegen, lint, and required override files.",
+          "opener": "Prod payments-service no longer matches our standard template and the next deploy might drop the metrics sidecar. How do templates stay the source of truth?",
+          "evidence": {
+            "strong": "Versioned templates, codegen on create, CI diff against golden path, allowed extension points, automated backport bot, template upgrade runbooks.",
+            "adequate": "Copy-paste template once at create with no drift checks.",
+            "weak": "Every team writes YAML from scratch."
+          },
+          "misconceptions": [{ "id": "tmpl.once", "pattern": "Believes scaffolding once at repo creation is enough.", "challenge": "What happens when the platform adds mandatory security sidecars six months later?" }],
+          "probes": ["How do teams customize without forking the whole template?", "How are template version upgrades rolled out?"],
+          "hints": ["Separate platform defaults from service-specific knobs.", "CI should fail on unexpected diffs."],
+          "referenceFix": "Golden templates with semver, generated base + owned overlay, CI policy gates on drift."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-platform/escape_hatch_bypasses_guardrails",
+      "title": "Emergency SSH Escape Hatch Bypasses All Guardrails",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.escape_hatches",
+      "scenario": {
+        "symptoms": "A Sev-1 fix required kubectl exec into production as root, disabling network policy and exporting customer data to a laptop. Post-incident review finds no approval trail.",
+        "interviewerSetup": "Platform guardrails block direct prod access by default, but a shared break-glass role with static credentials was circulated in chat."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-eng", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Engineer" } },
+          { "id": "node-break", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "iam", "label": "Break-Glass Role" } },
+          { "id": "node-prod", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "kubernetes", "label": "Production Cluster" } },
+          { "id": "node-audit", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "logging", "label": "Audit (disabled for role)" } }
+        ],
+        "edges": [
+          { "id": "e-eng-break", "source": "node-eng", "target": "node-break", "label": "Shared static creds" },
+          { "id": "e-break-prod", "source": "node-break", "target": "node-prod", "label": "Full admin access" },
+          { "id": "e-break-audit", "source": "node-break", "target": "node-audit", "label": "Logging exempt" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-break", "node-audit"],
+        "edgeIds": ["e-break-prod"],
+        "headline": "Unaudited break-glass access circumvents platform safety controls during incident response"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_escape_hatch",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Provide time-bound, approved escape hatches with full audit and automatic expiry.",
+          "opener": "During the outage someone used a shared break-glass account and turned off network policy. How should emergency access work on your platform?",
+          "evidence": {
+            "strong": "Just-in-time elevation with manager approval, max 1h TTL, session recorded, automatic revert, no static shared passwords, post-incident review required.",
+            "adequate": "Break-glass role exists but without time bounds.",
+            "weak": "Permanent admin kubeconfig for all senior engineers."
+          },
+          "misconceptions": [{ "id": "esc.speed", "pattern": "Assumes guardrails must be permanently removed for fast incident response.", "challenge": "Can you grant scoped access for one pod for 30 minutes with audit?" }],
+          "probes": ["Who approves break-glass and for how long?", "What gets logged during a session?"],
+          "hints": ["JIT beats shared credentials.", "Auto-expire privileges."],
+          "referenceFix": "Approved JIT break-glass, immutable audit stream, automatic policy restore."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-platform/policy_gate_bypass_deploy",
+      "title": "Deploy Pipeline Skips CPU Limit Policy Gate",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.guardrails",
+      "scenario": {
+        "symptoms": "A new service deploys without CPU limits and starves neighboring pods on shared nodes. Noisy neighbor causes cluster-wide latency spike.",
+        "interviewerSetup": "Admission controller policy requires limits, but the deploy pipeline used an emergency `--skip-policy` flag that was never removed from the template."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-pipeline", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "deployment", "label": "Deploy Pipeline" } },
+          { "id": "node-admission", "type": "systemNode", "position": { "x": 280, "y": 150 }, "data": { "kind": "policy", "label": "Admission Controller" } },
+          { "id": "node-cluster", "type": "systemNode", "position": { "x": 480, "y": 150 }, "data": { "kind": "kubernetes", "label": "Shared Node Pool" } },
+          { "id": "node-bad", "type": "systemNode", "position": { "x": 480, "y": 300 }, "data": { "kind": "microservice", "label": "Service (no limits)" } }
+        ],
+        "edges": [
+          { "id": "e-pipe-adm", "source": "node-pipeline", "target": "node-admission", "label": "Bypass flag" },
+          { "id": "e-adm-cluster", "source": "node-admission", "target": "node-cluster", "label": "Allow deploy" },
+          { "id": "e-bad-cluster", "source": "node-bad", "target": "node-cluster", "label": "CPU hog" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-admission", "node-bad"],
+        "edgeIds": ["e-pipe-adm"],
+        "headline": "Policy guardrails bypassed in CI allow unbounded workloads onto shared infrastructure"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_guardrails",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Enforce guardrails at admission and in CI with no silent bypass except audited break-glass.",
+          "opener": "A deploy without CPU limits took down neighbors on the node pool. What guardrails should have blocked it?",
+          "evidence": {
+            "strong": "OPA/Gatekeeper policies on limits, probes, labels; CI renders manifests and fails on violation; no permanent skip flags; periodic audit of live cluster vs policy.",
+            "adequate": "Documentation says set limits but no enforcement.",
+            "weak": "Review in PR comments only."
+          },
+          "misconceptions": [{ "id": "guard.doc", "pattern": "Believes written standards replace automated enforcement.", "challenge": "Who checks every deploy at 2am?" }],
+          "probes": ["Where are policies enforced: CI, admission, or both?", "How are exceptions granted?"],
+          "hints": ["Admission is the last line of defense.", "Remove bypass from default pipeline."],
+          "referenceFix": "Mandatory policy checks in CI and admission, exception workflow with expiry."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-platform/terraform_state_lock_contention",
+      "title": "Shared Terraform State Blocks All Service Provisioning",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.iac",
+      "scenario": {
+        "symptoms": "Fifty teams queue on a single Terraform state lock for the shared platform stack. A stuck apply from yesterday prevents any new service onboarding.",
+        "interviewerSetup": "All microservices share one monolithic state file in S3. One engineer's local apply crashed after acquiring the lock."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-teams", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Service Teams" } },
+          { "id": "node-tf", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "deployment", "label": "Terraform Apply" } },
+          { "id": "node-state", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "database", "label": "Monolithic State + Lock" } },
+          { "id": "node-cloud", "type": "systemNode", "position": { "x": 460, "y": 300 }, "data": { "kind": "cloud", "label": "Cloud Resources" } }
+        ],
+        "edges": [
+          { "id": "e-teams-tf", "source": "node-teams", "target": "node-tf", "label": "Queued applies" },
+          { "id": "e-tf-state", "source": "node-tf", "target": "node-state", "label": "Stuck lock" },
+          { "id": "e-tf-cloud", "source": "node-tf", "target": "node-cloud", "label": "Provision" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-state", "node-tf"],
+        "edgeIds": ["e-tf-state"],
+        "headline": "Monolithic IaC state creates global lock contention and blocks independent service provisioning"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_iac_state",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Split IaC into scoped state per service or domain with automated pipelines and lock timeout hygiene.",
+          "opener": "Onboarding froze because one Terraform lock never released. How is infrastructure code organized for hundreds of services?",
+          "evidence": {
+            "strong": "State per service or domain, remote runs in CI only, lock force with audit, module library, blast-radius limited stacks.",
+            "adequate": "Single state with manual lock break.",
+            "weak": "ClickOps in console without IaC."
+          },
+          "misconceptions": [{ "id": "iac.one", "pattern": "Prefers one state file to see everything.", "challenge": "What happens when two teams apply unrelated changes simultaneously?" }],
+          "probes": ["How big should a Terraform state be?", "Who is allowed to run apply locally?"],
+          "hints": ["Split state by ownership boundary.", "CI runners hold locks briefly."],
+          "referenceFix": "Sharded Terraform state, pipeline-only apply, stale lock automation."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "service-platform/cve_unpatched_base_image",
+      "title": "Critical CVE in Shared Base Image Hits Every Service",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.cve",
+      "scenario": {
+        "symptoms": "Scanner flags CVE-2024-XXXX in OpenSSL across 400 services. Only 12% rebuilt images after the platform team published a patched base tag two weeks ago.",
+        "interviewerSetup": "Services pin `platform-base:2024.01` without auto-rebuild. No policy blocks deploy of images older than N days."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-base", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "container", "label": "platform-base Image" } },
+          { "id": "node-services", "type": "systemNode", "position": { "x": 320, "y": 150 }, "data": { "kind": "microservice", "label": "400 Service Images" } },
+          { "id": "node-scan", "type": "systemNode", "position": { "x": 320, "y": 300 }, "data": { "kind": "security", "label": "Vulnerability Scanner" } },
+          { "id": "node-registry", "type": "systemNode", "position": { "x": 520, "y": 150 }, "data": { "kind": "registry", "label": "Container Registry" } }
+        ],
+        "edges": [
+          { "id": "e-base-svc", "source": "node-base", "target": "node-services", "label": "FROM pin" },
+          { "id": "e-scan-svc", "source": "node-scan", "target": "node-services", "label": "Critical CVE" },
+          { "id": "e-svc-reg", "source": "node-services", "target": "node-registry", "label": "Still deployed" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-base", "node-services"],
+        "edgeIds": ["e-base-svc"],
+        "headline": "Stale base image pins leave fleet exposed after centralized patch release"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_cve_rollout",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Roll out base image CVE fixes with rebuild automation, deploy deadlines, and admission deny on critical CVEs.",
+          "opener": "A critical OpenSSL CVE is in our shared base and most services never rebuilt. How does the platform drive fleet-wide patching?",
+          "evidence": {
+            "strong": "Automated rebuild on new base tag, SBOM tracking, policy blocking critical CVEs at admission, dashboard of lagging services, canary base rollout.",
+            "adequate": "Email announcement to rebuild manually.",
+            "weak": "Teams choose any base image."
+          },
+          "misconceptions": [{ "id": "cve.app", "pattern": "Assumes app code changes are required to pick up OS patches.", "challenge": "If only the base layer changed, what triggers a new deploy?" }],
+          "probes": ["How do you know which running pods are still vulnerable?", "What deadline policy is reasonable?"],
+          "hints": ["Central base image with semver tags.", "Block deploy if scan fails."],
+          "referenceFix": "Automated downstream rebuilds on base publish, admission deny list for critical CVEs."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

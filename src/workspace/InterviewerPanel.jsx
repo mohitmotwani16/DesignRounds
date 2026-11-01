@@ -183,7 +183,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
       </div>
 
       <div className="interviewer-body interview-thread" ref={listRef} role="log" aria-relevant="additions" aria-label="Interview conversation">
-        {v3 && !learnerSpoke && !roundFinished && <ModeChoice mode={state.mode} onChange={interview.setMode} />}
+        {v3 && state?.sessionKind !== "nugget" && !learnerSpoke && !roundFinished && <ModeChoice mode={state.mode} onChange={interview.setMode} />}
         {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} onFeedback={interview.sendFeedback} />)}
         {outgoing && (
           <div className="interview-turn learner">

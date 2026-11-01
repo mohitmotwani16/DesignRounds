@@ -1,0 +1,137 @@
+{
+  "promptId": "payment-platform",
+  "nuggets": [
+    {
+      "id": "payment-platform/double-charge-retry",
+      "title": "Client retry double-charges customer",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.idempotency",
+      "scenario": {
+        "symptoms": "Merchants report duplicate charges when shoppers double-tap pay or when mobile clients retry timed-out requests. Two capture records share the same cart id but different processor transaction ids.",
+        "interviewerSetup": "The payments API generates a new internal id on every HTTP attempt and forwards both to the processor without idempotency keys."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-client", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Checkout app" } },
+          { "id": "n-api", "type": "systemNode", "position": { "x": 260, "y": 120 }, "data": { "kind": "api-gateway", "label": "Payments API" } },
+          { "id": "n-proc", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "service", "label": "Processor adapter" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "database", "label": "Payments DB" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-client", "target": "n-api", "label": "Retry same cart" },
+          { "id": "e2", "source": "n-api", "target": "n-proc", "label": "Two captures" },
+          { "id": "e3", "source": "n-api", "target": "n-db", "label": "No idempotency" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-api", "n-db"], "edgeIds": ["e2", "e3"], "headline": "Missing idempotency keys allow duplicate captures on client retries" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Make payment initiation safe under retries and timeouts.",
+          "opener": "Customers were charged twice after a timeout retry—how do you make pay idempotent?",
+          "evidence": {
+            "strong": "Client-supplied idempotency key stored with unique constraint, same response replayed, processor idempotency token forwarded.",
+            "adequate": "Server generates key per session but not tied to client retry.",
+            "weak": "New payment id every HTTP attempt."
+          },
+          "misconceptions": [{ "id": "idempotent.processor_only", "pattern": "Relying on processor dedupe without local record.", "challenge": "If the first call succeeded but response timed out, what does the client retry?" }],
+          "probes": ["Where is the idempotency key stored and for how long?", "What HTTP status does a replay return?"],
+          "hints": ["Keys should be merchant+cart or client request id.", "Return original result on duplicate key."],
+          "referenceFix": "Require Idempotency-Key header, persist request hash with status/outcome for 24h, forward key to processor, and return cached response on duplicates."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "payment-platform/ledger-outbox-gap",
+      "title": "Captured payment missing from ledger",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.outbox",
+      "scenario": {
+        "symptoms": "Finance reconciliation shows $240k in processor settlements without matching internal ledger entries. App servers updated payment status then crashed before publishing the ledger event.",
+        "interviewerSetup": "Dual write: SQL update and Kafka publish in the same request handler without transactional outbox."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-api", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Payment service" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "database", "label": "Payments DB" } },
+          { "id": "n-kafka", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "t-kafka", "label": "Ledger events" } },
+          { "id": "n-ledger", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "service", "label": "Ledger consumer" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-api", "target": "n-db", "label": "Commit status" },
+          { "id": "e2", "source": "n-api", "target": "n-kafka", "label": "Crash before send" },
+          { "id": "e3", "source": "n-kafka", "target": "n-ledger", "label": "Missing events" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-api", "n-kafka"], "edgeIds": ["e2"], "headline": "Non-transactional dual write drops ledger events after crash" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Keep ledger entries consistent with payment state transitions.",
+          "opener": "Money captured in processor but not in ledger—what pattern prevents this gap?",
+          "evidence": {
+            "strong": "Transactional outbox table in same DB transaction, relay publishes to Kafka, idempotent ledger consumer.",
+            "adequate": "Retry Kafka publish in handler without outbox—still can lose on crash after commit.",
+            "weak": "Fire-and-forget event after DB update."
+          },
+          "misconceptions": [],
+          "probes": ["Which writes belong in one database transaction?", "How does the relay handle duplicate publishes?"],
+          "hints": ["Outbox pattern decouples commit from message bus.", "Consumers must be idempotent."],
+          "referenceFix": "Insert outbox row atomically with payment state change, background relay publishes to Kafka, ledger consumer dedupes by event id."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "payment-platform/processor-timeout-orphan",
+      "title": "Processor timeout leaves unknown payment state",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.timeout",
+      "scenario": {
+        "symptoms": "Shoppers saw payment failures and placed second orders, but the processor actually captured both attempts. Internal status stayed PENDING after HTTP timeout to the adapter.",
+        "interviewerSetup": "Client timeout at 5s while processor may succeed at 8s. No reconciliation job queries processor for indeterminate ids."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-api", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "service", "label": "Payments API" } },
+          { "id": "n-proc", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Processor" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 480, "y": 120 }, "data": { "kind": "database", "label": "Payments DB" } },
+          { "id": "n-recon", "type": "systemNode", "position": { "x": 700, "y": 120 }, "data": { "kind": "worker", "label": "Reconciliation (missing)" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-api", "target": "n-proc", "label": "Timeout at 5s" },
+          { "id": "e2", "source": "n-api", "target": "n-db", "label": "Stays PENDING" },
+          { "id": "e3", "source": "n-proc", "target": "n-api", "label": "Success at 8s (lost)" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-api", "n-db"], "edgeIds": ["e1", "e2"], "headline": "Ambiguous timeout handling leaves payments stuck and enables double spend" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Resolve indeterminate processor outcomes safely after timeouts.",
+          "opener": "Client timed out but processor captured—how should the platform represent and fix ambiguous payments?",
+          "evidence": {
+            "strong": "Mark UNKNOWN, background status poll/webhook reconcile, idempotent client messaging, block duplicate capture until resolved.",
+            "adequate": "Manual ops ticket only.",
+            "weak": "Mark FAILED immediately on timeout."
+          },
+          "misconceptions": [{ "id": "timeout.fail", "pattern": "Treating HTTP timeout as definitive failure.", "challenge": "Processor may still succeed—what is merchant truth?" }],
+          "probes": ["How long do you poll processor state?", "What does the shopper UI show while UNKNOWN?"],
+          "hints": ["Async completion via webhooks helps.", "Never allow second capture while first is unknown."],
+          "referenceFix": "Use UNKNOWN state on timeout, reconcile via processor query/webhook workers, update ledger once final, and surface clear UX until resolution."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

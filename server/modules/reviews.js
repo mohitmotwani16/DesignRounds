@@ -225,6 +225,7 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
 reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
   const { requestId } = parse(requestBody, req.body);
   const session = await ownedSession(req);
+  if (session.session_kind === "nugget") throw new HttpError(409, "NUGGET_NO_REVIEW", "Incident drills use the mini debrief in the interviewer chat, not a full review.");
   const full = hasFullFeedback(req.user, session);
 
   // A retried request (same requestId) returns what the first attempt produced.

@@ -1,0 +1,133 @@
+{
+  "promptId": "offline-first-sync",
+  "nuggets": [
+    {
+      "id": "offline-first-sync/note-edit-conflict",
+      "title": "Offline edits clobber each other",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.conflicts",
+      "scenario": {
+        "symptoms": "A user edited a shared note on phone and laptop while offline for a flight. After reconnect, one device’s paragraph vanished with no warning.",
+        "interviewerSetup": "Sync uses last-write-wins by client timestamp without clock sync or merge semantics. The server picked the laptop edit because its clock was ahead."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-phone", "type": "systemNode", "position": { "x": 40, "y": 80 }, "data": { "kind": "mobile", "label": "Phone (offline)" } },
+          { "id": "n-laptop", "type": "systemNode", "position": { "x": 40, "y": 200 }, "data": { "kind": "client", "label": "Laptop (offline)" } },
+          { "id": "n-sync", "type": "systemNode", "position": { "x": 300, "y": 140 }, "data": { "kind": "service", "label": "Sync API" } },
+          { "id": "n-db", "type": "systemNode", "position": { "x": 560, "y": 140 }, "data": { "kind": "database", "label": "Document store" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-phone", "target": "n-sync", "label": "Push edit" },
+          { "id": "e2", "source": "n-laptop", "target": "n-sync", "label": "Push edit" },
+          { "id": "e3", "source": "n-sync", "target": "n-db", "label": "LWW by client time" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-sync", "n-db"], "edgeIds": ["e3"], "headline": "Last-write-wins with skewed client clocks silently drops offline edits" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "data", "weight": 3, "required": true,
+          "goal": "Merge concurrent offline edits without silent data loss.",
+          "opener": "Two offline edits to the same note—one disappeared. How should conflict resolution work?",
+          "evidence": {
+            "strong": "CRDT or operational transform, version vectors, server-assigned revision ids, and UI conflict surfacing.",
+            "adequate": "Field-level merge for plain text but whole-document LWW otherwise.",
+            "weak": "Whole-document LWW using client timestamps."
+          },
+          "misconceptions": [{ "id": "conflict.client_time", "pattern": "Trusting client wall clocks for ordering.", "challenge": "Laptop clock ahead of phone—who wins and is that fair?" }],
+          "probes": ["How does the user recover text that lost a merge?", "What metadata travels with each edit?"],
+          "hints": ["Vector clocks detect concurrent edits.", "CRDTs merge without a single winner."],
+          "referenceFix": "Use CRDT/OT with version vectors, reject whole-document LWW, store edit history, and show merge UI when concurrent branches diverge."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "offline-first-sync/tombstone-resurrection",
+      "title": "Deleted items reappear after sync",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.tombstones",
+      "scenario": {
+        "symptoms": "Users deleted tasks while offline, but items popped back after syncing from an older tablet that still held the rows locally.",
+        "interviewerSetup": "Deletes are implemented as hard deletes locally without tombstones propagated to the server. Slow devices replay stale snapshots that reinsert rows."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-old", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Stale tablet" } },
+          { "id": "n-sync", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Sync merge" } },
+          { "id": "n-srv", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "database", "label": "Server state" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-old", "target": "n-sync", "label": "Replay old rows" },
+          { "id": "e2", "source": "n-sync", "target": "n-srv", "label": "Resurrect records" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-sync"], "edgeIds": ["e1", "e2"], "headline": "Missing tombstones let stale clients resurrect deleted objects" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "reliability", "weight": 3, "required": true,
+          "goal": "Ensure deletes win over stale replicas during sync.",
+          "opener": "Deleted tasks came back from an old device—what sync metadata prevents resurrection?",
+          "evidence": {
+            "strong": "Tombstone records with deletion vector, retention window, and merge rules that prefer delete over stale upserts.",
+            "adequate": "Server-side delete flag without propagating tombstones to all clients.",
+            "weak": "Hard delete locally with no server tombstone."
+          },
+          "misconceptions": [],
+          "probes": ["How long must tombstones live?", "What happens if two devices delete and update the same id?"],
+          "hints": ["Deletes are events, not absence of rows.", "GC tombstones only after all clients caught up."],
+          "referenceFix": "Persist tombstones with deletion timestamps/vectors, replicate them to clients, reject upserts that predate tombstones, and GC after sync horizon."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "offline-first-sync/catch-up-storm",
+      "title": "Reconnect sync saturates mobile network",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.catch_up",
+      "scenario": {
+        "symptoms": "After a week offline, the app froze on ‘Syncing…’ and consumed 400 MB in minutes. Users on cellular complained about data caps.",
+        "interviewerSetup": "Catch-up pulls the full change log since epoch for every collection instead of incremental cursors or paginated deltas."
+      },
+      "diagram": {
+        "viewport": { "x": 0, "y": 0, "zoom": 0.85 },
+        "nodes": [
+          { "id": "n-app", "type": "systemNode", "position": { "x": 40, "y": 120 }, "data": { "kind": "mobile", "label": "Mobile app" } },
+          { "id": "n-sync", "type": "systemNode", "position": { "x": 280, "y": 120 }, "data": { "kind": "service", "label": "Sync API" } },
+          { "id": "n-log", "type": "systemNode", "position": { "x": 520, "y": 120 }, "data": { "kind": "database", "label": "Global oplog" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "n-app", "target": "n-sync", "label": "Full history pull" },
+          { "id": "e2", "source": "n-sync", "target": "n-log", "label": "Scan since epoch" }
+        ]
+      },
+      "incident": { "nodeIds": ["n-sync", "n-log"], "edgeIds": ["e1", "e2"], "headline": "Catch-up replays entire history instead of incremental deltas" },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix", "stage": "incident", "dimension": "scalability", "weight": 3, "required": true,
+          "goal": "Efficiently catch up long-offline clients without huge transfers.",
+          "opener": "A user offline for a week triggered a massive sync—how should catch-up be designed?",
+          "evidence": {
+            "strong": "Per-device sync tokens, paginated delta feeds, compression, Wi-Fi preference, and snapshot+bootstrap for very stale clients.",
+            "adequate": "Incremental since last sync but unbounded page size.",
+            "weak": "Full table dump on every reconnect."
+          },
+          "misconceptions": [],
+          "probes": ["When do you snapshot vs stream deltas?", "How do you resume a interrupted catch-up?"],
+          "hints": ["Store last applied sequence id on device.", "Batch and compress delta pages."],
+          "referenceFix": "Track per-client vector/sequence cursors, page deltas with backoff on cellular, offer snapshot bootstrap when lag exceeds threshold, and resume with range requests."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

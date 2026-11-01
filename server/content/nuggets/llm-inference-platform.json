@@ -1,0 +1,692 @@
+{
+  "promptId": "llm-inference-platform",
+  "packVersion": "pack-47c31d56",
+  "inputsFingerprint": "006bb9f725496f19e966f92bcf0cae103f984191ab40dcdb212cd473551ade40",
+  "nuggets": [
+    {
+      "id": "llm-inference-platform/deep-batching",
+      "title": "Dynamic Batching Adds 4s Tail Latency for Chat",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.batching",
+      "scenario": {
+        "symptoms": "Interactive chat P99 latency hits 4s while GPU utilization looks healthy at 85%.",
+        "interviewerSetup": "Scheduler waits up to 200ms to fill batches for throughput, applied to all request classes equally."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-chat",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Chat Apps"
+            }
+          },
+          {
+            "id": "node-router",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Request Router"
+            }
+          },
+          {
+            "id": "node-gpu",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "GPU Workers"
+            }
+          },
+          {
+            "id": "node-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 300
+            },
+            "data": {
+              "kind": "stream-processor",
+              "label": "Batch Queue"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-chat",
+            "target": "node-router",
+            "label": "Interactive"
+          },
+          {
+            "id": "e2",
+            "source": "node-router",
+            "target": "node-batch",
+            "label": "Wait fill"
+          },
+          {
+            "id": "e3",
+            "source": "node-batch",
+            "target": "node-gpu",
+            "label": "Infer"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-batch",
+          "node-router"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Batching wait policy penalizes latency-sensitive interactive traffic"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_batching",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 3,
+            "required": true,
+            "goal": "Maximise throughput while protecting latency.",
+            "opener": "How do you keep GPUs busy without making interactive users wait?",
+            "evidence": {
+              "strong": "Continuous batching that adds and removes sequences each step, a paged KV cache to avoid fragmentation, chunked prefill so long prompts don't stall decoding, batch size and admission limits tuned for time to first token, and prefix caching for shared system prompts.",
+              "adequate": "Dynamic batching with a wait window.",
+              "weak": "One request at a time or static batches."
+            },
+            "misconceptions": [
+              {
+                "id": "bat.static",
+                "pattern": "Waits to fill a fixed batch before running.",
+                "challenge": "A batch of sequences finishes at different lengths. What do the GPU slots of finished sequences do?"
+              }
+            ],
+            "probes": [
+              "What does a long prompt do to everyone else's decoding?",
+              "How do you trade throughput for latency?"
+            ],
+            "hints": [
+              "Join and leave the batch every step.",
+              "Split big prefills."
+            ],
+            "referenceFix": "Continuous batching, paged KV cache, chunked prefill, tuned admission and batch limits, and prefix caching."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-inference-platform/deep-isolation",
+      "title": "Batch Backfill Saturates GPU Shared with Online",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.isolation",
+      "scenario": {
+        "symptoms": "Nightly embedding job colocated on same GPU pool spikes interactive latency 10x at 2am UTC globally.",
+        "interviewerSetup": "Batch and online share GPU pool without priority queues or separate autoscaling groups."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-online",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 120
+            },
+            "data": {
+              "kind": "client",
+              "label": "Online API"
+            }
+          },
+          {
+            "id": "node-batch",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 260
+            },
+            "data": {
+              "kind": "batch-job",
+              "label": "Batch Jobs"
+            }
+          },
+          {
+            "id": "node-sched",
+            "type": "systemNode",
+            "position": {
+              "x": 320,
+              "y": 190
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "GPU Scheduler"
+            }
+          },
+          {
+            "id": "node-gpu",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 190
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "GPU Pool"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-online",
+            "target": "node-sched",
+            "label": "Low latency"
+          },
+          {
+            "id": "e2",
+            "source": "node-batch",
+            "target": "node-sched",
+            "label": "Fill GPU"
+          },
+          {
+            "id": "e3",
+            "source": "node-sched",
+            "target": "node-gpu",
+            "label": "Shared queue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-sched",
+          "node-gpu"
+        ],
+        "edgeIds": [
+          "e3"
+        ],
+        "headline": "Missing workload isolation lets batch jobs steal GPU from online"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_isolation",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Keep batch work from hurting interactive latency.",
+            "opener": "A large batch job starts and interactive latency spikes. What do you change?",
+            "evidence": {
+              "strong": "Separate pools or priority classes, batch jobs filling idle capacity and preempted or throttled first, admission control based on queue and KV cache pressure, per-team quotas, and latency SLO monitoring per class.",
+              "adequate": "Runs batch at night.",
+              "weak": "No separation."
+            },
+            "misconceptions": [
+              {
+                "id": "iso.night",
+                "pattern": "Relies on running batch jobs at night.",
+                "challenge": "Your users are in many time zones and batch jobs are urgent sometimes. What happens then?"
+              }
+            ],
+            "probes": [
+              "Which work gets preempted?",
+              "How do you know interactive users are suffering?"
+            ],
+            "hints": [
+              "Priorities, not schedules.",
+              "Watch per-class latency."
+            ],
+            "referenceFix": "Priority classes or separate pools, preemptible batch on idle capacity, pressure-based admission control, quotas and per-class SLOs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-inference-platform/deep-adapters",
+      "title": "30 LoRA Adapters Require 30 Full Model Loads",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.adapters",
+      "scenario": {
+        "symptoms": "GPU memory exhausted serving many fine-tunes; platform loads separate full weights per adapter.",
+        "interviewerSetup": "Each tenant adapter deployed as independent model replica instead of shared base with adapter swap."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-router",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "Inference Router"
+            }
+          },
+          {
+            "id": "node-gpu",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "GPU Node"
+            }
+          },
+          {
+            "id": "node-base",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 80
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Base Weights"
+            }
+          },
+          {
+            "id": "node-adapters",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 220
+            },
+            "data": {
+              "kind": "kv-store",
+              "label": "LoRA Adapters"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-router",
+            "target": "node-gpu",
+            "label": "Route tenant"
+          },
+          {
+            "id": "e2",
+            "source": "node-gpu",
+            "target": "node-base",
+            "label": "Reload full"
+          },
+          {
+            "id": "e3",
+            "source": "node-adapters",
+            "target": "node-gpu",
+            "label": "Unused swap"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-gpu",
+          "node-base"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Per-adapter full model replicas exhaust GPU memory"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_adapters",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 3,
+            "required": true,
+            "goal": "Serve many fine-tuned variants without a copy each.",
+            "opener": "How do you serve thirty fine-tuned variants without thirty copies of the model?",
+            "evidence": {
+              "strong": "Fine-tunes as LoRA adapters on shared base models, an engine that batches requests for different adapters together, adapters loaded on demand from storage with an in-memory cache, routing requests with adapter ids, and a registry tracking adapter versions and their base model.",
+              "adequate": "Merges each fine-tune into a full model.",
+              "weak": "A dedicated GPU per variant."
+            },
+            "misconceptions": [
+              {
+                "id": "ad.copy",
+                "pattern": "Deploys each fine-tune as a separate full model.",
+                "challenge": "Thirty copies of a large model, mostly idle. What does that cost?"
+              }
+            ],
+            "probes": [
+              "What happens when a rarely used adapter gets a request?",
+              "What breaks when the base model is upgraded?"
+            ],
+            "hints": [
+              "Adapters are small.",
+              "Variants depend on their base."
+            ],
+            "referenceFix": "LoRA adapters on shared bases, multi-adapter batching, on-demand loading with caching, adapter-aware routing and versioned registry."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-inference-platform/deep-autoscaling",
+      "title": "Traffic Spike Hits Before Cold GPU Fleet Ready",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.autoscaling",
+      "scenario": {
+        "symptoms": "Product launch causes 503s for 12 minutes while new GPU nodes load 70GB checkpoints sequentially.",
+        "interviewerSetup": "Autoscaler reacts to queue depth but model load takes 8 minutes; no pre-warmed pool or forecast scaling."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-traffic",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "client",
+              "label": "Clients"
+            }
+          },
+          {
+            "id": "node-lb",
+            "type": "systemNode",
+            "position": {
+              "x": 280,
+              "y": 150
+            },
+            "data": {
+              "kind": "load-balancer",
+              "label": "Inference LB"
+            }
+          },
+          {
+            "id": "node-pool",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 150
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "GPU Pool"
+            }
+          },
+          {
+            "id": "node-asg",
+            "type": "systemNode",
+            "position": {
+              "x": 480,
+              "y": 300
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Autoscaler"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-traffic",
+            "target": "node-lb",
+            "label": "Spike"
+          },
+          {
+            "id": "e2",
+            "source": "node-asg",
+            "target": "node-pool",
+            "label": "Slow scale"
+          },
+          {
+            "id": "e3",
+            "source": "node-lb",
+            "target": "node-pool",
+            "label": "503 overflow"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-asg",
+          "node-pool"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Slow model load time makes reactive GPU autoscaling too late"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_autoscaling",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 3,
+            "required": true,
+            "goal": "Scale GPUs ahead of demand despite slow startup.",
+            "opener": "Loading a large model takes several minutes. How does that shape autoscaling?",
+            "evidence": {
+              "strong": "Scales on leading signals (queue depth, KV cache utilisation, time to first token) rather than CPU, keeps warm spare replicas, pre-scales for known daily peaks, caches weights on local disks to speed loading, and scales batch capacity down first.",
+              "adequate": "Scales on GPU utilisation.",
+              "weak": "Scales on CPU."
+            },
+            "misconceptions": [
+              {
+                "id": "as.cpu",
+                "pattern": "Uses CPU utilisation as the scaling signal.",
+                "challenge": "GPUs are saturated and CPUs are idle. What does a CPU-based autoscaler do?"
+              }
+            ],
+            "probes": [
+              "Which metric tells you to scale before users notice?",
+              "How do you make new replicas start faster?"
+            ],
+            "hints": [
+              "Watch queues and cache pressure.",
+              "Keep some capacity warm."
+            ],
+            "referenceFix": "Leading-signal autoscaling, warm spares, scheduled pre-scaling, local weight caches, and shrinking batch capacity first."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "llm-inference-platform/deep-rollout",
+      "title": "Canary Model Swap Regresses All Traffic Instantly",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.rollout",
+      "scenario": {
+        "symptoms": "New quantized model promoted to 100% traffic after 5-minute canary with no quality guardrails.",
+        "interviewerSetup": "Rollout controller promotes on schedule timer rather than error rate or eval score regression."
+      },
+      "diagram": {
+        "nodes": [
+          {
+            "id": "node-deploy",
+            "type": "systemNode",
+            "position": {
+              "x": 80,
+              "y": 150
+            },
+            "data": {
+              "kind": "deployer",
+              "label": "Rollout Controller"
+            }
+          },
+          {
+            "id": "node-canary",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 80
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Canary Pool"
+            }
+          },
+          {
+            "id": "node-prod",
+            "type": "systemNode",
+            "position": {
+              "x": 300,
+              "y": 220
+            },
+            "data": {
+              "kind": "model-serving",
+              "label": "Production Pool"
+            }
+          },
+          {
+            "id": "node-mon",
+            "type": "systemNode",
+            "position": {
+              "x": 520,
+              "y": 150
+            },
+            "data": {
+              "kind": "monitoring-dashboard",
+              "label": "Quality Metrics"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "node-deploy",
+            "target": "node-canary",
+            "label": "5% traffic"
+          },
+          {
+            "id": "e2",
+            "source": "node-deploy",
+            "target": "node-prod",
+            "label": "Instant 100%"
+          },
+          {
+            "id": "e3",
+            "source": "node-mon",
+            "target": "node-deploy",
+            "label": "Ignored"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      },
+      "incident": {
+        "nodeIds": [
+          "node-deploy",
+          "node-prod"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Timer-based promotion skips quality gates on model rollout"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix_rollout",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 3,
+            "required": true,
+            "goal": "Release new models and engine versions safely.",
+            "opener": "How do you roll out a new model version or a quantized variant?",
+            "evidence": {
+              "strong": "Offline eval suite and latency benchmarks on target hardware, shadow traffic, canary percentages with automatic rollback on quality, error or latency thresholds, pinned versions, and keeping the old version warm during rollout.",
+              "adequate": "Blue-green deploys without evals.",
+              "weak": "Replaces models in place."
+            },
+            "misconceptions": [
+              {
+                "id": "ro.same",
+                "pattern": "Assumes a quantized model behaves the same.",
+                "challenge": "The quantized model is faster but subtly worse at code. Where would that show?"
+              }
+            ],
+            "probes": [
+              "What would trigger an automatic rollback?",
+              "How do you test quality before serving users?"
+            ],
+            "hints": [
+              "Benchmarks and evals before traffic.",
+              "Small slices first."
+            ],
+            "referenceFix": "Evals and hardware benchmarks, shadow and canary rollouts with automatic rollback, pinned versions and a warm old version."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}

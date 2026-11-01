@@ -1,0 +1,267 @@
+{
+  "promptId": "voice-ai-agent",
+  "packVersion": "pack-45419408",
+  "inputsFingerprint": "789623ba3dafc7005b8b36b136c5f0f3ba68379ae8c82b791ec0259963e2f414",
+  "nuggets": [
+    {
+      "id": "voice-ai-agent/end_to_end_latency_budget",
+      "title": "Turn Latency Exceeds 800ms Voice UX Threshold",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.latency",
+      "scenario": {
+        "symptoms": "Users interrupt the assistant mid-sentence; session abandon rate rises 22%. Traces show 1.4s from end-of-speech to first audio byte due to serial STT, LLM, TTS pipeline.",
+        "interviewerSetup": "Pipeline waits for full STT transcript before LLM call; TTS starts only after complete LLM response text."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-user", "type": "systemNode", "position": { "x": 40, "y": 150 }, "data": { "kind": "user", "label": "Caller" } },
+          { "id": "node-stt", "type": "systemNode", "position": { "x": 180, "y": 150 }, "data": { "kind": "speech", "label": "STT (full utterance)" } },
+          { "id": "node-llm", "type": "systemNode", "position": { "x": 340, "y": 150 }, "data": { "kind": "llm", "label": "LLM" } },
+          { "id": "node-tts", "type": "systemNode", "position": { "x": 500, "y": 150 }, "data": { "kind": "speech", "label": "TTS (batch)" } }
+        ],
+        "edges": [
+          { "id": "e-u-stt", "source": "node-user", "target": "node-stt", "label": "Audio" },
+          { "id": "e-stt-llm", "source": "node-stt", "target": "node-llm", "label": "Wait for final" },
+          { "id": "e-llm-tts", "source": "node-llm", "target": "node-tts", "label": "Wait for full text" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-stt", "node-llm", "node-tts"],
+        "edgeIds": ["e-stt-llm", "e-llm-tts"],
+        "headline": "Serial batch speech pipeline breaks interactive voice latency budget"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_voice_latency",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Hit sub-800ms turn latency with streaming STT, speculative LLM, and streaming TTS overlap.",
+          "opener": "Users say the assistant feels sluggish on the phone. Walk through timing from when they stop talking to when they hear a reply.",
+          "evidence": {
+            "strong": "Streaming STT partials, endpointing, LLM on partial with correction, streaming TTS on first tokens, colocate services, measure per-stage budget.",
+            "adequate": "Faster model only without pipeline overlap.",
+            "weak": "Record entire utterance then batch process."
+          },
+          "misconceptions": [{ "id": "lat.model", "pattern": "Assumes only model size determines voice latency.", "challenge": "How much time is waiting for full transcript vs inference?" }],
+          "probes": ["When can TTS start?", "What is your end-of-speech detector?"],
+          "hints": ["Stream tokens to TTS early.", "Parallelize stages."],
+          "referenceFix": "Streaming STT/LLM/TTS with overlapping pipeline and tight per-stage timeouts."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "voice-ai-agent/barge_in_talk_over",
+      "title": "Assistant Talks Over User During Barge-In",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.turns",
+      "scenario": {
+        "symptoms": "Customers yell 'stop' repeatedly while TTS continues for 3 seconds. Turn-taking state machine ignores VAD during playback.",
+        "interviewerSetup": "Half-duplex mode: mic muted while assistant speaks; barge-in events not wired to cancel TTS stream."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-user", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "User Speech" } },
+          { "id": "node-vad", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "speech", "label": "VAD (disabled on play)" } },
+          { "id": "node-tts", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "speech", "label": "TTS Playback" } },
+          { "id": "node-fsm", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "service", "label": "Turn FSM" } }
+        ],
+        "edges": [
+          { "id": "e-user-vad", "source": "node-user", "target": "node-vad", "label": "Ignored" },
+          { "id": "e-fsm-tts", "source": "node-fsm", "target": "node-tts", "label": "No cancel" },
+          { "id": "e-vad-fsm", "source": "node-vad", "target": "node-fsm", "label": "Not connected" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-fsm", "node-vad"],
+        "edgeIds": ["e-vad-fsm"],
+        "headline": "Turn manager lacks barge-in handling to stop playback and capture user speech"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_turn_taking",
+          "stage": "incident",
+          "dimension": "requirements",
+          "weight": 3,
+          "required": true,
+          "goal": "Implement full-duplex or fast barge-in with VAD, TTS cancel, and clear speaking/listening states.",
+          "opener": "Users can't interrupt the bot while it's talking. How does turn-taking work in your voice agent?",
+          "evidence": {
+            "strong": "Full-duplex VAD during TTS, immediate playback cancel, truncate LLM generation, echo cancellation, explicit FSM states, test barge-in latency.",
+            "adequate": "Push-to-talk only.",
+            "weak": "Assistant monologue until TTS ends."
+          },
+          "misconceptions": [{ "id": "turn.ptt", "pattern": "Treats push-to-talk as sufficient for natural conversation.", "challenge": "Do real phone support calls allow interruption?" }],
+          "probes": ["How fast must TTS stop after user speaks?", "How handle echo from speaker?"],
+          "hints": ["Cancel audio and LLM together.", "Keep mic open with AEC."],
+          "referenceFix": "Barge-in path cancels TTS within 200ms and pivots to listening state."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "voice-ai-agent/tool_hallucination_transfer",
+      "title": "Agent Promises Transfer Without Calling Telephony API",
+      "minutes": 4,
+      "parentAgendaItemId": "deep.safety",
+      "scenario": {
+        "symptoms": "Callers stay on hold indefinitely after assistant says 'connecting you to a specialist'. Logs show no TransferCall tool invocation.",
+        "interviewerSetup": "LLM instructed to be helpful can verbalize transfer without forced tool call; no guardrail validates action completion."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-llm", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "llm", "label": "Voice Agent" } },
+          { "id": "node-tts", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "speech", "label": "TTS" } },
+          { "id": "node-tools", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "telephony", "label": "Transfer API" } },
+          { "id": "node-user", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Caller" } }
+        ],
+        "edges": [
+          { "id": "e-llm-tts", "source": "node-llm", "target": "node-tts", "label": "Says transferring" },
+          { "id": "e-llm-tools", "source": "node-llm", "target": "node-tools", "label": "Skipped" },
+          { "id": "e-tts-user", "source": "node-tts", "target": "node-user", "label": "False assurance" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-llm", "node-tools"],
+        "edgeIds": ["e-llm-tools"],
+        "headline": "Voice agent verbalizes actions without executing required tool calls"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_voice_safety",
+          "stage": "incident",
+          "dimension": "reliability",
+          "weight": 3,
+          "required": true,
+          "goal": "Ground responses in tool results; block claims of actions until tools succeed; safety prompts and classifiers.",
+          "opener": "The bot told callers they were transferred but nothing happened. How do you prevent harmful or false voice agent behavior?",
+          "evidence": {
+            "strong": "Tool-first patterns for actions, response validation layer, prohibited claim templates, escalation on low confidence, log tool-result pairing.",
+            "adequate": "Prompt says don't lie without enforcement.",
+            "weak": "Pure LLM monologue for actions."
+          },
+          "misconceptions": [{ "id": "safe.prompt", "pattern": "Relies on system prompt alone for action honesty.", "challenge": "Can the model still say 'transferring' without calling Transfer?" }],
+          "probes": ["How verify transfer actually started?", "What happens on tool failure?"],
+          "hints": ["Never speak action until tool OK.", "Validate transcript against tool log."],
+          "referenceFix": "Orchestrator speaks only after TransferCall success; retry or apologize on failure."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "voice-ai-agent/concurrent_call_capacity",
+      "title": "Marketing Spike Exhausts Real-Time Voice Session Pool",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.capacity",
+      "scenario": {
+        "symptoms": "New callers hear busy tone during campaign while CPU is only 60%. Session manager limit of 2k concurrent WebRTC legs hit before autoscaler adds nodes.",
+        "interviewerSetup": "Hard cap on concurrent sessions per control plane with slow scale-out; no queue with estimated wait callback."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-callers", "type": "systemNode", "position": { "x": 60, "y": 150 }, "data": { "kind": "user", "label": "Inbound Calls" } },
+          { "id": "node-sfu", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "telephony", "label": "Media Session Pool" } },
+          { "id": "node-cap", "type": "systemNode", "position": { "x": 260, "y": 300 }, "data": { "kind": "metrics", "label": "2k Session Cap" } },
+          { "id": "node-scale", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "kubernetes", "label": "Autoscaler (lag)" } }
+        ],
+        "edges": [
+          { "id": "e-call-sfu", "source": "node-callers", "target": "node-sfu", "label": "Rejected at cap" },
+          { "id": "e-cap-sfu", "source": "node-cap", "target": "node-sfu", "label": "Hard limit" },
+          { "id": "e-scale-sfu", "source": "node-scale", "target": "node-sfu", "label": "Slow add" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-cap", "node-sfu"],
+        "edgeIds": ["e-cap-sfu"],
+        "headline": "Session limits and slow scale-out reject calls despite available cluster headroom"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_voice_capacity",
+          "stage": "incident",
+          "dimension": "scalability",
+          "weight": 3,
+          "required": true,
+          "goal": "Scale real-time voice horizontally with pre-warm capacity, queue/callback, and per-region pools.",
+          "opener": "Campaign drove busy signals while servers looked half idle. How many concurrent voice sessions can you handle and how do you scale?",
+          "evidence": {
+            "strong": "Horizontal media servers, pre-warm before campaigns, queue with callback offer, regional sharding, limit admission with message not busy tone.",
+            "adequate": "Raise static cap manually.",
+            "weak": "Single media server."
+          },
+          "misconceptions": [{ "id": "cap.cpu", "pattern": "Uses CPU only to decide capacity.", "challenge": "What limits concurrent WebRTC sessions besides CPU?" }],
+          "probes": ["What do callers hear at capacity?", "How pre-scale before known spike?"],
+          "hints": ["Session counts matter as much as CPU.", "Offer callback instead of drop."],
+          "referenceFix": "Pre-warmed pool, fast horizontal scale, queued callback UX."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    },
+    {
+      "id": "voice-ai-agent/wer_regression_deploy",
+      "title": "STT Model Upgrade Hurts Intent Detection in Noise",
+      "minutes": 3,
+      "parentAgendaItemId": "deep.eval",
+      "scenario": {
+        "symptoms": "After STT v3 deploy, misrouted intents rise 18% on car Bluetooth calls. Offline WER improved on clean LibriSpeech but not on telephony noise set.",
+        "interviewerSetup": "Release gated on clean speech benchmark only; no eval on production noisy sample or downstream intent accuracy."
+      },
+      "diagram": {
+        "nodes": [
+          { "id": "node-stt", "type": "systemNode", "position": { "x": 260, "y": 150 }, "data": { "kind": "speech", "label": "STT v3" } },
+          { "id": "node-eval", "type": "systemNode", "position": { "x": 80, "y": 150 }, "data": { "kind": "evaluation", "label": "Clean WER Eval" } },
+          { "id": "node-intent", "type": "systemNode", "position": { "x": 460, "y": 150 }, "data": { "kind": "llm", "label": "Intent Router" } },
+          { "id": "node-noisy", "type": "systemNode", "position": { "x": 80, "y": 300 }, "data": { "kind": "metrics", "label": "Noisy Calls (not tested)" } }
+        ],
+        "edges": [
+          { "id": "e-eval-stt", "source": "node-eval", "target": "node-stt", "label": "Ship" },
+          { "id": "e-stt-intent", "source": "node-stt", "target": "node-intent", "label": "Bad transcript" },
+          { "id": "e-noisy-skip", "source": "node-noisy", "target": "node-eval", "label": "Excluded" }
+        ],
+        "viewport": { "x": 0, "y": 0, "zoom": 1 }
+      },
+      "incident": {
+        "nodeIds": ["node-eval", "node-noisy"],
+        "edgeIds": ["e-eval-stt"],
+        "headline": "STT evaluation on clean speech fails to predict real-world voice agent quality regression"
+      },
+      "miniPack": {
+        "agenda": [{
+          "id": "incident.fix_voice_eval",
+          "stage": "incident",
+          "dimension": "tradeoffs",
+          "weight": 3,
+          "required": true,
+          "goal": "Evaluate voice stack on noisy telephony samples and end-to-end task success not WER alone.",
+          "opener": "WER looked better but callers get misrouted more on car speakers. How do you evaluate speech and agent changes?",
+          "evidence": {
+            "strong": "Telephony noise test set, intent accuracy E2E, shadow traffic canary, human review sample, slice by device and accent.",
+            "adequate": "WER on internal clean set only.",
+            "weak": "No STT eval before deploy."
+          },
+          "misconceptions": [{ "id": "eval.wer", "pattern": "Uses academic WER as sole release gate.", "challenge": "Does lower WER on clean audio imply better intent routing in cars?" }],
+          "probes": ["What dataset matches your users?", "Which metric reflects caller outcome?"],
+          "hints": ["Evaluate downstream task success.", "Sample real call audio."],
+          "referenceFix": "Gate STT releases on noisy set WER and intent accuracy canary."
+        }],
+        "pacing": { "incident": 0.85, "wrap_up": 0.15 }
+      },
+      "status": "published",
+      "source": "cursor"
+    }
+  ]
+}
