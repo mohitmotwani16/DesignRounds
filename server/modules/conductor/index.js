@@ -465,6 +465,11 @@ function canvasItemFor(added, items, agenda, stage) {
 
 const tickKeyOf = (design, ledgerVersion, reason) => crypto.createHash("sha256").update(`${design.text}\0${ledgerVersion}\0${reason}`).digest("hex").slice(0, 16);
 
+/** Component kinds newly added to the canvas since the conductor's last snapshot. */
+function addedKinds(snapshot, diagram) {
+  return diffSnapshots(snapshot, snapshotOf(diagram), diagram).added.map((entry) => entry.kind);
+}
+
 // A background tick (section 6). Returns { action: "none", reason } or the turn it
 // produced. `reserveCredit` and `releaseCredit` come from the route, which owns credits.
 export async function handleTick({ session, user, stateRow, body, reserveCredit, releaseCredit }) {
