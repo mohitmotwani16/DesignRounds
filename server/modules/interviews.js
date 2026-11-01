@@ -314,7 +314,12 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
       await conn.query("select id from practice_sessions where id = $1 for update", [session.id]);
       const stateRow = await ensureState(conn, session);
       const hasTurns = Boolean(await conn.queryOne("select 1 from interview_turns where session_id = $1 limit 1", [session.id]));
-      const needsNuggetV3 = session.session_kind === "nugget" && packVersion && (!hasTurns || stateRow.engine !== "v3");
+      const needsNuggetV3 = session.session_kind === "nugget" && packVersion && (
+        !hasTurns
+        || stateRow.engine !== "v3"
+        || stateRow.stage === "requirements"
+        || stateRow.stage === "high_level"
+      );
       if (needsNuggetV3) {
         if (hasTurns) await clearInterviewRound(conn, session.id);
         await startNuggetRound(conn, { session, user: req.user });

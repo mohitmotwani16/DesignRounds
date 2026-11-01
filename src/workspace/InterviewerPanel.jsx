@@ -13,7 +13,7 @@ const STAGES = [
 
 // The live interviewer conversation. State comes from useInterview so it survives
 // the panel being hidden or the Review tab being open.
-export function InterviewerPanel({ interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
+export function InterviewerPanel({ sessionKind = "full", interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
   if (interview.status === "loading") return <div className="interviewer-body interviewer-center"><LoaderCircle size={18} className="spin" /></div>;
   if (interview.status === "error") {
     return (
@@ -24,7 +24,7 @@ export function InterviewerPanel({ interview, roundFinished, selected, onClearSe
     );
   }
   if (interview.access !== "full") return <LockedInterviewer interview={interview} onShowReview={onShowReview} />;
-  return <Conversation interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} />;
+  return <Conversation sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} />;
 }
 
 // Free plans. The interviewer is a Plus feature, and the panel says so first: one
@@ -117,11 +117,12 @@ function LockedInterviewer({ interview, onShowReview }) {
   );
 }
 
-function Conversation({ interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
+function Conversation({ sessionKind, interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
   const { turns, state, allowance, pending, pendingAudio, outgoing, replyText, sendError } = interview;
   const [draft, setDraft] = useState("");
   const [soundOn, toggleSound] = useInterviewerSound();
   const listRef = useRef(null);
+  const isNugget = sessionKind === "nugget" || state?.sessionKind === "nugget";
   const stageIndex = Math.max(0, STAGES.findIndex(([id]) => id === state?.stage));
   const repliesLeft = allowance ? Math.max(0, allowance.turns.limit - allowance.turns.used) : 0;
   const hintsLeft = allowance ? Math.max(0, allowance.hints.limit - allowance.hints.used) : 0;
@@ -170,11 +171,14 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
   return (
     <>
       <div className="interview-stagebar">
-        <ol className="interview-stages" aria-label="Interview stage">
-          {STAGES.map(([id, label], index) => (
-            <li key={id} className={index < stageIndex ? "done" : index === stageIndex ? "current" : ""} aria-current={index === stageIndex ? "step" : undefined}>{label}</li>
-          ))}
-        </ol>
+        {!isNugget && (
+          <ol className="interview-stages" aria-label="Interview stage">
+            {STAGES.map(([id, label], index) => (
+              <li key={id} className={index < stageIndex ? "done" : index === stageIndex ? "current" : ""} aria-current={index === stageIndex ? "step" : undefined}>{label}</li>
+            ))}
+          </ol>
+        )}
+        {isNugget && v3 && <span className="interview-drill-label">Incident drill</span>}
         {v3 && <RoundClock clock={state.clock} receivedAt={interview.receivedAt} paused={roundFinished} />}
         <button type="button" className="interview-sound" onClick={toggleSound} aria-pressed={soundOn}
           aria-label={soundOn ? "Mute the reply sound" : "Play a sound when the interviewer replies"} title={soundOn ? "Reply sound on" : "Reply sound off"}>
@@ -184,7 +188,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
 
       <div className="interviewer-body interview-thread" ref={listRef} role="log" aria-relevant="additions" aria-label="Interview conversation">
         {v3 && state?.sessionKind !== "nugget" && !learnerSpoke && !roundFinished && <ModeChoice mode={state.mode} onChange={interview.setMode} />}
-        {turns.map((turn) => <Turn key={turn.id} turn={turn} onFocusNode={onFocusNode} labelFor={labelFor} onFeedback={interview.sendFeedback} />)}
+        {turns.map((turn) => <Turn key={turn.id} turn={turn} isNugget={isNugget} onFocusNode={onFocusNode} labelFor={labelFor} onFeedback={interview.sendFeedback} />)}
         {outgoing && (
           <div className="interview-turn learner">
             {outgoing.kind === "hint_request"
@@ -247,7 +251,7 @@ function Conversation({ interview, roundFinished, selected, onClearSelected, onF
             <div className="compose-box">
               <textarea
                 aria-label="Message to interviewer"
-                placeholder={outOfReplies ? "No interviewer replies left this round" : "Explain a decision or ask a question…"}
+                placeholder={outOfReplies ? "No interviewer replies left this round" : isNugget ? "Explain what failed and how you'd fix it…" : "Explain a decision or ask a question…"}
                 rows={2}
                 value={draft}
                 maxLength={2000}
@@ -340,9 +344,9 @@ const FEEDBACK_REASONS = [
   ["other", "Something else"],
 ];
 
-function Turn({ turn, onFocusNode, labelFor, onFeedback }) {
+function Turn({ turn, isNugget = false, onFocusNode, labelFor, onFeedback }) {
   const mine = turn.role === "learner";
-  const noticed = turn.trigger === "proactive" || (turn.trigger === "tick" && !QUIET_KINDS.has(turn.kind) && turn.kind !== "wrap_up");
+  const noticed = !isNugget && (turn.trigger === "proactive" || (turn.trigger === "tick" && !QUIET_KINDS.has(turn.kind) && turn.kind !== "wrap_up"));
   return (
     <div className={`interview-turn ${mine ? "learner" : "interviewer"}${QUIET_KINDS.has(turn.kind) ? " quiet" : ""}`}>
       {!mine && (

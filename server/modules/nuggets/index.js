@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { prompts } from "../../../src/data/prompts.js";
 import { isPlus } from "../plans.js";
 import { canAccessRound, promptById } from "../rounds.js";
-import { briefOf } from "../pks/inputs.js";
-import { renderPack } from "../pks/render.js";
+import { estimateTokens } from "../ucs/index.js";
+import { renderIncidentBrief, renderPack } from "../pks/render.js";
 import { miniPackAsProblemPack, nuggetContentVersion, validateNuggetFile } from "./schema.js";
 
 const contentDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "content", "nuggets");
@@ -58,17 +58,19 @@ export function getNuggetRecord(nuggetId) {
   const version = nugget.version;
   const pack = { ...miniPackAsProblemPack(nugget), version };
   const parent = promptById.get(nugget.parentPromptId);
-  const brief = parent ? { ...briefOf(parent), minutes: nugget.minutes, description: nugget.scenario.symptoms } : {
+  const brief = {
     title: nugget.title,
-    description: nugget.scenario.symptoms,
-    difficulty: "Intermediate",
+    difficulty: parent?.difficulty ?? "Intermediate",
     minutes: nugget.minutes,
+    description: nugget.scenario.symptoms,
     requirements: [],
     considerations: [],
     expectedOutcome: "",
     prerequisites: [],
   };
   const rendered = renderPack(pack, brief);
+  const incidentBrief = renderIncidentBrief(nugget, parent);
+  rendered.interviewer.brief = { text: incidentBrief, tokens: estimateTokens(incidentBrief) };
   return { nugget, pack, version, rendered };
 }
 

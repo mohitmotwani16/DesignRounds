@@ -151,6 +151,7 @@ export function nuggetContentVersion(nugget) {
 export function miniPackAsProblemPack(nugget) {
   const item = nugget.miniPack.agenda[0];
   return {
+    incidentDrill: true,
     opening: nugget.scenario.symptoms,
     clarifications: [],
     clarificationPolicy: "This is a short incident drill. Do not reveal the full fix; coach the learner toward it.",

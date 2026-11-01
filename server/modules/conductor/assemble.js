@@ -40,14 +40,17 @@ export function renderLedger(items, conventions) {
   ].join("\n");
 }
 
-export function renderPlan({ plan, trigger, items, selected, changes, rejection }) {
+export function renderPlan({ plan, trigger, items, selected, changes, rejection, incidentDrill = false }) {
   const status = (id) => items.find((item) => item.itemId === id)?.status ?? "none";
   const focus = plan.focusItemId ? `${plan.focusItemId} (${status(plan.focusItemId)})` : "none (every item is closed)";
+  const stageLine = incidentDrill
+    ? `Clock: incident drill, ${minutes(plan.clock.stageElapsedMs)} of about ${minutes(plan.clock.stageBudgetMs)} minutes; round ${minutes(plan.clock.roundElapsedMs)} of ${minutes(plan.clock.roundBudgetMs)} minutes.`
+    : `Clock: ${plan.clock.stage} stage, ${minutes(plan.clock.stageElapsedMs)} of about ${minutes(plan.clock.stageBudgetMs)} minutes; round ${minutes(plan.clock.roundElapsedMs)} of ${minutes(plan.clock.roundBudgetMs)} minutes.`;
   return [
     "<plan>",
     `Focus item: ${focus}. Next item to open: ${plan.nextItemId ?? "none"}.`,
     `Follow-ups left on the focus item: ${plan.budget.followUps}. Challenges left: ${plan.budget.challenges}. Hints left this round: ${plan.budget.hints}.`,
-    `Clock: ${plan.clock.stage} stage, ${minutes(plan.clock.stageElapsedMs)} of about ${minutes(plan.clock.stageBudgetMs)} minutes; round ${minutes(plan.clock.roundElapsedMs)} of ${minutes(plan.clock.roundBudgetMs)} minutes.`,
+    stageLine,
     `Allowed moves: ${plan.allowedMoves.join(", ")}.`,
     plan.candidates.length ? `Other items this turn may touch (credit them if the candidate covered them): ${plan.candidates.join(", ")}.` : "",
     plan.curveball ? `Curveball available: ${plan.curveball.id}, opens ${plan.curveball.agendaItemId}.` : "",
@@ -65,16 +68,27 @@ export function renderPlan({ plan, trigger, items, selected, changes, rejection 
 }
 
 export async function assembleBlocks({ round, record, items, conventions, design, turns, plan, trigger, selected = null, changes = "", rejection = "" }) {
+  const incidentDrill = Boolean(record.pack.incidentDrill);
   const universal = await renderUniversal({ version: round.ucsVersion, task: "interviewer", candidate: round.candidate, mode: round.mode });
   const problem = renderProblem(record, { task: "interviewer", focusItemId: plan.focusItemId });
-  return [
+  const blocks = [
     ...universal,
     ...problem,
     block("conductor.assumptions", renderAssumptions(round.assumptions, record.pack), "session"),
+  ];
+  if (incidentDrill) {
+    blocks.push(block(
+      "conductor.incident_drill",
+      "<incident_drill>\nThis session is a short incident drill, not a full system design round. The UCS stage flow (requirements, high-level, deep dive) does not apply. Ask only about the failure in the brief, diagnosis, and fix on the canvas.\n</incident_drill>",
+      "session",
+    ));
+  }
+  blocks.push(
     block("conductor.ledger", renderLedger(items, conventions), "turn"),
     block("conductor.design", `<learner_design>\n${design.text}\n</learner_design>`, "turn"),
     ...(round.summary ? [block("conductor.summary", `<earlier_conversation_summary>\n${clean(round.summary, 4000)}\n</earlier_conversation_summary>`, "turn")] : []),
     block("conductor.turns", `<conversation>\n${formatTurns(turns)}\n</conversation>`, "turn"),
-    block("conductor.plan", renderPlan({ plan, trigger, items, selected, changes, rejection }), "turn"),
-  ];
+    block("conductor.plan", renderPlan({ plan, trigger, items, selected, changes, rejection, incidentDrill }), "turn"),
+  );
+  return blocks;
 }

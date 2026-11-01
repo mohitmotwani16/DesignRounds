@@ -20,16 +20,38 @@ function renderBrief(brief) {
   ].filter(Boolean).join("\n");
 }
 
+/** Incident nugget drills: scenario only — no parent-round requirements list. */
+export function renderIncidentBrief(nugget, parent) {
+  return [
+    "<brief>",
+    `Incident drill: ${line(nugget.title)}.`,
+    parent?.title ? `Related design question: ${line(parent.title)}.` : "",
+    `Time: ${nugget.minutes} minutes.`,
+    `Scenario (what the candidate sees): ${line(nugget.scenario.symptoms)}`,
+    `Private context (do not read aloud verbatim): ${line(nugget.scenario.interviewerSetup)}`,
+    "This is a short incident drill on the diagram already on the canvas. Do not run a full system design interview.",
+    "Do not ask requirements, scope, or high-level architecture questions unless they are directly needed to explain this failure.",
+    "Stay on the outage, root cause, and fix for the highlighted components.",
+    "</brief>",
+  ].filter(Boolean).join("\n");
+}
+
 function agendaLine(item) {
   return `- ${item.id} · ${item.stage} · ${item.dimension} · weight ${item.weight} · ${item.required ? "required" : "optional"} · ${line(item.goal)}`;
 }
 
 function renderInterviewerAgenda(pack) {
-  const byStage = STAGES.flatMap((stage) => pack.agenda.filter((item) => item.stage === stage));
+  const byStage = pack.incidentDrill
+    ? pack.agenda
+    : STAGES.flatMap((stage) => pack.agenda.filter((item) => item.stage === stage));
   return [
     "<agenda>",
-    "Your private notepad for this question, one line per item: id · stage · rubric dimension · weight · required or optional · goal.",
-    ...byStage.map(agendaLine),
+    pack.incidentDrill
+      ? "One incident focus for this drill: id · rubric dimension · weight · goal."
+      : "Your private notepad for this question, one line per item: id · stage · rubric dimension · weight · required or optional · goal.",
+    ...byStage.map((item) => (pack.incidentDrill
+      ? `- ${item.id} · ${item.dimension} · weight ${item.weight} · ${line(item.goal)}`
+      : agendaLine(item))),
     "</agenda>",
     "",
     "<clarifications>",
@@ -41,10 +63,11 @@ function renderInterviewerAgenda(pack) {
   ].filter((part) => part !== "").join("\n");
 }
 
-export function renderFocus(item) {
+export function renderFocus(item, pack = null) {
+  const stage = pack?.incidentDrill ? "incident" : item.stage;
   return [
     `<focus_item id="${item.id}">`,
-    `Stage: ${item.stage}. Dimension: ${item.dimension}. Goal: ${line(item.goal)}`,
+    `Stage: ${stage}. Dimension: ${item.dimension}. Goal: ${line(item.goal)}`,
     `Opener: ${line(item.opener)}`,
     "Evidence:",
     ...["strong", "adequate", "weak"].map((band) => `- ${band}: ${line(item.evidence[band])}`),
@@ -79,7 +102,7 @@ export function renderPack(pack, brief) {
   return {
     interviewer: { brief: briefText, agenda: entry(renderInterviewerAgenda(pack)) },
     review: { brief: briefText, agenda: entry(renderReviewAgenda(pack)) },
-    focus: Object.fromEntries(pack.agenda.map((item) => [item.id, entry(renderFocus(item))])),
+    focus: Object.fromEntries(pack.agenda.map((item) => [item.id, entry(renderFocus(item, pack))])),
   };
 }
 
