@@ -14,7 +14,7 @@ import { guideFor } from "./ai/guides.js";
 import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
-import { changeMode, conductorPackVersion, handleLearnerTurn, handleTick, nuggetInterviewNeedsBootstrap, nuggetOpeningText, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
+import { changeMode, conductorPackVersion, ensureNuggetDebriefIfDue, handleLearnerTurn, handleTick, nuggetInterviewNeedsBootstrap, nuggetOpeningText, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
 import { nuggetDebriefSent } from "./conductor/nugget.js";
 import { requireUser } from "./identity.js";
 import { needsDataModel } from "./pks/index.js";
@@ -346,6 +346,9 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
       }
     });
   }
+  if (session.status === "in_progress" && session.session_kind === "nugget") {
+    await ensureNuggetDebriefIfDue({ session, user: req.user });
+  }
   const state = await queryOne("select * from interview_state where session_id = $1", [session.id]);
   const turns = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [session.id]);
   res.json({
@@ -398,7 +401,7 @@ async function reserveLearnerTurn({ session, user, kind, content, requestId, hin
       const allowance = await readAllowance(conn, user, session, state);
       if (allowance.turns.used >= allowance.turns.limit) {
         const limitMsg = session.session_kind === "nugget"
-          ? `You've used all ${allowance.turns.limit} interviewer replies for this drill. Finish the round when you're ready.`
+          ? `You've used all ${allowance.turns.limit} interviewer replies for this drill. Check the chat for your mini debrief, then finish the round.`
           : `You've used all ${allowance.turns.limit} interviewer replies for this round. Finish the round to get your review.`;
         throw new HttpError(403, "INTERVIEW_LIMIT_ROUND", limitMsg);
       }
@@ -477,7 +480,7 @@ async function deliverLearnerReply(req, res, { session, reserved, hint = false }
       throw error;
     }
     return {
-      turns: [presentTurn(reserved.learner), presentTurn(result.turn)],
+      turns: [presentTurn(reserved.learner), presentTurn(result.turn), ...(result.extraTurns ?? []).map(presentTurn)],
       state: presentState(result.state, session),
       allowance: await readAllowance(db, req.user, session, result.state),
     };

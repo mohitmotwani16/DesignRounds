@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { plan as makePlan } from "./plan.js";
-import { nuggetDebriefSent, nuggetIncidentResolved, nuggetInterviewerExplainedFix, nuggetWrapMessage } from "./nugget.js";
+import { nuggetDebriefSent, nuggetDrillConventions, nuggetIncidentResolved, nuggetInterviewerExplainedFix, nuggetLearnerNearFix, nuggetWrapMessage } from "./nugget.js";
 import { decideTick } from "./ticks.js";
 
 const conventions = { maxFollowUpsPerItem: 2, maxChallengesPerMisconception: 1, hintsPerRound: 3, stageOverrunFactor: 1.5, wrapUpAt: 0.95, maxAssessmentsPerTurn: 4, minCanvasComponents: 3, minCanvasConnections: 2, drawCooldownTurns: 2, maxDrawRequestsPerItem: 2, timeWarnings: [0.8], idleNudgeMs: 180_000, drawingWithoutTalkingMs: 240_000, proactiveCooldownMs: 90_000 };
@@ -42,6 +42,18 @@ test("decideTick: incident drill skips canvas proactive questions", () => {
 test("nuggetDebriefSent detects debrief in turns", () => {
   assert.equal(nuggetDebriefSent([{ role: "interviewer", content: "Quick debrief: fix it." }]), true);
   assert.equal(nuggetDebriefSent([{ role: "interviewer", content: "Tell me more." }]), false);
+});
+
+test("nuggetLearnerNearFix matches overlapping learner answer", () => {
+  const ref = "Use a distributed lock with lease renewal and fencing tokens.";
+  assert.equal(nuggetLearnerNearFix("I'd add distributed lock, lease renewal, fencing tokens on writes.", ref), true);
+  assert.equal(nuggetLearnerNearFix("Maybe scale out more servers?", ref), false);
+});
+
+test("nuggetDrillConventions tightens follow-ups", () => {
+  const tight = nuggetDrillConventions({ maxFollowUpsPerItem: 3, wrapUpAt: 0.95 });
+  assert.equal(tight.maxFollowUpsPerItem, 1);
+  assert.equal(tight.wrapUpAt, 0.9);
 });
 
 test("nuggetInterviewerExplainedFix matches reference language", () => {

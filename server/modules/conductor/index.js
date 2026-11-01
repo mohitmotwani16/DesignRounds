@@ -21,7 +21,15 @@ import { applyTurn, nextPoorResponseState } from "./apply.js";
 import { canvasSignals } from "./canvas.js";
 import { assembleBlocks } from "./assemble.js";
 import { CLOSED, FOCUS_AREAS, KIND_FOR_MOVE, bandAtLeast, creditedBand } from "./moves.js";
-import { nuggetDebriefSent, nuggetIncidentResolved, nuggetInterviewerExplainedFix, nuggetReferenceFix, nuggetWrapMessage } from "./nugget.js";
+import {
+  nuggetDebriefSent,
+  nuggetDrillConventions,
+  nuggetIncidentResolved,
+  nuggetInterviewerExplainedFix,
+  nuggetLearnerNearFix,
+  nuggetReferenceFix,
+  nuggetWrapMessage,
+} from "./nugget.js";
 import { clockOf, focusItem, nextPendingItem, plan as makePlan, tickPlan } from "./plan.js";
 import * as store from "./store.js";
 import { conductorTask } from "./task.js";
@@ -155,7 +163,8 @@ async function context({ session, user, stateRow }) {
   if (session.session_kind === "nugget" && session.nugget_id) {
     const record = getNuggetRecord(session.nugget_id);
     if (!record) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
-    const conventions = await ucsConventions({ version: round.ucsVersion, mode: round.mode, hintsPerRound: limitsFor(user, session).hintsPerRound });
+    const baseConventions = await ucsConventions({ version: round.ucsVersion, mode: round.mode, hintsPerRound: limitsFor(user, session).hintsPerRound });
+    const conventions = nuggetDrillConventions(baseConventions);
     round.activeMs = accrueActiveMs({ activeMs: round.activeMs, lastActivityAt: round.lastActivityAt, now: Date.now(), capMs: conventions.activityGapCapMs });
     const items = await store.itemsFor(session.id);
     const design = describeDiagram(session.diagram);
@@ -334,6 +343,72 @@ function finishNuggetWrap(ctx, verified, turns) {
   return nuggetWrapMessage(ctx.record.nugget, lead.endsWith(".") ? lead.slice(0, -1) : lead);
 }
 
+const MONTH_START = "(date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')";
+
+async function nuggetReplyAllowance(user, session) {
+  const limits = limitsFor(user, session);
+  const row = await queryOne(
+    `select count(*) filter (where session_id = $2) as round_used,
+            count(*) filter (where created_at >= ${MONTH_START}) as month_used
+       from ai_credits where user_id = $1 and kind = 'interview_turn' and status <> 'released'`,
+    [user.id, session.id]
+  );
+  return {
+    turns: { used: Number(row.round_used), limit: limits.interviewTurnsPerRound },
+    month: { used: Number(row.month_used), limit: limits.interviewTurnsPerMonth },
+  };
+}
+
+/** Append a template wrap-up with mini debrief when the drill ended without one (reply limit, time, etc.). */
+export async function ensureNuggetDebriefIfDue({ session, user }) {
+  if (session.session_kind !== "nugget" || !session.nugget_id) return null;
+  const stateRow = await queryOne("select * from interview_state where session_id = $1", [session.id]);
+  if (!stateRow || stateRow.engine !== "v3") return null;
+  if (stateRow.pending_since && Date.now() - new Date(stateRow.pending_since).getTime() < 90_000) return null;
+  if (await queryOne("select 1 as ok from interview_turns where session_id = $1 and role = 'interviewer' and content like '%Quick debrief:%' limit 1", [session.id])) {
+    return null;
+  }
+
+  const ctx = await context({ session, user, stateRow });
+  const { round, record, items, prompt } = ctx;
+  const allowance = await nuggetReplyAllowance(user, session);
+  const atReplyLimit = allowance.turns.used >= allowance.turns.limit || allowance.month.used >= allowance.month.limit;
+  const clock = clockOf({ state: round, pacing: record.pack.pacing, minutes: effectiveMinutes(session, prompt) });
+  const timedOut = clock.roundElapsedMs >= clock.roundBudgetMs;
+  const lastInterviewer = (await store.recentTurns(session.id, round.summarizedThrough)).filter((turn) => turn.role === "interviewer").at(-1);
+  const lastWasWrapWithoutDebrief = lastInterviewer?.move === "wrap_up" && !String(lastInterviewer.content ?? "").includes("Quick debrief:");
+
+  if (!atReplyLimit && !timedOut && !lastWasWrapWithoutDebrief) return null;
+
+  const lead = atReplyLimit
+    ? "We're out of replies for this drill"
+    : timedOut
+      ? "We're at time for this drill"
+      : "Let's close this drill";
+  const message = nuggetWrapMessage(record.nugget, lead);
+  const verified = { move: "wrap_up", focusItemId: null, assessments: [], clarificationIds: [], newAssumption: "", message, nodeIds: [], coveredNodeIds: [] };
+  const plan = { focusItemId: null, nextItemId: null, allowedMoves: ["wrap_up"] };
+  const result = applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: null, interviewerSeq: null } });
+  result.events.push({ type: "nugget_debrief", payload: { reason: atReplyLimit ? "reply_limit" : timedOut ? "time" : "wrap_without_debrief" } });
+  return store.saveTurn({
+    session,
+    before: items,
+    result,
+    learnerTurn: null,
+    notes: null,
+    interviewer: { kind: KIND_FOR_MOVE.wrap_up, trigger: "tick", content: message, move: "wrap_up", agendaItemId: null, nodeIds: [] },
+    stateExtras: {
+      activeMs: round.activeMs,
+      covered: round.covered,
+      snapshot: round.snapshot,
+      timeWarnings: [...new Set([...round.timeWarnings, timedOut ? 1 : null].filter((entry) => entry !== null))],
+      poorResponseStreak: round.poorResponseStreak,
+      poorResponseItemId: round.poorResponseItemId,
+    },
+    creditId: null,
+  });
+}
+
 // A learner message, voice answer or hint request. `reserved` comes from the route's
 // reservation (turn inserted, credit taken, reply pending).
 export async function handleLearnerTurn({ session, user, reserved, selectedNodeId, hint, onDelta, onReset }) {
@@ -354,10 +429,13 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const focusBefore = items.find((item) => item.itemId === plan.focusItemId);
   const focusAssessment = verified.assessments.find((assessment) => assessment.itemId === plan.focusItemId);
   const refFix = nuggetReferenceFix(record);
+  const learnerSaid = learnerText(reserved.learner);
+  const ballpark = ctx.isNugget && refFix && nuggetLearnerNearFix(learnerSaid, refFix);
   const resolvedNow = ctx.isNugget && !nuggetDebriefSent(turns) && (
     nuggetIncidentResolved(focusBefore)
     || (focusAssessment && bandAtLeast(focusAssessment.band, "adequate"))
     || nuggetInterviewerExplainedFix(verified.message, refFix)
+    || ballpark
   );
   if (resolvedNow && verified.move !== "wrap_up") {
     onReset?.();
@@ -365,7 +443,7 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
       ...verified,
       move: "wrap_up",
       focusItemId: null,
-      message: nuggetWrapMessage(ctx.record.nugget),
+      message: nuggetWrapMessage(ctx.record.nugget, ballpark ? "You're in the right ballpark" : undefined),
       nodeIds: [],
       coveredNodeIds: verified.coveredNodeIds ?? [],
     };
@@ -375,23 +453,34 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const poorResponseStreak = poorResponse.streak;
   const poorResponseItemId = poorResponse.itemId;
   if (poorResponseStreak >= 3) {
-    const move = plan.nextItemId ? "move_on" : "wrap_up";
     onReset?.();
-    verified = {
-      ...verified,
-      move,
-      focusItemId: move === "move_on" ? plan.nextItemId : null,
-      message: move === "move_on"
-        ? `Let's try a different angle. ${agenda.get(plan.nextItemId)?.opener ?? ""}`.trim()
-        : WRAP_UP_TEXT,
-      nodeIds: [],
-      coveredNodeIds: [],
-    };
+    if (ctx.isNugget) {
+      verified = {
+        ...verified,
+        move: "wrap_up",
+        focusItemId: null,
+        message: nuggetWrapMessage(ctx.record.nugget, "Let's close this drill"),
+        nodeIds: [],
+        coveredNodeIds: [],
+      };
+    } else {
+      const move = plan.nextItemId ? "move_on" : "wrap_up";
+      verified = {
+        ...verified,
+        move,
+        focusItemId: move === "move_on" ? plan.nextItemId : null,
+        message: move === "move_on"
+          ? `Let's try a different angle. ${agenda.get(plan.nextItemId)?.opener ?? ""}`.trim()
+          : WRAP_UP_TEXT,
+        nodeIds: [],
+        coveredNodeIds: [],
+      };
+    }
   }
   const result = applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: reserved.learner.seq, interviewerSeq: reserved.learner.seq + 1 } });
   result.events.push(...flags);
   if (poorResponseStreak >= 3) result.events.push({ type: "poor_response_redirect", payload: { itemId: plan.focusItemId, streak: poorResponseStreak, move: verified.move } });
-  return store.saveTurn({
+  const saved = await store.saveTurn({
     session,
     before: items,
     result,
@@ -408,6 +497,9 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
     },
     creditId: reserved.creditId,
   });
+  const debrief = await ensureNuggetDebriefIfDue({ session, user });
+  if (!debrief?.turn) return saved;
+  return { ...saved, state: debrief.state, extraTurns: [debrief.turn] };
 }
 
 // The major parts of the design the interviewer hasn't discussed yet, best first: a

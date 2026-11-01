@@ -134,6 +134,11 @@ function Conversation({ sessionKind, interview, roundFinished, selected, onClear
   const v3 = state?.engine === "v3";
   const learnerSpoke = turns.some((turn) => turn.role === "learner");
   const canSend = !roundFinished && !debriefSent && interview.aiAvailable && !pending && !outOfReplies;
+
+  useEffect(() => {
+    if (!isNugget || debriefSent || !outOfReplies || roundFinished || pending) return;
+    interview.reload?.();
+  }, [isNugget, debriefSent, outOfReplies, roundFinished, pending, interview.reload]);
   // A voice answer is a reply like a typed one, so the mic follows the same rules.
   const [voiceAvailable] = useState(voiceSupported);
   const voice = interview.voice && voiceAvailable;
@@ -212,7 +217,11 @@ function Conversation({ sessionKind, interview, roundFinished, selected, onClear
       </div>
 
       <div className="interviewer-compose">
-        {debriefSent && !roundFinished ? (
+        {outOfReplies && !debriefSent && !roundFinished ? (
+          <div className="interview-ended">
+            <p>Replies are used up. Your mini debrief should appear shortly — check the Review tab when it&apos;s ready, then finish the round.</p>
+          </div>
+        ) : debriefSent && !roundFinished ? (
           <div className="interview-ended">
             <p>The drill debrief is above. Finish the round to save your diagram and close the interview.</p>
             <button type="button" className="button button-dark button-small" onClick={onFinishRound}><CircleCheck size={14} /> Finish round</button>

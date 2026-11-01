@@ -9,30 +9,51 @@ import { ReviewPanel } from "./ReviewPanel.jsx";
 
 import { Link } from "../router.js";
 
-function NuggetReviewPanel({ roundFinished, nugget, promptId }) {
-  if (!roundFinished) {
+import { nuggetDebriefBody, nuggetDebriefInTurns } from "./nuggetInterview.js";
+
+function NuggetReviewPanel({ roundFinished, nugget, promptId, turns, onFinishRound }) {
+  const debrief = nuggetDebriefBody(turns ?? []);
+  if (!roundFinished && !debrief) {
     return (
       <div className="interviewer-body interviewer-center">
-        <p className="interviewer-muted">Finish the incident conversation in the Interviewer tab. There is no full rubric review for drills.</p>
+        <p className="interviewer-muted">Finish the incident conversation in the Interviewer tab. When the drill closes, your mini debrief appears here.</p>
       </div>
     );
   }
   return (
     <div className="interviewer-body" style={{ padding: "1rem 1.1rem" }}>
-      <p className="interviewer-muted">This drill is complete. Check the interviewer chat for your mini debrief.</p>
-      <div className="modal-actions" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <Link className="button button-dark" to="/nuggets">Random nugget</Link>
-        {promptId && <Link className="button button-outline" to={`/nuggets?q=${encodeURIComponent(promptId)}`}>More from this question</Link>}
-        {promptId && <Link className="button button-outline" to={`/start/${promptId}`}>Full design round</Link>}
-      </div>
+      {debrief && (
+        <section className="review-card debrief" aria-label="Mini debrief">
+          <h3>Mini debrief</h3>
+          <p className="debrief-lede">{debrief}</p>
+        </section>
+      )}
+      {!roundFinished && debrief && onFinishRound && (
+        <div className="modal-actions" style={{ marginTop: "1rem" }}>
+          <button type="button" className="button button-dark" onClick={onFinishRound}>Finish round</button>
+        </div>
+      )}
+      {roundFinished && (
+        <>
+          <p className="interviewer-muted" style={{ marginTop: "1rem" }}>This drill is complete.</p>
+          <div className="modal-actions" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+            <Link className="button button-dark" to="/nuggets">Random nugget</Link>
+            {promptId && <Link className="button button-outline" to={`/nuggets?q=${encodeURIComponent(promptId)}`}>More from this question</Link>}
+            {promptId && <Link className="button button-outline" to={`/start/${promptId}`}>Full design round</Link>}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 // Right-hand panel: the interviewer conversation and the round's final review.
 export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack, sessionKind = "full", nugget, promptId, onFinishRound }) {
+  const nuggetDebriefReady = sessionKind === "nugget" && interview.status === "ready" && nuggetDebriefInTurns(interview.turns ?? []);
   const tabs = sessionKind === "nugget"
-    ? [["interviewer", "Interviewer", MessageSquare]]
+    ? (nuggetDebriefReady
+      ? [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]]
+      : [["interviewer", "Interviewer", MessageSquare]])
     : [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
   // On free plans the interviewer is a Plus feature (or the one free round), and the tab says so.
   const interviewerLocked = interview.status === "ready" && interview.access !== "full";
@@ -52,7 +73,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
       </div>
       {tab === "review"
         ? (sessionKind === "nugget"
-          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} />
+          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} turns={interview.turns} onFinishRound={onFinishRound} />
           : <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />)
         : <InterviewerPanel sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} onFinishRound={onFinishRound} promptId={promptId} />}
     </aside>
