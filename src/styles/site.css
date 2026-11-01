@@ -1595,6 +1595,8 @@ label.consent-option { cursor: pointer; }
 .nuggets-catalog .round-facts svg { width: 12px; height: 12px; }
 .nuggets-catalog .round-go { height: 28px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
 .nuggets-catalog .round-go svg { width: 12px; height: 12px; }
+.nuggets-catalog .round[role="button"] { cursor: pointer; }
+.nuggets-catalog .round[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .nuggets-catalog .nugget-parent { min-height: 168px; }
 .nuggets-catalog .nugget-parent h3 { margin-top: 4px; font-size: 15px; -webkit-line-clamp: 2; }
 .nuggets-catalog .nugget-parent-cta { padding-top: 10px; font-size: 12px; }

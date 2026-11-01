@@ -289,7 +289,20 @@ export function NuggetCard({ nugget, onStart, onLockRound, disabled = false, ind
   };
 
   return (
-    <article className={`round tone-${track.color} ${unlocked ? "round-unlocked" : ""}`} style={{ "--i": index % 12 }}>
+    <article
+      className={`round tone-${track.color} ${unlocked ? "round-unlocked" : ""}`}
+      style={{ "--i": index % 12 }}
+      role={disabled ? undefined : "button"}
+      tabIndex={disabled ? undefined : 0}
+      aria-label={disabled ? undefined : `${playable ? "Start" : "Plus"} incident drill: ${nugget.title}`}
+      onClick={disabled ? undefined : go}
+      onKeyDown={disabled ? undefined : (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          go();
+        }
+      }}
+    >
       <div className="round-top">
         <span className="round-icon"><Icon size={19} strokeWidth={1.9} /></span>
         <span className="round-badges">
@@ -297,13 +310,13 @@ export function NuggetCard({ nugget, onStart, onLockRound, disabled = false, ind
         </span>
       </div>
       <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>Incident drill</span></div>
-      <h3><Link to={roundPath(nugget.parentPromptId)}>{nugget.title}</Link></h3>
+      <h3>{nugget.title}</h3>
       <p>{nugget.symptomsPreview}…</p>
       <div className="round-foot">
         <span className="round-facts">
           <span><Clock3 size={13} /> {nugget.minutes} min</span>
         </span>
-        <button type="button" className={`round-go ${playable && !disabled ? "" : "locked"}`} disabled={disabled && playable} onClick={go} aria-label={`${playable ? "Start" : "Plus round"}: ${nugget.title}`}>
+        <button type="button" className={`round-go ${playable && !disabled ? "" : "locked"}`} disabled={disabled && playable} onClick={(event) => { event.stopPropagation(); go(); }} aria-hidden="true" tabIndex={-1}>
           {playable ? (disabled ? "…" : "Start") : <><LockKeyhole size={12} /> Plus</>}
           {playable && !disabled && <ArrowRight size={13} className="nudge" />}
         </button>

@@ -61,6 +61,30 @@ function nuggetOpening(nugget) {
   return `${nugget.scenario.symptoms} ${item.opener}`.replace(/\s+/g, " ").trim();
 }
 
+export function nuggetOpeningText(nuggetId) {
+  const record = getNuggetRecord(nuggetId);
+  return record ? nuggetOpening(record.nugget) : null;
+}
+
+const LEGACY_FULL_ROUND_OPENING = /start with the requirements|Before you draw much, start with the requirements/i;
+
+/** True when the stored opening is the generic full-round line, not an incident drill. */
+export function isLegacyFullRoundOpening(content) {
+  return Boolean(content && LEGACY_FULL_ROUND_OPENING.test(content));
+}
+
+/** (Re)start the Conductor or replace a stale v2/full-round opening for a nugget session. */
+export function nuggetInterviewNeedsBootstrap({ stateRow, hasTurns, firstTurn, packVersion }) {
+  if (!hasTurns) return true;
+  if (isLegacyFullRoundOpening(firstTurn?.content)) return true;
+  if (packVersion) {
+    if (stateRow.engine !== "v3") return true;
+    if (stateRow.stage === "requirements" || stateRow.stage === "high_level") return true;
+    if (firstTurn?.move !== "open") return true;
+  }
+  return false;
+}
+
 export async function startNuggetRound(conn, { session, user }) {
   const record = getNuggetRecord(session.nugget_id);
   if (!record) throw new HttpError(404, "NOT_FOUND", "This incident drill is no longer available.");
