@@ -18,7 +18,7 @@ import { EdgeInspector, MultiInspector, NodeInspector } from "./Inspector.jsx";
 import { CanvasActions, edgeTypes, IncidentOverlay, nodeTypes, RENAME_EVENT } from "./nodes.jsx";
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
 import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from "./CanvasTour.jsx";
-import { PromptModal, ShortcutsDialog, SidePanel } from "./Panels.jsx";
+import { PromptModal, ShortcutsDialog, SidePanel, NuggetBriefModal } from "./Panels.jsx";
 import { PanelResizer } from "./PanelResizer.jsx";
 import { inspectorAskMode, useInterview } from "./useInterview.js";
 import { useAuth } from "../auth.jsx";
@@ -90,7 +90,10 @@ function Workspace({ session, prompt }) {
   const plan = user?.plan;
   // An active round opens on the Interviewer tab for everyone: free learners see the
   // free interviewer round offer (or what Plus adds) there. A finished round opens on Review.
-  const [panelTab, setPanelTab] = useState(() => (session.status === "completed" ? "review" : "interviewer"));
+  const [panelTab, setPanelTab] = useState(() => {
+    if (session.status !== "completed") return "interviewer";
+    return session.sessionKind === "nugget" ? "interviewer" : "review";
+  });
   const [paletteOpen, setPaletteOpen] = useState(() => window.innerWidth > 760);
   // Side panel widths the learner dragged to (null: the CSS default), kept per browser.
   const [paletteWidth, setPaletteWidth] = usePanelWidth("designrounds:palette-width", PALETTE_WIDTH);
@@ -696,13 +699,16 @@ function Workspace({ session, prompt }) {
   }
 
   async function finishRound() {
-    if (!window.confirm("Finish this round? Your design will be saved and become read-only, and you can then request its review. You can reopen it later to keep editing.")) return;
+    const message = isNugget
+      ? "Finish this drill? Your design will be saved and become read-only. You can reopen it later to keep editing."
+      : "Finish this round? Your design will be saved and become read-only, and you can then request its review. You can reopen it later to keep editing.";
+    if (!window.confirm(message)) return;
     await flush();
     try {
       await api.updateSession(session.id, { status: "completed" });
       setStatus("completed");
       clearSelection();
-      setPanelTab("review");
+      setPanelTab(isNugget ? "interviewer" : "review");
       setPanelOpen(true);
     } catch (error) {
       window.alert(error.message);
@@ -804,12 +810,12 @@ function Workspace({ session, prompt }) {
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
   useEffect(() => {
-    if (tourOn || authStatus !== "signed-in" || !user?.id) return undefined;
+    if (tourOn || isNugget || authStatus !== "signed-in" || !user?.id) return undefined;
     if (showPrompt || showShortcuts) return undefined;
     if (canvasTourSeen(user.id)) return undefined;
     const timer = window.setTimeout(() => setTourOn(true), 400);
     return () => window.clearTimeout(timer);
-  }, [authStatus, user?.id, showPrompt, showShortcuts, tourOn]);
+  }, [authStatus, user?.id, showPrompt, showShortcuts, tourOn, isNugget]);
   const onTourStep = useCallback((step) => {
     if (!tourLayout.current) tourLayout.current = { ...layoutNow.current };
     if (step.targets?.includes("library")) setPaletteOpen(true);
@@ -834,7 +840,19 @@ function Workspace({ session, prompt }) {
       <header className="workspace-header">
         <Brand className="workspace-brand" onClick={exitRound} />
         <div className="workspace-divider" />
-        <button className="workspace-round-name" onClick={() => setShowPrompt(true)}><span className="round-name-kicker">PRACTICE ROUND</span><span>{prompt.title}<ChevronDown size={14} /></span></button>
+        <button className="workspace-round-name" onClick={() => setShowPrompt(true)}>
+          {isNugget && nuggetMeta ? (
+            <>
+              <span className="round-name-kicker">INCIDENT DRILL · {prompt.title}</span>
+              <span>{nuggetMeta.title}<ChevronDown size={14} /></span>
+            </>
+          ) : (
+            <>
+              <span className="round-name-kicker">PRACTICE ROUND</span>
+              <span>{prompt.title}<ChevronDown size={14} /></span>
+            </>
+          )}
+        </button>
         <div className="workspace-header-right">
           <span className={`save-indicator ${readOnly ? "readonly" : saveState}`} role="status"><span />{saveLabel}</span>
           <span className="header-v-divider" />
@@ -878,7 +896,7 @@ function Workspace({ session, prompt }) {
 
         <section className="canvas-column" aria-label="System design canvas">
           <div className="canvas-topbar">
-            <div className="canvas-topbar-left"><span className="canvas-breadcrumb">Design</span><ChevronRight size={13} /><span className="canvas-breadcrumb-current">{prompt.title}</span></div>
+            <div className="canvas-topbar-left"><span className="canvas-breadcrumb">Design</span><ChevronRight size={13} /><span className="canvas-breadcrumb-current">{isNugget && nuggetMeta ? nuggetMeta.title : prompt.title}</span></div>
             <div className="canvas-topbar-actions">
               <button className="topbar-action prompt-action" onClick={() => setShowPrompt(true)} title="Open the brief (P)"><FileText size={14} /> Brief</button>
               <button className="topbar-action shortcuts-action" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)"><Keyboard size={15} /> Shortcuts <kbd>?</kbd></button>
@@ -991,11 +1009,12 @@ function Workspace({ session, prompt }) {
         {panelOpen && (
           <SidePanel tab={panelTab} onTab={setPanelTab} onClose={togglePanel} interview={interview} unread={unread}
             selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} promptTrack={prompt.track}
-            sessionKind={session.sessionKind} nugget={nuggetMeta} promptId={session.promptId} />
+            sessionKind={session.sessionKind} nugget={nuggetMeta} promptId={session.promptId} onFinishRound={finishRound} />
         )}
       </div>
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
-      {showPrompt && <PromptModal prompt={prompt} fresh={nodes.length === 0} onClose={() => setShowPrompt(false)} />}
+      {showPrompt && isNugget && nuggetMeta && <NuggetBriefModal nugget={nuggetMeta} parentPrompt={prompt} onClose={() => setShowPrompt(false)} />}
+      {showPrompt && !(isNugget && nuggetMeta) && <PromptModal prompt={prompt} fresh={nodes.length === 0} onClose={() => setShowPrompt(false)} />}
       {tourOn && <CanvasTour steps={tourSteps} layoutKey={`${paletteOpen}:${panelOpen}:${panelTab}`} onStep={onTourStep} onDone={closeTour} />}
     </main>
   );

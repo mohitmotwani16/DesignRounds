@@ -10,9 +10,13 @@ const OPEN_QUESTION_MS = 3 * 60_000;
 // often start drawing instead of answering it.
 const CANVAS_WAIT_MS = 60_000;
 
-export const timeCheckText = (share, mode) => {
+export const timeCheckText = (share, mode, incidentDrill = false) => {
   const percent = Math.round(share * 100);
-  if (percent >= 100) return "We're at time.";
+  if (percent >= 100) return incidentDrill ? "We're at time for this drill." : "We're at time.";
+  if (incidentDrill) {
+    if (percent <= 55) return "Quick time check: focus on the highlighted failure and how you'd fix it.";
+    return `We're about ${percent}% through this drill. Leave a moment to land your fix.`;
+  }
   if (percent <= 55) {
     return mode === "guided"
       ? "Quick time check: we're about halfway through. If you haven't sketched the main flow yet, now's a good time to."
@@ -38,41 +42,52 @@ const since = (at, now) => (at ? now - new Date(at).getTime() : Infinity);
 //   lastProactiveAt, lastNudgeAt,
 //   proactiveLeft, focusExhausted, canvas { itemId, unexplained, major, changedSinceLearner }
 export function decideTick(context) {
-  const { typing, pending, now, mode, conventions, clock, timeWarnings, stage, lastTurn, idleSinceAt, lastIdleHintAt, lastLearnerAt, lastProactiveAt, lastNudgeAt, proactiveLeft, focusExhausted, canvas, canvasThin = false } = context;
+  const { typing, pending, now, mode, conventions, clock, timeWarnings, stage, lastTurn, idleSinceAt, lastIdleHintAt, lastLearnerAt, lastProactiveAt, lastNudgeAt, proactiveLeft, focusExhausted, canvas, canvasThin = false, incidentDrill = false, debriefDone = false } = context;
   if (pending) return { action: "none", why: "busy" };
   if (typing) return { action: "none", why: "typing" };
+  if (incidentDrill && debriefDone) return { action: "none", why: "debrief_done" };
 
   const idleMs = idleSinceAt ? since(idleSinceAt, now) : 0;
   const alreadyNudged = idleSinceAt && lastNudgeAt && new Date(lastNudgeAt) >= new Date(idleSinceAt);
   const alreadyHinted = idleSinceAt && lastIdleHintAt && new Date(lastIdleHintAt) >= new Date(idleSinceAt);
   if (idleMs >= 120_000) return { action: "close", why: "idle" };
-  if (idleMs >= 60_000 && !alreadyHinted) return { action: "template", move: "idle_hint", text: IDLE_HINT_TEXT };
-  if (idleMs >= 30_000 && !alreadyNudged) return { action: "template", move: "nudge", text: IDLE_NUDGE_TEXT };
+  if (idleMs >= 60_000 && !alreadyHinted) {
+    return { action: "template", move: "idle_hint", text: incidentDrill ? "What do you think is failing in this setup, and what would you change first?" : IDLE_HINT_TEXT };
+  }
+  if (idleMs >= 30_000 && !alreadyNudged) {
+    return { action: "template", move: "nudge", text: incidentDrill ? "Take your time. Walk me through the failure on the highlighted parts, or ask for a hint." : IDLE_NUDGE_TEXT };
+  }
 
   // Time thresholds, each announced once. At 100% the round moves to wrap-up.
   const share = clock.roundElapsedMs / clock.roundBudgetMs;
-  if (share >= 1 && stage !== "wrap_up") return { action: "template", move: "wrap_up", text: canvasThin ? WRAP_UP_DRAW_TEXT : WRAP_UP_TEXT, threshold: 1 };
+  if (share >= 1 && stage !== "wrap_up") {
+    return { action: "template", move: "wrap_up", text: incidentDrill ? null : (canvasThin ? WRAP_UP_DRAW_TEXT : WRAP_UP_TEXT), threshold: 1 };
+  }
   const due = conventions.timeWarnings.filter((threshold) => share >= threshold && !timeWarnings.includes(threshold));
   if (due.length && stage !== "wrap_up") {
     const threshold = Math.max(...due);
-    return { action: "template", move: "time_check", text: timeCheckText(threshold, mode), threshold, alsoRecord: due };
+    return { action: "template", move: "time_check", text: timeCheckText(threshold, mode, incidentDrill), threshold, alsoRecord: due };
   }
 
   const cooling = since(lastProactiveAt, now) < conventions.proactiveCooldownMs;
   const questionOpen = lastTurn?.role === "interviewer" && QUESTION_KINDS.has(lastTurn.kind) && since(lastTurn.at, now) < OPEN_QUESTION_MS;
 
+  if (incidentDrill && focusExhausted && !cooling && !questionOpen && stage !== "wrap_up") {
+    return { action: "template", move: "wrap_up", text: null, threshold: null };
+  }
+
   // A stage that ran well over its budget, with nothing more to get from the focus item.
-  if (clock.stageElapsedMs > clock.stageBudgetMs * conventions.stageOverrunFactor && focusExhausted && !cooling && !questionOpen && proactiveLeft > 0 && stage !== "wrap_up") {
+  if (!incidentDrill && clock.stageElapsedMs > clock.stageBudgetMs * conventions.stageOverrunFactor && focusExhausted && !cooling && !questionOpen && proactiveLeft > 0 && stage !== "wrap_up") {
     return { action: "model", kind: "stage" };
   }
   // A major part of the design is on the canvas that nobody has talked about yet.
   const canvasWait = lastTurn?.role === "interviewer" && QUESTION_KINDS.has(lastTurn.kind) && lastTurn.kind !== "opening" && since(lastTurn.at, now) < CANVAS_WAIT_MS;
-  if (canvas?.unexplained && canvas.itemId && !cooling && !canvasWait && proactiveLeft > 0) {
+  if (!incidentDrill && canvas?.unexplained && canvas.itemId && !cooling && !canvasWait && proactiveLeft > 0) {
     return { action: "model", kind: "canvas", itemId: canvas.itemId };
   }
   // Silent for a while with a question waiting.
   // Drawing for a while without saying anything.
-  if (canvas?.changedSinceLearner && since(lastLearnerAt, now) >= conventions.drawingWithoutTalkingMs && !alreadyNudged && lastTurn?.kind !== "nudge") {
+  if (!incidentDrill && canvas?.changedSinceLearner && since(lastLearnerAt, now) >= conventions.drawingWithoutTalkingMs && !alreadyNudged && lastTurn?.kind !== "nudge") {
     return { action: "template", move: "nudge", text: DRAWING_NUDGE_TEXT };
   }
   return { action: "none", why: canvas?.major || canvas?.unexplained ? "not_now" : "nothing_to_ask" };

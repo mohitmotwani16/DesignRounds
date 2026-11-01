@@ -30,7 +30,7 @@ function NuggetReviewPanel({ roundFinished, nugget, promptId }) {
 }
 
 // Right-hand panel: the interviewer conversation and the round's final review.
-export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack, sessionKind = "full", nugget, promptId }) {
+export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack, sessionKind = "full", nugget, promptId, onFinishRound }) {
   const tabs = sessionKind === "nugget"
     ? [["interviewer", "Interviewer", MessageSquare]]
     : [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
@@ -54,8 +54,39 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
         ? (sessionKind === "nugget"
           ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} />
           : <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />)
-        : <InterviewerPanel sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} />}
+        : <InterviewerPanel sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} onFinishRound={onFinishRound} promptId={promptId} />}
     </aside>
+  );
+}
+
+export function NuggetBriefModal({ nugget, parentPrompt, onClose }) {
+  useEscape(onClose);
+  const parentTitle = parentPrompt?.title ?? "Design round";
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="prompt-modal" role="dialog" aria-modal="true" aria-labelledby="nugget-brief-title">
+        <header className="modal-header">
+          <div className="modal-heading">
+            <span className="modal-kicker">Incident drill · {parentTitle}</span>
+            <h2 id="nugget-brief-title">{nugget.title}</h2>
+            {nugget.incident?.headline && <p className="modal-description">{nugget.incident.headline}</p>}
+            <div className="modal-meta">
+              <span><Clock3 size={15} /> {nugget.minutes} min</span>
+            </div>
+          </div>
+          <button className="icon-button modal-close" onClick={onClose} aria-label="Close brief"><X size={20} /></button>
+        </header>
+        <div className="modal-content">
+          <h3 className="modal-section-title">What you're seeing</h3>
+          <p>{nugget.symptoms}</p>
+          <div className="modal-nudge"><Sparkles size={18} /><p><strong>Your job:</strong> explain what failed on the highlighted parts of the diagram and how you'd fix it. The interviewer stays on this incident only.</p></div>
+        </div>
+        <footer className="modal-footer">
+          <span>Reopen from <strong>Brief</strong> anytime.</span>
+          <button className="button button-dark" onClick={onClose}>Back to canvas <ArrowRight size={16} /></button>
+        </footer>
+      </section>
+    </div>
   );
 }
 

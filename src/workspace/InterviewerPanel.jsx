@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, Mic, PenLine, RefreshCw, Send, ThumbsDown, Volume2, VolumeX, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CircleCheck, Clock, Crown, Eye, Gift, Lightbulb, LoaderCircle, Mic, PenLine, RefreshCw, Send, ThumbsDown, Volume2, VolumeX, X } from "lucide-react";
 import { api } from "../api.js";
 import { useInterviewerSound } from "./chime.js";
 import { RecordingBar, VoiceNote, useVoiceRecorder, voiceSupported } from "./VoiceRecorder.jsx";
@@ -13,7 +13,7 @@ const STAGES = [
 
 // The live interviewer conversation. State comes from useInterview so it survives
 // the panel being hidden or the Review tab being open.
-export function InterviewerPanel({ sessionKind = "full", interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
+export function InterviewerPanel({ sessionKind = "full", interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview, onFinishRound, promptId }) {
   if (interview.status === "loading") return <div className="interviewer-body interviewer-center"><LoaderCircle size={18} className="spin" /></div>;
   if (interview.status === "error") {
     return (
@@ -24,7 +24,7 @@ export function InterviewerPanel({ sessionKind = "full", interview, roundFinishe
     );
   }
   if (interview.access !== "full") return <LockedInterviewer interview={interview} onShowReview={onShowReview} />;
-  return <Conversation sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} />;
+  return <Conversation sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={onShowReview} onFinishRound={onFinishRound} promptId={promptId} />;
 }
 
 // Free plans. The interviewer is a Plus feature, and the panel says so first: one
@@ -117,19 +117,23 @@ function LockedInterviewer({ interview, onShowReview }) {
   );
 }
 
-function Conversation({ sessionKind, interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview }) {
+import { Link } from "../router.js";
+import { nuggetDebriefInTurns } from "./nuggetInterview.js";
+
+function Conversation({ sessionKind, interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview, onFinishRound, promptId }) {
   const { turns, state, allowance, pending, pendingAudio, outgoing, replyText, sendError } = interview;
   const [draft, setDraft] = useState("");
   const [soundOn, toggleSound] = useInterviewerSound();
   const listRef = useRef(null);
   const isNugget = sessionKind === "nugget" || state?.sessionKind === "nugget";
+  const debriefSent = isNugget && nuggetDebriefInTurns(turns);
   const stageIndex = Math.max(0, STAGES.findIndex(([id]) => id === state?.stage));
   const repliesLeft = allowance ? Math.max(0, allowance.turns.limit - allowance.turns.used) : 0;
   const hintsLeft = allowance ? Math.max(0, allowance.hints.limit - allowance.hints.used) : 0;
   const outOfReplies = allowance && (repliesLeft === 0 || allowance.month.used >= allowance.month.limit);
   const v3 = state?.engine === "v3";
   const learnerSpoke = turns.some((turn) => turn.role === "learner");
-  const canSend = !roundFinished && interview.aiAvailable && !pending && !outOfReplies;
+  const canSend = !roundFinished && !debriefSent && interview.aiAvailable && !pending && !outOfReplies;
   // A voice answer is a reply like a typed one, so the mic follows the same rules.
   const [voiceAvailable] = useState(voiceSupported);
   const voice = interview.voice && voiceAvailable;
@@ -208,10 +212,27 @@ function Conversation({ sessionKind, interview, roundFinished, selected, onClear
       </div>
 
       <div className="interviewer-compose">
-        {roundFinished ? (
+        {debriefSent && !roundFinished ? (
           <div className="interview-ended">
-            <p>This round is finished, so the interview has ended.</p>
-            <button className="button button-outline button-small" onClick={onShowReview}>See your review <ArrowRight size={14} /></button>
+            <p>The drill debrief is above. Finish the round to save your diagram and close the interview.</p>
+            <button type="button" className="button button-dark button-small" onClick={onFinishRound}><CircleCheck size={14} /> Finish round</button>
+          </div>
+        ) : roundFinished ? (
+          <div className="interview-ended">
+            {isNugget ? (
+              <>
+                <p>This drill is finished and read-only.</p>
+                <div className="modal-actions" style={{ marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <Link className="button button-dark button-small" to="/nuggets">Random nugget</Link>
+                  {promptId && <Link className="button button-outline button-small" to={`/nuggets?q=${encodeURIComponent(promptId)}`}>More from this question</Link>}
+                </div>
+              </>
+            ) : (
+              <>
+                <p>This round is finished, so the interview has ended.</p>
+                <button className="button button-outline button-small" onClick={onShowReview}>See your review <ArrowRight size={14} /></button>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -242,8 +263,11 @@ function Conversation({ sessionKind, interview, roundFinished, selected, onClear
                 <button aria-label="Don't attach the selected component" onClick={onClearSelected}><X size={13} /></button>
               </div>
             )}
-            {voiceTip.visible && !recording && (
+            {voiceTip.visible && !recording && !isNugget && (
               <p className="voice-tip" role="note"><Mic size={12} /> Tip: answer out loud with the mic, like in a real interview. Your review will include feedback on how you explain.</p>
+            )}
+            {voiceTip.visible && !recording && isNugget && (
+              <p className="voice-tip" role="note"><Mic size={12} /> Tip: answer out loud with the mic, like in a real interview.</p>
             )}
             {recording ? (
               <RecordingBar elapsed={recorder.elapsed} onCancel={recorder.cancel} onSend={recorder.send} />

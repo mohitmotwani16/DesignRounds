@@ -137,7 +137,14 @@ export default function ProfilePage({ onStart }) {
                       ) : (
                         <>
                           <button className="button button-outline button-small" onClick={() => navigate(`/workspace/${session.id}`)}>View</button>
-                          {prompt && <button className="icon-button" title="Start a new attempt" aria-label="Start a new attempt" onClick={() => onStart(prompt.id)}><RotateCcw size={15} /></button>}
+                          {prompt && (
+                            <button
+                              className="icon-button"
+                              title={session.sessionKind === "nugget" ? "Try another drill from this question" : "Start a new attempt"}
+                              aria-label={session.sessionKind === "nugget" ? "Try another drill from this question" : "Start a new attempt"}
+                              onClick={() => (session.sessionKind === "nugget" ? navigate(`/nuggets?q=${encodeURIComponent(session.promptId)}`) : onStart(prompt.id))}
+                            ><RotateCcw size={15} /></button>
+                          )}
                         </>
                       )}
                       <button className="icon-button danger" title="Delete attempt" aria-label="Delete attempt" onClick={() => removeSession(session)}><Trash2 size={15} /></button>

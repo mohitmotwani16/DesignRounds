@@ -21,6 +21,7 @@ import { applyTurn, nextPoorResponseState } from "./apply.js";
 import { canvasSignals } from "./canvas.js";
 import { assembleBlocks } from "./assemble.js";
 import { CLOSED, FOCUS_AREAS, KIND_FOR_MOVE, bandAtLeast, creditedBand } from "./moves.js";
+import { nuggetDebriefSent, nuggetIncidentResolved, nuggetInterviewerExplainedFix, nuggetReferenceFix, nuggetWrapMessage } from "./nugget.js";
 import { clockOf, focusItem, nextPendingItem, plan as makePlan, tickPlan } from "./plan.js";
 import * as store from "./store.js";
 import { conductorTask } from "./task.js";
@@ -316,8 +317,21 @@ function conversationOf(turns) {
   return { lastMove: said.at(-1)?.move ?? null, questionStreak };
 }
 
-function addedKinds(snapshot, diagram) {
-  return diffSnapshots(snapshot, snapshotOf(diagram), diagram).added.map((entry) => entry.kind);
+function tickTemplateText(ctx, decision) {
+  if (decision.text) return decision.text;
+  if (decision.move === "wrap_up" && ctx.isNugget) {
+    return nuggetWrapMessage(ctx.record.nugget, decision.threshold === 1 ? "We're at time for this drill." : "Good — that addresses this incident.");
+  }
+  if (decision.move === "wrap_up") return WRAP_UP_TEXT;
+  return decision.text ?? "";
+}
+
+function finishNuggetWrap(ctx, verified, turns) {
+  if (!ctx.isNugget || verified.move !== "wrap_up") return verified.message;
+  if (String(verified.message ?? "").includes("Quick debrief:")) return verified.message;
+  if (nuggetDebriefSent(turns)) return verified.message;
+  const lead = verified.message?.trim() || "Good — that addresses this incident.";
+  return nuggetWrapMessage(ctx.record.nugget, lead.endsWith(".") ? lead.slice(0, -1) : lead);
 }
 
 // A learner message, voice answer or hint request. `reserved` comes from the route's
@@ -333,10 +347,30 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
     turn: { kind: reserved.learner.kind, text: learnerText(reserved.learner) }, trigger, addedKinds: addedKinds(round.snapshot, session.diagram),
     canvas: await signalsFor({ session, record, round, turns }),
     conversation: conversationOf(turns),
+    incidentDrill: ctx.isNugget,
   });
   const selected = selectedNodeId && design.labels.has(selectedNodeId) ? { id: selectedNodeId, label: design.labels.get(selectedNodeId) } : null;
   let { verified, data, flags } = await converse({ ctx, session, user, turns, plan, trigger, learner: reserved.learner, selected, onDelta, onReset });
+  const focusBefore = items.find((item) => item.itemId === plan.focusItemId);
   const focusAssessment = verified.assessments.find((assessment) => assessment.itemId === plan.focusItemId);
+  const refFix = nuggetReferenceFix(record);
+  const resolvedNow = ctx.isNugget && !nuggetDebriefSent(turns) && (
+    nuggetIncidentResolved(focusBefore)
+    || (focusAssessment && bandAtLeast(focusAssessment.band, "adequate"))
+    || nuggetInterviewerExplainedFix(verified.message, refFix)
+  );
+  if (resolvedNow && verified.move !== "wrap_up") {
+    onReset?.();
+    verified = {
+      ...verified,
+      move: "wrap_up",
+      focusItemId: null,
+      message: nuggetWrapMessage(ctx.record.nugget),
+      nodeIds: [],
+      coveredNodeIds: verified.coveredNodeIds ?? [],
+    };
+  }
+  verified.message = finishNuggetWrap(ctx, verified, turns);
   const poorResponse = nextPoorResponseState({ assessment: focusAssessment, focusItemId: plan.focusItemId, streak: round.poorResponseStreak, itemId: round.poorResponseItemId });
   const poorResponseStreak = poorResponse.streak;
   const poorResponseItemId = poorResponse.itemId;
@@ -357,12 +391,6 @@ export async function handleLearnerTurn({ session, user, reserved, selectedNodeI
   const result = applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: reserved.learner.seq, interviewerSeq: reserved.learner.seq + 1 } });
   result.events.push(...flags);
   if (poorResponseStreak >= 3) result.events.push({ type: "poor_response_redirect", payload: { itemId: plan.focusItemId, streak: poorResponseStreak, move: verified.move } });
-  if (ctx.isNugget && verified.move === "wrap_up") {
-    const reference = ctx.record.nugget?.miniPack?.agenda?.[0]?.referenceFix;
-    if (reference) {
-      verified.message = `${verified.message}\n\nQuick debrief: ${reference}`.slice(0, 4000);
-    }
-  }
   return store.saveTurn({
     session,
     before: items,
@@ -437,6 +465,11 @@ function canvasItemFor(added, items, agenda, stage) {
 
 const tickKeyOf = (design, ledgerVersion, reason) => crypto.createHash("sha256").update(`${design.text}\0${ledgerVersion}\0${reason}`).digest("hex").slice(0, 16);
 
+/** Component kinds newly added to the canvas since the conductor's last snapshot. */
+function addedKinds(snapshot, diagram) {
+  return diffSnapshots(snapshot, snapshotOf(diagram), diagram).added.map((entry) => entry.kind);
+}
+
 // A background tick (section 6). Returns { action: "none", reason } or the turn it
 // produced. `reserveCredit` and `releaseCredit` come from the route, which owns credits.
 export async function handleTick({ session, user, stateRow, body, reserveCredit, releaseCredit }) {
@@ -449,11 +482,13 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     const current = snapshotOf(session.diagram);
     const diff = diffSnapshots(round.snapshot, current, session.diagram);
     const covered = new Set(round.covered);
-    const parts = undiscussedParts({ diagram: session.diagram, covered, items, agenda, stage: round.stage, focusItemId: round.focusItemId });
+    const parts = ctx.isNugget ? [] : undiscussedParts({ diagram: session.diagram, covered, items, agenda, stage: round.stage, focusItemId: round.focusItemId });
     const mapped = parts[0] ?? null;
+    const turns = await store.recentTurns(session.id, round.summarizedThrough);
+    const debriefDone = ctx.isNugget && nuggetDebriefSent(turns);
     const { last, lastLearnerAt, idleSinceAt, lastIdleHintAt } = await store.lastTurns(session.id);
     const focus = focusItem(items, round);
-    const focusExhausted = Boolean(focus && (focus.followUps >= conventions.maxFollowUpsPerItem || bandAtLeast(focus.band, "adequate")));
+    const focusExhausted = Boolean(focus && (focus.followUps >= conventions.maxFollowUpsPerItem || bandAtLeast(focus.band, "adequate") || nuggetIncidentResolved(focus)));
     const limits = limitsFor(user, session);
     const decision = decideTick({
       typing: Boolean(body.typing),
@@ -463,6 +498,8 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       proactiveLeft: limits.proactiveChecksPerRound - round.proactiveChecks, focusExhausted,
       canvasThin: design.componentCount < conventions.minCanvasComponents || design.edgeCount < conventions.minCanvasConnections,
       canvas: { unexplained: Boolean(mapped), itemId: mapped?.itemId ?? null, major: diff.added.length + diff.removed.length >= 3 || diff.edgeChanges >= 3, changedSinceLearner: diff.added.length + diff.removed.length + diff.edgeChanges > 0 },
+      incidentDrill: ctx.isNugget,
+      debriefDone,
     });
 
     if (decision.action === "none") {
@@ -482,6 +519,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     }
 
     if (decision.action === "template") {
+      const templateText = tickTemplateText(ctx, decision);
       const verified = { move: decision.move, focusItemId: null, assessments: [], clarificationIds: [], newAssumption: "" };
       const plan = { focusItemId: focus?.itemId ?? null, nextItemId: null, allowedMoves: [decision.move] };
       const result = decision.move === "wrap_up"
@@ -492,7 +530,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
       try {
         const saved = await store.saveTurn({
           session, before: items, result, learnerTurn: null, notes: null,
-          interviewer: { kind: KIND_FOR_MOVE[decision.move], trigger: "tick", content: decision.text, move: decision.move, agendaItemId: null },
+          interviewer: { kind: KIND_FOR_MOVE[decision.move], trigger: "tick", content: templateText, move: decision.move, agendaItemId: null },
           stateExtras: { activeMs: round.activeMs, covered: round.covered, snapshot: round.snapshot, timeWarnings: warnings, nudged: decision.move === "nudge", idleHinted: decision.move === "idle_hint", poorResponseStreak: round.poorResponseStreak, poorResponseItemId: round.poorResponseItemId },
           creditId: null,
           idleAt: round.ledgerVersion,
@@ -511,7 +549,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
     if (!creditId) return { action: "none", reason: "not_now" };
     try {
       const turns = await store.recentTurns(session.id, round.summarizedThrough);
-      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs ?? [], pacing: record.pack.pacing, minutes: effectiveMinutes(session, prompt), trigger: "tick", turn: { kind: "tick", text: "" }, canvas: await signalsFor({ session, record, round, turns }) });
+      const base = makePlan({ items, state: round, conventions, agenda, curveballs: record.pack.curveballs ?? [], pacing: record.pack.pacing, minutes: effectiveMinutes(session, prompt), trigger: "tick", turn: { kind: "tick", text: "" }, canvas: await signalsFor({ session, record, round, turns }), incidentDrill: ctx.isNugget });
       const plan = tickPlan({ base, kind: decision.kind, itemId: decision.itemId, items });
       const changes = decision.kind === "canvas" && mapped ? partToAskAbout(mapped) : "";
       const { verified, flags } = await converse({ ctx, session, user, turns, plan, trigger: `tick:${decision.kind}`, learner: null, changes });
@@ -520,6 +558,7 @@ export async function handleTick({ session, user, stateRow, body, reserveCredit,
         await store.touchState(session.id, { activeMs: round.activeMs, snapshot: current, tickKey });
         return { action: "none", reason: "skip" };
       }
+      verified.message = finishNuggetWrap(ctx, verified, turns);
       const result = applyTurn({ items, state: round, plan, verified, turn: { learnerSeq: null, interviewerSeq: null } });
       result.events.push({ type: "tick_model", payload: { kind: decision.kind } }, ...flags);
       const saved = await store.saveTurn({

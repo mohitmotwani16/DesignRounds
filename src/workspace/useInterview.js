@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import { playChime, primeChime } from "./chime.js";
+import { nuggetDebriefInTurns } from "./nuggetInterview.js";
 
 // The canvas has to be still this long before the interviewer looks at it, and it looks
 // at most this often. The server applies its own, stricter rules on top.
@@ -84,6 +85,9 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
 
   const send = useCallback(async (content, intent = "message") => {
     if (pendingRef.current) return false;
+    if (data.status === "ready" && (data.state?.sessionKind === "nugget" || data.sessionKind === "nugget") && nuggetDebriefInTurns(data.turns ?? [])) {
+      return false;
+    }
     // A retry of the same draft reuses its id, so it can't produce two replies.
     if (!attempt.current || attempt.current.content !== content || attempt.current.intent !== intent) {
       attempt.current = { id: crypto.randomUUID(), content, intent };
@@ -117,13 +121,16 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
         setReplyText(null);
       }
     }
-  }, [sessionId, settleSave, selectedIdRef]);
+  }, [sessionId, settleSave, selectedIdRef, data.status, data.state, data.sessionKind, data.turns]);
 
   // A voice answer: transcribed and answered on the server, like a typed message. The
   // recording keeps its request id across retries, so a retry after a lost response
   // can't produce two replies. The blob is dropped once the answer is through.
   const sendAudio = useCallback(async (recording) => {
     if (pendingRef.current) return false;
+    if (data.status === "ready" && (data.state?.sessionKind === "nugget" || data.sessionKind === "nugget") && nuggetDebriefInTurns(data.turns ?? [])) {
+      return false;
+    }
     const gen = generation.current;
     pendingRef.current = true;
     setPending(true);
@@ -151,7 +158,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
         setReplyText(null);
       }
     }
-  }, [sessionId, settleSave, selectedIdRef]);
+  }, [sessionId, settleSave, selectedIdRef, data.status, data.state, data.sessionKind, data.turns]);
 
   // A background tick: the server decides whether anything is worth saying (a question
   // about the canvas, a time check, a gentle check-in) and most ticks end with nothing.
