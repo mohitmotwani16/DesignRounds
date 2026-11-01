@@ -19,6 +19,7 @@ import { CanvasActions, edgeTypes, IncidentOverlay, nodeTypes, RENAME_EVENT } fr
 import { DRAG_TYPE, Palette } from "./Palette.jsx";
 import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from "./CanvasTour.jsx";
 import { PromptModal, ShortcutsDialog, SidePanel, NuggetBriefModal } from "./Panels.jsx";
+import { nuggetDebriefInTurns } from "./nuggetInterview.js";
 import { PanelResizer } from "./PanelResizer.jsx";
 import { inspectorAskMode, useInterview } from "./useInterview.js";
 import { useAuth } from "../auth.jsx";
@@ -773,6 +774,12 @@ function Workspace({ session, prompt }) {
   const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose });
   const inspectorAsk = inspectorAskMode(interview, status, user);
   useEffect(() => { if (panelOpen && panelTab === "interviewer") setUnread(0); }, [panelOpen, panelTab]);
+  useEffect(() => {
+    if (!isNugget || readOnly || interview.status !== "ready") return;
+    if (!nuggetDebriefInTurns(interview.turns ?? [])) return;
+    setPanelTab("review");
+    setPanelOpen(true);
+  }, [isNugget, readOnly, interview.status, interview.turns]);
   useEffect(() => {
     if (!isNugget || !initial.nodes.length) return undefined;
     const timer = window.setTimeout(() => reactFlow.fitView({ padding: 0.25, duration: 300, maxZoom: 1 }), 80);
