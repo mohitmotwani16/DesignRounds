@@ -36,17 +36,17 @@
     "theme": "node scripts/theme-tokens.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.133.0",
-    "@anthropic-ai/vertex-sdk": "0.20.4",
-    "@aws-sdk/client-s3": "3.1152.0",
+    "@anthropic-ai/sdk": "0.137.0",
+    "@anthropic-ai/vertex-sdk": "0.22.0",
+    "@aws-sdk/client-s3": "3.1154.0",
     "@electric-sql/pglite": "0.4.6",
-    "@vercel/functions": "3.10.1",
+    "@vercel/functions": "3.10.2",
     "@xyflow/react": "12.12.0",
     "cookie-parser": "1.4.7",
     "express": "4.22.3",
-    "google-auth-library": "11.1.0",
+    "google-auth-library": "11.3.1",
     "lucide-react": "0.577.0",
-    "nodemailer": "10.1.1",
+    "nodemailer": "10.1.7",
     "pg": "8.23.1",
     "posthog-js": "1.438.13",
     "react": "18.3.1",
@@ -57,7 +57,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "4.7.0",
     "concurrently": "9.1.2",
-    "vite": "6.4.4"
+    "vite": "6.4.5"
   },
   "overrides": {
     "zod": "$zod"
