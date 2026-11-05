@@ -54,8 +54,8 @@ nuggetsRouter.get("/nuggets/:nuggetId", route(async (req, res) => {
   res.json({
     nugget: {
       ...publicNuggetSummary(nugget),
-      symptoms: nugget.scenario.symptoms,
-      incidentHeadline: nugget.incident.headline,
+      // A Plus drill's scenario stays with those who can open it; others get the preview.
+      ...(canStart ? { symptoms: nugget.scenario.symptoms, incidentHeadline: nugget.incident.headline } : {}),
     },
     canStart,
   });

@@ -26,6 +26,7 @@
     "packs:build": "node scripts/build-packs.js",
     "nuggets:build": "node scripts/build-nuggets.js",
     "packs:audit": "node scripts/audit-packs.js",
+    "test:security": "node --test server/security.test.js",
     "test:answers": "node --test server/modules/answers/answers.test.js",
     "test:stream": "node --test server/modules/ai/message-stream.test.js",
     "test:scoring": "node --test server/modules/ai/scoring.test.js",
@@ -46,7 +47,7 @@
     "express": "4.22.3",
     "google-auth-library": "11.1.0",
     "lucide-react": "0.577.0",
-    "nodemailer": "10.1.1",
+    "nodemailer": "10.3.1",
     "pg": "8.23.1",
     "posthog-js": "1.438.13",
     "react": "18.3.1",
@@ -57,7 +58,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "4.7.0",
     "concurrently": "9.1.2",
-    "vite": "6.4.4"
+    "vite": "6.4.5"
   },
   "overrides": {
     "zod": "$zod"

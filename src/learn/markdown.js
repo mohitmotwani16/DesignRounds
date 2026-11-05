@@ -112,7 +112,7 @@ export function articleProblems(article, { categories, taken = () => false } = {
   for (const block of blocks) {
     for (const text of [block.text, ...(block.items ?? []), ...(block.rows?.flat() ?? [])].filter(Boolean)) {
       for (const [, , href] of String(text).matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
-        if (!/^(https?:\/\/[^\s]+|\/[a-z0-9/#-]*)$/i.test(href)) problems.push(`Link "${href}" isn't allowed: use https:// links or site paths like /learn/caching.`);
+        if (!/^(https?:\/\/[^\s]+|\/(?!\/)[a-z0-9/#-]*)$/i.test(href)) problems.push(`Link "${href}" isn't allowed: use https:// links or site paths like /learn/caching.`);
       }
     }
   }

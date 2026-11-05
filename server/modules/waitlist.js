@@ -3,7 +3,7 @@ import { z } from "zod";
 import { query, queryOne } from "../db.js";
 import { deliveryMode, sendPlusWaitlistEmail } from "../email.js";
 import { afterResponse, createLimiter, HttpError, parse, route } from "../http.js";
-import { assertHuman } from "../turnstile.js";
+import { assertHuman, networkKey } from "../turnstile.js";
 import { requireAdmin, requireUser } from "./identity.js";
 
 // The Plus early-access list. Visitors join with an email and pass the human check;
@@ -31,7 +31,7 @@ waitlistRouter.get("/plus/waitlist", requireUser, route(async (req, res) => {
 waitlistRouter.post("/plus/waitlist", route(async (req, res) => {
   const body = parse(joinBody, req.body);
   const signedIn = Boolean(req.user);
-  const allowed = signedIn ? await userWaitlistLimiter(req.user.id) : await ipWaitlistLimiter(req.ip);
+  const allowed = signedIn ? await userWaitlistLimiter(req.user.id) : await ipWaitlistLimiter(networkKey(req.ip));
   if (!allowed) throw new HttpError(429, "RATE_LIMITED", "Too many requests. Try again in a few minutes.");
 
   // A signed-in learner always joins with the account email, whatever the form sent.
@@ -58,7 +58,8 @@ waitlistRouter.post("/plus/waitlist", route(async (req, res) => {
 
   // Visitors get the same answer whether or not the address was already listed, so
   // the form can't be used to check who has signed up.
-  res.status(inserted ? 201 : 200).json(signedIn ? { joined: true, alreadyJoined: !inserted } : { joined: true });
+  if (!signedIn) return res.status(201).json({ joined: true });
+  res.status(inserted ? 201 : 200).json({ joined: true, alreadyJoined: !inserted });
 }));
 
 waitlistRouter.get("/admin/plus-waitlist", requireAdmin, route(async (_req, res) => {

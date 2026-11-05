@@ -1,3 +1,4 @@
+import { BlockList, isIP } from "node:net";
 // Turn public pages and search results into short, attributable excerpts.
 // Full articles and transcripts are not stored.
 
@@ -15,21 +16,31 @@ const SKIP_HOSTS = [
   "metadata.google.internal",
 ];
 
+// Everything that isn't the public internet: loopback, private, link-local, carrier-grade
+// NAT, documentation, benchmarking, multicast, reserved and the IPv6 transition prefixes
+// that can embed a private IPv4 address.
+const NON_PUBLIC = new BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12],
+  ["192.0.0.0", 24], ["192.0.2.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24],
+  ["224.0.0.0", 4], ["240.0.0.0", 4],
+]) NON_PUBLIC.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [
+  ["::", 128], ["::1", 128], ["64:ff9b::", 96], ["100::", 64], ["2001::", 32], ["2001:db8::", 32], ["2002::", 16],
+  ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8],
+]) NON_PUBLIC.addSubnet(network, prefix, "ipv6");
+
 export function isPrivateAddress(ip) {
-  const value = String(ip).toLowerCase().replace(/^::ffff:/, "");
-  if (value === "::1" || value.startsWith("fe80:") || value.startsWith("fc") || value.startsWith("fd")) return true;
-  const parts = value.split(".");
-  if (parts.length !== 4) return false;
-  const nums = parts.map((part) => Number(part));
-  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
-  const [a, b] = nums;
-  if (a === 0 || a === 10 || a === 127) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a >= 224) return true;
-  return false;
+  const value = String(ip).trim().toLowerCase();
+  const family = isIP(value);
+  // Anything that isn't a plain address can't be shown to be public.
+  if (!family) return true;
+  try {
+    // BlockList also applies the IPv4 ranges to IPv4-mapped forms such as ::ffff:7f00:1.
+    return NON_PUBLIC.check(value, family === 4 ? "ipv4" : "ipv6");
+  } catch {
+    return true;
+  }
 }
 
 export function decodeEntities(value) {

@@ -337,7 +337,7 @@ articlesRouter.post("/admin/articles/:id/decision", requireAdmin, route(async (r
          published_at = case when $2::text = 'published' then now() else published_at end,
          author_name = case when $2::text = 'published' then coalesce(author_name, $4::text) else author_name end
        where id = $1`,
-      [row.id, next, req.user.id, row.display_name || row.author_email.split("@")[0]]
+      [row.id, next, req.user.id, row.display_name || "DesignRounds community"]
     );
     if (message) await addMessage(conn, row.id, req.user.id, "admin", message);
     await addMessage(conn, row.id, req.user.id, "system", note);

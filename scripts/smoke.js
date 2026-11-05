@@ -240,13 +240,23 @@ try {
     assert.equal(form.status, 415);
   });
 
+  await step("every table and view is locked against the database's HTTP API", async () => {
+    const open = await query("select tablename from pg_tables where schemaname = 'public' and not rowsecurity");
+    assert.deepEqual(open.map((row) => row.tablename), [], "a new table needs row level security");
+    const definer = await query(
+      `select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'v' and not coalesce(c.reloptions::text[] @> array['security_invoker=true'], false)`
+    );
+    assert.deepEqual(definer.map((row) => row.relname), [], "a new view needs security_invoker");
+  });
+
   await step("visitors join the Plus waitlist", async () => {
     cookie = "";
     const joined = await call("POST", "/api/v1/plus/waitlist", { email: "Waitlist@Example.com" });
     assert.equal(joined.status, 201);
     assert.deepEqual(joined.body, { joined: true });
     const again = await call("POST", "/api/v1/plus/waitlist", { email: "waitlist@example.com" });
-    assert.equal(again.status, 200);
+    assert.equal(again.status, joined.status, "the status can't reveal whether an address was already listed");
     assert.deepEqual(again.body, { joined: true }, "a visitor can't tell whether an address was already listed");
     const [row] = await query("select email, user_id from plus_waitlist where email = 'waitlist@example.com'");
     assert.equal(row.user_id, null);
@@ -381,6 +391,9 @@ try {
     const ogg = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(4000)]).toString("base64");
     assert.equal((await call("POST", url, audio({ data: ogg }))).body.error.code, "INVALID_AUDIO", "declared type must match the bytes");
     assert.equal((await call("POST", url, audio({ mimeType: "video/mp4" }))).status, 400);
+    for (const mimeType of ["constructor", "__proto__", "hasownproperty"]) {
+      assert.equal((await call("POST", url, audio({ mimeType }))).body.error?.code, "INVALID_AUDIO", `${mimeType} is not an audio format`);
+    }
     assert.equal((await call("POST", url, audio({ durationMs: 10 * 60_000 }))).status, 400, "longer than the limit");
 
     const text = await call("POST", `/api/v1/sessions/${round.id}/interview/messages`, { requestId: crypto.randomUUID(), content: "I'd shard by user id." });

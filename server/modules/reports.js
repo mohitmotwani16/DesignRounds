@@ -3,7 +3,7 @@ import { z } from "zod";
 import { query, queryOne } from "../db.js";
 import { deliveryMode, sendEmail } from "../email.js";
 import { afterResponse, createLimiter, HttpError, parse, route } from "../http.js";
-import { assertHuman } from "../turnstile.js";
+import { assertHuman, networkKey } from "../turnstile.js";
 import { isBootstrapAdmin, requireAdmin } from "./identity.js";
 
 // "Report a problem" (issue #71): a short form linked from the footer, the account
@@ -34,7 +34,7 @@ export const reportsRouter = express.Router();
 reportsRouter.post("/reports", route(async (req, res) => {
   const body = parse(reportBody, req.body);
   const signedIn = Boolean(req.user);
-  const allowed = signedIn ? await userReportLimiter(req.user.id) : await ipReportLimiter(req.ip);
+  const allowed = signedIn ? await userReportLimiter(req.user.id) : await ipReportLimiter(networkKey(req.ip));
   if (!allowed) throw new HttpError(429, "RATE_LIMITED", "You've sent several reports in a short time. Try again in an hour.");
 
   // A signed-in learner always reports with the account email, whatever the form sent.

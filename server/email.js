@@ -45,6 +45,7 @@ export async function sendEmail({ to, subject, text, html }) {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: from(), to: recipients, subject, text, html, headers }),
+      signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`Resend rejected the email (${response.status}): ${await response.text()}`);
     return;

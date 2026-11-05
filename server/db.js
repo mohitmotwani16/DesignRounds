@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { postgresOptions } from "./db-ssl.js";
 import { isProduction } from "./flags.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -25,15 +26,16 @@ export async function connect({ url = process.env.DATABASE_URL, migrate: runMigr
   if (!url && isProduction) throw new Error("DATABASE_URL must be set in production; the embedded database is for local development only.");
   if (url) {
     const { default: pg } = await import("pg");
+    const { verified, ...connection } = postgresOptions(url);
+    if (isProduction && verified === false) console.warn("[db] DATABASE_CA_CERT is not set: the database's TLS certificate is not being verified.");
     const pool = new pg.Pool({
-      connectionString: url,
+      ...connection,
       // Small per-instance pools: on serverless every warm instance holds its own, and
       // the provider's pooler (e.g. Supabase Supavisor) multiplexes them onto Postgres.
       max: Number(process.env.DATABASE_POOL_SIZE || 5),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
       application_name: "designrounds",
-      ssl: /localhost|127\.0\.0\.1/.test(url) || process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
     });
     // An idle client dropped by the server must not crash the process.
     pool.on("error", (error) => console.error("[db] idle client error:", error.message));

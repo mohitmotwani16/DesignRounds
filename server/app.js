@@ -31,6 +31,8 @@ import { prompts } from "../src/data/prompts.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(here, "..", "dist");
 const release = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || "local";
+// What a log line may say about a request: no query string (OAuth codes) or invitation tokens.
+const loggablePath = (req) => req.originalUrl.split("?")[0].replace(/(\/invitations\/)[^/]+/, "$1[token]");
 
 // Builds the HTTP application. Hosting is decided by the caller: server/index.js
 // listens on a port (local development, any long-running Node host), and api/index.js
@@ -97,7 +99,7 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use((_req, _res, next) => next(new HttpError(404, "NOT_FOUND", "No such endpoint.")));
   api.use((error, req, res, _next) => {
     if (res.headersSent) {
-      console.error(`[api] ${req.method} ${req.originalUrl} failed after the response started:`, error);
+      console.error(`[api] ${req.method} ${loggablePath(req)} failed after the response started:`, error);
       if (!res.writableEnded) res.end();
       return;
     }
@@ -109,7 +111,7 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
     if (error instanceof HttpError) return res.status(error.status).json({ error: { code: error.code, message: error.message } });
     // The platform request id ties a user's report to the matching log line.
     const requestId = req.get("x-vercel-id") || undefined;
-    console.error(`[api] ${req.method} ${req.originalUrl} failed${requestId ? ` (request ${requestId})` : ""}:`, error);
+    console.error(`[api] ${req.method} ${loggablePath(req)} failed${requestId ? ` (request ${requestId})` : ""}:`, error);
     res.status(500).json({ error: { code: "INTERNAL", message: "Something went wrong on our side.", requestId } });
   });
   app.use("/api", api);
