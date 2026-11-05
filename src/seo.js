@@ -368,7 +368,7 @@ export function routeMeta(path) {
     return {
       ...base,
       title: `Privacy Policy | ${SITE.name}`,
-      description: "What DesignRounds collects, why, who processes it, and how to delete your data. No ads, no third-party tracking.",
+      description: "What DesignRounds collects, why, who receives it, and how to delete your data.",
     };
   }
 
