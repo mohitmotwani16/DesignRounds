@@ -9,11 +9,12 @@
 // Category ids are stored with community articles, so never rename one.
 
 export const LEARN_PATH = "/learn";
-export const LEARN_UPDATED = "2026-10-29";
+export const LEARN_UPDATED = "2026-11-05";
 
 const NEW = "2026-10-17";
 const NOTES = "2026-10-20";
 const ML_AI = "2026-10-29";
+const GENAI_DEEP = "2026-11-05";
 
 export const CATEGORIES = [
   {
@@ -360,14 +361,16 @@ export const CATEGORIES = [
     track: "ai-engineering",
     blurb: "LLM and generative AI interview problems solved end to end: requirements, architecture, evaluation, safety, cost and scale.",
     topics: [
-      { slug: "design-chatgpt", title: "Design ChatGPT: LLM Chat Assistant System Design Walkthrough", short: "Design ChatGPT", level: "Advanced", description: "System design for a ChatGPT-style assistant: conversation storage, streaming responses, context management, GPU serving, rate limits, safety and cost.", published: ML_AI },
-      { slug: "design-rag-chatbot", title: "Design a RAG Chatbot for Company Documents (Enterprise AI Search)", short: "Design a RAG chatbot", level: "Advanced", description: "System design for an enterprise RAG chatbot over company documents: connectors, permission-aware retrieval, hybrid search, citations, evals, freshness.", published: ML_AI },
-      { slug: "design-customer-support-ai-agent", title: "Design a Customer Support AI Agent With Tools and Human Handoff", short: "Design a support AI agent", level: "Advanced", description: "AI agent system design for customer support: intent routing, RAG over help docs, tool calls with approvals, escalation to humans, evals, guardrails and cost.", published: ML_AI },
-      { slug: "design-ai-code-assistant", title: "Design an AI Code Assistant Like GitHub Copilot: System Design", short: "Design an AI code assistant", level: "Advanced", description: "System design for an AI coding assistant like Copilot: completion latency, repository context, fill-in-the-middle models, agent mode, metrics and privacy.", published: ML_AI },
-      { slug: "design-ai-voice-agent", title: "Design a Real-Time Voice AI Agent: Speech, LLM and TTS Latency", short: "Design a voice AI agent", level: "Advanced", description: "System design for a real-time voice AI agent: streaming speech recognition, turn detection, LLM and tools, streaming text-to-speech, interruptions, latency.", published: ML_AI },
-      { slug: "design-text-to-image-service", title: "Design a Text-to-Image Generation Service: GPUs, Queues and Safety", short: "Design text-to-image", level: "Advanced", description: "System design for a text-to-image service like Midjourney: diffusion inference on GPUs, job queues and priorities, prompt and image safety, storage and cost.", published: ML_AI },
-      { slug: "design-document-ingestion-pipeline", title: "Design a Document Processing Pipeline for LLMs and RAG", short: "Design document ingestion", level: "Advanced", description: "System design for ingesting millions of documents for LLMs and RAG: parsing PDFs and scans, chunking, embedding at scale, incremental updates and deletes.", published: ML_AI },
-      { slug: "design-ai-answer-engine", title: "Design an AI Search Answer Engine Like Perplexity: System Design", short: "Design an AI answer engine", level: "Advanced", description: "System design for an AI answer engine: query planning, web search, fetching and ranking sources, grounded answers with citations, latency and cost.", published: ML_AI },
+      { slug: "design-chatgpt", title: "Design ChatGPT: LLM Chat Assistant System Design Walkthrough", short: "Design ChatGPT", level: "Advanced", description: "System design for a ChatGPT-style assistant: conversation storage, streaming responses, context management, GPU serving, rate limits, safety and cost.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-rag-chatbot", title: "Design a RAG Chatbot for Company Documents (Enterprise AI Search)", short: "Design a RAG chatbot", level: "Advanced", description: "System design for an enterprise RAG chatbot over company documents: connectors, permission-aware retrieval, hybrid search, citations, evals, freshness.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-customer-support-ai-agent", title: "Design a Customer Support AI Agent With Tools and Human Handoff", short: "Design a support AI agent", level: "Advanced", description: "AI agent system design for customer support: intent routing, RAG over help docs, tool calls with approvals, escalation to humans, evals, guardrails and cost.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-ai-code-assistant", title: "Design an AI Code Assistant Like GitHub Copilot: System Design", short: "Design an AI code assistant", level: "Advanced", description: "System design for an AI coding assistant like Copilot: completion latency, repository context, fill-in-the-middle models, agent mode, metrics and privacy.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-ai-voice-agent", title: "Design a Real-Time Voice AI Agent: Speech, LLM and TTS Latency", short: "Design a voice AI agent", level: "Advanced", description: "System design for a real-time voice AI agent: streaming speech recognition, turn detection, LLM and tools, streaming text-to-speech, interruptions, latency.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-text-to-image-service", title: "Design a Text-to-Image Generation Service: GPUs, Queues and Safety", short: "Design text-to-image", level: "Advanced", description: "System design for a text-to-image service like Midjourney: diffusion inference on GPUs, job queues and priorities, prompt and image safety, storage and cost.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-document-ingestion-pipeline", title: "Design a Document Processing Pipeline for LLMs and RAG", short: "Design document ingestion", level: "Advanced", description: "System design for ingesting millions of documents for LLMs and RAG: parsing PDFs and scans, chunking, embedding at scale, incremental updates and deletes.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-ai-answer-engine", title: "Design an AI Search Answer Engine Like Perplexity: System Design", short: "Design an AI answer engine", level: "Advanced", description: "System design for an AI answer engine: query planning, web search, fetching and ranking sources, grounded answers with citations, latency and cost.", published: ML_AI, updated: GENAI_DEEP },
+      { slug: "design-ai-voice-platform", title: "Design an AI Voice Platform Like ElevenLabs: Text-to-Speech at Scale", short: "Design an AI voice platform", level: "Advanced", description: "System design for an AI voice platform like ElevenLabs: streaming text-to-speech, GPU serving, voice cloning, long-form audio, usage billing and safety.", published: GENAI_DEEP },
+      { slug: "design-ai-video-generation", title: "Design an AI Video Generator Like Seedance: Architecture and Scale", short: "Design AI video generation", level: "Advanced", description: "How AI video generators like Seedance work: diffusion transformers, multi-shot models, GPU job scheduling, drafts, distillation, delivery and deepfake safety.", published: GENAI_DEEP },
     ],
   },
   {

@@ -535,6 +535,20 @@ export const SEARCH_INTENT = {
       { q: "How do AI answer engines stay fast?", a: "By fetching pages in parallel with strict timeouts, caching popular pages and their extracts, using a small model for query planning, showing sources before the answer, and streaming the answer as it is generated." },
     ],
   },
+  "design-ai-voice-platform": {
+    keywords: ["how elevenlabs works", "elevenlabs system design", "text to speech system design", "ai voice cloning architecture", "tts at scale", "voice ai platform design"],
+    faq: [
+      { q: "How would you design a platform like ElevenLabs?", a: "Separate real-time, long-form and voice-creation paths. Normalise text, stream it over WebSockets, serve each speech model from its own GPU pool with micro-batching and plan concurrency limits, keep voice data warm, gate cloning with consent and verification, and meter usage through idempotent events." },
+      { q: "What is the difference between instant and professional voice cloning?", a: "An instant clone uses about a minute or more of audio and is ready quickly, typically by deriving a speaker representation for a general model. A professional clone uses far more audio, needs voice verification and runs a training job over hours, giving a closer match." },
+    ],
+  },
+  "design-ai-video-generation": {
+    keywords: ["how ai video generation works", "seedance architecture", "how seedance works", "ai video generator system design", "text to video system design", "design sora", "video diffusion transformer"],
+    faq: [
+      { q: "How do AI video generators like Seedance work?", a: "A VAE compresses video into a small latent, a diffusion transformer with separate spatial and temporal layers turns noise into a latent guided by text and references, a refiner raises the resolution, and a VAE decoder produces the frames. Distillation reduces the number of steps needed." },
+      { q: "How do you serve AI video generation at scale?", a: "Run generation as asynchronous jobs with priority tiers, estimate work in GPU-seconds, schedule multi-GPU stages as gangs, checkpoint latents between stages, offer cheap low-resolution drafts, scan outputs for safety, add provenance labels, and deliver through a CDN." },
+    ],
+  },
 };
 
 export const searchIntent = (slug) => SEARCH_INTENT[slug] ?? null;
