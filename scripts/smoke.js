@@ -803,10 +803,16 @@ try {
     assert.ok((await call("GET", "/api/v1/admin/human-checks?q=human-log@example.com")).body.events.some((event) => event.outcome === "missing-token"), "by email");
     assert.ok(found.body.summary.some((row) => row.source === "client" && row.outcome === "widget-error"));
 
-    // Deleting the account removes the sign-in attempts recorded under its email.
+    // Deleting the account removes the sign-in attempts and invitations recorded under its email.
     await signInAs("human-log@example.com");
+    await query(
+      `insert into invitations (email, token_hash, plan, created_by)
+       select 'human-log@example.com', 'smoke-deleted-invitation', 'free', id from users where email <> 'human-log@example.com' limit 1`
+    );
+    assert.equal((await query("select 1 from invitations where email = 'human-log@example.com'")).length, 1);
     assert.equal((await call("DELETE", "/api/v1/me", { confirmEmail: "human-log@example.com" })).status, 200);
     assert.equal((await query("select 1 from human_check_events where email = 'human-log@example.com'")).length, 0);
+    assert.equal((await query("select 1 from invitations where email = 'human-log@example.com'")).length, 0);
     cookie = previousCookie;
   });
 
