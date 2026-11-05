@@ -13,7 +13,7 @@ export default {
       ["Constraints?", "Never act on another customer's account; follow refund policy exactly; full audit trail"],
     ] },
     { type: "p", text: "The most useful thing to pin down is the **risk level of each action**, because it decides how much autonomy the agent gets. Reading a shipment status is harmless, while a wrong refund costs money and can't easily be taken back." },
-    { type: "diagram", kind: "tree", caption: "Sorting actions by risk. Each level gets different controls, from none at all for help articles up to an outright ban on anything outside the agent's job.", root: { label: "Agent actions", tone: "accent", children: [
+    { type: "diagram", kind: "tree", caption: "Sorting actions by risk. Each level gets different controls, from none at all for help articles up to human approval for large refunds.", root: { label: "Agent actions", tone: "accent", children: [
       { label: "Read", sub: "automatic", tone: "ok", children: [{ label: "Help articles" }, { label: "Own orders" }] },
       { label: "Low-risk write", sub: "checked in code", tone: "cache", children: [{ label: "Reschedule" }, { label: "Refund ≤ $50" }] },
       { label: "High-risk write", sub: "human approves", tone: "danger", children: [{ label: "Refund > $50" }] },

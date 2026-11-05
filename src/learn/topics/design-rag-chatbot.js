@@ -115,7 +115,7 @@ Keyword idx : BM25 over the same chunks in a search engine
 
     { type: "h2", text: "6. Retrieval that respects permissions" },
     { type: "p", text: "The non-negotiable requirement. Each chunk stores the document's **ACL** (users and groups allowed). At query time, resolve the user's groups and apply them as a **filter inside both searches**, so restricted content never reaches the model or the prompt." },
-    { type: "diagram", kind: "flow", caption: "Filtering in the right place. The left path can leak: the model has already read restricted text, and no instruction reliably stops it from repeating it. The right path means restricted text never leaves the index.", zones: [{ label: "wrong: filter after retrieval", from: [0, 0], to: [2, 0], tone: "muted" }, { label: "right: filter inside retrieval", from: [0, 1.5], to: [2, 1.5], tone: "muted" }], nodes: [
+    { type: "diagram", kind: "flow", caption: "Filtering in the right place. The first path can leak: the model has already read restricted text, and no instruction reliably stops it from repeating it. In the second path, restricted text never leaves the index.", zones: [{ label: "wrong: filter after retrieval", from: [0, 0], to: [2, 0], tone: "muted" }, { label: "right: filter inside retrieval", from: [0, 1.5], to: [2, 1.5], tone: "muted" }], nodes: [
       { id: "a1", label: "Top-k search", sub: "all documents", col: 0, row: 0 },
       { id: "a2", label: "LLM reads all", tone: "danger", col: 1, row: 0 },
       { id: "a3", label: "\"Hide secrets\"", sub: "hope it obeys", col: 2, row: 0, tone: "danger" },
