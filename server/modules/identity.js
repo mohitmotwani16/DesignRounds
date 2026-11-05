@@ -642,6 +642,7 @@ identityRouter.delete("/me", requireUser, route(async (req, res) => {
   await query("delete from users where id = $1", [req.user.id]);
   await query("delete from login_codes where email = $1", [req.user.email]);
   await query("delete from plus_waitlist where email = $1", [req.user.email]);
+  await query("delete from invitations where email = $1", [req.user.email]);
   // Reports sent while signed in cascade with the user; this also removes any sent as a visitor.
   await query("delete from problem_reports where email = $1", [req.user.email]);
   // Human-check events recorded while signed in cascade too; this removes sign-in attempts.
