@@ -10,10 +10,10 @@ import { GoogleMark } from "../pages/SignIn.jsx";
 import { TurnstileWidget } from "./Turnstile.jsx";
 
 // Asks signed-out readers to sign in while they read the handbook. How often is decided in
-// src/learn/login-prompt.js, including why these are banners and never a covering dialog.
+// src/learn/login-prompt.js, along with why this is a dialog and what that risks.
 //
-// Nothing renders until a real reader has scrolled for a while, so prerendered pages,
-// crawlers and the first paint are unaffected, and position: fixed means no layout shift.
+// Nothing renders until a real reader has been active for a while, so prerendered pages,
+// crawlers and the first paint are unaffected.
 
 const INPUTS = ["scroll", "wheel", "touchstart", "pointerdown", "keydown"];
 const TICK_MS = 1000;
@@ -41,17 +41,46 @@ function returnPath() {
 
 const signInPath = (destination) => `/signin?next=${encodeURIComponent(destination)}`;
 
-function copyFor(ask, topic, readCount) {
-  if (ask.style === "banner") {
-    return { title: readCount >= 2 ? `You're ${readCount} guides in` : "Welcome back" };
+function titleFor(ask, topic, readCount) {
+  if (ask.number >= 3) return readCount >= 2 ? `You're ${readCount} guides in` : "Welcome back";
+  if (ask.moment === "finished") return "Finished? See how you'd do in an interview";
+  if (ask.number === 1) return topic ? `Put ${topic} into practice` : "Put this into practice";
+  return "Reading is the easy part";
+}
+
+// While the dialog is open: the page behind can't scroll (without the scrollbar's width
+// shifting the article), focus stays inside, and it returns to where it was afterwards.
+function useDialogFocus(ref, open) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const root = document.documentElement;
+    const before = { overflow: root.style.overflow, gutter: root.style.scrollbarGutter };
+    const returnTo = document.activeElement;
+    root.style.scrollbarGutter = "stable";
+    root.style.overflow = "hidden";
+    ref.current?.focus();
+    return () => {
+      root.style.overflow = before.overflow;
+      root.style.scrollbarGutter = before.gutter;
+      if (returnTo instanceof HTMLElement && returnTo !== document.body) returnTo.focus({ preventScroll: true });
+    };
+  }, [ref, open]);
+}
+
+function keepTabInside(event, dialog) {
+  if (event.key !== "Tab" || !dialog) return;
+  const items = [...dialog.querySelectorAll("a[href], button:not([disabled])")];
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const at = document.activeElement;
+  if (event.shiftKey && (at === first || at === dialog)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && at === last) {
+    event.preventDefault();
+    first.focus();
   }
-  if (ask.moment === "finished") {
-    return { title: "Finished? See how you'd do in an interview", body: "Sign in free, build a design on a canvas and get an AI review with a score." };
-  }
-  if (ask.number === 1) {
-    return { title: topic ? `Put ${topic} into practice` : "Put this into practice", body: "Sign in free, build a design on a canvas and get an AI review with a score." };
-  }
-  return { title: "Reading is the easy part", body: "Sign in free and test yourself on a real design round, with an AI review of what you built." };
 }
 
 // One click for most people: the human check runs hidden and only after they choose
@@ -69,6 +98,17 @@ function GoogleButton({ onChoose }) {
     const timer = window.setTimeout(() => { if (!started.current) fallBack(starting); }, CHECK_STALL_MS);
     return () => window.clearTimeout(timer);
   }, [starting]);
+
+  // The back button from Google can restore this page exactly as it was left, mid-spinner.
+  useEffect(() => {
+    const onShow = (event) => {
+      if (!event.persisted) return;
+      started.current = false;
+      setStarting(null);
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   const start = async (destination, token) => {
     if (started.current) return;
@@ -90,7 +130,7 @@ function GoogleButton({ onChoose }) {
 
   return (
     <>
-      <button type="button" className="btn btn-google btn-sm" disabled={Boolean(starting)} onClick={choose}>
+      <button type="button" className="btn btn-google btn-lg" disabled={Boolean(starting)} onClick={choose}>
         {starting ? <LoaderCircle size={15} className="spin" /> : <GoogleMark />} Continue with Google
       </button>
       {starting && turnstileSiteKey && (
@@ -110,12 +150,12 @@ function SignInActions({ onChoose }) {
     navigate(signInPath(returnPath()));
   };
   if (!googleAuth) {
-    return <a className="btn btn-primary btn-sm" href="/signin" onClick={toSignIn}>Sign in free <ArrowRight size={14} /></a>;
+    return <a className="btn btn-primary btn-lg" href="/signin" onClick={toSignIn}>Sign in free <ArrowRight size={15} /></a>;
   }
   return (
     <>
       <GoogleButton onChoose={onChoose} />
-      <a className="btn btn-ghost btn-sm" href="/signin" onClick={toSignIn}>Use email</a>
+      <a className="btn btn-ghost btn-lg" href="/signin" onClick={toSignIn}>Use email</a>
     </>
   );
 }
@@ -124,6 +164,8 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
   const { status, error } = useAuth();
   const [ask, setAsk] = useState(null);
   const open = useRef(false);
+  const dialog = useRef(null);
+  useDialogFocus(dialog, Boolean(ask));
   // A failed session check can't tell a member from a visitor, so nobody is asked.
   const eligible = status === "signed-out" && !error && ready;
 
@@ -159,7 +201,7 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
       if (!next) return;
       saveState(withAsk(state, next, slug, now));
       open.current = true;
-      const details = { ask: next.number, style: next.style, moment: next.moment, slug, articles_read: state.read.length };
+      const details = { ask: next.number, moment: next.moment, slug, articles_read: state.read.length };
       setAsk({ ...next, details, readCount: state.read.length });
       track("learn_prompt_shown", details);
     }, TICK_MS);
@@ -172,8 +214,6 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
 
   if (!ask) return null;
 
-  const copy = copyFor(ask, topic, ask.readCount);
-  const banner = ask.style === "banner";
   const dismiss = () => {
     track("learn_prompt_dismissed", ask.details);
     open.current = false;
@@ -186,29 +226,33 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
   };
 
   return (
-    <section
-      className={`learn-prompt learn-prompt-${ask.style}`}
-      aria-labelledby="learn-prompt-title"
-      aria-live="polite"
-      onKeyDown={(event) => { if (event.key === "Escape") dismiss(); }}
-    >
-      <button type="button" className="learn-prompt-close" aria-label="Close" onClick={dismiss}><X size={16} /></button>
-      <h2 id="learn-prompt-title">{copy.title}</h2>
-      {banner ? (
-        <>
-          <p>Keep reading for free. A free account also gets you:</p>
-          <ul>
-            <li>{freeRounds} design rounds on a real canvas</li>
-            <li>An AI review of your design, with a score</li>
-            <li>Your first round with the live AI interviewer</li>
-          </ul>
-        </>
-      ) : <p>{copy.body}</p>}
-      <div className="learn-prompt-actions">
-        <SignInActions onChoose={choose} />
-      </div>
-      <small>No password or card. You'll come back to this spot.</small>
-    </section>
+    <div className="learn-prompt-backdrop" role="presentation">
+      <section
+        ref={dialog}
+        className="learn-prompt"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="learn-prompt-title"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") dismiss();
+          keepTabInside(event, dialog.current);
+        }}
+      >
+        <button type="button" className="learn-prompt-close" aria-label="Close" onClick={dismiss}><X size={20} /></button>
+        <h2 id="learn-prompt-title">{titleFor(ask, topic, ask.readCount)}</h2>
+        <p>The handbook stays free. A free account also gets you:</p>
+        <ul>
+          <li>{freeRounds} design rounds on a real canvas</li>
+          <li>An AI review of your design, with a score</li>
+          <li>Your first round with the live AI interviewer</li>
+        </ul>
+        <div className="learn-prompt-actions">
+          <SignInActions onChoose={choose} />
+        </div>
+        <small>No password or card. You'll come back to this spot.</small>
+      </section>
+    </div>
   );
 }
 

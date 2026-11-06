@@ -1,17 +1,20 @@
 // When to ask a signed-out reader of the handbook to sign in. Every number that decides
 // how often someone is asked lives here. The UI is src/components/LearnLoginPrompt.jsx.
 //
-// The handbook stays free to read. These pages are indexed, so the asks must never cover
-// the article: Google's guidance excuses login dialogs only on content that isn't publicly
-// indexable, and accepts banners that use a reasonable amount of screen and are easy to
-// dismiss. So every ask is a dismissible banner, and the article is always fully readable.
+// The handbook stays free to read. Each ask is a centred dialog the reader has to answer:
+// sign in, or close it with the cross.
+//
+// That is a product decision made knowing the cost. Google's guidance excuses login dialogs
+// only on content that isn't publicly indexable, and these pages are indexed, so the dialog
+// can count against them in search. To keep the risk small it never appears on page load
+// or for crawlers, and the article stays in the page. If Learn's search traffic falls after
+// this ships, this dialog is the first thing to look at.
 //
 // The ladder, per browser:
-//   1. A small card once they are clearly reading.
-//   2. A small card when they finish an article, open another one, or stay on a long one.
-//   3. A larger banner with what an account gets them, once they have read two articles
-//      (or come back the next day).
-//   After that, the larger banner once every two weeks.
+//   1. Once they are clearly reading.
+//   2. When they finish an article, open another one, or stay on a long one.
+//   3. Once they have read two articles (or come back the next day).
+//   After that, once every two weeks.
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -64,17 +67,17 @@ export function isReading({ progress, screens = 0, engagedMs }) {
 export function nextAsk(state, { slug, progress, screens, engagedMs, now }) {
   if (!isReading({ progress, screens, engagedMs })) return null;
   const since = now - state.lastAskAt;
-  if (state.asks === 0) return { number: 1, style: "card", moment: "reading" };
+  if (state.asks === 0) return { number: 1, moment: "reading" };
   if (state.asks === 1) {
     if (since < RULES.secondAskGapMs) return null;
-    if (progress >= RULES.finishedAt) return { number: 2, style: "card", moment: "finished" };
-    return slug !== state.lastAskSlug || engagedMs >= RULES.secondAskEngagedMs ? { number: 2, style: "card", moment: "reading" } : null;
+    if (progress >= RULES.finishedAt) return { number: 2, moment: "finished" };
+    return slug !== state.lastAskSlug || engagedMs >= RULES.secondAskEngagedMs ? { number: 2, moment: "reading" } : null;
   }
   if (state.asks === 2) {
     const readEnough = state.read.length >= RULES.thirdAskMinRead && since >= RULES.thirdAskGapMs;
-    return readEnough || since >= RULES.thirdAskReturnGapMs ? { number: 3, style: "banner", moment: "reading" } : null;
+    return readEnough || since >= RULES.thirdAskReturnGapMs ? { number: 3, moment: "reading" } : null;
   }
-  return since >= RULES.repeatEveryMs ? { number: state.asks + 1, style: "banner", moment: "reading" } : null;
+  return since >= RULES.repeatEveryMs ? { number: state.asks + 1, moment: "reading" } : null;
 }
 
 export function withRead(state, slug) {

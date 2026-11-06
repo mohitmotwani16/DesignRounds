@@ -26,32 +26,32 @@ test("a long article counts as being read well before 30% of it", () => {
   assert.equal(nextAsk(fresh, { ...early, screens: 0.2, engagedMs: 60_000 }).number, 1, "a minute at any depth");
 });
 
-test("the first ask is a small card", () => {
-  assert.deepEqual(nextAsk(parseState("{}"), reading), { number: 1, style: "card", moment: "reading" });
+test("the first ask comes once they are reading", () => {
+  assert.deepEqual(nextAsk(parseState("{}"), reading), { number: 1, moment: "reading" });
 });
 
 test("the second ask waits for the end of the article or another article", () => {
   const state = asked(1);
   assert.equal(after(state, 5 * MINUTE), null, "same article, not finished");
   assert.equal(after(state, 10_000, { progress: 0.95 }), null, "too soon after the first");
-  assert.deepEqual(after(state, 5 * MINUTE, { progress: 0.9 }), { number: 2, style: "card", moment: "finished" });
-  assert.deepEqual(after(state, 5 * MINUTE, { slug: "cdn" }), { number: 2, style: "card", moment: "reading" });
-  assert.deepEqual(after(state, 5 * MINUTE, { engagedMs: 3 * MINUTE }), { number: 2, style: "card", moment: "reading" }, "stayed on one long article");
+  assert.deepEqual(after(state, 5 * MINUTE, { progress: 0.9 }), { number: 2, moment: "finished" });
+  assert.deepEqual(after(state, 5 * MINUTE, { slug: "cdn" }), { number: 2, moment: "reading" });
+  assert.deepEqual(after(state, 5 * MINUTE, { engagedMs: 3 * MINUTE }), { number: 2, moment: "reading" }, "stayed on one long article");
 });
 
-test("the third ask is the larger banner, after two articles or a day", () => {
+test("the third ask comes after two articles or a day", () => {
   const oneArticle = asked(2);
   const twoArticles = asked(2, "caching", ["caching", "cdn"]);
   assert.equal(after(twoArticles, 5 * MINUTE), null, "two articles but too soon");
   assert.equal(after(oneArticle, 2 * 60 * MINUTE), null, "one article, same day");
-  assert.equal(after(twoArticles, RULES.thirdAskGapMs).style, "banner");
-  assert.equal(after(oneArticle, DAY).style, "banner");
+  assert.equal(after(twoArticles, RULES.thirdAskGapMs).number, 3);
+  assert.equal(after(oneArticle, DAY).number, 3);
 });
 
 test("after the ladder, one ask every two weeks", () => {
   const state = asked(3);
   assert.equal(after(state, 13 * DAY), null);
-  assert.deepEqual(after(state, 14 * DAY), { number: 4, style: "banner", moment: "reading" });
+  assert.deepEqual(after(state, 14 * DAY), { number: 4, moment: "reading" });
   assert.equal(after(asked(4), 14 * DAY).number, 5);
 });
 
