@@ -23,6 +23,7 @@ const humanValidUntil = (checkedAt) => (checkedAt ? new Date(new Date(checkedAt)
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+const GOOGLE_TIMEOUT_MS = 10_000;
 
 // "__Host-" makes browsers reject the cookie unless it is Secure, host-only and path=/.
 const COOKIE_NAME = isProduction ? "__Host-dr_session" : "dr_session";
@@ -47,6 +48,7 @@ const googleAuthEnabled = Boolean(googleClientId && googleClientSecret);
 const ipCodeLimiter = createLimiter({ name: "ip-code", windowMs: 15 * 60_000, max: 20 });
 const ipVerifyLimiter = createLimiter({ name: "ip-verify", windowMs: 15 * 60_000, max: 40 });
 const ipGoogleLimiter = createLimiter({ name: "ip-google", windowMs: 15 * 60_000, max: 30 });
+const passRequiredLogLimiter = createLimiter({ name: "human-pass-required-log", windowMs: 60 * 60_000, max: 60 });
 
 const emailSchema = z.string().trim().toLowerCase().max(254).email();
 const turnstileToken = z.string().trim().min(1).max(2048).optional();
@@ -329,7 +331,9 @@ export function requireCurrentHuman(req, _res, next) {
   if (HUMAN_EXEMPT.has(`${req.method} ${req.path}`)) return next();
   const reason = humanPassProblem(req);
   if (!reason) return next();
-  recordHumanCheck(req, { action: "continue", outcome: "pass-required", detail: { reason, route: `${req.method} ${req.path}` } })
+  passRequiredLogLimiter(req.user.id)
+    .then((allowed) => (allowed ? recordHumanCheck(req, { action: "continue", outcome: "pass-required", detail: { reason, route: `${req.method} ${req.path}` } }) : null))
+    .catch((error) => console.error("[human-check] could not record event:", error.message))
     .finally(() => next(new HttpError(403, "HUMAN_CHECK_REQUIRED", "Confirm you're human to continue.")));
 }
 
@@ -337,7 +341,7 @@ export const identityRouter = express.Router();
 
 identityRouter.post("/auth/request-code", route(async (req, res) => {
   const { email, turnstileToken: token } = parse(requestCodeBody, req.body);
-  if (!(await ipCodeLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many code requests. Try again in a few minutes.");
+  if (!(await ipCodeLimiter(networkKey(req.ip)))) throw new HttpError(429, "RATE_LIMITED", "Too many code requests. Try again in a few minutes.");
   if (deliveryMode() === "unconfigured") throw new HttpError(503, "EMAIL_UNAVAILABLE", "Email sign-in is temporarily unavailable.");
 
   const recent = await queryOne(
@@ -378,7 +382,7 @@ identityRouter.post("/auth/request-code", route(async (req, res) => {
 
 identityRouter.post("/auth/verify-code", route(async (req, res) => {
   const { email, code } = parse(verifyCodeBody, req.body);
-  if (!(await ipVerifyLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many attempts. Try again in a few minutes.");
+  if (!(await ipVerifyLimiter(networkKey(req.ip)))) throw new HttpError(429, "RATE_LIMITED", "Too many attempts. Try again in a few minutes.");
 
   const invalid = () => new HttpError(400, "INVALID_CODE", "That code is incorrect or has expired.");
   const pending = await queryOne(
@@ -456,7 +460,7 @@ identityRouter.get("/auth/google", route(async (req, res) => {
   if (turnstileRequired()) {
     return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "turnstile_required"));
   }
-  if (!(await ipGoogleLimiter(req.ip))) {
+  if (!(await ipGoogleLimiter(networkKey(req.ip)))) {
     return res.redirect(signInErrorRedirect(`/signin?next=${encodeURIComponent(next)}`, "rate_limited"));
   }
   res.redirect(beginGoogle(req, res, next));
@@ -466,7 +470,7 @@ identityRouter.post("/auth/google/start", route(async (req, res) => {
   const { next: requestedNext, turnstileToken: token } = parse(googleStartBody, req.body);
   const next = safeNextPath(requestedNext);
   if (!googleAuthEnabled) throw new HttpError(503, "GOOGLE_UNCONFIGURED", "Google sign-in isn't set up yet. Use email instead.");
-  if (!(await ipGoogleLimiter(req.ip))) throw new HttpError(429, "RATE_LIMITED", "Too many sign-in attempts. Try again in a few minutes.");
+  if (!(await ipGoogleLimiter(networkKey(req.ip)))) throw new HttpError(429, "RATE_LIMITED", "Too many sign-in attempts. Try again in a few minutes.");
   await assertHuman(req, token);
   if (turnstileRequired()) {
     res.cookie(HUMAN_GRANT_COOKIE, signHumanGrant(networkKey(req.ip)), grantCookieOptions());
@@ -493,7 +497,7 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
     return fail("google_state", next);
   }
   if (typeof req.query.code !== "string" || !req.query.code) return fail("google_failed", next);
-  if (!(await ipGoogleLimiter(req.ip))) return fail("rate_limited", next);
+  if (!(await ipGoogleLimiter(networkKey(req.ip)))) return fail("rate_limited", next);
 
   let profile;
   try {
@@ -507,6 +511,7 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
         redirect_uri: saved.redirectUri,
         grant_type: "authorization_code",
       }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
     const tokens = await tokenResponse.json().catch(() => ({}));
     if (!tokenResponse.ok || !tokens.access_token) {
@@ -516,6 +521,7 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
 
     const infoResponse = await fetch(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
     profile = await infoResponse.json().catch(() => ({}));
     if (!infoResponse.ok) {

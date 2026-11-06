@@ -46,6 +46,10 @@ export function createLimiter({ name, windowMs, max }) {
   };
 }
 
+function hostOf(value) {
+  try { return new URL(value.trim()).host; } catch { return null; }
+}
+
 // Rejects cross-site state-changing requests. Browsers cannot send a JSON
 // content type cross-origin without a CORS preflight (which we never approve),
 // and when an Origin header is present it must match this host.
@@ -53,10 +57,10 @@ export function sameOriginWrites(req, _res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   const origin = req.get("origin");
   if (origin) {
-    const allowed = new Set([req.get("host"), ...(process.env.APP_ORIGIN || "").split(",").map((value) => value.trim()).filter(Boolean).map((value) => new URL(value).host)]);
-    let host;
-    try { host = new URL(origin).host; } catch { host = null; }
-    if (!allowed.has(host)) return next(new HttpError(403, "BAD_ORIGIN", "Cross-site request rejected."));
+    // A mistyped APP_ORIGIN entry is skipped: it must not turn every write into a 500.
+    const allowed = new Set([req.get("host"), ...(process.env.APP_ORIGIN || "").split(",").map(hostOf).filter(Boolean)]);
+    const host = hostOf(origin);
+    if (!host || !allowed.has(host)) return next(new HttpError(403, "BAD_ORIGIN", "Cross-site request rejected."));
   }
   if (req.method !== "DELETE" && !req.is("application/json")) {
     return next(new HttpError(415, "UNSUPPORTED_MEDIA_TYPE", "Send JSON."));

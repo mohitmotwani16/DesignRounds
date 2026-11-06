@@ -11,6 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { postgresOptions } from "../server/db-ssl.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
@@ -26,8 +27,8 @@ let community = [];
 if (process.env.DATABASE_URL) {
   try {
     const { default: pg } = await import("pg");
-    const url = process.env.DATABASE_URL;
-    const db = new pg.Client({ connectionString: url, ssl: /localhost|127\.0\.0\.1/.test(url) || process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false } });
+    const { verified: _verified, ...connection } = postgresOptions(process.env.DATABASE_URL);
+    const db = new pg.Client(connection);
     await db.connect();
     const { rows } = await db.query("select a.slug, a.title, a.short_title, a.description, a.category, a.level, a.body, a.author_name, a.published_at, a.updated_at from articles a where a.status = 'published' order by a.published_at");
     await db.end();
@@ -56,8 +57,8 @@ if (!template.includes('<div id="root"></div>')) throw new Error("dist/index.htm
 const OWNED = /\s*<(title|meta name="description"|meta name="robots"|link rel="canonical"|meta property="og:[^"]+"|meta name="twitter:[^"]+")[^>]*>(?:[^<]*<\/title>)?/g;
 const page = (bodyHtml, headHtml) => template
   .replace(OWNED, "")
-  .replace("</head>", `    ${headHtml}\n  </head>`)
-  .replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`);
+  .replace("</head>", () => `    ${headHtml}\n  </head>`)
+  .replace('<div id="root"></div>', () => `<div id="root">${bodyHtml}</div>`);
 
 function write(file, contents) {
   const target = path.join(dist, file);
@@ -73,7 +74,7 @@ const paths = ssr.publicPaths();
 for (const url of paths) {
   const meta = ssr.routeMeta(url);
   if (meta.notFound) throw new Error(`Public path ${url} resolves to "not found".`);
-  const html = page(ssr.render(url), ssr.metaHtml(meta)).replace("</body>", `${communityScript(url)}</body>`);
+  const html = page(ssr.render(url), ssr.metaHtml(meta)).replace("</body>", () => `${communityScript(url)}</body>`);
   write(url === "/" ? "index.html" : `${url.slice(1)}.html`, html);
 }
 

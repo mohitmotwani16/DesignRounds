@@ -577,7 +577,8 @@ interviewsRouter.post("/sessions/:sessionId/interview/audio", route(async (req, 
   if (session.status !== "in_progress") throw new HttpError(409, "ROUND_FINISHED", ROUND_FINISHED);
   const mimeType = body.mimeType.split(";")[0].trim().toLowerCase();
   const bytes = Buffer.from(body.data, "base64");
-  if (!AUDIO_FORMATS[mimeType] || bytes.length < AUDIO_MIN_BYTES || !AUDIO_FORMATS[mimeType](bytes)) {
+  // hasOwn: "constructor" and friends are inherited by the lookup object and would pass as a format.
+  if (!Object.hasOwn(AUDIO_FORMATS, mimeType) || bytes.length < AUDIO_MIN_BYTES || !AUDIO_FORMATS[mimeType](bytes)) {
     throw new HttpError(400, "INVALID_AUDIO", "That recording couldn't be read. Try recording again.");
   }
   if (bytes.length > AUDIO_MAX_BYTES) throw new HttpError(413, "PAYLOAD_TOO_LARGE", "That recording is too large to send.");

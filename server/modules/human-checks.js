@@ -2,7 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { query } from "../db.js";
 import { createLimiter, parse, route } from "../http.js";
-import { recordHumanCheck } from "../turnstile.js";
+import { networkKey, recordHumanCheck } from "../turnstile.js";
 import { requireAdmin } from "./identity.js";
 
 // Human-check diagnostics (issue #103). Most Turnstile failures happen in the browser
@@ -39,7 +39,7 @@ export const humanChecksRouter = express.Router();
 // never retries, and a flood of reports shouldn't become a flood of rows.
 humanChecksRouter.post("/diagnostics/human-check", route(async (req, res) => {
   const body = parse(beaconBody, req.body);
-  if (!(await ipBeaconLimiter(req.ip))) return res.status(204).end();
+  if (!(await ipBeaconLimiter(networkKey(req.ip)))) return res.status(204).end();
   await recordHumanCheck(req, {
     source: "client",
     action: body.action,

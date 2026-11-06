@@ -1,7 +1,7 @@
 import express from "express";
 import { z } from "zod";
 import { query, queryOne } from "../db.js";
-import { HttpError, parse, route } from "../http.js";
+import { HttpError, createLimiter, parse, route } from "../http.js";
 import { deleteInterviewAudioForSession } from "../object-storage.js";
 import { requireUser } from "./identity.js";
 import { briefFor, canAccessRound, promptById } from "./rounds.js";
@@ -11,6 +11,17 @@ import { maybeUpgradeScaffoldParent } from "./nuggets/live.js";
 const CHECKPOINT_INTERVAL_MS = 5 * 60_000;
 const MAX_NODES = 400;
 const MAX_EDGES = 800;
+
+// Each round can hold a 600 KB design, so unlimited new rounds would let one account fill
+// the database. Far above what anyone practising needs; resuming a round doesn't count.
+const hourlyRoundLimiter = createLimiter({ name: "round-create-hour", windowMs: 60 * 60_000, max: 30 });
+const dailyRoundLimiter = createLimiter({ name: "round-create-day", windowMs: 24 * 60 * 60_000, max: 120 });
+
+async function assertCanCreateRound(user) {
+  if (!(await hourlyRoundLimiter(user.id)) || !(await dailyRoundLimiter(user.id))) {
+    throw new HttpError(429, "RATE_LIMITED", "You've started a lot of rounds recently. Try again a little later.");
+  }
+}
 
 // Rounds (including Plus briefs) and entitlements live in rounds.js.
 export { promptById };
@@ -167,6 +178,7 @@ practiceRouter.post("/sessions", route(async (req, res) => {
       [req.user.id, promptId]
     );
     if (existing) return res.json({ session: sessionResponse(existing, { brief: briefFor(prompt), resumed: true }) });
+    await assertCanCreateRound(req.user);
 
     const created = await queryOne(
       `insert into practice_sessions (user_id, prompt_id, prompt_version, interview_mode, session_kind)
@@ -194,6 +206,7 @@ practiceRouter.post("/sessions", route(async (req, res) => {
     [req.user.id, nugget.id]
   );
   if (existing) return res.json({ session: sessionResponse(existing, { brief: prompt ? briefFor(prompt) : null, resumed: true }) });
+  await assertCanCreateRound(req.user);
 
   const created = await queryOne(
     `insert into practice_sessions (user_id, prompt_id, prompt_version, session_kind, nugget_id, diagram)

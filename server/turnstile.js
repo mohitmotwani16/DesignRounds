@@ -52,7 +52,9 @@ export function turnstileRequired() {
   return Boolean(turnstileSiteKey()) || isProduction;
 }
 
-// Stable id for the visitor's current network. IPv4 is the whole address, so a
+// Stable id for the visitor's current network, and the subject of per-IP rate limits: a
+// single IPv6 customer controls a whole /64, so limiting by full address limits nothing.
+// IPv4 is the whole address, so a
 // move from Wi-Fi to mobile data (or a VPN) no longer matches. IPv6 keeps the
 // /64 prefix: the interface id rotates on its own and would nag people who
 // never changed networks.

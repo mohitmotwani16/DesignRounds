@@ -8,7 +8,16 @@ import { promptById } from "./rounds.js";
 
 // The ledger outlives the account (see migration 021), so it stores a hash, not the
 // address itself.
-export const trialEmailHash = (email) => crypto.createHash("sha256").update(`interviewer-trial:${email.trim().toLowerCase()}`).digest("hex");
+export const trialEmailHash = (email) => crypto.createHash("sha256").update(`interviewer-trial:${mailboxOf(email)}`).digest("hex");
+
+// One mailbox, however it's spelled: "me+1@x.com" and "m.e@gmail.com" reach the same
+// inbox, so they must not each earn another trial.
+export function mailboxOf(email) {
+  const [local, domain] = email.trim().toLowerCase().split("@");
+  const name = local.split("+")[0];
+  if (domain === "gmail.com" || domain === "googlemail.com") return `${name.replaceAll(".", "")}@gmail.com`;
+  return `${name}@${domain}`;
+}
 
 // Whether this round can start the trial. "available" and "used" are the states the
 // workspace shows; the rest explain why the offer doesn't apply.

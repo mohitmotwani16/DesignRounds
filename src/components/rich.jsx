@@ -16,7 +16,8 @@ export function Rich({ text, linkClassName, onInternalLinkClick }) {
       // External links (only https?, never javascript: or data:) open in a new tab and
       // carry no ranking endorsement, since community content can contain them.
       if (/^https?:\/\//i.test(href)) parts.push(<a key={match.index} href={href} target="_blank" rel="nofollow ugc noopener noreferrer">{label}</a>);
-      else if (href.startsWith("/")) {
+      // "//host" and "/\\host" leave the site in a browser, so they aren't internal links.
+      else if (/^\/(?![/\\])/.test(href)) {
         parts.push(
           <Link
             key={match.index}

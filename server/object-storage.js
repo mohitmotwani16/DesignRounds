@@ -53,6 +53,8 @@ export async function putInterviewAudio({ key, bytes, contentType }) {
   }));
 }
 
+const DELETE_BATCH = 1000;
+
 async function deleteKeys(keys) {
   const unique = [...new Set(keys.filter(Boolean))];
   if (!unique.length) return;
@@ -62,10 +64,16 @@ async function deleteKeys(keys) {
     await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: unique[0] }));
     return;
   }
-  await s3Client.send(new DeleteObjectsCommand({
-    Bucket: bucket,
-    Delete: { Objects: unique.map((key) => ({ Key: key })), Quiet: true },
-  }));
+  // One request can delete at most 1,000 objects. A partial failure is reported in the
+  // response rather than thrown, and it must not pass as a purged recording.
+  for (let start = 0; start < unique.length; start += DELETE_BATCH) {
+    const batch = unique.slice(start, start + DELETE_BATCH);
+    const { Errors: errors = [] } = await s3Client.send(new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: batch.map((key) => ({ Key: key })), Quiet: true },
+    }));
+    if (errors.length) throw new Error(`Object storage could not delete ${errors.length} recording(s): ${errors[0].Code}`);
+  }
 }
 
 export async function deleteInterviewAudioForTurn(turnId) {
