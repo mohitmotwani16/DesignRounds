@@ -1608,7 +1608,7 @@ label.consent-option { cursor: pointer; }
 
 /* Sign-in ask while reading the handbook (src/components/LearnLoginPrompt.jsx): a centred
    dialog answered by signing in or with the cross. Clicking outside doesn't close it. */
-.learn-prompt-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(10, 10, 14, 0.55); backdrop-filter: blur(4px); animation: fade 0.2s forwards; }
+.learn-prompt-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(10, 10, 14, 0.55); backdrop-filter: blur(4px); }
 .learn-prompt { position: relative; width: min(500px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 32px; display: grid; gap: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); outline: none; animation: learn-prompt-in 0.25s var(--ease); }
 .learn-prompt h2 { margin: 0; padding-right: 36px; font-size: 24px; font-weight: 650; line-height: 1.25; letter-spacing: -0.02em; }
 .learn-prompt p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
@@ -1621,7 +1621,7 @@ label.consent-option { cursor: pointer; }
 .learn-prompt-close { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--ink-2); cursor: pointer; }
 .learn-prompt-close:hover { background: var(--bg-sunken); color: var(--ink); }
 @keyframes learn-prompt-in { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .learn-prompt, .learn-prompt-backdrop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .learn-prompt { animation: none; } }
 @media (max-width: 520px) {
   .learn-prompt { padding: 24px 20px; gap: 10px; }
   .learn-prompt h2 { font-size: 21px; }
