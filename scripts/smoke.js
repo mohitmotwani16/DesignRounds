@@ -529,6 +529,7 @@ try {
     assert.equal((await call("PATCH", `/api/v1/articles/${id}`, { title: "Sneaky edit during review" })).status, 409, "no edits while in review");
     assert.equal((await call("GET", "/api/v1/admin/articles")).status, 403, "authors aren't admins");
     assert.equal((await call("GET", "/api/v1/admin/members")).status, 403, "only admins can list users");
+    assert.equal((await call("GET", "/api/v1/admin/member-stats")).status, 403, "only admins can see user counts");
     assert.equal((await call("POST", "/api/v1/admin/invitations", { email: "nope@example.com", plan: "free" })).status, 403, "only admins can invite accounts");
 
     // ADMIN_EMAILS makes admin@example.com an admin.
@@ -569,11 +570,14 @@ try {
     const writerStatus = await call("GET", "/api/v1/admin/members?email=writer%40example.com");
     assert.equal(writerStatus.status, 200);
     assert.equal(writerStatus.body.members[0].isAdmin, false);
+    const statsBefore = (await call("GET", "/api/v1/admin/member-stats")).body;
+    assert.ok(statsBefore.totalUsers >= 2, "signed-up accounts are counted");
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus" })).status, 400, "Plus requires an expiry date");
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus", expiresAt: "2028-02-30" })).status, 400, "invalid calendar dates are rejected");
     const today = new Date().toISOString().slice(0, 10);
     const pastDate = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus", expiresAt: today })).status, 200);
+    assert.equal((await call("GET", "/api/v1/admin/member-stats")).body.currentPlus, statsBefore.currentPlus + 1, "a membership that runs through today is current");
     cookie = authorCookie;
     assert.equal((await call("GET", "/api/v1/me")).body.user.plan, "plus", "expiry is inclusive through its UTC date");
     const paidPrompt = prompts.find((entry) => entry.access === "paid");
@@ -582,6 +586,7 @@ try {
     assert.equal((await call("GET", `/api/v1/sessions/${plusSession.id}/reviews`)).body.allowance.plan, "plus");
     cookie = adminCookie;
     assert.equal((await call("PUT", `/api/v1/admin/members/${writer[0].id}/plan`, { plan: "plus", expiresAt: pastDate })).status, 200);
+    assert.equal((await call("GET", "/api/v1/admin/member-stats")).body.currentPlus, statsBefore.currentPlus, "a lapsed membership is not current");
     const expiredMember = (await call("GET", "/api/v1/admin/members?email=writer%40example.com")).body.members[0];
     assert.equal(expiredMember.plan, "free", "expired Plus is shown as Free");
     assert.equal(expiredMember.storedPlan, "plus", "the stored expiry remains visible to admins");

@@ -105,6 +105,15 @@ for (const url of urls) {
 for (const [title, routes] of titles) if (routes.length > 1) fail(`duplicate title "${title}" on ${routes.join(", ")}`);
 for (const [description, routes] of descriptions) if (routes.length > 1) fail(`duplicate description on ${routes.join(", ")}`);
 
+// 2b. The sign-in asks exist only in a real reader's browser (src/components/LearnLoginPrompt.jsx):
+// crawlers and the first paint get the whole article with nothing over it.
+for (const url of urls) {
+  const pathname = new URL(url).pathname;
+  if (!pathname.startsWith("/learn/")) continue;
+  const page = path.join(dist, pathname.slice(1), "index.html");
+  if (existsSync(page) && /class="learn-(prompt|signin-cta)/.test(readFileSync(page, "utf8"))) fail(`${pathname} prerenders a sign-in ask`);
+}
+
 // 3. Supporting files.
 for (const file of ["404.html", "app.html", "robots.txt", "llms.txt", "og.png", "favicon.svg", "favicon.ico", "favicon-96x96.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "site.webmanifest"]) {
   if (!existsSync(path.join(dist, file))) fail(`missing dist/${file}`);

@@ -80,8 +80,8 @@ export function SiteNav({ onStart }) {
   const navLinks = (profileLabel) => (
     <>
       <Link className="nav-link-btn" to={LEARN_PATH} onClick={close} aria-current={current(path === LEARN_PATH || path.startsWith(`${LEARN_PATH}/`))}>Learn</Link>
-      <Link className="nav-link-btn" to="/nuggets" onClick={close} aria-current={current(path.startsWith("/nuggets"))}>Nuggets</Link>
       <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
+      <Link className="nav-link-btn" to="/nuggets" onClick={close} aria-current={current(path.startsWith("/nuggets"))}>Nuggets</Link>
       {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>{profileLabel}</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
     </>
