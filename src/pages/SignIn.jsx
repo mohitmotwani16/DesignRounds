@@ -17,7 +17,7 @@ const GOOGLE_ERRORS = {
   turnstile_required: "Confirm you're human, then continue with Google.",
 };
 
-function GoogleMark() {
+export function GoogleMark() {
   return (
     <svg className="google-mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
       <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" />

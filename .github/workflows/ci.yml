@@ -29,6 +29,7 @@ jobs:
       - run: npm run build
       - run: npm run check:build
       - run: npm run test:security
+      - run: npm run test:learn-prompt
       - run: npm run test:smoke
       - run: npm run test:stream
       - run: npm run test:vertex

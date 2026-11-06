@@ -94,8 +94,21 @@ function ArticleQueue() {
   );
 }
 
+// Whole-platform counts, so they don't change with the search below. A failed load
+// shows a dash and leaves the rest of the page working.
+function MemberStats({ stats }) {
+  const count = (value) => (typeof value === "number" ? value.toLocaleString("en-IN") : "–");
+  return (
+    <dl className="admin-stats" aria-busy={!stats}>
+      <div><dt>Registered users</dt><dd>{count(stats?.totalUsers)}</dd></div>
+      <div><dt>Current Plus users</dt><dd>{count(stats?.currentPlus)}</dd></div>
+    </dl>
+  );
+}
+
 function MemberList() {
   const [email, setEmail] = useState("");
+  const [stats, setStats] = useState(null);
   const [members, setMembers] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -116,7 +129,9 @@ function MemberList() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  const loadStats = () => api.adminMemberStats().then(setStats).catch(() => setStats(null));
+
+  useEffect(() => { load(); loadStats(); }, []);
 
   async function save(member, plan, expiresAt) {
     setBusyId(member.id);
@@ -125,6 +140,7 @@ function MemberList() {
     try {
       await api.setMemberPlan(member.id, plan, expiresAt || null);
       setNotice(`${member.email} now has ${plan === "plus" ? `Plus through ${expiresAt}` : "Free"} access.`);
+      loadStats();
       await load(email.trim().toLowerCase());
     } catch (saveError) {
       setError(saveError.message);
@@ -156,6 +172,7 @@ function MemberList() {
 
   return (
     <section className="admin-members">
+      <MemberStats stats={stats} />
       <form className="admin-grant" onSubmit={(event) => { event.preventDefault(); load(email.trim().toLowerCase()); }}>
         <label className="field-label" htmlFor="member-email">Search existing users by email</label>
         <div>

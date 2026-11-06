@@ -12,6 +12,7 @@ import { markdownToBlocks } from "../learn/markdown.js";
 import { searchIntent, searchKeywords } from "../learn/search-intent.js";
 import { Rich, plainText } from "../components/rich.jsx";
 import { AccessBadge, LevelMeter, SiteFooter } from "../components/site.jsx";
+import { LearnEndCta, LearnLoginPrompt } from "../components/LearnLoginPrompt.jsx";
 import { useAuth } from "../auth.jsx";
 import { Link, useRoute } from "../router.js";
 import { roundPath, trackPath, TRACK_SEO } from "../seo.js";
@@ -236,6 +237,18 @@ function wordCount(body) {
   return texts.join(" ").split(/\s+/).length;
 }
 
+// In-app arrivals at /learn/topic#heading (returning from sign-in) don't jump to the heading
+// by themselves, and the article may still be loading.
+function useScrollToHash(ready) {
+  useEffect(() => {
+    if (!ready || !window.location.hash) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+  }, [ready]);
+}
+
+// These pages are guides about preparing, so "Put <name> into practice" wouldn't read well.
+const GENERIC_PROMPT_CATEGORIES = new Set(["interview", "roadmaps"]);
+
 // ------------------------------------------------------------------ topic page
 
 export function LearnTopicPage({ slug }) {
@@ -244,6 +257,7 @@ export function LearnTopicPage({ slug }) {
   const category = categoryById(meta.category);
   const { previous, next } = neighbours(slug);
   const onRoadmaps = meta.category === "roadmaps" ? [] : roadmapsFor(slug);
+  useScrollToHash(Boolean(body));
 
   const headings = useMemo(() => {
     if (!body) return [];
@@ -363,6 +377,8 @@ export function LearnTopicPage({ slug }) {
                 </nav>
               )}
 
+              <LearnEndCta slug={slug} />
+
               <nav className="learn-pager" aria-label="Previous and next topic">
                 {previous ? <Link className="prev" to={topicPath(previous.slug)}><span><ArrowLeft size={13} /> Previous</span>{previous.title}</Link> : <span />}
                 {next ? (
@@ -382,6 +398,7 @@ export function LearnTopicPage({ slug }) {
         </article>
         <OnThisPage headings={headings} />
       </div>
+      <LearnLoginPrompt slug={slug} topic={GENERIC_PROMPT_CATEGORIES.has(meta.category) ? null : meta.short} ready={Boolean(body)} />
       <SiteFooter />
     </main>
   );
@@ -608,6 +625,7 @@ export function CommunityArticlePage({ slug }) {
   }, [slug]);
   const headings = useMemo(() => (article ? articleHeadings(article.body) : []), [article]);
   const category = article ? categoryById(article.category) : null;
+  useScrollToHash(Boolean(article));
 
   return (
     <main className="learn-page">
@@ -622,6 +640,7 @@ export function CommunityArticlePage({ slug }) {
             <>
               <CommunityArticleHeader article={article} category={category} />
               <ArticleBody markdown={article.body} />
+              <LearnEndCta slug={slug} />
               <aside className="learn-write-cta compact">
                 <p><PenLine size={15} /> Written by a member of the DesignRounds community and reviewed by our editors.</p>
                 <Link to="/learn/write">Write your own article <ArrowRight size={14} /></Link>
@@ -631,6 +650,7 @@ export function CommunityArticlePage({ slug }) {
         </article>
         <OnThisPage headings={headings} />
       </div>
+      <LearnLoginPrompt slug={slug} ready={Boolean(article)} />
       <SiteFooter />
     </main>
   );

@@ -8,6 +8,7 @@ import { LEARN_PATH, topicMeta } from "./learn/catalog.js";
 import { BackgroundHumanCheck } from "./components/BackgroundHumanCheck.jsx";
 import { ConsentBanner } from "./components/ConsentBanner.jsx";
 import { HumanCheck } from "./components/HumanCheck.jsx";
+import { reportLearnPromptSignIn } from "./components/LearnLoginPrompt.jsx";
 import { ReportProblemHost } from "./components/ReportProblem.jsx";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
@@ -88,6 +89,7 @@ function AnalyticsIdentity() {
   const { status, user } = useAuth();
   useEffect(() => {
     if (status !== "loading") identifyUser(status === "signed-in" ? user : null);
+    if (status === "signed-in") reportLearnPromptSignIn();
   }, [status, user?.id, user?.plan]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }

@@ -409,6 +409,19 @@ articlesRouter.get("/admin/members", requireAdmin, route(async (req, res) => {
   });
 }));
 
+// Counted in SQL because the member list stops at 200. "Current Plus" follows isPlus in
+// plans.js: a lapsed membership still has plan = 'plus' but no longer counts, and the date
+// is today in UTC, the same day isPlus uses.
+articlesRouter.get("/admin/member-stats", requireAdmin, route(async (_req, res) => {
+  const [row] = await query(
+    `select count(*)::int as total_users,
+            (count(*) filter (where plan = 'plus' and plan_expires_at >= $1::date))::int as current_plus
+       from users`,
+    [new Date().toISOString().slice(0, 10)]
+  );
+  res.json({ totalUsers: row.total_users, currentPlus: row.current_plus });
+}));
+
 articlesRouter.put("/admin/members/:id/plan", requireAdmin, route(async (req, res) => {
   const { plan, expiresAt } = parse(membershipBody, req.body);
   if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) throw new HttpError(404, "NOT_FOUND", "User not found.");
