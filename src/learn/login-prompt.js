@@ -8,7 +8,7 @@
 //
 // The ladder, per browser:
 //   1. A small card once they are clearly reading.
-//   2. A small card when they finish an article, or when they open another one.
+//   2. A small card when they finish an article, open another one, or stay on a long one.
 //   3. A larger banner with what an account gets them, once they have read two articles
 //      (or come back the next day).
 //   After that, the larger banner once every two weeks.
@@ -17,11 +17,16 @@ const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
 export const RULES = {
-  readingAt: 0.3, // share of the article scrolled past
+  // "Clearly reading". Articles run to many screens, so a share of the article alone would
+  // miss someone who spends minutes on the first few sections and then leaves.
   engagedMs: 20_000, // visible, recently active time on this article
+  readingAt: 0.3, // share of the article on screen or scrolled past
+  readingScreens: 1.5, // or this many screens scrolled
+  engagedAloneMs: MINUTE, // or this long active at any depth
   finishedAt: 0.85,
   idleAfterMs: MINUTE, // no scroll, tap or key for this long stops the engaged clock
   secondAskGapMs: MINUTE,
+  secondAskEngagedMs: 3 * MINUTE, // still on one long article, nowhere near its end
   thirdAskGapMs: 30 * MINUTE,
   thirdAskReturnGapMs: DAY, // a reader who sticks to one article still reaches the third ask
   thirdAskMinRead: 2,
@@ -50,15 +55,20 @@ export function parseState(raw) {
   }
 }
 
+export function isReading({ progress, screens = 0, engagedMs }) {
+  if (engagedMs >= RULES.engagedAloneMs) return true;
+  return engagedMs >= RULES.engagedMs && (progress >= RULES.readingAt || screens >= RULES.readingScreens);
+}
+
 // Decides the ask for this moment, or null. Pure, so the ladder can be tested.
-export function nextAsk(state, { slug, progress, engagedMs, now }) {
-  if (progress < RULES.readingAt || engagedMs < RULES.engagedMs) return null;
+export function nextAsk(state, { slug, progress, screens, engagedMs, now }) {
+  if (!isReading({ progress, screens, engagedMs })) return null;
   const since = now - state.lastAskAt;
   if (state.asks === 0) return { number: 1, style: "card", moment: "reading" };
   if (state.asks === 1) {
     if (since < RULES.secondAskGapMs) return null;
     if (progress >= RULES.finishedAt) return { number: 2, style: "card", moment: "finished" };
-    return slug !== state.lastAskSlug ? { number: 2, style: "card", moment: "reading" } : null;
+    return slug !== state.lastAskSlug || engagedMs >= RULES.secondAskEngagedMs ? { number: 2, style: "card", moment: "reading" } : null;
   }
   if (state.asks === 2) {
     const readEnough = state.read.length >= RULES.thirdAskMinRead && since >= RULES.thirdAskGapMs;

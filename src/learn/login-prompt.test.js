@@ -17,6 +17,15 @@ test("nothing is asked before the reader is clearly reading", () => {
   assert.equal(nextAsk(fresh, { ...reading, progress: 1, engagedMs: 0 }), null);
 });
 
+test("a long article counts as being read well before 30% of it", () => {
+  const fresh = parseState("{}");
+  const early = { ...reading, progress: 0.12 };
+  assert.equal(nextAsk(fresh, { ...early, screens: 0.5 }), null, "barely scrolled, 30 seconds");
+  assert.equal(nextAsk(fresh, { ...early, screens: 1.5 }).number, 1, "a screen and a half");
+  assert.equal(nextAsk(fresh, { ...early, screens: 1.5, engagedMs: 10_000 }), null, "too quick to be reading");
+  assert.equal(nextAsk(fresh, { ...early, screens: 0.2, engagedMs: 60_000 }).number, 1, "a minute at any depth");
+});
+
 test("the first ask is a small card", () => {
   assert.deepEqual(nextAsk(parseState("{}"), reading), { number: 1, style: "card", moment: "reading" });
 });
@@ -27,6 +36,7 @@ test("the second ask waits for the end of the article or another article", () =>
   assert.equal(after(state, 10_000, { progress: 0.95 }), null, "too soon after the first");
   assert.deepEqual(after(state, 5 * MINUTE, { progress: 0.9 }), { number: 2, style: "card", moment: "finished" });
   assert.deepEqual(after(state, 5 * MINUTE, { slug: "cdn" }), { number: 2, style: "card", moment: "reading" });
+  assert.deepEqual(after(state, 5 * MINUTE, { engagedMs: 3 * MINUTE }), { number: 2, style: "card", moment: "reading" }, "stayed on one long article");
 });
 
 test("the third ask is the larger banner, after two articles or a day", () => {

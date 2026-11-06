@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, LoaderCircle, X } from "lucide-react";
-import { analyticsEnabled, readConsent, track } from "../analytics.js";
+import { track } from "../analytics.js";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { prompts } from "../data/prompts.js";
-import { RULES, loadState, nextAsk, rememberClick, saveState, takeClick, withAsk, withRead } from "../learn/login-prompt.js";
+import { RULES, isReading, loadState, nextAsk, rememberClick, saveState, takeClick, withAsk, withRead } from "../learn/login-prompt.js";
 import { Link, navigate } from "../router.js";
 import { GoogleMark } from "../pages/SignIn.jsx";
 import { TurnstileWidget } from "./Turnstile.jsx";
@@ -17,10 +17,8 @@ import { TurnstileWidget } from "./Turnstile.jsx";
 
 const INPUTS = ["scroll", "wheel", "touchstart", "pointerdown", "keydown"];
 const TICK_MS = 1000;
-// The phone layout has no room for this and the analytics banner at once.
-const NARROW = "(max-width: 900px)";
 // How long the hidden human check may take before the sign-in page takes over.
-const CHECK_STALL_MS = 6000;
+const CHECK_STALL_MS = 10_000;
 
 const freeRounds = prompts.filter((prompt) => prompt.access === "free").length;
 
@@ -43,14 +41,9 @@ function returnPath() {
 
 const signInPath = (destination) => `/signin?next=${encodeURIComponent(destination)}`;
 
-function holdForOtherUi() {
-  if (document.querySelector(".learn-sidebar.open")) return true;
-  return analyticsEnabled && readConsent() === null && window.matchMedia(NARROW).matches;
-}
-
 function copyFor(ask, topic, readCount) {
   if (ask.style === "banner") {
-    return { title: readCount >= 2 ? `You've read ${readCount} guides here` : "Welcome back" };
+    return { title: readCount >= 2 ? `You're ${readCount} guides in` : "Welcome back" };
   }
   if (ask.moment === "finished") {
     return { title: "Finished? See how you'd do in an interview", body: "Sign in free, build a design on a canvas and get an AI review with a score." };
@@ -138,6 +131,7 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
     if (!eligible) return undefined;
     let engagedMs = 0;
     let furthest = 0;
+    let screens = 0;
     let lastInput = 0;
     let lastTick = Date.now();
     let counted = false;
@@ -151,16 +145,17 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
       lastTick = now;
       if (!active) return;
       furthest = Math.max(furthest, articleProgress());
+      screens = Math.max(screens, window.scrollY / window.innerHeight);
 
       // Read from storage each time: another tab may have asked or read since.
       let state = loadState();
-      if (!counted && furthest >= RULES.readingAt && engagedMs >= RULES.engagedMs) {
+      if (!counted && isReading({ progress: furthest, screens, engagedMs })) {
         counted = true;
         state = withRead(state, slug);
         saveState(state);
       }
-      if (open.current || holdForOtherUi()) return;
-      const next = nextAsk(state, { slug, progress: furthest, engagedMs, now });
+      if (open.current || document.querySelector(".learn-sidebar.open")) return;
+      const next = nextAsk(state, { slug, progress: furthest, screens, engagedMs, now });
       if (!next) return;
       saveState(withAsk(state, next, slug, now));
       open.current = true;

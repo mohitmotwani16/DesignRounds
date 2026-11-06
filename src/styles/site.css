@@ -1627,6 +1627,9 @@ label.consent-option { cursor: pointer; }
   .learn-prompt p, .learn-prompt ul { font-size: 13px; line-height: 1.4; }
   .learn-prompt small { display: none; }
 }
+/* Where the two don't fit side by side, the analytics banner steps aside until this closes.
+   An unanswered banner already means no analytics, and it comes back afterwards. */
+@media (max-width: 940px) { body:has(.learn-prompt) .consent-banner { display: none; } }
 @media print { .learn-prompt, .learn-signin-cta { display: none; } }
 .learn-signin-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; margin: 32px 0; padding: 20px 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .learn-signin-cta > div { flex: 1 1 320px; min-width: 0; }
