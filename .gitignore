@@ -10,5 +10,8 @@ node_modules
 dist-ssr/
 .indexnow-state.json
 
-# Design tooling working files
+# Design tooling / Cursor skills (canonical copy: D:\CursorAgentsAndSkills\DesignRounds)
+.agents/
+skills-lock.json
+landing/
 .taste-skill/

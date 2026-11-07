@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, LoaderCircle, MessageCircle, Minus } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, LoaderCircle, MessageCircle, Minus } from "lucide-react";
 import { api } from "../api.js";
 import { track } from "../analytics.js";
 import { COMMUNICATION, PLUS_FEATURES, RUBRIC } from "../data/plans.js";
@@ -126,7 +126,7 @@ export default function PlusPage() {
   return (
     <main className="lp plus-page dot-ground" ref={ref}>
       <section className="plus-hero wrap" aria-labelledby="plus-title">
-        <nav className="crumbs" aria-label="Breadcrumb"><Link to="/">Home</Link> / <Link to="/#pricing">Pricing</Link> / <span aria-current="page">Plus</span></nav>
+        <nav className="crumbs" aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={13} /><Link to="/#pricing">Pricing</Link><ChevronRight size={13} /><span aria-current="page">Plus</span></nav>
         <h1 id="plus-title" className="rise" style={{ "--d": 0 }}>DesignRounds Plus</h1>
         <p className="plus-sub rise" style={{ "--d": 1 }}>For the last weeks before your interviews: every round, a live AI interviewer to talk your design through with, and feedback on both the design and the way you explain it.</p>
         <div id="early-access" className="plus-buy rise" style={{ "--d": 2 }}>

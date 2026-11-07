@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Dices, LayoutGrid, LoaderCircle } from "lucide-react";
+import { ArrowRight, ChevronRight, Dices, LayoutGrid, LoaderCircle } from "lucide-react";
 import { nuggets } from "../data/nuggets.js";
 import { findPrompt, getTrack, prompts, tracks } from "../data/prompts.js";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
-import { NuggetCard, NuggetParentCard, SiteFooter } from "../components/site.jsx";
+import { NuggetCard, NuggetParentCard, RoundCardSkeleton, SiteFooter } from "../components/site.jsx";
 import { promptIcon, trackIcon } from "../components/ui.jsx";
 import { Link, navigate, useRoute } from "../router.js";
 
-function nuggetsHref({ track = "all", parent = "" } = {}) {
+function nuggetsHref({ track = "all", parent = "", browse = "" } = {}) {
   const query = new URLSearchParams();
   if (track && track !== "all") query.set("track", track);
   if (parent) query.set("q", parent);
+  if (browse === "drills" || browse === "free") query.set("browse", browse);
   const qs = query.toString();
   return qs ? `/nuggets?${qs}` : "/nuggets";
 }
@@ -28,10 +29,35 @@ function groupByParent(items) {
   return map;
 }
 
+function nuggetAccess(item) {
+  return item.access ?? findPrompt(item.parentPromptId)?.access ?? "free";
+}
+
+function parentsFromNuggetCatalog(items) {
+  const list = [];
+  for (const [parentId, drills] of groupByParent(items)) {
+    const prompt = findPrompt(parentId);
+    if (!prompt) continue;
+    list.push({
+      id: prompt.id,
+      title: prompt.title,
+      track: prompt.track,
+      access: prompt.access,
+      nuggetCount: drills.length,
+    });
+  }
+  list.sort((a, b) => a.title.localeCompare(b.title));
+  return list;
+}
+
 export default function NuggetsPage({ onLockRound }) {
   const { params } = useRoute();
   const parentFilter = params.get("q") || "";
   const trackFilter = validTrackId(params.get("track") || "all");
+  const browseParam = params.get("browse") || "";
+  const browseAllDrills = browseParam === "drills" && !parentFilter && trackFilter === "all";
+  const browseFreeDrills = browseParam === "free" && !parentFilter && trackFilter === "all";
+  const activeBrowse = browseAllDrills ? "drills" : browseFreeDrills ? "free" : "";
   const activeTrack = tracks.find((item) => item.id === trackFilter);
   const { status, user, humanCheckRequired, humanLaunch, humanVisible } = useAuth();
   const [parents, setParents] = useState([]);
@@ -58,16 +84,25 @@ export default function NuggetsPage({ onLockRound }) {
     let items = nuggets;
     if (parentFilter) items = items.filter((item) => item.parentPromptId === parentFilter);
     else if (trackFilter !== "all") items = items.filter((item) => item.track === trackFilter);
+    if (browseFreeDrills) items = items.filter((item) => nuggetAccess(item) === "free");
     return items;
-  }, [parentFilter, trackFilter]);
+  }, [parentFilter, trackFilter, browseFreeDrills]);
   const grouped = useMemo(() => groupByParent(filtered), [filtered]);
+  const catalogParents = useMemo(() => parentsFromNuggetCatalog(nuggets), []);
   const parentMeta = parentFilter ? findPrompt(parentFilter) : null;
+  const resolvedParents = useMemo(() => {
+    if (parents.length) return parents;
+    if (loadingParents) return [];
+    return catalogParents;
+  }, [parents, loadingParents, catalogParents]);
   const visibleParents = useMemo(() => (
-    trackFilter === "all" ? parents : parents.filter((parent) => parent.track === trackFilter)
-  ), [parents, trackFilter]);
+    trackFilter === "all" ? resolvedParents : resolvedParents.filter((parent) => parent.track === trackFilter)
+  ), [resolvedParents, trackFilter]);
   const tabTrack = parentMeta?.track ? validTrackId(parentMeta.track) : trackFilter;
-  const showQuestionGrid = !parentFilter && !loadingParents && visibleParents.length > 0;
-  const showDrillGrid = Boolean(parentFilter) || trackFilter === "all";
+  const showQuestionGrid = !parentFilter && !browseAllDrills && !browseFreeDrills;
+  const showDrillGrid = Boolean(parentFilter) || browseAllDrills || browseFreeDrills;
+  const showBrowseDrillList = browseAllDrills || browseFreeDrills;
+  const showBrowseModes = trackFilter === "all" && !parentFilter;
 
   const start = useCallback(async (body) => {
     if (status === "loading") return;
@@ -121,34 +156,74 @@ export default function NuggetsPage({ onLockRound }) {
         ? "Starting…"
         : "Random nugget";
 
+  const showBreadcrumb = parentFilter || trackFilter !== "all" || showBrowseDrillList;
+
   let cardIndex = 0;
 
   return (
-    <main className="library nuggets-catalog">
-      <section className="lib-hero wrap">
-        <span className="kicker">Incident drills</span>
-        <h1>Two- to five-minute nuggets</h1>
-        <p>A pre-drawn architecture is already failing. Talk through what broke and how you would fix it with the AI interviewer.</p>
-        <p className="lib-hero-note">Drills follow the same access as their parent question in the library — free rounds stay free; Plus rounds need Plus to start.</p>
+    <main className="library nuggets-catalog dot-ground">
+      <section className={`lib-hero wrap${parentFilter ? " lib-hero--compact" : ""}`}>
+        {showBreadcrumb && (
+          <nav className="nuggets-crumb" aria-label="Breadcrumb">
+            <Link to="/nuggets">Nuggets</Link>
+            {trackFilter !== "all" && activeTrack && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <Link to={nuggetsHref({ track: trackFilter, browse: activeBrowse })}>{activeTrack.shortLabel}</Link>
+              </>
+            )}
+            {parentFilter && parentMeta && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span aria-current="page">{parentMeta.title}</span>
+              </>
+            )}
+            {browseFreeDrills && !parentFilter && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span aria-current="page">Free drills</span>
+              </>
+            )}
+            {browseAllDrills && !parentFilter && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span aria-current="page">All drills</span>
+              </>
+            )}
+          </nav>
+        )}
+        {!parentFilter && (
+          <>
+            <span className="kicker">Incident drills</span>
+            <h1>Short drills when you have five minutes</h1>
+            <div className="lib-hero-lede">
+              <p className="lib-hero-sub">The architecture on the canvas is already broken. Walk through what failed and how you would fix it — same AI interviewer as a full round.</p>
+              <div className="lp-hero-actions">
+                <button type="button" className="btn lp-btn" disabled={!authReady || (signedIn && !canStart) || !filtered.length} onClick={startRandom}>
+                  {starting && <LoaderCircle size={17} className="spin" />}
+                  {primaryLabel}
+                  {!starting && <ArrowRight size={17} className="nudge" />}
+                </button>
+                <Link className="lp-text-link" to="/library">Browse design rounds</Link>
+              </div>
+            </div>
+          </>
+        )}
+        {parentFilter && parentMeta && (
+          <p className="lib-hero-lean">Incident drills for this question. Start one below or roll random.</p>
+        )}
         {needsHuman && (
           <p className="form-hint" role="status">
             {humanVisible ? "Complete the security check to start a drill." : "Finishing a quick security check…"}
           </p>
         )}
-        <div className="hero-ctas" style={{ marginTop: "1.25rem" }}>
-          <button type="button" className="btn btn-primary btn-lg" disabled={!authReady || (signedIn && !canStart) || !filtered.length} onClick={startRandom}>
-            {starting ? <LoaderCircle size={18} className="spin" /> : <Dices size={18} />}
-            {primaryLabel}
-          </button>
-          {!parentFilter && <Link className="btn btn-ghost btn-lg" to="/library">Full design rounds</Link>}
-        </div>
         {error && <p className="form-error" role="alert">{error}</p>}
       </section>
 
       <div className="lib-tabs-bar">
         <div className="wrap">
           <div className="lib-tabs" role="toolbar" aria-label="Discipline">
-            <Link className="lib-tab tone-slate" to={nuggetsHref({ track: "all" })} aria-current={tabTrack === "all" ? "page" : undefined}>
+            <Link className="lib-tab tone-slate" to={nuggetsHref({ track: "all", browse: activeBrowse })} aria-current={tabTrack === "all" ? "page" : undefined}>
               <i><LayoutGrid size={13} /></i>All
             </Link>
             {tracks.map((item) => {
@@ -157,7 +232,7 @@ export default function NuggetsPage({ onLockRound }) {
                 <Link
                   key={item.id}
                   className={`lib-tab tone-${item.color}`}
-                  to={nuggetsHref({ track: item.id })}
+                  to={nuggetsHref({ track: item.id, browse: activeBrowse })}
                   aria-current={tabTrack === item.id ? "page" : undefined}
                 >
                   <i><Icon size={13} /></i>{item.shortLabel}
@@ -167,6 +242,46 @@ export default function NuggetsPage({ onLockRound }) {
           </div>
         </div>
       </div>
+
+      {showBrowseModes && (
+        <div className="nuggets-mode-bar">
+          <div className="wrap">
+            <div className="nuggets-mode" role="tablist" aria-label="How to browse">
+              <Link
+                className="nuggets-mode-btn"
+                to={nuggetsHref({ track: trackFilter })}
+                role="tab"
+                aria-selected={!showBrowseDrillList}
+              >
+                By question
+              </Link>
+              <Link
+                className="nuggets-mode-btn"
+                to={nuggetsHref({ track: trackFilter, browse: "free" })}
+                role="tab"
+                aria-selected={browseFreeDrills}
+              >
+                Free drills
+              </Link>
+              <Link
+                className="nuggets-mode-btn"
+                to={nuggetsHref({ track: trackFilter, browse: "drills" })}
+                role="tab"
+                aria-selected={browseAllDrills}
+              >
+                All drills
+              </Link>
+            </div>
+            <p className="nuggets-mode-hint">
+              {browseFreeDrills
+                ? "Every drill tied to a free library question — no Plus needed."
+                : browseAllDrills
+                  ? "Every published drill, grouped by parent question."
+                  : "Pick a library question first — easiest way to practice related failures."}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="wrap lib-body lib-body-solo">
         <section aria-label="Incident drills">
@@ -212,22 +327,36 @@ export default function NuggetsPage({ onLockRound }) {
                 </header>
               )}
               <div className="rounds nuggets-parent-rounds">
-                {visibleParents.map((parent, index) => (
-                  <NuggetParentCard
-                    key={parent.id}
-                    parent={parent}
-                    index={index}
-                    to={nuggetsHref({ track: trackFilter, parent: parent.id })}
-                  />
-                ))}
+                {loadingParents
+                  ? Array.from({ length: 6 }, (_, index) => <RoundCardSkeleton key={index} />)
+                  : visibleParents.map((parent, index) => (
+                    <NuggetParentCard
+                      key={parent.id}
+                      parent={parent}
+                      index={index}
+                      to={nuggetsHref({ track: trackFilter, parent: parent.id })}
+                    />
+                  ))}
               </div>
+              {!loadingParents && !visibleParents.length && (
+                <div className="lib-empty">
+                  <p>{trackFilter !== "all"
+                    ? `No questions with incident drills for ${activeTrack?.shortLabel ?? "this discipline"} yet. Try another tab.`
+                    : "No questions with incident drills yet. Check back soon."}</p>
+                </div>
+              )}
             </div>
           )}
 
-          {showDrillGrid && trackFilter === "all" && !parentFilter && grouped.size > 0 && (
-            <header className="nuggets-section-head nuggets-section-head-compact" style={{ marginTop: 40 }}>
-              <h2>All incident drills</h2>
-              <p className="nuggets-section-lede">Or start any drill directly — grouped by parent question.</p>
+          {showDrillGrid && showBrowseDrillList && grouped.size > 0 && (
+            <header className="nuggets-section-head nuggets-section-head-compact">
+              <p className="lib-count" aria-live="polite"><strong>{filtered.length}</strong> drill{filtered.length === 1 ? "" : "s"}</p>
+              <h2>{browseFreeDrills ? "Free incident drills" : "All incident drills"}</h2>
+              <p className="nuggets-section-lede">
+                {browseFreeDrills
+                  ? "Grouped by parent question — each one is free to start without Plus."
+                  : "Grouped by parent question — or use Random nugget above to skip the choice."}
+              </p>
             </header>
           )}
 
@@ -261,11 +390,13 @@ export default function NuggetsPage({ onLockRound }) {
               </div>
             );
           })}
-          {!filtered.length && (
+          {!filtered.length && !showQuestionGrid && (
             <div className="lib-empty">
-              <p>{trackFilter !== "all" && !parentFilter
-                ? `No incident drills for ${activeTrack?.shortLabel ?? "this discipline"} yet. Try another tab or check back soon.`
-                : "No published nuggets yet. Check back soon."}</p>
+              <p>{browseFreeDrills
+                ? "No free incident drills yet. Try All drills or browse by question."
+                : trackFilter !== "all" && !parentFilter
+                  ? `No incident drills for ${activeTrack?.shortLabel ?? "this discipline"} yet. Try another tab or check back soon.`
+                  : "No published nuggets yet. Check back soon."}</p>
             </div>
           )}
         </section>
