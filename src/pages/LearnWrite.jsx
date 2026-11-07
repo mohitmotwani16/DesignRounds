@@ -239,7 +239,7 @@ function ArticleEditor({ id }) {
         </div>
         <div className="write-actions">
           {notice && <span className="write-notice"><Check size={14} /> {notice}</span>}
-          {editable && article.id && article.status === "draft" && <button className="btn btn-ghost" onClick={remove} title="Delete draft"><Trash2 size={15} /></button>}
+          {editable && article.id && article.status === "draft" && <button type="button" className="btn btn-ghost" onClick={remove} aria-label="Delete draft" title="Delete draft"><Trash2 size={15} /></button>}
           {editable && <button className="btn btn-ghost" disabled={Boolean(busy) || (article.id && !dirty)} onClick={save}>{busy === "save" ? <LoaderCircle size={15} className="spin" /> : null} Save draft</button>}
           {editable && <button className="btn btn-primary" disabled={Boolean(busy)} onClick={submit}>{busy === "submit" ? <LoaderCircle size={15} className="spin" /> : <Send size={15} />} {article.status === "changes_requested" ? "Resubmit for review" : "Submit for review"}</button>}
           {article.status === "published" && <Link className="btn btn-primary" to={`/learn/${article.slug}`}>View live article</Link>}

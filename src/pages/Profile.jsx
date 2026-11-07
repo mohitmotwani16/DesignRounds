@@ -84,7 +84,7 @@ export default function ProfilePage({ onStart }) {
   }
 
   return (
-    <main className="profile-page page-width">
+    <main className="profile-page page-width site">
       <header className="profile-hero">
         <Avatar user={user} size="lg" />
         <div className="profile-identity">
@@ -105,14 +105,14 @@ export default function ProfilePage({ onStart }) {
         <section className="profile-section" aria-labelledby="history-title">
           <div className="profile-section-head">
             <h2 id="history-title">Practice history</h2>
-            <button className="button button-outline button-small" onClick={() => navigate("/library")}>Find a round <ArrowRight size={14} /></button>
+            <Link className="btn btn-ghost btn-sm" to="/library">Find a round <ArrowRight size={14} /></Link>
           </div>
           {sessions === null && !sessionsError && <div className="history-empty"><LoaderCircle size={18} className="spin" /> Loading your rounds…</div>}
           {sessionsError && <div className="history-empty form-error">{sessionsError}</div>}
           {sessions?.length === 0 && (
             <div className="history-empty">
               <p>You haven't started a round yet.</p>
-              <button className="button button-dark button-small" onClick={() => navigate("/library")}>Browse the library <ArrowRight size={14} /></button>
+              <Link className="btn btn-primary btn-sm" to="/library">Browse the library <ArrowRight size={14} /></Link>
             </div>
           )}
           {sessions?.length > 0 && (
@@ -131,20 +131,28 @@ export default function ProfilePage({ onStart }) {
                     <div className="history-actions">
                       {session.status === "in_progress" ? (
                         <>
-                          <button className="button button-dark button-small" onClick={() => navigate(`/workspace/${session.id}`)}>Resume</button>
+                          <Link className="btn btn-primary btn-sm" to={`/workspace/${session.id}`}>Resume</Link>
                           <button className="icon-button" title="Mark as completed" aria-label="Mark as completed" onClick={() => setStatus(session, "completed")}><CircleCheck size={16} /></button>
                         </>
                       ) : (
                         <>
-                          <button className="button button-outline button-small" onClick={() => navigate(`/workspace/${session.id}`)}>View</button>
-                          {prompt && (
-                            <button
+                          <Link className="btn btn-ghost btn-sm" to={`/workspace/${session.id}`}>View</Link>
+                          {prompt && (session.sessionKind === "nugget" ? (
+                            <Link
                               className="icon-button"
-                              title={session.sessionKind === "nugget" ? "Try another drill from this question" : "Start a new attempt"}
-                              aria-label={session.sessionKind === "nugget" ? "Try another drill from this question" : "Start a new attempt"}
-                              onClick={() => (session.sessionKind === "nugget" ? navigate(`/nuggets?q=${encodeURIComponent(session.promptId)}`) : onStart(prompt.id))}
+                              to={`/nuggets?q=${encodeURIComponent(session.promptId)}`}
+                              title="Try another drill from this question"
+                              aria-label="Try another drill from this question"
+                            ><RotateCcw size={15} /></Link>
+                          ) : (
+                            <button
+                              type="button"
+                              className="icon-button"
+                              title="Start a new attempt"
+                              aria-label="Start a new attempt"
+                              onClick={() => onStart(prompt.id)}
                             ><RotateCcw size={15} /></button>
-                          )}
+                          ))}
                         </>
                       )}
                       <button className="icon-button danger" title="Delete attempt" aria-label="Delete attempt" onClick={() => removeSession(session)}><Trash2 size={15} /></button>
@@ -166,7 +174,7 @@ export default function ProfilePage({ onStart }) {
                 <div className="readonly-field">{user.email}</div>
               </div>
               {error && <p className="form-error" role="alert">{error}</p>}
-              <button className="button button-dark button-small" disabled={!dirty || saveState === "saving" || !values.displayName.trim()}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={!dirty || saveState === "saving" || !values.displayName.trim()}>
                 {saveState === "saving" ? <LoaderCircle size={14} className="spin" /> : saveState === "saved" ? <Check size={14} /> : null}
                 {saveState === "saved" ? "Saved" : "Save changes"}
               </button>
@@ -176,14 +184,14 @@ export default function ProfilePage({ onStart }) {
           <section className="profile-section" aria-labelledby="account-title">
             <h2 id="account-title">Account</h2>
             <div className="account-actions">
-              <button className="button button-outline button-small" onClick={async () => { await signOut(); navigate("/"); }}><LogOut size={14} /> Sign out</button>
-              <button className="button button-outline button-small" onClick={async () => { await api.signOutEverywhere(); setUser(null); navigate("/"); }}>Sign out of all devices</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { await signOut(); navigate("/"); }}><LogOut size={14} /> Sign out</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { await api.signOutEverywhere(); setUser(null); navigate("/"); }}>Sign out of all devices</button>
             </div>
             <form className="danger-zone" onSubmit={deleteAccount}>
               <h3><TriangleAlert size={14} /> Delete account</h3>
               <p>This permanently deletes your profile, practice rounds, and saved diagrams. Type <strong>{user.email}</strong> to confirm.</p>
               <input className="text-input" aria-label="Confirm your email" value={confirmEmail} onChange={(event) => setConfirmEmail(event.target.value)} placeholder={user.email} />
-              <button className="button button-danger button-small" disabled={deleting || confirmEmail.trim().toLowerCase() !== user.email}>{deleting && <LoaderCircle size={14} className="spin" />}Delete my account</button>
+              <button type="submit" className="btn btn-danger btn-sm" disabled={deleting || confirmEmail.trim().toLowerCase() !== user.email}>{deleting && <LoaderCircle size={14} className="spin" />}Delete my account</button>
             </form>
           </section>
         </div>
