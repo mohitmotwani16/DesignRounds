@@ -21,7 +21,7 @@ import { CanvasTour, canvasTourSeen, canvasTourSteps, markCanvasTourSeen } from 
 import { PromptModal, ShortcutsDialog, SidePanel, NuggetBriefModal } from "./Panels.jsx";
 import { nuggetDebriefInTurns } from "./nuggetInterview.js";
 import { PanelResizer } from "./PanelResizer.jsx";
-import { inspectorAskMode, useInterview } from "./useInterview.js";
+import { useInterview } from "./useInterview.js";
 import { useAuth } from "../auth.jsx";
 import { useTheme } from "../theme.js";
 
@@ -745,15 +745,6 @@ function Workspace({ session, prompt }) {
   }
 
   // ---- Interviewer -------------------------------------------------------------
-  // Opens the conversation with the selected component attached and the composer focused.
-  function askAboutSelection() {
-    setDetachedId(null);
-    setPanelTab("interviewer");
-    setPanelOpen(true);
-    writePreference("designrounds:interviewer-open", "true");
-    window.setTimeout(() => document.querySelector(".compose-box textarea")?.focus(), 80);
-  }
-
   const [detachedId, setDetachedId] = useState(null);
   const attached = selectedComponent && selectedComponent.id !== detachedId ? { id: selectedComponent.id, label: selectedComponent.data.label || "Component" } : null;
   const selectedIdRef = useRef(null);
@@ -772,7 +763,6 @@ function Workspace({ session, prompt }) {
     setPanelOpen(true);
   }, [isNugget]);
   const interview = useInterview({ sessionId: session.id, plan, roundActive: !readOnly, structureKey, settleSave, selectedIdRef, onProactiveTurn, onIdleClose });
-  const inspectorAsk = inspectorAskMode(interview, status, user);
   useEffect(() => { if (panelOpen && panelTab === "interviewer") setUnread(0); }, [panelOpen, panelTab]);
   useEffect(() => {
     if (!isNugget || readOnly || interview.status !== "ready") return;
@@ -995,8 +985,7 @@ function Workspace({ session, prompt }) {
 
             {singleNode && inspectedId === singleNode.id && singleNode.type !== "pointNode" && (
               <NodeInspector id={singleNode.id} type={singleNode.type} data={singleNode.data} readOnly={readOnly}
-                onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection}
-                ask={inspectorAsk} onAsk={askAboutSelection} />
+                onBegin={record} onChange={updateNodeData} onDuplicate={duplicateSelection} onDelete={deleteSelection} onClose={clearSelection} />
             )}
             {singleEdge && (
               <EdgeInspector edge={singleEdge} sourceLabel={labelFor(singleEdge.source)} targetLabel={labelFor(singleEdge.target)} readOnly={readOnly} focusLabel={focusEdgeLabel}
