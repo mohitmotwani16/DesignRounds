@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, ArrowRight, ChevronDown, ChevronUp, Copy, MessageSquare, Plus, Repeat, Server, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, ChevronDown, ChevronUp, Copy, Plus, Repeat, Server, Trash2, X } from "lucide-react";
 import { COLUMN_KEYS, COLUMN_TYPES, DATA_MODEL_KINDS, getItem, nodeColors } from "./catalog.jsx";
 import { columnId, columnsFromText, columnsToText, MAX_COLUMNS } from "./columns.js";
 
@@ -14,13 +14,6 @@ function Field({ label, value, onChange, onBegin, placeholder, multiline, maxLen
     </label>
   );
 }
-
-const ASK_TITLES = {
-  available: "Ask the interviewer about this component",
-  loading: "Loading interviewer…",
-  plus: "The live interviewer is part of Plus",
-  finished: "The interview ends when the round is finished",
-};
 
 // One editable column row: name, type, key toggles, and what a foreign key references.
 function ColumnRow({ column, index, count, readOnly, onBegin, onPatch, onRemove, onMove, onEnter, nameRef }) {
@@ -118,7 +111,7 @@ function ColumnsEditor({ columns, readOnly, onBegin, onSet }) {
   );
 }
 
-export const NodeInspector = memo(function NodeInspector({ id, type, data, readOnly, onBegin, onChange, onDuplicate, onDelete, onClose, ask = "plus", onAsk }) {
+export const NodeInspector = memo(function NodeInspector({ id, type, data, readOnly, onBegin, onChange, onDuplicate, onDelete, onClose }) {
   const item = getItem(data.kind);
   const Icon = item?.icon || Server;
   const color = data.color || item?.color || "blue";
@@ -170,15 +163,14 @@ export const NodeInspector = memo(function NodeInspector({ id, type, data, readO
           </div>
         )}
       </div>
-      <div className="inspector-actions">
-        <button type="button" className={`inspector-ask${ask === "available" ? " button button-outline button-small" : ""}`} disabled={ask !== "available"} title={ASK_TITLES[ask] ?? ASK_TITLES.plus} onClick={onAsk}><MessageSquare size={14} /> Ask the interviewer about this</button>
-        {!readOnly && (
+      {!readOnly && (
+        <div className="inspector-actions">
           <div className="inspector-row">
             <button className="button button-outline button-small" onClick={onDuplicate}><Copy size={13} /> Duplicate</button>
             <button className="button button-outline button-small danger-text" onClick={onDelete}><Trash2 size={13} /> Delete</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 });
