@@ -8,6 +8,7 @@ import { RULES, isReading, loadState, nextAsk, rememberClick, saveState, takeCli
 import { Link, navigate } from "../router.js";
 import { GoogleMark } from "../pages/SignIn.jsx";
 import { TurnstileWidget } from "./Turnstile.jsx";
+import { MotionModal, useClosableMotion } from "../motion/MotionModal.jsx";
 
 // Asks signed-out readers to sign in while they read the handbook. How often is decided in
 // src/learn/login-prompt.js, along with why this is a dialog and what that risks.
@@ -164,8 +165,6 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
   const { status, error } = useAuth();
   const [ask, setAsk] = useState(null);
   const open = useRef(false);
-  const dialog = useRef(null);
-  useDialogFocus(dialog, Boolean(ask));
   // A failed session check can't tell a member from a visitor, so nobody is asked.
   const eligible = status === "signed-out" && !error && ready;
 
@@ -214,11 +213,20 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
 
   if (!ask) return null;
 
-  const dismiss = () => {
+  return <LearnPromptDialog ask={ask} topic={topic} openRef={open} onDismissed={() => setAsk(null)} />;
+}
+
+function LearnPromptDialog({ ask, topic, openRef, onDismissed }) {
+  const dialog = useRef(null);
+  useDialogFocus(dialog, true);
+  const finishDismiss = () => {
     track("learn_prompt_dismissed", ask.details);
-    open.current = false;
-    setAsk(null);
+    openRef.current = false;
+    onDismissed();
   };
+  const { present, requestClose, onExitComplete } = useClosableMotion(finishDismiss);
+
+  const dismiss = requestClose;
   const choose = (method) => {
     const details = { ...ask.details, surface: "prompt", method };
     rememberClick(details);
@@ -226,7 +234,7 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
   };
 
   return (
-    <div className="learn-prompt-backdrop" role="presentation">
+    <MotionModal present={present} onExitComplete={onExitComplete} onBackdropClose={dismiss} backdropClass="learn-prompt-backdrop">
       <section
         ref={dialog}
         className="learn-prompt"
@@ -252,7 +260,7 @@ export function LearnLoginPrompt({ slug, topic, ready }) {
         </div>
         <small>No password or card. You'll come back to this spot.</small>
       </section>
-    </div>
+    </MotionModal>
   );
 }
 

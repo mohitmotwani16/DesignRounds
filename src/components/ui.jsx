@@ -12,6 +12,9 @@ import { isPlus, useAuth } from "../auth.jsx";
 import { THEMES, setTheme, useTheme } from "../theme.js";
 import { openReportProblem } from "./ReportProblem.jsx";
 import { Link, navigate, useRoute } from "../router.js";
+import { MotionModal, useClosableMotion } from "../motion/MotionModal.jsx";
+import { AnimatePresence, motion } from "motion/react";
+import { SPRING_UI, usePrefersReducedMotion } from "../motion/presets.js";
 
 export function Brand({ onClick, className = "" }) {
   return (
@@ -60,6 +63,23 @@ export function Avatar({ user, size = "sm" }) {
   );
 }
 
+function UserMenuPopover({ children }) {
+  const reduce = usePrefersReducedMotion();
+  if (reduce) return <div className="user-menu-popover" role="menu">{children}</div>;
+  return (
+    <motion.div
+      className="user-menu-popover"
+      role="menu"
+      initial={{ opacity: 0, scale: 0.96, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, y: -4 }}
+      transition={SPRING_UI}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 export function UserMenu({ compact = false }) {
   const { user, signOut, setUser } = useAuth();
   const [open, setOpen] = useState(false);
@@ -73,23 +93,25 @@ export function UserMenu({ compact = false }) {
         {!compact && <span className="account-name">{firstName(user)}</span>}
         <ChevronDown size={14} className="account-chevron" />
       </button>
-      {open && (
-        <div className="user-menu-popover" role="menu">
-          <div className="user-menu-identity"><Avatar user={user} size="md" /><span className="user-menu-identity-text ph-mask" data-clarity-mask="true"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></span></div>
-          <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & practice history</button>
-          <button role="menuitem" onClick={() => { setOpen(false); navigate("/learn/write"); }}><SquarePen size={15} /> My articles</button>
-          {user.isAdmin && <button role="menuitem" onClick={() => { setOpen(false); navigate("/admin"); }}><ShieldCheck size={15} /> Admin</button>}
-          {user.devTools && (
-            <button role="menuitem" className="dev-menu-item" onClick={async () => {
-              setOpen(false);
-              try { setUser((await api.devSetPlan(user.plan === "plus" ? "free" : "plus")).user); } catch (error) { window.alert(error.message); }
-            }}><FlaskConical size={15} /> Dev: switch to {user.plan === "plus" ? "Free" : "Plus"} <span className="dev-plan-pill">{user.plan}</span></button>
-          )}
-          <ThemePicker />
-          <button role="menuitem" onClick={() => { setOpen(false); openReportProblem(); }}><Bug size={15} /> Report a problem</button>
-          <button role="menuitem" onClick={async () => { setOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <UserMenuPopover key="user-menu-popover">
+            <div className="user-menu-identity"><Avatar user={user} size="md" /><span className="user-menu-identity-text ph-mask" data-clarity-mask="true"><strong>{user.displayName || "Your account"}</strong><span>{user.email}</span></span></div>
+            <button role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><CircleUser size={15} /> Profile & practice history</button>
+            <button role="menuitem" onClick={() => { setOpen(false); navigate("/learn/write"); }}><SquarePen size={15} /> My articles</button>
+            {user.isAdmin && <button role="menuitem" onClick={() => { setOpen(false); navigate("/admin"); }}><ShieldCheck size={15} /> Admin</button>}
+            {user.devTools && (
+              <button role="menuitem" className="dev-menu-item" onClick={async () => {
+                setOpen(false);
+                try { setUser((await api.devSetPlan(user.plan === "plus" ? "free" : "plus")).user); } catch (error) { window.alert(error.message); }
+              }}><FlaskConical size={15} /> Dev: switch to {user.plan === "plus" ? "Free" : "Plus"} <span className="dev-plan-pill">{user.plan}</span></button>
+            )}
+            <ThemePicker />
+            <button role="menuitem" onClick={() => { setOpen(false); openReportProblem(); }}><Bug size={15} /> Report a problem</button>
+            <button role="menuitem" onClick={async () => { setOpen(false); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
+          </UserMenuPopover>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -135,11 +157,12 @@ export function trackIcon(icon) {
 // round from the same discipline.
 export function LockedPromptDialog({ prompt, alternative, onClose, onStart }) {
   const track = getTrack(prompt.track);
-  useEscape(onClose);
+  const { present, requestClose, onExitComplete } = useClosableMotion(onClose);
+  useEscape(requestClose);
   return (
-    <div className="lock-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <MotionModal present={present} onExitComplete={onExitComplete} onBackdropClose={requestClose} backdropClass="lock-backdrop">
       <section className={`lock-modal tone-${track.color}`} role="dialog" aria-modal="true" aria-labelledby="locked-dialog-title">
-        <button className="lock-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <button className="lock-close" onClick={requestClose} aria-label="Close"><X size={18} /></button>
         <span className="lock-badge"><Crown size={13} /> Plus round · {track.shortLabel}</span>
         <h2 id="locked-dialog-title">{prompt.title}</h2>
         <p className="lock-lede">{prompt.description}</p>
@@ -147,11 +170,11 @@ export function LockedPromptDialog({ prompt, alternative, onClose, onStart }) {
         <ul>{[...prompt.considerations, prompt.category].map((item) => <li key={item}><Check size={15} />{item}</li>)}</ul>
         <div className="lock-note"><Sparkles size={16} /><span>The brief, scale and interviewer notes for this round are for Plus members. Plus is coming soon, with every round, the live AI interviewer, and full coaching.</span></div>
         <div className="lock-actions">
-          {alternative && <button className="btn btn-primary btn-lg" onClick={() => { onClose(); onStart(alternative.id); }}>Try “{alternative.title.replace(/^Design (a |an )?/i, "")}” free <ArrowRight size={16} /></button>}
-          <Link className="btn btn-ghost btn-lg" to="/plus" onClick={onClose}>See what's in Plus</Link>
+          {alternative && <button className="btn btn-primary btn-lg" onClick={() => { requestClose(); onStart(alternative.id); }}>Try “{alternative.title.replace(/^Design (a |an )?/i, "")}” free <ArrowRight size={16} /></button>}
+          <Link className="btn btn-ghost btn-lg" to="/plus" onClick={requestClose}>See what's in Plus</Link>
         </div>
       </section>
-    </div>
+    </MotionModal>
   );
 }
 

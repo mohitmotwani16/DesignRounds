@@ -3,6 +3,7 @@ import { Bug, Check, LoaderCircle, X } from "lucide-react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { TurnstileWidget } from "./Turnstile.jsx";
+import { MotionModal, useClosableMotion } from "../motion/MotionModal.jsx";
 
 // "Report a problem" (issue #71). One dialog for the whole app, opened from the footer,
 // the account menu and the workspace with openReportProblem(). It asks for as little
@@ -27,6 +28,7 @@ export function ReportProblemHost() {
 }
 
 function ReportProblemDialog({ onClose }) {
+  const { present, requestClose, onExitComplete } = useClosableMotion(onClose);
   const { user, turnstileSiteKey } = useAuth();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -40,10 +42,10 @@ function ReportProblemDialog({ onClose }) {
   const [page] = useState(() => window.location.pathname);
   useEffect(() => {
     messageRef.current?.focus();
-    const onKey = (event) => { if (event.key === "Escape") onClose(); };
+    const onKey = (event) => { if (event.key === "Escape") requestClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [requestClose]);
 
   async function submit(event) {
     event.preventDefault();
@@ -69,15 +71,15 @@ function ReportProblemDialog({ onClose }) {
   }
 
   return (
-    <div className="lock-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <MotionModal present={present} onExitComplete={onExitComplete} onBackdropClose={requestClose} backdropClass="lock-backdrop">
       <section className="lock-modal report-modal" role="dialog" aria-modal="true" aria-labelledby="report-title">
-        <button className="lock-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <button className="lock-close" onClick={requestClose} aria-label="Close"><X size={18} /></button>
         {state === "sent" ? (
           <div className="report-sent" role="status">
             <span className="report-icon report-icon-done"><Check size={20} /></span>
             <h2 id="report-title">Thanks, we've got it</h2>
             <p>We read every report. If we need more detail, we'll email {user ? user.email : "you"}.</p>
-            <button className="btn btn-primary" onClick={onClose}>Done</button>
+            <button className="btn btn-primary" onClick={requestClose}>Done</button>
           </div>
         ) : (
           <form onSubmit={submit}>
@@ -102,11 +104,11 @@ function ReportProblemDialog({ onClose }) {
               <button className="btn btn-primary" disabled={state === "sending" || message.trim().length < 10 || (needsHumanCheck && !token)}>
                 {state === "sending" && <LoaderCircle size={16} className="spin" />} Send report
               </button>
-              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn btn-ghost" onClick={requestClose}>Cancel</button>
             </div>
           </form>
         )}
       </section>
-    </div>
+    </MotionModal>
   );
 }

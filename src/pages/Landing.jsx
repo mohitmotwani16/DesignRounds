@@ -194,8 +194,22 @@ const MOBILE_WIRES = [
 ];
 const MOBILE_NOTE = "Reads outnumber writes by about 100 to 1, so cache-aside keeps redirects fast.";
 
+function usePrefersReducedMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mq) return undefined;
+    const sync = () => setReduce(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return reduce;
+}
+
 function Demo() {
   const mobile = useMediaQuery(MOBILE_MEDIA);
+  const reduceMotion = usePrefersReducedMotion();
   const stage = mobile ? STAGE_MOBILE : STAGE_DESKTOP;
   const nodes = mobile ? MOBILE_NODES : NODES;
   const wires = mobile ? MOBILE_WIRES : WIRES;
@@ -243,7 +257,7 @@ function Demo() {
                   <text className="lp-wire-label" x={wire.lx} y={wire.ly} textAnchor="middle" style={{ "--w": index }}>{wire.label}</text>
                 </g>
               ))}
-              {!mobile && wires.map((wire, index) => (
+              {!mobile && !reduceMotion && wires.map((wire, index) => (
                 <circle key={`packet-${wire.d}`} r="5" className="lp-packet">
                   <animateMotion dur={`${1.3 + (index % 3) * 0.3}s`} repeatCount="indefinite" begin={`${1.6 + index * 0.3}s`} path={wire.d} />
                 </circle>
@@ -415,7 +429,7 @@ function Pricing({ onStart }) {
         <p className="lp-plan-body">Free questions in every discipline, the full canvas with autosave and version history, an AI review of your design scored on every rubric dimension, and your first round with the live AI interviewer.</p>
         <div className="lp-plan-foot">
           <p className="lp-price">₹0<small>forever</small></p>
-          <StartRoundButton onStart={onStart} className="btn lp-btn lp-btn-on-accent" />
+          <StartRoundButton onStart={onStart} className="btn lp-btn" />
         </div>
       </article>
       <article className="lp-plan lp-plan-plus reveal" style={{ transitionDelay: "80ms" }}>
@@ -425,8 +439,8 @@ function Pricing({ onStart }) {
         <div className="lp-plan-foot">
           <p className="lp-price">Plus<small>launching soon</small></p>
           {isPlus(user)
-            ? <Link className="btn lp-btn" to="/plus">You're on Plus <Check size={17} /></Link>
-            : <Link className="btn lp-btn" to="/plus">Get Plus <ArrowRight size={17} className="nudge" /></Link>}
+            ? <Link className="btn lp-btn lp-btn-on-accent" to="/plus">You're on Plus <Check size={17} /></Link>
+            : <Link className="btn lp-btn lp-btn-on-accent" to="/plus">Get Plus <ArrowRight size={17} className="nudge" /></Link>}
         </div>
       </article>
     </section>

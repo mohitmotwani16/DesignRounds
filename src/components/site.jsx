@@ -8,6 +8,8 @@ import { roundPath, trackPath } from "../seo.js";
 import { Avatar, ThemePicker, UserMenu, promptIcon } from "./ui.jsx";
 import { openReportProblem } from "./ReportProblem.jsx";
 import { StartRoundButton } from "./StartRound.jsx";
+import { AnimatePresence, motion } from "motion/react";
+import { SPRING_UI, usePrefersReducedMotion } from "../motion/presets.js";
 
 // Landing-page sections linked from the header and footer, as /#<id> anchors.
 export const SECTIONS = [
@@ -74,6 +76,7 @@ export function SiteNav({ onStart }) {
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("mousedown", onDown); };
   }, [open]);
 
+  const reduceMotion = usePrefersReducedMotion();
   const signedIn = status === "signed-in";
   const close = () => setOpen(false);
   const current = (match) => (match ? "page" : undefined);
@@ -84,6 +87,29 @@ export function SiteNav({ onStart }) {
       <Link className="nav-link-btn" to="/nuggets" onClick={close} aria-current={current(path.startsWith("/nuggets"))}>Nuggets</Link>
       {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>{profileLabel}</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
+    </>
+  );
+  const sheetBody = (
+    <>
+      <nav aria-label="Mobile">
+        {navLinks("My Account")}
+        {signedIn && user?.isAdmin && (
+          <Link className="nav-link-btn" to="/admin" onClick={close} aria-current={current(path === "/admin" || path.startsWith("/admin/"))}>Admin</Link>
+        )}
+      </nav>
+      <div className="nav-sheet-actions">
+        {signedIn ? (
+          <>
+            <span className="nav-sheet-identity ph-mask" data-clarity-mask="true"><Avatar user={user} size="md" /><span>{user.email}</span></span>
+            <button className="btn btn-ghost" onClick={async () => { close(); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
+          </>
+        ) : (
+          <>
+            <Link className="btn btn-primary" to="/library" onClick={close}>Start practicing <ArrowRight size={15} /></Link>
+            <Link className="btn btn-ghost" to="/signin" onClick={close}>Sign in</Link>
+          </>
+        )}
+      </div>
     </>
   );
 
@@ -109,27 +135,24 @@ export function SiteNav({ onStart }) {
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-        <div className={`nav-sheet ${open ? "open" : ""}`}>
-          <nav aria-label="Mobile">
-            {navLinks("My Account")}
-            {signedIn && user?.isAdmin && (
-              <Link className="nav-link-btn" to="/admin" onClick={close} aria-current={current(path === "/admin" || path.startsWith("/admin/"))}>Admin</Link>
-            )}
-          </nav>
-          <div className="nav-sheet-actions">
-            {signedIn ? (
-              <>
-                <span className="nav-sheet-identity ph-mask" data-clarity-mask="true"><Avatar user={user} size="md" /><span>{user.email}</span></span>
-                <button className="btn btn-ghost" onClick={async () => { close(); await signOut(); navigate("/"); }}><LogOut size={15} /> Sign out</button>
-              </>
+        <AnimatePresence>
+          {open && (
+            reduceMotion ? (
+              <div key="nav-sheet" className="nav-sheet">{sheetBody}</div>
             ) : (
-              <>
-                <Link className="btn btn-primary" to="/library" onClick={close}>Start practicing <ArrowRight size={15} /></Link>
-                <Link className="btn btn-ghost" to="/signin" onClick={close}>Sign in</Link>
-              </>
-            )}
-          </div>
-        </div>
+              <motion.div
+                key="nav-sheet"
+                className="nav-sheet"
+                initial={{ opacity: 0, y: -14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={SPRING_UI}
+              >
+                {sheetBody}
+              </motion.div>
+            )
+          )}
+        </AnimatePresence>
       </div>
     </header>
   );
