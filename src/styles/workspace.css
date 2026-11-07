@@ -446,7 +446,7 @@ body.dragging-edge, body.dragging-edge * { cursor: move !important; user-select:
 kbd { min-width: 22px; padding: 2px 6px; display: inline-block; color: var(--fg-3f4b60); border: 1px solid var(--bd-d9dde4); border-bottom-width: 2px; border-radius: 5px; background: var(--bg-ffffff); font: 600 11.5px/1.4 "DM Sans", sans-serif; text-align: center; }
 .shortcuts-action kbd { min-width: 18px; margin-left: 2px; padding: 0 5px; font-size: 11px; }
 .canvas-footer kbd { min-width: 16px; padding: 0 4px; font-size: 10.5px; }
-.shortcuts-dialog { width: min(860px, 100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--bd-e3e6eb); border-radius: 14px; background: var(--bg-ffffff); box-shadow: 0 18px 70px rgba(22, 32, 48, .19); animation: modal-in .16s ease-out; }
+.shortcuts-dialog { width: min(860px, 100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--bd-e3e6eb); border-radius: 14px; background: var(--bg-ffffff); box-shadow: 0 18px 70px rgba(22, 32, 48, .19); }
 .shortcuts-header { padding: 18px 22px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--bd-eef0f3); }
 .shortcuts-icon { width: 36px; height: 36px; display: grid; place-items: center; color: var(--fg-5562c8); border: 1px solid var(--bd-e2e4f4); border-radius: 9px; background: var(--bg-f3f4fd); }
 .shortcuts-header h2 { margin: 0; flex: 1; color: var(--fg-1f2a3d); font: 600 20px var(--serif); letter-spacing: -.4px; }
@@ -625,7 +625,7 @@ kbd { min-width: 22px; padding: 2px 6px; display: inline-block; color: var(--fg-
 /* First-visit canvas walkthrough (CanvasTour.jsx). Portaled to the body so the
    spotlight is positioned against the viewport, above the workspace panels. */
 .canvas-tour-blocker { position: fixed; inset: 0; z-index: 80; background: transparent; }
-.canvas-tour-hole { position: fixed; z-index: 81; border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #5964d8, 0 0 0 9999px rgba(15, 20, 32, .62); transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease; }
+.canvas-tour-hole { position: fixed; left: 0; top: 0; z-index: 81; border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #5964d8, 0 0 0 9999px rgba(15, 20, 32, .62); transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1); }
 .canvas-tour-card { position: fixed; z-index: 82; width: min(340px, calc(100vw - 24px)); padding: 16px 16px 14px; border: 1px solid var(--bd-e3e6eb); border-radius: 12px; background: var(--bg-ffffff); box-shadow: 0 18px 50px rgba(22, 32, 48, .24); }
 .canvas-tour-progress { display: flex; gap: 5px; margin-bottom: 10px; }
 .canvas-tour-progress span { width: 18px; height: 3px; border-radius: 99px; background: var(--bg-e8eaee); }

@@ -42,7 +42,9 @@ a { color: inherit; text-decoration: none; }
 .saved-note { display: flex; align-items: center; gap: 8px; color: var(--fg-7b8491); font-size: 11px; }
 .availability-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bg-6ca98a); box-shadow: 0 0 0 3px var(--bd-ecf5ef); }
 .button { height: 44px; padding: 0 17px; border: 1px solid transparent; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background .16s, border-color .16s, transform .16s; }
-.button:hover { transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .button:hover { transform: translateY(-1px); }
+}
 .button-dark { color: var(--fg-ffffff); background: var(--bg-293449); }
 .button-dark:hover { background: var(--bg-1e293d); }
 .button-small { height: 36px; padding: 0 13px; font-size: 11px; }
@@ -145,9 +147,9 @@ a { color: inherit; text-decoration: none; }
 .topics-topline h2 { font-size: 34px; }
 .topics-topline > .button { margin-bottom: 5px; }
 .featured-prompts { margin-top: 34px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 17px; }
-.prompt-card { min-width: 0; padding: 20px 19px 16px; border: 1px solid var(--bd-e6e8ed); border-radius: 7px; background: var(--bg-ffffff); animation: card-in .35s both; animation-delay: calc(var(--card-order, 0) * 45ms); transition: border-color .18s, transform .18s, box-shadow .18s; }
+.prompt-card { min-width: 0; padding: 20px 19px 16px; border: 1px solid var(--bd-e6e8ed); border-radius: 7px; background: var(--bg-ffffff); animation: prompt-card-in .35s both; animation-delay: calc(var(--card-order, 0) * 45ms); transition: border-color .18s, transform .18s, box-shadow .18s; }
 .prompt-card:hover { transform: translateY(-2px); border-color: var(--bd-d2d7e1); box-shadow: 0 6px 18px rgba(35, 49, 70, .045); }
-@keyframes card-in { from { opacity: .3; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes prompt-card-in { from { opacity: .3; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 .prompt-card-top { min-height: 39px; display: flex; align-items: start; justify-content: space-between; }
 .access-tag { padding: 5px 6px; display: inline-flex; align-items: center; gap: 4px; border-radius: 3px; font-size: 6px; font-weight: 700; letter-spacing: .55px; }
 .access-free { color: var(--fg-63826b); border: 1px solid var(--bd-e3ede5); background: var(--bg-f7faf7); }

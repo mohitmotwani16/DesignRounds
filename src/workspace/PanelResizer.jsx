@@ -1,6 +1,8 @@
 import { useRef } from "react";
+import { pointerVelocityPxPerSec } from "../motion/presets.js";
 
 const STEP = 16;
+const FLICK_VELOCITY = 520;
 
 // A drag handle on the inner edge of a workspace side panel. `side` is the panel's
 // side of the canvas: dragging toward the canvas widens it. Keyboard: arrow keys
@@ -22,7 +24,11 @@ export function PanelResizer({ side, width, defaultWidth, min, max, label, onRes
     if (event.button !== 0) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { x: event.clientX, width: panelWidth(event.currentTarget) };
+    drag.current = {
+      x: event.clientX,
+      width: panelWidth(event.currentTarget),
+      sample: { x: event.clientX, t: performance.now() },
+    };
     document.body.classList.add("is-resizing-panel");
   }
 
@@ -30,10 +36,17 @@ export function PanelResizer({ side, width, defaultWidth, min, max, label, onRes
     if (!drag.current) return;
     const delta = event.clientX - drag.current.x;
     onResize(clamp(drag.current.width + (side === "left" ? delta : -delta)));
+    drag.current.sample = { x: event.clientX, t: performance.now() };
   }
 
-  function endDrag() {
+  function endDrag(event) {
     if (!drag.current) return;
+    const clientX = event?.clientX ?? drag.current.sample?.x ?? drag.current.x;
+    const velocity = pointerVelocityPxPerSec(drag.current.sample, clientX);
+    if (Math.abs(velocity) > FLICK_VELOCITY) {
+      const towardWider = side === "left" ? velocity > 0 : velocity < 0;
+      onResize(clamp(towardWider ? max : min));
+    }
     drag.current = null;
     document.body.classList.remove("is-resizing-panel");
   }

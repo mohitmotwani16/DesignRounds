@@ -173,8 +173,13 @@
 
 .btn { height: 40px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 10px; font-size: 14px; font-weight: 550; letter-spacing: -0.01em; white-space: nowrap; cursor: pointer; text-decoration: none; touch-action: manipulation; transition: background 0.18s var(--ease), border-color 0.18s, color 0.18s, transform 0.18s var(--ease), box-shadow 0.18s; }
 .btn svg { flex: none; transition: transform 0.2s var(--ease); }
-.btn:hover svg.nudge { transform: translateX(2px); }
-.btn:active { transform: translateY(1px); }
+/* Press scale: interface.css (pointer-down). */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover svg.nudge { transform: translateX(2px); }
+  .lp-btn:hover svg { transform: translateX(3px); }
+  .lp-qcard:hover { transform: translateY(-8px) scale(1.02); background: var(--bg-raised); box-shadow: var(--lp-lift), 0 0 0 2px var(--accent); }
+  .lp-qcard:hover .lp-qcard-go { background: var(--accent); color: var(--accent-ink); transform: translateX(4px); }
+}
 .btn-lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
 .btn-sm { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
 .btn-primary { color: var(--accent-ink); background: var(--accent); }
@@ -202,8 +207,7 @@
 /* ---------------------------------------------------------------- header */
 
 .nav { position: sticky; top: 0; z-index: 50; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid transparent; transition: background 0.25s, border-color 0.25s, backdrop-filter 0.25s; }
-/* A plain bar once the page scrolls: solid ground and a soft shadow, the one thing that truly floats. */
-.nav.scrolled { background: var(--bg); box-shadow: 0 10px 24px -20px rgba(0, 0, 0, 0.45); }
+/* Scrolled / open: translucent material (see interface.css). */
 .nav-inner { height: 64px; display: flex; align-items: center; gap: 28px; }
 .logo { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: var(--ink); text-decoration: none; font-size: 16.5px; font-weight: 650; letter-spacing: -0.03em; cursor: pointer; }
 .logo-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--accent-ink); background: var(--accent); }
@@ -220,7 +224,7 @@
 .nav-start-cta,
 .nav-sheet-actions .btn-primary { border-radius: 999px; }
 .nav-burger { display: none; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; place-items: center; flex-shrink: 0; touch-action: manipulation; }
-.nav-sheet { display: none; }
+.nav-sheet { display: none; transform-origin: top center; }
 
 /* Account menu inside the new header (reuses the existing UserMenu markup). */
 .nav .account-button { height: 36px; border-radius: 10px; }
@@ -229,7 +233,7 @@
   .nav-links, .nav-actions { display: none; }
   .nav-mobile-actions { display: flex; }
   .nav-burger { display: grid; }
-  .nav-sheet.open { display: block; position: absolute; left: 0; right: 0; top: 64px; padding: 12px var(--gutter) calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--bg-raised); border-bottom: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+  .nav-sheet { display: block; position: absolute; left: 0; right: 0; top: 64px; padding: 12px var(--gutter) calc(20px + env(safe-area-inset-bottom, 0px)); border-bottom: 1px solid var(--line); box-shadow: var(--shadow-lg); overflow: hidden; }
   .nav-sheet .nav-link-btn { width: 100%; height: 44px; text-align: left; font-size: 15px; }
   .nav-sheet-actions { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
   .nav-sheet-actions .btn { width: 100%; }
@@ -305,7 +309,6 @@
 .lp-btn:disabled:hover { background: var(--accent); }
 .lp-btn:disabled:active { transform: none; }
 .lp-btn svg { transition: transform 0.2s var(--ease); }
-.lp-btn:hover svg { transform: translateX(3px); }
 .lp-btn-on-accent { background: var(--accent-ink); color: var(--accent); }
 .lp-btn-on-accent:hover { background: var(--accent-ink); opacity: 0.92; }
 .lp-text-link { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; text-decoration-color: var(--accent); transition: color 0.18s; }
@@ -456,7 +459,7 @@
 .lp-panel-lede { margin: 28px 0 0; max-width: 60ch; color: var(--ink-2); }
 .lp-qcards { margin: 24px 0 36px; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 .lp-qcard { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 210px; padding: 20px 20px 22px; border-radius: 22px; background: var(--bg-sunken); transition: transform 0.25s var(--ease), background 0.2s, box-shadow 0.25s var(--ease); animation: lp-msg 0.5s var(--ease) both; animation-delay: calc(var(--q) * 50ms); }
-.lp-qcard:hover, .lp-qcard:focus-within { transform: translateY(-8px) scale(1.02); background: var(--bg-raised); box-shadow: var(--lp-lift), 0 0 0 2px var(--accent); }
+.lp-qcard:focus-within { background: var(--bg-raised); box-shadow: var(--lp-lift), 0 0 0 2px var(--accent); }
 .lp-qcard-tags { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--ink-3); font-size: 13px; font-weight: 550; font-variant-numeric: tabular-nums; }
 .lp-qcard h3 { margin: 0; font-size: 19px; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; }
 .lp-qcard h3 a { color: var(--ink); text-decoration: none; }
@@ -464,7 +467,6 @@
 .lp-qcard h3 a:focus-visible { outline: none; }
 .lp-qcard-desc { margin: 0; color: var(--ink-2); font-size: var(--lp-small); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .lp-qcard-go { margin-top: auto; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--bg); color: var(--ink-2); transition: background 0.2s, color 0.2s, transform 0.25s var(--ease); }
-.lp-qcard:hover .lp-qcard-go { background: var(--accent); color: var(--accent-ink); transform: translateX(4px); }
 
 /* What interviewers grade: the rubric as a list beside its heading. */
 .lp-rubric { display: grid; grid-template-columns: 5fr 7fr; gap: clamp(32px, 6vw, 96px); align-items: start; }
@@ -485,8 +487,8 @@
 /* Pricing: two plans as two colour fields that meet at a hard edge. */
 .lp-pricing { display: grid; grid-template-columns: 7fr 5fr; }
 .lp-plan { min-height: clamp(400px, 52svh, 500px); display: flex; flex-direction: column; padding-block: clamp(40px, 5vw, 64px); }
-.lp-plan-free { padding-left: var(--lp-edge); padding-right: clamp(28px, 4vw, 64px); background: var(--accent); color: var(--accent-ink); }
-.lp-plan-plus { padding-right: var(--lp-edge); padding-left: clamp(28px, 4vw, 64px); background: var(--bg-sunken); color: var(--ink); }
+.lp-plan-free { padding-left: var(--lp-edge); padding-right: clamp(28px, 4vw, 64px); background: var(--bg-sunken); color: var(--ink); }
+.lp-plan-plus { padding-right: var(--lp-edge); padding-left: clamp(28px, 4vw, 64px); background: var(--accent); color: var(--accent-ink); }
 .lp-plan h3 { margin: 0; font-size: var(--lp-heading); line-height: 1; font-weight: 600; letter-spacing: -0.04em; }
 .lp-plan-for { margin: 16px 0 0; max-width: 26ch; font-size: var(--lp-lead); line-height: 1.35; }
 .lp-plan-body { margin: 20px 0 0; max-width: 46ch; line-height: 1.6; }
@@ -494,8 +496,8 @@
 .lp-price { margin: 0; font-size: var(--lp-display); line-height: 0.9; font-weight: 600; letter-spacing: -0.05em; }
 .lp-price small { margin-left: 10px; font-size: var(--lp-small); font-weight: 500; letter-spacing: 0; }
 .lp-plan-plus .lp-price { font-size: var(--lp-heading); }
-.lp-plan-plus .lp-btn { background: var(--ink); color: var(--bg); }
-.lp-plan-plus .lp-btn:hover { background: var(--ink-2); }
+.lp-plan-free .lp-btn { background: var(--ink); color: var(--bg); }
+.lp-plan-free .lp-btn:hover { background: var(--ink-2); }
 
 /* FAQ: questions filed like index cards, each tab stepping right. */
 .lp-faq .lp-h2, .lp-cards { margin-left: clamp(0px, 14%, 180px); }
@@ -895,7 +897,8 @@
 .not-found .hero-ctas { margin-top: 30px; }
 
 /* ---------------------------------------------------------------- Plus (locked) dialog */
-.lock-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(10, 10, 14, 0.5); backdrop-filter: blur(4px); overscroll-behavior: contain; animation: fade 0.2s forwards; }
+@keyframes lock-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+.lock-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(10, 10, 14, 0.5); backdrop-filter: blur(4px); overscroll-behavior: contain; animation: lock-backdrop-in 0.2s ease-out forwards; }
 .lock-modal { position: relative; width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; overscroll-behavior: contain; padding: 32px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg); color: var(--ink); animation: rise 0.35s var(--ease) both; }
 .lock-close { position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--ink-3); cursor: pointer; }
 .lock-close:hover { background: var(--bg-sunken); color: var(--ink); }
@@ -926,6 +929,10 @@
 .lock-actions { margin-top: 24px; display: grid; gap: 10px; }
 .lock-actions .btn { width: 100%; white-space: normal; text-align: center; }
 @media (max-width: 520px) { .lock-modal { padding: 26px 20px; } }
+@media (prefers-reduced-motion: reduce) {
+  .lock-backdrop { animation: lock-backdrop-in 0.2s ease forwards; }
+  .lock-modal { animation: none; opacity: 1; transform: none; }
+}
 
 /* ---------------------------------------------------------------- breadcrumbs */
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 28px; color: var(--ink-4); font-size: 13.5px; }

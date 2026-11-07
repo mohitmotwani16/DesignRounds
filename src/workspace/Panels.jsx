@@ -4,6 +4,7 @@ import { getTrack } from "../data/prompts.js";
 import { DATA_MODEL_TRACKS } from "./catalog.jsx";
 import { shortcutGroups } from "./shortcuts.js";
 import { useEscape } from "../components/ui.jsx";
+import { MotionModal, useClosableMotion } from "../motion/MotionModal.jsx";
 import { InterviewerPanel } from "./InterviewerPanel.jsx";
 import { ReviewPanel } from "./ReviewPanel.jsx";
 
@@ -81,10 +82,11 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
 }
 
 export function NuggetBriefModal({ nugget, parentPrompt, onClose }) {
-  useEscape(onClose);
+  const { present, requestClose, onExitComplete } = useClosableMotion(onClose);
+  useEscape(requestClose);
   const parentTitle = parentPrompt?.title ?? "Design round";
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <MotionModal present={present} onExitComplete={onExitComplete} onBackdropClose={requestClose}>
       <section className="prompt-modal" role="dialog" aria-modal="true" aria-labelledby="nugget-brief-title">
         <header className="modal-header">
           <div className="modal-heading">
@@ -95,7 +97,7 @@ export function NuggetBriefModal({ nugget, parentPrompt, onClose }) {
               <span><Clock3 size={15} /> {nugget.minutes} min</span>
             </div>
           </div>
-          <button className="icon-button modal-close" onClick={onClose} aria-label="Close brief"><X size={20} /></button>
+          <button className="icon-button modal-close" onClick={requestClose} aria-label="Close brief"><X size={20} /></button>
         </header>
         <div className="modal-content">
           <h3 className="modal-section-title">What you're seeing</h3>
@@ -104,20 +106,21 @@ export function NuggetBriefModal({ nugget, parentPrompt, onClose }) {
         </div>
         <footer className="modal-footer">
           <span>Reopen from <strong>Brief</strong> anytime.</span>
-          <button className="button button-dark" onClick={onClose}>Back to canvas <ArrowRight size={16} /></button>
+          <button className="button button-dark" onClick={requestClose}>Back to canvas <ArrowRight size={16} /></button>
         </footer>
       </section>
-    </div>
+    </MotionModal>
   );
 }
 
 export function PromptModal({ prompt, onClose, fresh = false }) {
   const [tab, setTab] = useState("brief");
-  useEscape(onClose);
+  const { present, requestClose, onExitComplete } = useClosableMotion(onClose);
+  useEscape(requestClose);
   const track = getTrack(prompt.track);
   const free = prompt.access === "free";
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <MotionModal present={present} onExitComplete={onExitComplete} onBackdropClose={requestClose}>
       <section className="prompt-modal" role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title">
         <header className="modal-header">
           <div className="modal-heading">
@@ -131,7 +134,7 @@ export function PromptModal({ prompt, onClose, fresh = false }) {
               <span className={free ? "meta-free" : "meta-plus"}>{free ? <Check size={14} /> : <LockKeyhole size={14} />}{free ? "Free round" : "Plus round"}</span>
             </div>
           </div>
-          <button className="icon-button modal-close" onClick={onClose} aria-label="Close brief"><X size={20} /></button>
+          <button className="icon-button modal-close" onClick={requestClose} aria-label="Close brief"><X size={20} /></button>
         </header>
 
         <div className="modal-tabs" role="tablist">
@@ -178,22 +181,23 @@ export function PromptModal({ prompt, onClose, fresh = false }) {
 
         <footer className="modal-footer">
           <span>You can reopen this anytime from <strong>Brief</strong>.</span>
-          <button className="button button-dark" onClick={onClose}>{fresh ? "Start designing" : "Back to canvas"} <ArrowRight size={16} /></button>
+          <button className="button button-dark" onClick={requestClose}>{fresh ? "Start designing" : "Back to canvas"} <ArrowRight size={16} /></button>
         </footer>
       </section>
-    </div>
+    </MotionModal>
   );
 }
 
 export function ShortcutsDialog({ onClose }) {
-  useEscape(onClose);
+  const { present, requestClose, onExitComplete } = useClosableMotion(onClose);
+  useEscape(requestClose);
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <MotionModal present={present} onExitComplete={onExitComplete} onBackdropClose={requestClose} instant>
       <section className="shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
         <header className="shortcuts-header">
           <span className="shortcuts-icon"><Keyboard size={18} /></span>
           <h2 id="shortcuts-title">Keyboard shortcuts</h2>
-          <button className="icon-button" onClick={onClose} aria-label="Close shortcuts"><X size={19} /></button>
+          <button className="icon-button" onClick={requestClose} aria-label="Close shortcuts"><X size={19} /></button>
         </header>
         <div className="shortcuts-body">
           {shortcutGroups.map((group) => (
@@ -212,6 +216,6 @@ export function ShortcutsDialog({ onClose }) {
         </div>
         <footer className="shortcuts-footer">Shortcuts are paused while you're typing in a text field. Press <kbd>?</kbd> anytime to open this list.</footer>
       </section>
-    </div>
+    </MotionModal>
   );
 }

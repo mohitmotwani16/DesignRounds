@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback } from "react";
 import { ChevronRight, Search, Server, X } from "lucide-react";
 import { catalog, componentCount, getItem, searchItems, shapeItems, techCatalog } from "./catalog.jsx";
 
@@ -16,13 +16,19 @@ function readExpanded() {
 
 const Tile = memo(function Tile({ item, onAdd, disabled }) {
   const Icon = item.icon;
+  const [pressed, setPressed] = useState(false);
+  const clearPressed = useCallback(() => setPressed(false), []);
   return (
     <button
-      className="palette-tile"
+      className={`palette-tile${pressed ? " palette-tile-pressed" : ""}`}
       draggable={!disabled}
       disabled={disabled}
       title={`${item.label}${item.tech ? " (technology)" : ""}: click to add or drag onto the canvas`}
-      onDragStart={(event) => { event.dataTransfer.setData(DRAG_TYPE, item.kind); event.dataTransfer.effectAllowed = "copy"; }}
+      onPointerDown={() => { if (!disabled) setPressed(true); }}
+      onPointerUp={clearPressed}
+      onPointerCancel={clearPressed}
+      onPointerLeave={clearPressed}
+      onDragStart={(event) => { event.dataTransfer.setData(DRAG_TYPE, item.kind); event.dataTransfer.effectAllowed = "copy"; clearPressed(); }}
       onClick={() => onAdd(item)}
     >
       <span className={`palette-tile-icon ${item.tech ? "tech" : `icon-${item.color}`}`}><Icon size={18} strokeWidth={1.8} /></span>

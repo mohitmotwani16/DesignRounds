@@ -224,7 +224,11 @@ export function CanvasTour({ steps, layoutKey, onStep, onDone }) {
       {frame?.hole && (
         <div
           className="canvas-tour-hole"
-          style={{ left: frame.hole.left, top: frame.hole.top, width: frame.hole.width, height: frame.hole.height }}
+          style={{
+            width: frame.hole.width,
+            height: frame.hole.height,
+            transform: `translate(${frame.hole.left}px, ${frame.hole.top}px)`,
+          }}
         />
       )}
       <div

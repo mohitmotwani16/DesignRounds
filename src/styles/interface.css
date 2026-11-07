@@ -1,0 +1,155 @@
+/* Fluid interface foundation — apple-design skill (WWDC 2018+), web translation.
+ * Loaded last so shared press + material rules apply across site, workspace, and legacy shell. */
+
+:root {
+  --interface-press-scale: 0.97;
+  --interface-press-duration: 100ms;
+  --interface-press-ease: ease-out;
+  --interface-material-blur: saturate(180%) blur(20px);
+  --interface-material-border: color-mix(in srgb, var(--line) 65%, transparent);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  font-optical-sizing: auto;
+}
+
+/* §12 Materials — floating chrome scrolls over content */
+.nav.scrolled,
+.nav:has(.nav-sheet) {
+  background: var(--header-bg);
+  backdrop-filter: var(--interface-material-blur);
+  -webkit-backdrop-filter: var(--interface-material-blur);
+  border-bottom-color: var(--interface-material-border);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+@media (max-width: 900px) {
+  .nav-sheet {
+    background: var(--header-bg);
+    backdrop-filter: var(--interface-material-blur);
+    -webkit-backdrop-filter: var(--interface-material-blur);
+    border-bottom-color: var(--interface-material-border);
+  }
+}
+
+.lib-tabs-bar {
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+}
+
+.modal-backdrop,
+.lock-backdrop,
+.learn-prompt-backdrop {
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+/* §1 Response — feedback on press, not release */
+.btn:active:not(:disabled),
+.lp-btn:active:not(:disabled),
+.nav-link-btn:active,
+.nav-burger:active,
+.button:active:not(:disabled),
+.account-button:active,
+.user-menu-popover [role="menuitem"]:active,
+.canvas-tour-next:active:not(:disabled),
+.canvas-tour-back:active:not(:disabled),
+.canvas-tour-skip:active,
+.palette-tile:active,
+.track-filter:active,
+.segmented button:active,
+.lp-tabs button:active,
+.continue-item:active {
+  transform: scale(var(--interface-press-scale));
+  transition: transform var(--interface-press-duration) var(--interface-press-ease);
+}
+
+.btn-primary:active:not(:disabled),
+.lp-btn:active:not(:disabled) {
+  transform: scale(var(--interface-press-scale));
+}
+
+/* §7 Spatial consistency — anchored popovers */
+.user-menu-popover { transform-origin: top right; }
+.mobile-menu-panel { transform-origin: top right; }
+
+/* §2 Direct manipulation — panel resize tracks pointer 1:1 (PanelResizer.jsx) */
+.panel-resizer { touch-action: none; }
+body.is-resizing-panel {
+  cursor: col-resize;
+  user-select: none;
+}
+body.is-resizing-panel .panel-resizer::after {
+  background: var(--bd-5964d8);
+}
+
+/* §14 Reduced transparency — frostier surfaces */
+@media (prefers-reduced-transparency: reduce) {
+  .nav.scrolled,
+  .nav:has(.nav-sheet),
+  .nav-sheet,
+  .lib-tabs-bar,
+  .modal-backdrop,
+  .lock-backdrop,
+  .learn-prompt-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg-raised);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled),
+  .lp-btn:active:not(:disabled),
+  .nav-link-btn:active,
+  .nav-burger:active,
+  .button:active:not(:disabled),
+  .account-button:active {
+    transform: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .account-button.open { background: var(--bg-sunken); }
+}
+
+/* Phase C — vibrancy on translucent chrome (Apple §12) */
+.nav.scrolled .nav-link-btn,
+.nav:has(.nav-sheet) .nav-link-btn {
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+.lib-tabs-bar .btn,
+.lib-tabs-bar a {
+  font-weight: 550;
+}
+
+/* Phase A — motion surfaces own enter/exit (no CSS keyframe fight) */
+[data-motion-modal] .prompt-modal,
+[data-motion-modal] .lock-modal,
+[data-motion-modal] .learn-prompt,
+[data-motion-modal] .shortcuts-dialog {
+  animation: none;
+}
+.user-menu-popover { animation: none; }
+
+/* Phase A — drawer width spring settle after drag (not during) */
+.component-sidebar,
+.interviewer-panel {
+  transition: width 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+body.is-resizing-panel .component-sidebar,
+body.is-resizing-panel .interviewer-panel {
+  transition: none;
+}
+
+/* Phase B — palette press before drag */
+.palette-tile.palette-tile-pressed:not(:disabled) {
+  background: var(--bg-f1f3f6);
+  border-color: var(--bd-dfe3ea);
+}
+.system-node:active:not(.incident-pulse) {
+  transform: scale(0.99);
+  transition: transform 100ms ease-out;
+}

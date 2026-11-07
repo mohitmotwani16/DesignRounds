@@ -940,6 +940,8 @@ function Workspace({ session, prompt }) {
                 onNodeDragStart={onNodeDragStart}
                 onSelectionStart={() => setBoxSelecting(true)}
                 nodeClickDistance={4}
+                nodeDragThreshold={3}
+                selectNodesOnDrag={false}
                 onNodeDrag={onNodeDrag}
                 onNodeDragStop={onNodeDragStop}
                 onEdgeDoubleClick={onEdgeDoubleClick}
