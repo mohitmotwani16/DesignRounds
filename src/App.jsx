@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api.js";
 import { identifyUser, PRIVATE_ZONE, track } from "./analytics.js";
@@ -13,7 +13,7 @@ import { ReportProblemHost } from "./components/ReportProblem.jsx";
 import { FullPageMessage, LockedPromptDialog } from "./components/ui.jsx";
 import { SiteNav } from "./components/site.jsx";
 import { recommendedFreeRound } from "./data/free-rounds.js";
-import { Link, navigate, safeNext, useRoute } from "./router.js";
+import { Link, navigate, safeNext, shouldResetScrollOnNavigate, useRoute } from "./router.js";
 import { applyMeta, routeMeta } from "./seo.js";
 import AboutPage from "./pages/About.jsx";
 import PrivacyPage from "./pages/Privacy.jsx";
@@ -98,11 +98,18 @@ function Routes() {
   const { path, params, raw, hash } = useRoute();
   const auth = useAuth();
   const [lockedPromptId, setLockedPromptId] = useState(null);
+  const prevRouteRef = useRef(raw);
 
   // Title, description, canonical and structured data follow the route.
   useEffect(() => { applyMeta(routeMeta(path)); }, [path]);
-  // A new page starts at the top; "/#section" links scroll themselves (Landing).
-  useEffect(() => { if (!hash) window.scrollTo(0, 0); }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A new page starts at the top; query-only navigations too (e.g. /nuggets?q=…),
+  // but not Nuggets browse tabs when only ?browse= changes. "/#section" scrolls itself (Landing).
+  useEffect(() => {
+    if (hash) return;
+    const prev = prevRouteRef.current;
+    if (shouldResetScrollOnNavigate(prev, raw)) window.scrollTo(0, 0);
+    prevRouteRef.current = raw;
+  }, [raw, hash]);
 
   // Practicing requires an account; browsing the catalog does not.
   const startPrompt = useCallback((promptId) => {
@@ -169,8 +176,11 @@ function Routes() {
 
   return (
     <div className="site-shell site">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <SiteNav onStart={startPrompt} />
-      <Page path={path} onStart={startPrompt} onLockRound={lockRound} />
+      <div id="main-content" tabIndex={-1} className="main-focus-target">
+        <Page path={path} onStart={startPrompt} onLockRound={lockRound} />
+      </div>
       {lockedPromptId && <LockedPromptDialog prompt={findPrompt(lockedPromptId)} alternative={freeAlternative(lockedPromptId)} onStart={startPrompt} onClose={() => setLockedPromptId(null)} />}
     </div>
   );

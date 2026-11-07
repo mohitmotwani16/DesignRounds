@@ -11,7 +11,7 @@ import { api } from "../api.js";
 import { isPlus, useAuth } from "../auth.jsx";
 import { THEMES, setTheme, useTheme } from "../theme.js";
 import { openReportProblem } from "./ReportProblem.jsx";
-import { navigate, useRoute } from "../router.js";
+import { Link, navigate, useRoute } from "../router.js";
 
 export function Brand({ onClick, className = "" }) {
   return (
@@ -148,7 +148,7 @@ export function LockedPromptDialog({ prompt, alternative, onClose, onStart }) {
         <div className="lock-note"><Sparkles size={16} /><span>The brief, scale and interviewer notes for this round are for Plus members. Plus is coming soon, with every round, the live AI interviewer, and full coaching.</span></div>
         <div className="lock-actions">
           {alternative && <button className="btn btn-primary btn-lg" onClick={() => { onClose(); onStart(alternative.id); }}>Try “{alternative.title.replace(/^Design (a |an )?/i, "")}” free <ArrowRight size={16} /></button>}
-          <button className="btn btn-ghost btn-lg" onClick={() => { onClose(); navigate("/plus"); }}>See what's in Plus</button>
+          <Link className="btn btn-ghost btn-lg" to="/plus" onClick={onClose}>See what's in Plus</Link>
         </div>
       </section>
     </div>

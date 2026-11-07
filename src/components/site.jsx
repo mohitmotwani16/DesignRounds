@@ -154,6 +154,7 @@ export function SiteFooter() {
             <h2>Product</h2>
             <ul>
               <li><Link to="/library">Practice library</Link></li>
+              <li><Link to="/nuggets">Incident drills</Link></li>
               <li><Link to="/plus">Plus</Link></li>
               {SECTIONS.map((item) => <li key={item.id}><Link to={`/#${item.id}`}>{item.label}</Link></li>)}
               <li><Link to="/about">About</Link></li>
@@ -253,14 +254,16 @@ export function NuggetParentCard({ parent, to, index = 0 }) {
 
   return (
     <Link className={`nugget-parent round tone-${track.color}`} to={to} style={{ "--i": index % 12 }}>
-      <div className="round-top">
-        <span className="round-icon"><Icon size={19} strokeWidth={1.9} /></span>
-        <span className="round-badges">
-          {access === "paid" ? <span className="badge badge-plus"><Crown size={12} /> Plus</span> : <span className="badge badge-free">Free</span>}
-        </span>
+      <div className="nugget-parent-body">
+        <div className="round-top">
+          <span className="round-icon"><Icon size={19} strokeWidth={1.9} /></span>
+          <span className="round-badges">
+            {access === "paid" ? <span className="badge badge-plus"><Crown size={12} /> Plus</span> : <span className="badge badge-free">Free</span>}
+          </span>
+        </div>
+        <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>{count} drill{count === 1 ? "" : "s"}</span></div>
+        <h3>{parent.title}</h3>
       </div>
-      <div className="round-track"><b>{track.shortLabel}</b><span>·</span><span>{count} drill{count === 1 ? "" : "s"}</span></div>
-      <h3>{parent.title}</h3>
       <span className="nugget-parent-cta">
         Browse drills <ArrowRight size={14} className="nudge" />
       </span>

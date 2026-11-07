@@ -207,7 +207,9 @@ export default function LibraryPage({ onStart, track: routeTrack }) {
       </div>
 
       <div className="wrap lib-body">
-        <div className={`drawer-backdrop ${drawerOpen ? "open" : ""}`} onClick={() => setDrawerOpen(false)} />
+        {drawerOpen && (
+          <button type="button" className="drawer-backdrop open" aria-label="Close filters" onClick={() => setDrawerOpen(false)} />
+        )}
         <aside className={`lib-filters ${drawerOpen ? "open" : ""}`} aria-label="Filters">
           <div className="drawer-head"><h2>Filters</h2><button className="btn btn-quiet btn-sm" onClick={() => setDrawerOpen(false)} aria-label="Close filters"><X size={16} /></button></div>
 

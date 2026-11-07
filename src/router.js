@@ -27,6 +27,21 @@ export function parseUrl(url) {
   return { path: path || "/", params: new URLSearchParams(search), hash, raw: `${path}${search ? `?${search}` : ""}` };
 }
 
+// Scroll-to-top on in-app navigations, except Nuggets browse tabs (only ?browse= changes).
+export function shouldResetScrollOnNavigate(from, to) {
+  if (from === to) return false;
+  const prev = parseUrl(from);
+  const next = parseUrl(to);
+  if (prev.path !== next.path) return true;
+  if (prev.path === "/nuggets" && next.path === "/nuggets") {
+    const sameQ = (prev.params.get("q") || "") === (next.params.get("q") || "");
+    const sameTrack = (prev.params.get("track") || "") === (next.params.get("track") || "");
+    const browseChanged = (prev.params.get("browse") || "") !== (next.params.get("browse") || "");
+    if (sameQ && sameTrack && browseChanged) return false;
+  }
+  return prev.raw !== next.raw;
+}
+
 export function navigate(to, { replace = false } = {}) {
   if (to === currentUrl()) return;
   window.history[replace ? "replaceState" : "pushState"](null, "", to);
