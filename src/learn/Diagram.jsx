@@ -227,7 +227,10 @@ function Sequence({ spec }) {
   const id = markerId(spec);
   const headerH = 40;
   const top = PAD + headerH;
-  const width = PAD * 2 + spec.actors.length * SEQ_COL;
+  // A note box grows to fit its text, so the diagram widens if a note is wider than the lifelines.
+  const noteW = (note) => textWidth(note, 11.5) + 8;
+  const widestNote = Math.max(0, ...spec.steps.filter((step) => step.note).map((step) => noteW(step.note)));
+  const width = Math.max(PAD * 2 + spec.actors.length * SEQ_COL, widestNote + 8);
   const height = top + 24 + spec.steps.length * SEQ_STEP + 16;
   const xOf = (index) => PAD + index * SEQ_COL + SEQ_COL / 2;
   return (
@@ -244,12 +247,14 @@ function Sequence({ spec }) {
         const y = top + 28 + index * SEQ_STEP;
         if (step.note) {
           const [a, b = a] = step.over;
-          const x1 = xOf(Math.min(a, b)) - 78;
-          const x2 = xOf(Math.max(a, b)) + 78;
+          const w = Math.max(xOf(Math.max(a, b)) - xOf(Math.min(a, b)) + 156, noteW(step.note));
+          const centre = (xOf(a) + xOf(b)) / 2;
+          // Centred over its lifelines, nudged inwards so the box never leaves the diagram.
+          const x1 = Math.min(Math.max(centre - w / 2, 4), width - 4 - w);
           return (
             <g key={index} className="dg-note">
-              <rect x={x1} y={y - 15} width={x2 - x1} height={26} rx={6} />
-              <text x={(x1 + x2) / 2} y={y + 2} textAnchor="middle">{step.note}</text>
+              <rect x={x1} y={y - 15} width={w} height={26} rx={6} />
+              <text x={x1 + w / 2} y={y + 2} textAnchor="middle">{step.note}</text>
             </g>
           );
         }
