@@ -1,6 +1,6 @@
 # Interview intelligence: overview
 
-Status: implemented behind `INTERVIEWER_V3` (see [Implementation status](#13-implementation-status)) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23)
+Status: implemented when `INTERVIEWER_VERSION` enables Conductor (see [Implementation status](#13-implementation-status)) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23)
 
 This folder designs the parts of DesignRounds that make the live interviewer behave like a real one. There are three services and one shared platform layer:
 
@@ -278,7 +278,7 @@ Nothing here should break current rounds:
 
 - **Additive migrations only.** New tables and nullable columns. Nothing existing is renamed or dropped until the old path is retired.
 - **Versions are pinned per round.** A round started on today's interviewer (v2) finishes on v2. A round started with a pack keeps that pack version and UCS version even if newer ones are published mid-round.
-- **Flags at two levels.** `INTERVIEWER_V3` per environment, and per question (a question uses the Conductor only if it has a published pack).
+- **Flags at two levels.** `INTERVIEWER_VERSION` per environment, and per question (a question uses the Conductor only if it has a published pack).
 - **Shadow mode first.** The Conductor plans and judges alongside v2, which keeps writing the messages. Ledgers are compared offline before anything is learner-visible. Shadow mode sends real learner text through an extra processing path, so it needs the privacy step in section 11 first.
 - **Fallbacks at every step.** No pack → guide-only prompt (today's behaviour). Provider down → failover route → the existing "AI unavailable" state. Invalid output → one repair → a templated move. A cache miss is only ever slower, never wrong.
 
@@ -336,7 +336,7 @@ Before shadow mode on real rounds, and before any second production provider rec
 
 ## 13. Implementation status
 
-Built in the `feature/interview-intelligence` branch, behind `INTERVIEWER_V3` (on in development, opt-in in production) and per question (only questions with a published pack).
+Built in the `feature/interview-intelligence` branch, gated by `INTERVIEWER_VERSION` (`auto`: v3 in development, v2 in production) and per question (only questions with a published pack).
 
 **Built as designed**
 
