@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { query, queryOne } from "../../db.js";
 import { HttpError } from "../../http.js";
-import { interviewerV3Enabled } from "../../flags.js";
+import { conductorEnabledForNewRounds } from "../../flags.js";
 import { canvasNotes, diffSnapshots, snapshotOf } from "../ai/canvas.js";
 import { filterFillerWords, parseAnswerContext } from "../ai/communication.js";
 import { isAnonymousKind, isSignificantKind } from "../ai/components.js";
@@ -46,7 +46,7 @@ const learnTitles = new Map(TOPICS.map((topic) => [topic.slug, topic.short ?? to
 
 // Whether a new round of this question should run on the Conductor.
 export async function v3PackFor(promptId) {
-  if (!interviewerV3Enabled) return null;
+  if (!conductorEnabledForNewRounds()) return null;
   return publishedVersion(promptId);
 }
 
@@ -59,7 +59,7 @@ export function effectiveMinutes(session, prompt) {
 
 export async function conductorPackVersion(session) {
   if (session.session_kind === "nugget" && session.nugget_id) {
-    if (!interviewerV3Enabled) return null;
+    if (!conductorEnabledForNewRounds()) return null;
     return getNuggetRecord(session.nugget_id)?.version ?? null;
   }
   return v3PackFor(session.prompt_id);

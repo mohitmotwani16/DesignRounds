@@ -7,7 +7,7 @@ const dataDir = await mkdtemp(path.join(os.tmpdir(), "nugget-interview-"));
 Object.assign(process.env, {
   PGLITE_DIR: dataDir,
   AI_PROVIDER: "fake",
-  INTERVIEWER_V3: "true",
+  INTERVIEWER_VERSION: "v3",
   DEV_TOOLS: "true",
   ADMIN_EMAILS: "admin@example.com",
   GOOGLE_CLIENT_ID: " ",

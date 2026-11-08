@@ -21,8 +21,38 @@ export const devToolsEnabled = !isProduction && process.env.DEV_TOOLS !== "false
 // VOICE_ANSWERS=true, and only effective when speech-to-text is configured.
 export const voiceAnswersEnabled = process.env.VOICE_ANSWERS ? process.env.VOICE_ANSWERS === "true" : !isProduction;
 
-// The v3 interviewer (the Interview Conductor, docs/design/interview-conductor.md).
-// A round uses it only when this is on and its question has a published Problem Pack;
-// the choice is made at the round's opening and never changes mid-round. On in
-// development; opt-in elsewhere with INTERVIEWER_V3=true.
-export const interviewerV3Enabled = process.env.INTERVIEWER_V3 ? process.env.INTERVIEWER_V3 === "true" : !isProduction;
+const INTERVIEWER_ENGINES = new Set(["v2", "v3"]);
+
+function defaultInterviewerVersion() {
+  return isProduction ? "v2" : "v3";
+}
+
+function parseInterviewerVersion(raw) {
+  const value = String(raw).trim().toLowerCase();
+  if (value === "auto") return defaultInterviewerVersion();
+  if (INTERVIEWER_ENGINES.has(value)) return value;
+  console.warn(`[flags] Unknown INTERVIEWER_VERSION="${raw}"; expected v2, v3, or auto. Using v2.`);
+  return "v2";
+}
+
+function resolveInterviewerVersion() {
+  if (process.env.INTERVIEWER_VERSION) {
+    return parseInterviewerVersion(process.env.INTERVIEWER_VERSION);
+  }
+  if (process.env.INTERVIEWER_V3 !== undefined) {
+    console.warn("[flags] INTERVIEWER_V3 is deprecated; set INTERVIEWER_VERSION=v2, v3, or auto.");
+    return process.env.INTERVIEWER_V3 === "true" ? "v3" : "v2";
+  }
+  return defaultInterviewerVersion();
+}
+
+// Which interviewer stack new rounds may use (docs/design/interview-conductor.md).
+// v3: Interview Conductor when a published Problem Pack (or nugget mini-pack) is available.
+// v2: legacy free-form interviewer (opening + interviewerTask).
+// Unset env: auto — v3 in development, v2 in production/preview (same as INTERVIEWER_VERSION=auto).
+// A session's engine is pinned at open time and never changes mid-round.
+export const interviewerVersion = resolveInterviewerVersion();
+
+export function conductorEnabledForNewRounds() {
+  return interviewerVersion === "v3";
+}

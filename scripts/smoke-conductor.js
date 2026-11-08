@@ -14,7 +14,7 @@ const dataDir = await mkdtemp(path.join(os.tmpdir(), "designrounds-conductor-"))
 Object.assign(process.env, {
   PGLITE_DIR: dataDir,
   AI_PROVIDER: "fake",
-  INTERVIEWER_V3: "true",
+  INTERVIEWER_VERSION: "v3",
   PROBLEM_PACKS: "off",
   DEV_TOOLS: "true",
   ADMIN_EMAILS: "admin@example.com",

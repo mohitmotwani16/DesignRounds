@@ -26,7 +26,7 @@ const maxTurns = Number(option("turns", 16));
 
 Object.assign(process.env, {
   PGLITE_DIR: await mkdtemp(path.join(os.tmpdir(), "designrounds-round-")),
-  INTERVIEWER_V3: "true",
+  INTERVIEWER_VERSION: "v3",
   DEV_TOOLS: "true",
   ANSWER_POOLS: "off",
   GOOGLE_CLIENT_ID: " ",

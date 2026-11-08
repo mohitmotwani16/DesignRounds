@@ -1,6 +1,6 @@
 # Interview Conductor
 
-Status: implemented behind `INTERVIEWER_V3` (`server/modules/conductor`) · Part of [interview intelligence](README.md) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23)
+Status: implemented when `INTERVIEWER_VERSION` is `v3` or `auto` (dev) (`server/modules/conductor`) · Part of [interview intelligence](README.md) · Issue: [#23](https://github.com/mohitmotwani16/DesignRounds/issues/23)
 
 ## 1. Purpose
 
@@ -384,7 +384,7 @@ server/modules/interviews.js           routes only
 
 ## 16. Rollout
 
-Behind `INTERVIEWER_V3`, and per question (only questions with a published pack). Rounds pin everything at start, so in-progress rounds are never switched.
+When the environment selects Conductor (`INTERVIEWER_VERSION`), and per question (only questions with a published pack). Rounds pin everything at start, so in-progress rounds are never switched.
 
 0. **Baseline:** ship the realism rating and the thumbs-down reasons on v2, and run the simulation suite against v2, so there's something to compare against.
 1. Ledger tables, events, `plan/validate/apply` with unit tests; nothing wired.

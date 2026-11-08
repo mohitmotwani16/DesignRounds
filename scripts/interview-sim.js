@@ -23,7 +23,7 @@ const mode = option("mode", "realistic");
 
 Object.assign(process.env, {
   PGLITE_DIR: await mkdtemp(path.join(os.tmpdir(), "designrounds-sim-")),
-  INTERVIEWER_V3: "true",
+  INTERVIEWER_VERSION: "v3",
   PROBLEM_PACKS: "off",
   DEV_TOOLS: "true",
   ANSWER_POOLS: "off",
