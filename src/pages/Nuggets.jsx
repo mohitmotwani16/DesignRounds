@@ -55,8 +55,8 @@ export default function NuggetsPage({ onLockRound }) {
   const parentFilter = params.get("q") || "";
   const trackFilter = validTrackId(params.get("track") || "all");
   const browseParam = params.get("browse") || "";
-  const browseAllDrills = browseParam === "drills" && !parentFilter && trackFilter === "all";
-  const browseFreeDrills = browseParam === "free" && !parentFilter && trackFilter === "all";
+  const browseAllDrills = browseParam === "drills" && !parentFilter;
+  const browseFreeDrills = browseParam === "free" && !parentFilter;
   const activeBrowse = browseAllDrills ? "drills" : browseFreeDrills ? "free" : "";
   const activeTrack = tracks.find((item) => item.id === trackFilter);
   const { status, user, humanCheckRequired, humanLaunch, humanVisible } = useAuth();
@@ -102,7 +102,7 @@ export default function NuggetsPage({ onLockRound }) {
   const showQuestionGrid = !parentFilter && !browseAllDrills && !browseFreeDrills;
   const showDrillGrid = Boolean(parentFilter) || browseAllDrills || browseFreeDrills;
   const showBrowseDrillList = browseAllDrills || browseFreeDrills;
-  const showBrowseModes = trackFilter === "all" && !parentFilter;
+  const showBrowseModes = !parentFilter;
 
   const start = useCallback(async (body) => {
     if (status === "loading") return;
@@ -285,7 +285,7 @@ export default function NuggetsPage({ onLockRound }) {
 
       <div className="wrap lib-body lib-body-solo">
         <section aria-label="Incident drills">
-          {!parentFilter && trackFilter !== "all" && activeTrack && (
+          {!parentFilter && trackFilter !== "all" && activeTrack && showQuestionGrid && (
             <header className="nuggets-section-head">
               <p className="lib-count" aria-live="polite">
                 <strong>{activeTrack.shortLabel}</strong> drills · {filtered.length} total
