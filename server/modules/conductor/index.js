@@ -763,3 +763,20 @@ export async function debrief(sessionId, promptId) {
     }),
   };
 }
+
+/** Ledger debrief + reference fix + cached communication for the Review tab after a drill closes. */
+export async function nuggetDrillReview(session, stateRow, turns) {
+  if (session.session_kind !== "nugget" || !session.nugget_id || stateRow?.engine !== "v3") return null;
+  if (!nuggetDebriefSent(turns)) return null;
+  const spoke = turns.some((turn) => turn.role === "learner");
+  const debriefData = await debrief(session.id, session.prompt_id);
+  const referenceFix = nuggetReferenceFix(getNuggetRecord(session.nugget_id));
+  const communication = stateRow?.drill_communication ?? null;
+  const communicationPending = Boolean(aiConfig.enabled && spoke && !communication);
+  return {
+    referenceFix: referenceFix ?? null,
+    debrief: debriefData,
+    communication,
+    communicationPending,
+  };
+}

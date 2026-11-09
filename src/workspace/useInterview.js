@@ -50,10 +50,24 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
 
   useEffect(() => { load(); }, [load, plan, roundActive]);
 
+  const communicationPending = data.status === "ready" && data.drillReview?.communicationPending;
+  useEffect(() => {
+    if (!communicationPending || pendingRef.current) return undefined;
+    const timer = window.setInterval(() => { load(); }, 4000);
+    return () => window.clearInterval(timer);
+  }, [communicationPending, load]);
+
   const appendTurns = (turns, extra = {}) => setData((current) => {
     const prior = current.turns ?? [];
     const known = new Set(prior.map((turn) => turn.id));
-    return { ...current, ...extra, ...(extra.state ? { receivedAt: Date.now() } : {}), turns: [...prior, ...turns.filter((turn) => !known.has(turn.id))] };
+    const { drillReview, ...rest } = extra;
+    return {
+      ...current,
+      ...rest,
+      ...(extra.state ? { receivedAt: Date.now() } : {}),
+      ...(drillReview !== undefined ? { drillReview } : {}),
+      turns: [...prior, ...turns.filter((turn) => !known.has(turn.id))],
+    };
   });
 
   // The chime plays as the interviewer starts replying (the first streamed text), or
@@ -95,7 +109,10 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
       attempt.current = null;
       if (generation.current === gen) {
         if (!handlers.chimed) playChime();
-        appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+        appendTurns(result.turns, {
+          ...(result.state ? { state: result.state, allowance: result.allowance } : {}),
+          ...(result.drillReview !== undefined ? { drillReview: result.drillReview } : {}),
+        });
       }
       return true;
     } catch (error) {
@@ -134,7 +151,10 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
       const result = await api.sendInterviewAudio(sessionId, { requestId: recording.id, mimeType: recording.mimeType, durationMs: recording.durationMs, data, selectedNodeId: selectedIdRef.current }, handlers);
       if (generation.current === gen) {
         if (!handlers.chimed) playChime();
-        appendTurns(result.turns, result.state ? { state: result.state, allowance: result.allowance } : {});
+        appendTurns(result.turns, {
+          ...(result.state ? { state: result.state, allowance: result.allowance } : {}),
+          ...(result.drillReview !== undefined ? { drillReview: result.drillReview } : {}),
+        });
       }
       return true;
     } catch (error) {
@@ -167,6 +187,7 @@ export function useInterview({ sessionId, plan, roundActive, structureKey, settl
         appendTurns([result.turn], { state: result.state, allowance: result.allowance });
         playChime();
         if (result.action === "ask") onProactiveTurn?.();
+        if (nuggetDebriefInTurns([result.turn])) load();
       }
     } catch {
       // A missed tick is harmless; the learner can always ask.

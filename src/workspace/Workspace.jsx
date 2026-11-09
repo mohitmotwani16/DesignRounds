@@ -767,9 +767,12 @@ function Workspace({ session, prompt }) {
   useEffect(() => {
     if (!isNugget || readOnly || interview.status !== "ready") return;
     if (!nuggetDebriefInTurns(interview.turns ?? [])) return;
-    setPanelTab("review");
-    setPanelOpen(true);
-  }, [isNugget, readOnly, interview.status, interview.turns]);
+    const timer = window.setTimeout(() => {
+      setPanelTab("review");
+      setPanelOpen(true);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [isNugget, readOnly, interview.status, interview.turns, interview.drillReview]);
   useEffect(() => {
     if (!isNugget || !initial.nodes.length) return undefined;
     const timer = window.setTimeout(() => reactFlow.fitView({ padding: 0.25, duration: 300, maxZoom: 1 }), 80);

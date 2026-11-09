@@ -14,7 +14,8 @@ import { guideFor } from "./ai/guides.js";
 import { runTask, runTaskStream } from "./ai/run.js";
 import { SpeechError, speechConfig, transcribe } from "./ai/speech.js";
 import { STAGES, interviewSummaryTask, interviewerTask } from "./ai/tasks/interviewer.js";
-import { changeMode, conductorPackVersion, ensureNuggetDebriefIfDue, handleLearnerTurn, handleTick, nuggetInterviewNeedsBootstrap, nuggetOpeningText, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
+import { changeMode, conductorPackVersion, ensureNuggetDebriefIfDue, handleLearnerTurn, handleTick, nuggetDrillReview, nuggetInterviewNeedsBootstrap, nuggetOpeningText, presentV3State, startNuggetRound, startRound, summarize as summarizeV3, v3PackFor } from "./conductor/index.js";
+import { communicationTask, communicationTemplateVersion, withoutUnsoundExamples } from "./ai/tasks/communication.js";
 import { nuggetDebriefSent } from "./conductor/nugget.js";
 import { requireUser } from "./identity.js";
 import { needsDataModel } from "./pks/index.js";
@@ -249,6 +250,48 @@ export async function interviewTranscript(sessionId, maxChars = 12_000) {
 // Null when the learner said too little to judge.
 const MIN_ANSWERS_FOR_COMMUNICATION = 2;
 
+async function ensureNuggetDrillCommunication({ session, user, turns }) {
+  if (session.session_kind !== "nugget" || !nuggetDebriefSent(turns)) return;
+  const locked = await queryOne(
+    "select engine, drill_communication from interview_state where session_id = $1",
+    [session.id]
+  );
+  if (!locked || locked.engine !== "v3" || locked.drill_communication) return;
+  const conversation = await communicationInput(session.id);
+  if (!conversation || !aiConfig.enabled) return;
+  const prompt = promptById.get(session.prompt_id);
+  if (!prompt) return;
+  try {
+    const { data } = await runTask(communicationTask, { prompt, ...conversation }, { userId: user.id, sessionId: session.id });
+    const payload = {
+      ...withoutUnsoundExamples(data, conversation.answers),
+      stats: conversation.stats,
+      version: communicationTemplateVersion,
+    };
+    await queryOne(
+      `update interview_state set drill_communication = $2::jsonb, drill_communication_at = now()
+        where session_id = $1 and drill_communication is null returning session_id`,
+      [session.id, JSON.stringify(payload)]
+    );
+  } catch (error) {
+    console.error("[ai] nugget drill communication failed:", error.code || error.message);
+  }
+}
+
+async function attachNuggetDrillReview(session, user, payload, { scheduleCommunication = false } = {}) {
+  if (session.session_kind !== "nugget") return payload;
+  const state = await queryOne("select * from interview_state where session_id = $1", [session.id]);
+  const turns = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [session.id]);
+  const drillReview = await nuggetDrillReview(session, state, turns);
+  if (!drillReview) return payload;
+  if (scheduleCommunication && drillReview.communicationPending) {
+    afterResponse(() => ensureNuggetDrillCommunication({ session, user, turns }).catch((error) => {
+      console.error("[ai] nugget drill communication scheduling failed:", error.message);
+    }));
+  }
+  return { ...payload, drillReview };
+}
+
 export async function communicationInput(sessionId) {
   const rows = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [sessionId]);
   const answers = [];
@@ -351,14 +394,15 @@ interviewsRouter.get("/sessions/:sessionId/interview", route(async (req, res) =>
   }
   const state = await queryOne("select * from interview_state where session_id = $1", [session.id]);
   const turns = await query(`${TURNS_WITH_AUDIO} where t.session_id = $1 order by t.seq limit 400`, [session.id]);
-  res.json({
+  const body = {
     access: "full",
     aiAvailable: aiConfig.enabled,
     voice: voiceAvailable,
     turns: turns.map(presentTurn),
     state: state ? presentState(state, session) : null,
     allowance: await readAllowance(db, req.user, session, state),
-  });
+  };
+  res.json(await attachNuggetDrillReview(session, req.user, body, { scheduleCommunication: true }));
 }));
 
 // Spends the learner's one free interviewer round on this round (issue #75). Only a
@@ -479,11 +523,12 @@ async function deliverLearnerReply(req, res, { session, reserved, hint = false }
       }
       throw error;
     }
-    return {
+    const payload = {
       turns: [presentTurn(reserved.learner), presentTurn(result.turn), ...(result.extraTurns ?? []).map(presentTurn)],
       state: presentState(result.state, session),
       allowance: await readAllowance(db, req.user, session, result.state),
     };
+    return attachNuggetDrillReview(session, req.user, payload, { scheduleCommunication: true });
   };
   const summarize = () => afterResponse(maybeSummarize(session).catch((error) => console.error("[ai] interview summary failed:", error.code || error.message)));
 

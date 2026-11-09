@@ -1,48 +1,73 @@
 import { useState } from "react";
-import { ArrowRight, Check, ClipboardCheck, Clock3, Crown, GraduationCap, Keyboard, Layers2, LockKeyhole, MessageSquare, Network, Sparkles, Table2, X } from "lucide-react";
+import { ArrowRight, Check, ClipboardCheck, Clock3, Crown, GraduationCap, Keyboard, Layers2, LoaderCircle, LockKeyhole, MessageSquare, Network, Sparkles, Table2, X } from "lucide-react";
 import { getTrack } from "../data/prompts.js";
 import { DATA_MODEL_TRACKS } from "./catalog.jsx";
 import { shortcutGroups } from "./shortcuts.js";
 import { useEscape } from "../components/ui.jsx";
 import { MotionModal, useClosableMotion } from "../motion/MotionModal.jsx";
 import { InterviewerPanel } from "./InterviewerPanel.jsx";
-import { ReviewPanel } from "./ReviewPanel.jsx";
+import { CommunicationSection, InterviewDebrief, ReviewPanel } from "./ReviewPanel.jsx";
 
 import { Link } from "../router.js";
 
 import { nuggetDebriefBody, nuggetDebriefInTurns } from "./nuggetInterview.js";
 
-function NuggetReviewPanel({ roundFinished, nugget, promptId, turns, onFinishRound }) {
-  const debrief = nuggetDebriefBody(turns ?? []);
-  if (!roundFinished && !debrief) {
+function NuggetReviewPanel({ roundFinished, nugget, promptId, drillReview, onReload, onFinishRound }) {
+  const ready = Boolean(drillReview?.debrief);
+  const fallbackReference = drillReview?.referenceFix ?? nuggetDebriefBody([]);
+  if (!ready && !fallbackReference) {
     return (
       <div className="interviewer-body interviewer-center">
-        <p className="interviewer-muted">Finish the incident conversation in the Interviewer tab. When the drill closes, your mini debrief appears here.</p>
+        <p className="interviewer-muted">Finish the incident conversation in the Interviewer tab. When the drill closes, your response analysis and debrief appear here.</p>
       </div>
     );
   }
   return (
-    <div className="interviewer-body" style={{ padding: "1rem 1.1rem" }}>
-      {debrief && (
-        <section className="review-card debrief" aria-label="Mini debrief">
-          <h3>Mini debrief</h3>
-          <p className="debrief-lede">{debrief}</p>
+    <div className="review-body">
+      <div className="review-card review-intro">
+        <span className="review-kicker"><Sparkles size={13} /> DRILL REVIEW</span>
+        <h3>How you handled this incident</h3>
+        <p>Here’s how clearly you explained yourself, what the interviewer credited on the fix, and the reference answer for this drill.</p>
+      </div>
+
+      {drillReview?.communicationPending && !drillReview.communication && (
+        <div className="review-card review-progress" role="status">
+          <LoaderCircle size={18} className="spin" />
+          <div><strong>Reviewing how you explained it…</strong><p>This usually takes a few seconds.</p></div>
+        </div>
+      )}
+
+      {drillReview?.communication && <CommunicationSection communication={drillReview.communication} />}
+
+      {drillReview?.debrief && <InterviewDebrief debrief={drillReview.debrief} />}
+
+      {fallbackReference && (
+        <section className="review-card debrief" aria-label="Reference fix">
+          <span className="review-kicker"><ClipboardCheck size={13} /> REFERENCE FIX</span>
+          <h3>What a strong answer includes</h3>
+          <p className="debrief-lede">{fallbackReference}</p>
         </section>
       )}
-      {!roundFinished && debrief && onFinishRound && (
-        <div className="modal-actions" style={{ marginTop: "1rem" }}>
+
+      {!roundFinished && ready && onFinishRound && (
+        <div className="modal-actions" style={{ marginTop: "0.25rem" }}>
           <button type="button" className="button button-dark" onClick={onFinishRound}>Finish round</button>
         </div>
       )}
+
       {roundFinished && (
         <>
-          <p className="interviewer-muted" style={{ marginTop: "1rem" }}>This drill is complete.</p>
-          <div className="modal-actions" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <p className="interviewer-muted" style={{ marginTop: "0.5rem" }}>This drill is complete.</p>
+          <div className="modal-actions" style={{ marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
             <Link className="button button-dark" to="/nuggets">Random nugget</Link>
             {promptId && <Link className="button button-outline" to={`/nuggets?q=${encodeURIComponent(promptId)}`}>More from this question</Link>}
             {promptId && <Link className="button button-outline" to={`/start/${promptId}`}>Full design round</Link>}
           </div>
         </>
+      )}
+
+      {!ready && onReload && (
+        <button type="button" className="button button-outline button-small" onClick={onReload}>Refresh review</button>
       )}
     </div>
   );
@@ -74,7 +99,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
       </div>
       {tab === "review"
         ? (sessionKind === "nugget"
-          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} turns={interview.turns} onFinishRound={onFinishRound} />
+          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} drillReview={interview.drillReview} onReload={interview.reload} onFinishRound={onFinishRound} />
           : <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />)
         : <InterviewerPanel sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} onFinishRound={onFinishRound} promptId={promptId} />}
     </aside>
