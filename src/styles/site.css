@@ -324,8 +324,8 @@
 
 /* Hero: the headline, then the round itself: interviewer on the left, canvas on the right. */
 .lp-hero { position: relative; isolation: isolate; padding-bottom: clamp(40px, 5vw, 72px); }
-/* A soft wash of the accent behind the question cards and a cooler one low on the left. */
-.lp-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse 48% 58% at 82% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%), radial-gradient(ellipse 40% 40% at 4% 62%, color-mix(in srgb, var(--t-teal) 10%, transparent), transparent 72%); }
+/* A soft wash of the accent behind the question cards. */
+.lp-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse 48% 58% at 82% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%); }
 /* Headline and supporting copy on the left; the question cards on the right, their top
    edge level with the headline. */
 .lp-hero-copy { padding-top: clamp(40px, 8vh, 88px); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: clamp(24px, 4vw, 64px); }
@@ -1034,7 +1034,7 @@
 .dot-ground .lib-hero::before {
   inset: 0;
   background-image: none;
-  background: radial-gradient(ellipse 48% 58% at 82% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%), radial-gradient(ellipse 40% 40% at 4% 62%, color-mix(in srgb, var(--t-teal) 10%, transparent), transparent 72%);
+  background: radial-gradient(ellipse 48% 58% at 82% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%);
   -webkit-mask-image: none;
   mask-image: none;
 }
