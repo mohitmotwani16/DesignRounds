@@ -197,9 +197,18 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
   const rows = await query("select * from ai_reviews where session_id = $1 and user_id = $2 order by created_at desc limit 20", [session.id, req.user.id]);
   const full = hasFullFeedback(req.user, session);
   // After a v3 round: what each agenda item got, and what a strong answer adds.
-  const roundDebrief = session.status === "completed"
-    ? await debrief(session.id, session.prompt_id).catch((error) => { console.error("[ai] debrief failed:", error.message); return null; })
-    : null;
+  let roundDebrief = null;
+  if (session.status === "completed") {
+    roundDebrief = await debrief(session.id, session.prompt_id).catch((error) => { console.error("[ai] debrief failed:", error.message); return null; });
+  } else if (session.session_kind === "nugget") {
+    const turns = await queryOne(
+      "select exists (select 1 from interview_turns where session_id = $1 and role = 'interviewer' and content like '%Quick debrief:%') as ready",
+      [session.id]
+    );
+    if (turns?.ready) {
+      roundDebrief = await debrief(session.id, session.prompt_id).catch(() => null);
+    }
+  }
   // Whether this round had an interview, and whether its realism rating is in yet.
   const interview = await queryOne(
     `select s.engine, exists (select 1 from interview_ratings r where r.session_id = s.session_id) as rated,

@@ -118,7 +118,7 @@ function LockedInterviewer({ interview, onShowReview }) {
 }
 
 import { Link } from "../router.js";
-import { nuggetDebriefInTurns } from "./nuggetInterview.js";
+import { nuggetDebriefInTurns, nuggetTurnHasDebrief, nuggetWrapLead } from "./nuggetInterview.js";
 
 function Conversation({ sessionKind, interview, roundFinished, selected, onClearSelected, onFocusNode, labelFor, onShowReview, onFinishRound, promptId }) {
   const { turns, state, allowance, pending, pendingAudio, outgoing, replyText, sendError } = interview;
@@ -197,7 +197,7 @@ function Conversation({ sessionKind, interview, roundFinished, selected, onClear
 
       <div className="interviewer-body interview-thread" ref={listRef} role="log" aria-relevant="additions" aria-label="Interview conversation">
         {v3 && state?.sessionKind !== "nugget" && !learnerSpoke && !roundFinished && <ModeChoice mode={state.mode} onChange={interview.setMode} />}
-        {turns.map((turn) => <Turn key={turn.id} turn={turn} isNugget={isNugget} onFocusNode={onFocusNode} labelFor={labelFor} onFeedback={interview.sendFeedback} />)}
+        {turns.map((turn) => <Turn key={turn.id} turn={turn} isNugget={isNugget} onFocusNode={onFocusNode} labelFor={labelFor} onFeedback={interview.sendFeedback} onShowReview={onShowReview} />)}
         {outgoing && (
           <div className="interview-turn learner">
             {outgoing.kind === "hint_request"
@@ -219,12 +219,15 @@ function Conversation({ sessionKind, interview, roundFinished, selected, onClear
       <div className="interviewer-compose">
         {outOfReplies && !debriefSent && !roundFinished ? (
           <div className="interview-ended">
-            <p>Replies are used up. Your mini debrief should appear shortly — check the Review tab when it&apos;s ready, then finish the round.</p>
+            <p>Replies are used up. Your drill review (how you explained it plus the reference fix) should appear shortly in the Review tab — we&apos;ll switch you there when it&apos;s ready.</p>
           </div>
         ) : debriefSent && !roundFinished ? (
           <div className="interview-ended">
-            <p>The drill debrief is above. Finish the round to save your diagram and close the interview.</p>
-            <button type="button" className="button button-dark button-small" onClick={onFinishRound}><CircleCheck size={14} /> Finish round</button>
+            <p>Your drill review is ready with feedback on how you explained the fix and what to study next.</p>
+            <div className="modal-actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+              <button type="button" className="button button-dark button-small" onClick={onShowReview}><ArrowRight size={14} /> See drill review</button>
+              <button type="button" className="button button-outline button-small" onClick={onFinishRound}><CircleCheck size={14} /> Finish round</button>
+            </div>
           </div>
         ) : roundFinished ? (
           <div className="interview-ended">
@@ -377,9 +380,11 @@ const FEEDBACK_REASONS = [
   ["other", "Something else"],
 ];
 
-function Turn({ turn, isNugget = false, onFocusNode, labelFor, onFeedback }) {
+function Turn({ turn, isNugget = false, onFocusNode, labelFor, onFeedback, onShowReview }) {
   const mine = turn.role === "learner";
   const noticed = !isNugget && (turn.trigger === "proactive" || (turn.trigger === "tick" && !QUIET_KINDS.has(turn.kind) && turn.kind !== "wrap_up"));
+  const debriefInChat = isNugget && !mine && nuggetTurnHasDebrief(turn.content);
+  const chatText = debriefInChat ? nuggetWrapLead(turn.content) : turn.content;
   return (
     <div className={`interview-turn ${mine ? "learner" : "interviewer"}${QUIET_KINDS.has(turn.kind) ? " quiet" : ""}`}>
       {!mine && (
@@ -393,7 +398,16 @@ function Turn({ turn, isNugget = false, onFocusNode, labelFor, onFeedback }) {
       )}
       {mine && turn.kind === "audio" ? <VoiceNote durationMs={turn.audio?.durationMs} />
         : mine && turn.kind === "hint_request" ? <p className="interview-hint-request"><Lightbulb size={13} /> {turn.content}</p>
-        : <p>{turn.content}</p>}
+        : (
+          <>
+            <p>{chatText}</p>
+            {debriefInChat && onShowReview && (
+              <button type="button" className="button button-outline button-small" style={{ marginTop: "0.45rem" }} onClick={onShowReview}>
+                Open drill review <ArrowRight size={13} />
+              </button>
+            )}
+          </>
+        )}
       {turn.nodeIds?.length > 0 && (
         <div className="review-node-chips">
           {turn.nodeIds.map((id) => <button key={id} onClick={() => onFocusNode(id)} title="Show on canvas">{labelFor(id)}</button>)}

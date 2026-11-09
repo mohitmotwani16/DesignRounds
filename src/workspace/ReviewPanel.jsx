@@ -160,7 +160,7 @@ export function ReviewPanel({ sessionId, roundFinished, onFocusNode, labelFor, p
 
       {roundFinished && data.interview && !data.interview.rated && <RealismRating sessionId={sessionId} onRated={load} />}
 
-      {roundFinished && data.debrief && <Debrief debrief={data.debrief} />}
+      {roundFinished && data.debrief && <InterviewDebrief debrief={data.debrief} />}
 
       {(roundFinished || succeeded.length > 0) && <p className="review-allowance">{allowanceText(allowance)}</p>}
     </div>
@@ -219,7 +219,7 @@ const DEBRIEF_STATUS = {
 
 // What each part of the interview got, after the round: quotes the interviewer noted,
 // what a strong answer adds, and where to read up.
-function Debrief({ debrief }) {
+export function InterviewDebrief({ debrief }) {
   const [open, setOpen] = useState(null);
   const areas = [...new Set(debrief.items.map((item) => item.area))];
   const covered = debrief.items.filter((item) => item.status === "answered").length;
@@ -517,7 +517,7 @@ function paceLabel(wordsPerMinute) {
 
 // How the learner explained themselves in the interview, judged separately from the
 // design. Delivery numbers (pace, fillers, pauses) come from spoken answers only.
-function CommunicationSection({ communication }) {
+export function CommunicationSection({ communication }) {
   const [ratingClass, ratingLabel] = COMMUNICATION_RATINGS[communication.rating] || COMMUNICATION_RATINGS.solid;
   const stats = communication.stats || {};
   const facts = [
