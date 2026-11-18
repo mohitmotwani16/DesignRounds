@@ -61,7 +61,7 @@ function mixPreferred(entries, prefer) {
 const normalize = (text) => ` ${text.toLowerCase().replace(/[^a-z0-9+#]+/g, " ").trim()} `;
 
 // What a card needs, plus a normalized search haystack. Built once.
-const catalog = prompts.map((prompt, order) => ({
+const catalog = prompts.filter((prompt) => !prompt.nuggetBasicsOnly).map((prompt, order) => ({
   order,
   haystack: normalize(`${prompt.title} ${prompt.description} ${prompt.category} ${getTrack(prompt.track).label} ${prompt.requirements?.join(" ") ?? ""} ${prompt.considerations.join(" ")} ${prompt.prerequisites?.join(" ") ?? ""} ${prompt.expectedOutcome ?? ""}`),
   card: {

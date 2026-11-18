@@ -9,6 +9,8 @@ import { afterResponse, HttpError, createLimiter, parse, route } from "../http.j
 import { deleteInterviewAudioForUser } from "../object-storage.js";
 import { assertHuman, networkKey, recordHumanCheck, turnstileRequired, turnstileSiteKey } from "../turnstile.js";
 import { planFor } from "./plans.js";
+import { claimGuestBasicsSessions } from "./nugget-basics/claim.js";
+import { GUEST_COOKIE, guestCookieOptions } from "./guest.js";
 
 const SESSION_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
@@ -424,8 +426,14 @@ identityRouter.post("/auth/verify-code", route(async (req, res) => {
   // The person signed in but will be asked to check again straight away.
   if (!sameNetwork) await recordHumanCheck(req, { action: "sign-in", outcome: "carry-over-missed", userId: user.id, email, detail: { method: "email", reason: "network-changed" } });
   await welcomeFirstLogin(user);
+  let guestBasics = null;
+  if (req.guestTokenHash) {
+    guestBasics = await claimGuestBasicsSessions(user.id, req.guestTokenHash);
+    res.clearCookie(GUEST_COOKIE, { ...guestCookieOptions(), maxAge: undefined });
+  }
   const body = { user: toPublicUser(user) };
   if (launchId) Object.assign(body, { launchId, humanValidUntil: humanValidUntil(new Date()) });
+  if (guestBasics?.claimed) body.guestBasicsClaimed = guestBasics.claimed;
   res.json(body);
 }));
 
@@ -558,6 +566,10 @@ identityRouter.get("/auth/google/callback", route(async (req, res) => {
     await recordHumanCheck(req, { action: "sign-in", outcome: "carry-over-missed", userId: user.id, email: user.email, detail: { method: "google", reason: grant ? "network-changed" : "no-grant" } });
   }
   await welcomeFirstLogin(user);
+  if (req.guestTokenHash) {
+    await claimGuestBasicsSessions(user.id, req.guestTokenHash);
+    res.clearCookie(GUEST_COOKIE, { ...guestCookieOptions(), maxAge: undefined });
+  }
   clearOAuth();
   res.clearCookie(HUMAN_GRANT_COOKIE, { ...grantCookieOptions(), maxAge: undefined });
   if (launchId) res.cookie(LAUNCH_COOKIE, launchId, launchCookieOptions());

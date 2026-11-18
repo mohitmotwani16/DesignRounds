@@ -189,9 +189,8 @@ function limitMessage(kind, allowance) {
 }
 
 export const reviewsRouter = express.Router();
-reviewsRouter.use(requireUser);
 
-reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
+reviewsRouter.get("/sessions/:sessionId/reviews", requireUser, route(async (req, res) => {
   const session = await ownedSession(req);
   await expireStale(db, session.id);
   const rows = await query("select * from ai_reviews where session_id = $1 and user_id = $2 order by created_at desc limit 20", [session.id, req.user.id]);
@@ -231,7 +230,7 @@ reviewsRouter.get("/sessions/:sessionId/reviews", route(async (req, res) => {
   });
 }));
 
-reviewsRouter.post("/sessions/:sessionId/reviews", route(async (req, res) => {
+reviewsRouter.post("/sessions/:sessionId/reviews", requireUser, route(async (req, res) => {
   const { requestId } = parse(requestBody, req.body);
   const session = await ownedSession(req);
   if (session.session_kind === "nugget") throw new HttpError(409, "NUGGET_NO_REVIEW", "Incident drills use the mini debrief in the interviewer chat, not a full review.");

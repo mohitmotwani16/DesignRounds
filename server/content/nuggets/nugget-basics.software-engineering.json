@@ -1,0 +1,2814 @@
+{
+  "promptId": "nugget-basics",
+  "packVersion": "basics-v1",
+  "nuggets": [
+    {
+      "id": "nugget-basics/software-engineering/app-server/easy",
+      "title": "App cannot keep up with traffic",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The app server CPU stays at one hundred percent while users see slow pages.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: app-server. Run more app server instances behind a load balancer."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "App server"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "App cannot keep up with traffic"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Run more app server instances behind a load balancer.",
+            "opener": "One app server handles everything. What is the simplest way to handle more users?",
+            "evidence": {
+              "strong": "Run more app server instances behind a load balancer.",
+              "adequate": "Names a reasonable fix direction related to app server.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What if each user must stick to the same server for their session?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Run more app server instances behind a load balancer."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "app-server",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/app-server/medium",
+      "title": "Deploy breaks running users",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "During deploy, active users get disconnected errors until the new version is fully up.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: app-server. Rolling deploy: add new instances, drain old ones, and health-check before taking traffic."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "App server"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Deploy breaks running users"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Rolling deploy: add new instances, drain old ones, and health-check before taking traffic.",
+            "opener": "You need to ship code without kicking everyone off. What approach helps?",
+            "evidence": {
+              "strong": "Rolling deploy: add new instances, drain old ones, and health-check before taking traffic.",
+              "adequate": "Names a reasonable fix direction related to app server.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you know a new instance is ready for traffic?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Rolling deploy: add new instances, drain old ones, and health-check before taking traffic."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "app-server",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/app-server/hard",
+      "title": "Heavy work blocks quick requests",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Small API calls time out when someone uploads a large file on the same server.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: app-server. Move heavy jobs to background workers or separate services so the API stays responsive."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "App server"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Heavy work blocks quick requests"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Move heavy jobs to background workers or separate services so the API stays responsive.",
+            "opener": "Quick and heavy work share one process. How do you protect fast requests?",
+            "evidence": {
+              "strong": "Move heavy jobs to background workers or separate services so the API stays responsive.",
+              "adequate": "Names a reasonable fix direction related to app server.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What happens if the worker queue backs up?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Move heavy jobs to background workers or separate services so the API stays responsive."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "app-server",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/database/easy",
+      "title": "Database cannot store more",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Inserts get slower each week. One database stores all rows.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: database. Split data across multiple databases (sharding) by a stable key."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Database"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Database cannot store more"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Split data across multiple databases (sharding) by a stable key.",
+            "opener": "Storage and write load grow on one database. What family of fix do you consider first?",
+            "evidence": {
+              "strong": "Split data across multiple databases (sharding) by a stable key.",
+              "adequate": "Names a reasonable fix direction related to database.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Name one thing you give up or complicate when you shard."
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Split data across multiple databases (sharding) by a stable key."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "database",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/database/medium",
+      "title": "Reads overwhelm writes",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "The database is fast for writes but read queries pile up and time out.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: database. Add read replicas and send read traffic to them; keep writes on the primary."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Database"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Reads overwhelm writes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Add read replicas and send read traffic to them; keep writes on the primary.",
+            "opener": "Writes are fine; reads are not. What do you add without splitting writes yet?",
+            "evidence": {
+              "strong": "Add read replicas and send read traffic to them; keep writes on the primary.",
+              "adequate": "Names a reasonable fix direction related to database.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Can replicas always return the latest write?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Add read replicas and send read traffic to them; keep writes on the primary."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "database",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/database/hard",
+      "title": "Split data, broken friendships",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "After sharding by user id, two friends on different shards see different feed updates.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: database. Co-locate strongly linked data on one shard, or use a small consistent store for cross-shard relationships and accept defined staleness elsewhere."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Database"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Split data, broken friendships"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Co-locate strongly linked data on one shard, or use a small consistent store for cross-shard relationships and accept defined staleness elsewhere.",
+            "opener": "You sharded for scale but cross-user views look wrong. What is one way to improve consistency?",
+            "evidence": {
+              "strong": "Co-locate strongly linked data on one shard, or use a small consistent store for cross-shard relationships and accept defined staleness elsewhere.",
+              "adequate": "Names a reasonable fix direction related to database.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When is eventual consistency acceptable for a social feed?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Co-locate strongly linked data on one shard, or use a small consistent store for cross-shard relationships and accept defined staleness elsewhere."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "database",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/cache/easy",
+      "title": "Database busy on every read",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Popular pages hit the database on every view.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: cache. A cache that stores frequently read values closer to the app."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Database busy on every read"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "A cache that stores frequently read values closer to the app.",
+            "opener": "Repeated reads cost a full database trip. What layer do you add?",
+            "evidence": {
+              "strong": "A cache that stores frequently read values closer to the app.",
+              "adequate": "Names a reasonable fix direction related to cache.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a cache miss?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A cache that stores frequently read values closer to the app."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "cache",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/cache/medium",
+      "title": "Price updates lag in UI",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Admins change a price but shoppers still see the old price for minutes.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: cache. Invalidate cache entries on write or use a short TTL for prices; read-through after update for critical keys."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Price updates lag in UI"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Invalidate cache entries on write or use a short TTL for prices; read-through after update for critical keys.",
+            "opener": "Cached prices outlive updates. How do you fix that?",
+            "evidence": {
+              "strong": "Invalidate cache entries on write or use a short TTL for prices; read-through after update for critical keys.",
+              "adequate": "Names a reasonable fix direction related to cache.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why is a long TTL risky for money-related data?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Invalidate cache entries on write or use a short TTL for prices; read-through after update for critical keys."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "cache",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/cache/hard",
+      "title": "Cache stampede on expiry",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "When a popular cache entry expires, the database spikes and the site stutters.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: cache. Request coalescing, jittered TTLs, or early background refresh before expiry."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Cache"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Cache stampede on expiry"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Request coalescing, jittered TTLs, or early background refresh before expiry.",
+            "opener": "Many clients miss at once when a hot key expires. What smooths that?",
+            "evidence": {
+              "strong": "Request coalescing, jittered TTLs, or early background refresh before expiry.",
+              "adequate": "Names a reasonable fix direction related to cache.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is thundering herd in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Request coalescing, jittered TTLs, or early background refresh before expiry."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "cache",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/load-balancer/easy",
+      "title": "One server takes all users",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Traffic spikes hit a single app server while others sit idle.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: load-balancer. A load balancer that distributes requests across healthy servers."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Load balancer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "One server takes all users"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "A load balancer that distributes requests across healthy servers.",
+            "opener": "Users land on one machine. What sits in front to spread them out?",
+            "evidence": {
+              "strong": "A load balancer that distributes requests across healthy servers.",
+              "adequate": "Names a reasonable fix direction related to load balancer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Does the load balancer run application code?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A load balancer that distributes requests across healthy servers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "load-balancer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/load-balancer/medium",
+      "title": "Bad server still gets traffic",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "One crashed server still receives requests until someone reboots it manually.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: load-balancer. Health checks; stop sending traffic to unhealthy targets automatically."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Load balancer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Bad server still gets traffic"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Health checks; stop sending traffic to unhealthy targets automatically.",
+            "opener": "Failed servers stay in rotation. What should the load balancer do?",
+            "evidence": {
+              "strong": "Health checks; stop sending traffic to unhealthy targets automatically.",
+              "adequate": "Names a reasonable fix direction related to load balancer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How often should health checks run?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Health checks; stop sending traffic to unhealthy targets automatically."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "load-balancer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/load-balancer/hard",
+      "title": "Uneven load with same round-robin",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Round-robin spreads count evenly but some requests are ten times heavier.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: load-balancer. Least-connections or latency-aware routing, or separate pools for heavy endpoints."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Load balancer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Uneven load with same round-robin"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Least-connections or latency-aware routing, or separate pools for heavy endpoints.",
+            "opener": "Equal request count does not mean equal load. What balancing idea helps?",
+            "evidence": {
+              "strong": "Least-connections or latency-aware routing, or separate pools for heavy endpoints.",
+              "adequate": "Names a reasonable fix direction related to load balancer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When would sticky sessions hurt balance?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Least-connections or latency-aware routing, or separate pools for heavy endpoints."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "load-balancer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/api-gateway/easy",
+      "title": "Clients talk to many services",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Mobile apps must know dozens of backend URLs and version paths.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: api-gateway. An API gateway that routes one public URL to the right internal service."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "API gateway"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Clients talk to many services"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "An API gateway that routes one public URL to the right internal service.",
+            "opener": "Clients juggle many backends. What single front door helps?",
+            "evidence": {
+              "strong": "An API gateway that routes one public URL to the right internal service.",
+              "adequate": "Names a reasonable fix direction related to api gateway.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What besides routing might a gateway do?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "An API gateway that routes one public URL to the right internal service."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "api-gateway",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/api-gateway/medium",
+      "title": "No auth at the edge",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Every microservice implements login checks differently; some forget checks entirely.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: api-gateway. Authenticate and authorize at the gateway (or shared middleware) before routing inward."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "API gateway"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "No auth at the edge"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Authenticate and authorize at the gateway (or shared middleware) before routing inward.",
+            "opener": "Auth logic is duplicated and inconsistent. Where do you centralize it?",
+            "evidence": {
+              "strong": "Authenticate and authorize at the gateway (or shared middleware) before routing inward.",
+              "adequate": "Names a reasonable fix direction related to api gateway.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What should still be checked inside the service?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Authenticate and authorize at the gateway (or shared middleware) before routing inward."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "api-gateway",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/api-gateway/hard",
+      "title": "One noisy tenant affects others",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "A single API key sends huge traffic and slows responses for everyone else.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: api-gateway. Per-tenant rate limits, quotas, and prioritization at the gateway."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "API gateway"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "One noisy tenant affects others"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Per-tenant rate limits, quotas, and prioritization at the gateway.",
+            "opener": "Shared gateway, one tenant hogs capacity. What controls do you add?",
+            "evidence": {
+              "strong": "Per-tenant rate limits, quotas, and prioritization at the gateway.",
+              "adequate": "Names a reasonable fix direction related to api gateway.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What if limits are too strict for a paying customer?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Per-tenant rate limits, quotas, and prioritization at the gateway."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "api-gateway",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/message-queue/easy",
+      "title": "Email sends block checkout",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Checkout waits until a receipt email finishes sending.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: message-queue. Publish an event to a queue and process email in a background consumer."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Message queue"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Email sends block checkout"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Publish an event to a queue and process email in a background consumer.",
+            "opener": "Slow side work blocks the main user path. What pattern decouples them?",
+            "evidence": {
+              "strong": "Publish an event to a queue and process email in a background consumer.",
+              "adequate": "Names a reasonable fix direction related to message queue.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What if the email worker is down?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Publish an event to a queue and process email in a background consumer."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "message-queue",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/message-queue/medium",
+      "title": "Messages processed twice",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Retries after failures sometimes create duplicate shipments.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: message-queue. Idempotent consumers with a unique id per message or dedupe store."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Message queue"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Messages processed twice"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Idempotent consumers with a unique id per message or dedupe store.",
+            "opener": "The queue delivers at-least-once. How do handlers stay safe?",
+            "evidence": {
+              "strong": "Idempotent consumers with a unique id per message or dedupe store.",
+              "adequate": "Names a reasonable fix direction related to message queue.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between at-most-once and at-least-once?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Idempotent consumers with a unique id per message or dedupe store."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "message-queue",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/message-queue/hard",
+      "title": "Strict order across all events",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Inventory updates must apply in order per product but products are numerous.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: message-queue. Partition the queue by product id so one partition keeps order for that product."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Message queue"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Strict order across all events"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Partition the queue by product id so one partition keeps order for that product.",
+            "opener": "You need order per product, not one global queue. How do you partition?",
+            "evidence": {
+              "strong": "Partition the queue by product id so one partition keeps order for that product.",
+              "adequate": "Names a reasonable fix direction related to message queue.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What breaks if one partition has a hot product?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Partition the queue by product id so one partition keeps order for that product."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "message-queue",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/object-storage/easy",
+      "title": "Huge files in the database",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Backups swell and queries slow down because images sit in database rows.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: object-storage. Object storage for files; database keeps metadata and a pointer."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Object storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Huge files in the database"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Object storage for files; database keeps metadata and a pointer.",
+            "opener": "Large blobs should not live in the primary database. Where do they go?",
+            "evidence": {
+              "strong": "Object storage for files; database keeps metadata and a pointer.",
+              "adequate": "Names a reasonable fix direction related to object storage.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What metadata do you still store in the database?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Object storage for files; database keeps metadata and a pointer."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "object-storage",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/object-storage/medium",
+      "title": "Upload fails midway",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Users re-upload multi-gigabyte files after any network blip.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: object-storage. Multipart upload with parts stored in object storage and resume using upload id."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Object storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Upload fails midway"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Multipart upload with parts stored in object storage and resume using upload id.",
+            "opener": "Large uploads need resumability. What capability helps?",
+            "evidence": {
+              "strong": "Multipart upload with parts stored in object storage and resume using upload id.",
+              "adequate": "Names a reasonable fix direction related to object storage.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Who tracks which parts finished?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Multipart upload with parts stored in object storage and resume using upload id."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "object-storage",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/object-storage/hard",
+      "title": "Hot object overloads one path",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "One viral video object is fetched millions of times from the same region.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: object-storage. CDN caching in front of object storage for public hot content."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Object storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Hot object overloads one path"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "CDN caching in front of object storage for public hot content.",
+            "opener": "Single object, massive read fan-out. What reduces load on origin?",
+            "evidence": {
+              "strong": "CDN caching in front of object storage for public hot content.",
+              "adequate": "Names a reasonable fix direction related to object storage.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When should objects stay private and skip CDN?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "CDN caching in front of object storage for public hot content."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "object-storage",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/search-index/easy",
+      "title": "SQL search is too slow",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Product search scans millions of rows and times out.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: search-index. A search index built for full-text or prefix queries."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Search index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "SQL search is too slow"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "A search index built for full-text or prefix queries.",
+            "opener": "Full table scans fail for search. What specialized system helps?",
+            "evidence": {
+              "strong": "A search index built for full-text or prefix queries.",
+              "adequate": "Names a reasonable fix direction related to search index.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Does the index hold the full product row?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A search index built for full-text or prefix queries."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "software-engineering",
+        "componentId": "search-index",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/search-index/medium",
+      "title": "Search results feel stale",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "New products appear in the catalog minutes before search finds them.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: search-index. Async index updates from change events or periodic refresh with bounded lag."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Search index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Search results feel stale"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Async index updates from change events or periodic refresh with bounded lag.",
+            "opener": "Writes land in the database but search lags. How do you close the gap?",
+            "evidence": {
+              "strong": "Async index updates from change events or periodic refresh with bounded lag.",
+              "adequate": "Names a reasonable fix direction related to search index.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What if indexing falls behind during a sale?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Async index updates from change events or periodic refresh with bounded lag."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "software-engineering",
+        "componentId": "search-index",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/software-engineering/search-index/hard",
+      "title": "Ranking needs fresh signals",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Pure text match ranks obscure items above popular ones.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: search-index. Combine inverted index retrieval with a ranking layer using popularity or ML scores."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Search index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Ranking needs fresh signals"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Combine inverted index retrieval with a ranking layer using popularity or ML scores.",
+            "opener": "You need relevance, not just match. What changes in the search path?",
+            "evidence": {
+              "strong": "Combine inverted index retrieval with a ranking layer using popularity or ML scores.",
+              "adequate": "Names a reasonable fix direction related to search index.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Where does ranking run: index or app?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Combine inverted index retrieval with a ranking layer using popularity or ML scores."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "software-engineering",
+        "componentId": "search-index",
+        "onboardingOrder": null
+      }
+    }
+  ]
+}

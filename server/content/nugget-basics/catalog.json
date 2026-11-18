@@ -1,0 +1,3744 @@
+{
+  "schemaVersion": 1,
+  "parentPromptId": "nugget-basics",
+  "productName": "Nugget-basics",
+  "locale": "en",
+  "meta": {
+    "onboardingTextOnlyCount": 5,
+    "matrixDrillCount": 168,
+    "totalDrillCount": 173,
+    "anonymousAccess": true,
+    "anonymousReview": "debrief_only",
+    "signedInReview": "full_drill_review",
+    "conductor": "full_with_probes",
+    "contentLanguage": "en-only-v1"
+  },
+  "tracks": [
+    {
+      "id": "software-engineering",
+      "components": [
+        {
+          "id": "app-server",
+          "label": "App server"
+        },
+        {
+          "id": "database",
+          "label": "Database"
+        },
+        {
+          "id": "cache",
+          "label": "Cache"
+        },
+        {
+          "id": "load-balancer",
+          "label": "Load balancer"
+        },
+        {
+          "id": "api-gateway",
+          "label": "API gateway"
+        },
+        {
+          "id": "message-queue",
+          "label": "Message queue"
+        },
+        {
+          "id": "object-storage",
+          "label": "Object storage"
+        },
+        {
+          "id": "search-index",
+          "label": "Search index"
+        }
+      ]
+    },
+    {
+      "id": "data-engineering",
+      "components": [
+        {
+          "id": "source-system",
+          "label": "Source system"
+        },
+        {
+          "id": "ingestion",
+          "label": "Ingestion"
+        },
+        {
+          "id": "stream-processor",
+          "label": "Stream processor"
+        },
+        {
+          "id": "warehouse",
+          "label": "Data warehouse"
+        },
+        {
+          "id": "data-lake",
+          "label": "Data lake"
+        },
+        {
+          "id": "orchestrator",
+          "label": "Orchestrator"
+        },
+        {
+          "id": "data-quality",
+          "label": "Data quality"
+        },
+        {
+          "id": "serving-layer",
+          "label": "Serving layer"
+        }
+      ]
+    },
+    {
+      "id": "machine-learning",
+      "components": [
+        {
+          "id": "training-data",
+          "label": "Training data"
+        },
+        {
+          "id": "feature-store",
+          "label": "Feature store"
+        },
+        {
+          "id": "training-jobs",
+          "label": "Training jobs"
+        },
+        {
+          "id": "model-registry",
+          "label": "Model registry"
+        },
+        {
+          "id": "model-serving",
+          "label": "Model serving"
+        },
+        {
+          "id": "online-features",
+          "label": "Online features"
+        },
+        {
+          "id": "monitoring",
+          "label": "Monitoring"
+        },
+        {
+          "id": "experimentation",
+          "label": "Experimentation"
+        }
+      ]
+    },
+    {
+      "id": "ai-engineering",
+      "components": [
+        {
+          "id": "llm-api",
+          "label": "LLM API"
+        },
+        {
+          "id": "prompt-router",
+          "label": "Prompt router"
+        },
+        {
+          "id": "retrieval-index",
+          "label": "Retrieval index"
+        },
+        {
+          "id": "context-assembler",
+          "label": "Context assembler"
+        },
+        {
+          "id": "tool-executor",
+          "label": "Tool executor"
+        },
+        {
+          "id": "guardrails",
+          "label": "Guardrails"
+        },
+        {
+          "id": "eval-harness",
+          "label": "Eval harness"
+        },
+        {
+          "id": "user-session-store",
+          "label": "User session store"
+        }
+      ]
+    },
+    {
+      "id": "platform-infrastructure",
+      "components": [
+        {
+          "id": "compute-runtime",
+          "label": "Compute runtime"
+        },
+        {
+          "id": "deployment-pipeline",
+          "label": "Deployment pipeline"
+        },
+        {
+          "id": "observability",
+          "label": "Observability"
+        },
+        {
+          "id": "service-discovery",
+          "label": "Service discovery"
+        },
+        {
+          "id": "secrets",
+          "label": "Secrets"
+        },
+        {
+          "id": "config-control",
+          "label": "Config control"
+        },
+        {
+          "id": "multi-region-routing",
+          "label": "Multi-region routing"
+        },
+        {
+          "id": "identity-access",
+          "label": "Identity & access"
+        }
+      ]
+    },
+    {
+      "id": "distributed-systems",
+      "components": [
+        {
+          "id": "single-node-limit",
+          "label": "Single-node limit"
+        },
+        {
+          "id": "replication",
+          "label": "Replication"
+        },
+        {
+          "id": "partitioning",
+          "label": "Partitioning"
+        },
+        {
+          "id": "caching-layer",
+          "label": "Caching layer"
+        },
+        {
+          "id": "message-bus",
+          "label": "Message bus"
+        },
+        {
+          "id": "consensus-coordination",
+          "label": "Consensus & coordination"
+        },
+        {
+          "id": "clock-ordering",
+          "label": "Clock & ordering"
+        },
+        {
+          "id": "failure-detection",
+          "label": "Failure detection"
+        }
+      ]
+    },
+    {
+      "id": "frontend-mobile",
+      "components": [
+        {
+          "id": "client-app",
+          "label": "Client app"
+        },
+        {
+          "id": "api-client",
+          "label": "API client"
+        },
+        {
+          "id": "local-storage",
+          "label": "Local storage"
+        },
+        {
+          "id": "cdn-edge",
+          "label": "CDN / edge"
+        },
+        {
+          "id": "realtime-channel",
+          "label": "Realtime channel"
+        },
+        {
+          "id": "auth-session",
+          "label": "Auth session"
+        },
+        {
+          "id": "offline-sync",
+          "label": "Offline sync"
+        },
+        {
+          "id": "client-performance",
+          "label": "Client performance"
+        }
+      ]
+    }
+  ],
+  "drills": [
+    {
+      "id": "nugget-basics/onboarding-1",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "load-balancer",
+      "componentLabel": "load balancer",
+      "difficulty": "onboarding",
+      "format": "text-only",
+      "onboardingOrder": 1,
+      "minutes": 2,
+      "title": "Too many users on one server",
+      "failureClass": "uneven-traffic",
+      "symptoms": "When lots of people use the site at the same time, only one server struggles and the rest stay quiet.",
+      "opener": "Traffic keeps hitting one place. What kind of change would spread the load?",
+      "referenceFix": "Put a load balancer in front of multiple app servers so requests spread across them.",
+      "probes": [
+        "What happens if one of those servers stops responding?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/onboarding-2",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "cache",
+      "componentLabel": "cache",
+      "difficulty": "onboarding",
+      "format": "text-only",
+      "onboardingOrder": 2,
+      "minutes": 2,
+      "title": "Database overloaded by reads",
+      "failureClass": "read-amplification",
+      "symptoms": "Every page view asks the database for the same popular data. The database stays busy even when traffic is normal.",
+      "opener": "Reads hammer the database. What do you add so common reads do not always hit the database?",
+      "referenceFix": "Add a cache in front of the database for frequently read data.",
+      "probes": [
+        "When should you not cache a value?"
+      ],
+      "mapsTo": "distributed-cache/ttl-sync-mass-eviction",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/onboarding-3",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "database",
+      "componentLabel": "database",
+      "difficulty": "onboarding",
+      "format": "text-only",
+      "onboardingOrder": 3,
+      "minutes": 2,
+      "title": "One database cannot grow anymore",
+      "failureClass": "capacity-limit",
+      "symptoms": "Saving new users and posts gets slower every month. One database holds everything and is running out of room.",
+      "opener": "One database cannot keep all the data. What approach splits the load?",
+      "referenceFix": "Shard or partition data across multiple databases using a key such as user id.",
+      "probes": [
+        "What kind of data should live on the same shard?"
+      ],
+      "mapsTo": "distributed-cache/mod-n-remap-storm",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/onboarding-4",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "cache",
+      "componentLabel": "cache",
+      "difficulty": "onboarding",
+      "format": "text-only",
+      "onboardingOrder": 4,
+      "minutes": 2,
+      "title": "Users see stale information",
+      "failureClass": "stale-reads",
+      "symptoms": "After someone updates their profile, friends still see the old name for several minutes.",
+      "opener": "Writes succeed but readers see old data. How do you tighten what readers see after an update?",
+      "referenceFix": "Invalidate or update the cache on write, shorten TTL, or read from the source of truth for that user right after they edit.",
+      "probes": [
+        "Can you keep every read as fast as a cache and still never show stale data?"
+      ],
+      "mapsTo": "distributed-cache/async-replica-serves-stale",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/onboarding-5",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "partitioning",
+      "componentLabel": "partitioning",
+      "difficulty": "onboarding",
+      "format": "text-only",
+      "onboardingOrder": 5,
+      "minutes": 2,
+      "title": "One hot item slows everything",
+      "failureClass": "hot-spot",
+      "symptoms": "A single popular product page gets almost all visits. That one part of the system melts while everything else looks fine.",
+      "opener": "One hot key or hot shard takes almost all traffic. What do you do?",
+      "referenceFix": "Spread hot reads with replication, local caching, or splitting the hot key; avoid sending all traffic to one partition.",
+      "probes": [
+        "Why does sharding alone not fix one extremely popular item?"
+      ],
+      "mapsTo": "distributed-cache/celebrity-key-melts-shard",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/app-server/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "app-server",
+      "componentLabel": "App server",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "App cannot keep up with traffic",
+      "symptoms": "The app server CPU stays at one hundred percent while users see slow pages.",
+      "opener": "One app server handles everything. What is the simplest way to handle more users?",
+      "referenceFix": "Run more app server instances behind a load balancer.",
+      "probes": [
+        "What if each user must stick to the same server for their session?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/app-server/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "app-server",
+      "componentLabel": "App server",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Deploy breaks running users",
+      "symptoms": "During deploy, active users get disconnected errors until the new version is fully up.",
+      "opener": "You need to ship code without kicking everyone off. What approach helps?",
+      "referenceFix": "Rolling deploy: add new instances, drain old ones, and health-check before taking traffic.",
+      "probes": [
+        "How do you know a new instance is ready for traffic?"
+      ],
+      "mapsTo": "deployment-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/app-server/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "app-server",
+      "componentLabel": "App server",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Heavy work blocks quick requests",
+      "symptoms": "Small API calls time out when someone uploads a large file on the same server.",
+      "opener": "Quick and heavy work share one process. How do you protect fast requests?",
+      "referenceFix": "Move heavy jobs to background workers or separate services so the API stays responsive.",
+      "probes": [
+        "What happens if the worker queue backs up?"
+      ],
+      "mapsTo": "task-scheduler",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/database/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "database",
+      "componentLabel": "Database",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Database cannot store more",
+      "symptoms": "Inserts get slower each week. One database stores all rows.",
+      "opener": "Storage and write load grow on one database. What family of fix do you consider first?",
+      "referenceFix": "Split data across multiple databases (sharding) by a stable key.",
+      "probes": [
+        "Name one thing you give up or complicate when you shard."
+      ],
+      "mapsTo": "geo-replicated-database",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/database/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "database",
+      "componentLabel": "Database",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Reads overwhelm writes",
+      "symptoms": "The database is fast for writes but read queries pile up and time out.",
+      "opener": "Writes are fine; reads are not. What do you add without splitting writes yet?",
+      "referenceFix": "Add read replicas and send read traffic to them; keep writes on the primary.",
+      "probes": [
+        "Can replicas always return the latest write?"
+      ],
+      "mapsTo": "distributed-cache/async-replica-serves-stale",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/database/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "database",
+      "componentLabel": "Database",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Split data, broken friendships",
+      "symptoms": "After sharding by user id, two friends on different shards see different feed updates.",
+      "opener": "You sharded for scale but cross-user views look wrong. What is one way to improve consistency?",
+      "referenceFix": "Co-locate strongly linked data on one shard, or use a small consistent store for cross-shard relationships and accept defined staleness elsewhere.",
+      "probes": [
+        "When is eventual consistency acceptable for a social feed?"
+      ],
+      "mapsTo": "news-feed",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/cache/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "cache",
+      "componentLabel": "Cache",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Database busy on every read",
+      "symptoms": "Popular pages hit the database on every view.",
+      "opener": "Repeated reads cost a full database trip. What layer do you add?",
+      "referenceFix": "A cache that stores frequently read values closer to the app.",
+      "probes": [
+        "What is a cache miss?"
+      ],
+      "mapsTo": "distributed-cache",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/cache/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "cache",
+      "componentLabel": "Cache",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Price updates lag in UI",
+      "symptoms": "Admins change a price but shoppers still see the old price for minutes.",
+      "opener": "Cached prices outlive updates. How do you fix that?",
+      "referenceFix": "Invalidate cache entries on write or use a short TTL for prices; read-through after update for critical keys.",
+      "probes": [
+        "Why is a long TTL risky for money-related data?"
+      ],
+      "mapsTo": "distributed-cache/async-replica-serves-stale",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/cache/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "cache",
+      "componentLabel": "Cache",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cache stampede on expiry",
+      "symptoms": "When a popular cache entry expires, the database spikes and the site stutters.",
+      "opener": "Many clients miss at once when a hot key expires. What smooths that?",
+      "referenceFix": "Request coalescing, jittered TTLs, or early background refresh before expiry.",
+      "probes": [
+        "What is thundering herd in one sentence?"
+      ],
+      "mapsTo": "distributed-cache/ttl-sync-mass-eviction",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/load-balancer/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "load-balancer",
+      "componentLabel": "Load balancer",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "One server takes all users",
+      "symptoms": "Traffic spikes hit a single app server while others sit idle.",
+      "opener": "Users land on one machine. What sits in front to spread them out?",
+      "referenceFix": "A load balancer that distributes requests across healthy servers.",
+      "probes": [
+        "Does the load balancer run application code?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/load-balancer/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "load-balancer",
+      "componentLabel": "Load balancer",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Bad server still gets traffic",
+      "symptoms": "One crashed server still receives requests until someone reboots it manually.",
+      "opener": "Failed servers stay in rotation. What should the load balancer do?",
+      "referenceFix": "Health checks; stop sending traffic to unhealthy targets automatically.",
+      "probes": [
+        "How often should health checks run?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/load-balancer/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "load-balancer",
+      "componentLabel": "Load balancer",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Uneven load with same round-robin",
+      "symptoms": "Round-robin spreads count evenly but some requests are ten times heavier.",
+      "opener": "Equal request count does not mean equal load. What balancing idea helps?",
+      "referenceFix": "Least-connections or latency-aware routing, or separate pools for heavy endpoints.",
+      "probes": [
+        "When would sticky sessions hurt balance?"
+      ],
+      "mapsTo": "api-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/api-gateway/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "api-gateway",
+      "componentLabel": "API gateway",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Clients talk to many services",
+      "symptoms": "Mobile apps must know dozens of backend URLs and version paths.",
+      "opener": "Clients juggle many backends. What single front door helps?",
+      "referenceFix": "An API gateway that routes one public URL to the right internal service.",
+      "probes": [
+        "What besides routing might a gateway do?"
+      ],
+      "mapsTo": "api-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/api-gateway/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "api-gateway",
+      "componentLabel": "API gateway",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "No auth at the edge",
+      "symptoms": "Every microservice implements login checks differently; some forget checks entirely.",
+      "opener": "Auth logic is duplicated and inconsistent. Where do you centralize it?",
+      "referenceFix": "Authenticate and authorize at the gateway (or shared middleware) before routing inward.",
+      "probes": [
+        "What should still be checked inside the service?"
+      ],
+      "mapsTo": "api-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/api-gateway/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "api-gateway",
+      "componentLabel": "API gateway",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "One noisy tenant affects others",
+      "symptoms": "A single API key sends huge traffic and slows responses for everyone else.",
+      "opener": "Shared gateway, one tenant hogs capacity. What controls do you add?",
+      "referenceFix": "Per-tenant rate limits, quotas, and prioritization at the gateway.",
+      "probes": [
+        "What if limits are too strict for a paying customer?"
+      ],
+      "mapsTo": "rate-limiter",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/message-queue/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "message-queue",
+      "componentLabel": "Message queue",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Email sends block checkout",
+      "symptoms": "Checkout waits until a receipt email finishes sending.",
+      "opener": "Slow side work blocks the main user path. What pattern decouples them?",
+      "referenceFix": "Publish an event to a queue and process email in a background consumer.",
+      "probes": [
+        "What if the email worker is down?"
+      ],
+      "mapsTo": "notification-service",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/message-queue/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "message-queue",
+      "componentLabel": "Message queue",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Messages processed twice",
+      "symptoms": "Retries after failures sometimes create duplicate shipments.",
+      "opener": "The queue delivers at-least-once. How do handlers stay safe?",
+      "referenceFix": "Idempotent consumers with a unique id per message or dedupe store.",
+      "probes": [
+        "What is the difference between at-most-once and at-least-once?"
+      ],
+      "mapsTo": "distributed-message-queue",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/message-queue/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "message-queue",
+      "componentLabel": "Message queue",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Strict order across all events",
+      "symptoms": "Inventory updates must apply in order per product but products are numerous.",
+      "opener": "You need order per product, not one global queue. How do you partition?",
+      "referenceFix": "Partition the queue by product id so one partition keeps order for that product.",
+      "probes": [
+        "What breaks if one partition has a hot product?"
+      ],
+      "mapsTo": "distributed-message-queue",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/object-storage/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "object-storage",
+      "componentLabel": "Object storage",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Huge files in the database",
+      "symptoms": "Backups swell and queries slow down because images sit in database rows.",
+      "opener": "Large blobs should not live in the primary database. Where do they go?",
+      "referenceFix": "Object storage for files; database keeps metadata and a pointer.",
+      "probes": [
+        "What metadata do you still store in the database?"
+      ],
+      "mapsTo": "file-storage",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/object-storage/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "object-storage",
+      "componentLabel": "Object storage",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Upload fails midway",
+      "symptoms": "Users re-upload multi-gigabyte files after any network blip.",
+      "opener": "Large uploads need resumability. What capability helps?",
+      "referenceFix": "Multipart upload with parts stored in object storage and resume using upload id.",
+      "probes": [
+        "Who tracks which parts finished?"
+      ],
+      "mapsTo": "file-storage",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/object-storage/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "object-storage",
+      "componentLabel": "Object storage",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Hot object overloads one path",
+      "symptoms": "One viral video object is fetched millions of times from the same region.",
+      "opener": "Single object, massive read fan-out. What reduces load on origin?",
+      "referenceFix": "CDN caching in front of object storage for public hot content.",
+      "probes": [
+        "When should objects stay private and skip CDN?"
+      ],
+      "mapsTo": "video-streaming",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/search-index/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "search-index",
+      "componentLabel": "Search index",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "SQL search is too slow",
+      "symptoms": "Product search scans millions of rows and times out.",
+      "opener": "Full table scans fail for search. What specialized system helps?",
+      "referenceFix": "A search index built for full-text or prefix queries.",
+      "probes": [
+        "Does the index hold the full product row?"
+      ],
+      "mapsTo": "autocomplete",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/search-index/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "search-index",
+      "componentLabel": "Search index",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Search results feel stale",
+      "symptoms": "New products appear in the catalog minutes before search finds them.",
+      "opener": "Writes land in the database but search lags. How do you close the gap?",
+      "referenceFix": "Async index updates from change events or periodic refresh with bounded lag.",
+      "probes": [
+        "What if indexing falls behind during a sale?"
+      ],
+      "mapsTo": "autocomplete",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/software-engineering/search-index/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "software-engineering",
+      "componentId": "search-index",
+      "componentLabel": "Search index",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Ranking needs fresh signals",
+      "symptoms": "Pure text match ranks obscure items above popular ones.",
+      "opener": "You need relevance, not just match. What changes in the search path?",
+      "referenceFix": "Combine inverted index retrieval with a ranking layer using popularity or ML scores.",
+      "probes": [
+        "Where does ranking run: index or app?"
+      ],
+      "mapsTo": "search-ranking",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/source-system/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "source-system",
+      "componentLabel": "Source system",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Reports missing yesterday's sales",
+      "symptoms": "The dashboard never shows data from the main store until someone runs a manual export.",
+      "opener": "Business data lives in a source app but analytics never sees it automatically. What connection is missing?",
+      "referenceFix": "Automated extraction: API, database replica, or change feed into your data pipeline.",
+      "probes": [
+        "Why avoid heavy queries on the production primary?"
+      ],
+      "mapsTo": "cdc-pipeline",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/source-system/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "source-system",
+      "componentLabel": "Source system",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Source schema changes break jobs",
+      "symptoms": "A renamed column stops nightly loads with no warning.",
+      "opener": "Upstream changes silently break ingestion. What practice reduces surprises?",
+      "referenceFix": "Schema contracts, versioned events, and alerts on incompatible changes.",
+      "probes": [
+        "Who owns the contract when two teams share an event?"
+      ],
+      "mapsTo": "clickstream",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/source-system/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "source-system",
+      "componentLabel": "Source system",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Some events never arrive",
+      "symptoms": "Finance totals are lower than the billing system with no clear pattern.",
+      "opener": "You suspect silent drops from the source. How do you detect and fix gaps?",
+      "referenceFix": "Reconciliation counts, idempotent ingestion with sequence ids, and backfill from durable source logs.",
+      "probes": [
+        "How often should reconciliation run?"
+      ],
+      "mapsTo": "payments-reconciliation",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/ingestion/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "ingestion",
+      "componentLabel": "Ingestion",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Lost clicks during spikes",
+      "symptoms": "Traffic spikes and some click events never show up in analytics.",
+      "opener": "Events disappear between the client and processing. What durable middle step helps?",
+      "referenceFix": "Buffer events in a durable log or queue before processing.",
+      "probes": [
+        "What if the consumer is slower than producers?"
+      ],
+      "mapsTo": "clickstream",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/ingestion/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "ingestion",
+      "componentLabel": "Ingestion",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Duplicate events inflate metrics",
+      "symptoms": "Retries after timeouts double-count purchases in reports.",
+      "opener": "The pipeline may see the same event twice. What property should processing have?",
+      "referenceFix": "Idempotent processing with event ids or dedupe keys.",
+      "probes": [
+        "Where do you store seen ids?"
+      ],
+      "mapsTo": "ad-click-aggregator/ad-click-sink-double-count",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/ingestion/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "ingestion",
+      "componentLabel": "Ingestion",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Late events skew daily totals",
+      "symptoms": "Events arriving hours late change yesterday's revenue after reports were sent.",
+      "opener": "Batch jobs close the day but data keeps arriving. What time semantics help?",
+      "referenceFix": "Process on event time with watermarks; allow recomputation or correction jobs for late data.",
+      "probes": [
+        "When is processing time acceptable instead?"
+      ],
+      "mapsTo": "realtime-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/stream-processor/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "stream-processor",
+      "componentLabel": "Stream processor",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Batch is too slow for alerts",
+      "symptoms": "Fraud alerts need to fire within seconds but jobs run hourly.",
+      "opener": "Hourly batch cannot meet real-time needs. What processing style fits?",
+      "referenceFix": "Stream processing that consumes events continuously and emits results quickly.",
+      "probes": [
+        "What is one downside of streams versus batch?"
+      ],
+      "mapsTo": "realtime-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/stream-processor/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "stream-processor",
+      "componentLabel": "Stream processor",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Windowed counts look wrong",
+      "symptoms": "Five-minute counts jump when the wall clock crosses bucket boundaries.",
+      "opener": "You need counts per sliding time window. What concept defines the window?",
+      "referenceFix": "Event-time windows with clear start and end; handle out-of-order events with allowed lateness.",
+      "probes": [
+        "What is a watermark in one sentence?"
+      ],
+      "mapsTo": "realtime-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/stream-processor/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "stream-processor",
+      "componentLabel": "Stream processor",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Stateful job fails mid-window",
+      "symptoms": "After a crash, duplicate counts appear until someone clears state manually.",
+      "opener": "Stateful streaming crashed. How do you recover counts correctly?",
+      "referenceFix": "Checkpointed state to durable storage and replay from the log with exactly-once or idempotent sinks.",
+      "probes": [
+        "What is the difference between at-least-once and exactly-once delivery?"
+      ],
+      "mapsTo": "ad-click-aggregator",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/warehouse/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "warehouse",
+      "componentLabel": "Data warehouse",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Analysts query production",
+      "symptoms": "Ad-hoc SQL on the live database slows checkout for customers.",
+      "opener": "Analytics should not hit production OLTP. Where should analysts query?",
+      "referenceFix": "Load data into a warehouse or replica built for analytical queries.",
+      "probes": [
+        "Why is columnar storage common in warehouses?"
+      ],
+      "mapsTo": "scd2-warehouse",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/warehouse/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "warehouse",
+      "componentLabel": "Data warehouse",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "History of customer changes",
+      "symptoms": "Reports need how a customer looked last quarter, not just today.",
+      "opener": "Dimension rows change but history matters. What modeling pattern helps?",
+      "referenceFix": "Slowly changing dimensions (Type 2) with effective dates and current-row flags.",
+      "probes": [
+        "What is a business key versus a surrogate key?"
+      ],
+      "mapsTo": "scd2-warehouse",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/warehouse/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "warehouse",
+      "componentLabel": "Data warehouse",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Two teams, different revenue numbers",
+      "symptoms": "Finance and product dashboards disagree on monthly revenue.",
+      "opener": "Same metric, two definitions. What org and technical fix reduces drift?",
+      "referenceFix": "Single curated metric layer in the warehouse with documented grain and ownership.",
+      "probes": [
+        "What is metric grain?"
+      ],
+      "mapsTo": "experimentation-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-lake/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "data-lake",
+      "componentLabel": "Data lake",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Raw files with no structure",
+      "symptoms": "Teams dump JSON and CSV files into storage but nobody can find datasets.",
+      "opener": "Cheap storage holds raw data. What catalog layer makes it usable?",
+      "referenceFix": "A metastore or catalog with dataset names, schema, and ownership.",
+      "probes": [
+        "What is the difference between lake and warehouse in one sentence?"
+      ],
+      "mapsTo": "lakehouse-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-lake/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "data-lake",
+      "componentLabel": "Data lake",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "PII scattered in raw files",
+      "symptoms": "Auditors find emails in unexpected buckets with open access.",
+      "opener": "Raw lake data includes sensitive fields. What controls belong on the lake?",
+      "referenceFix": "Classification, column masking, and access policies per dataset or zone.",
+      "probes": [
+        "When should PII never land in the lake?"
+      ],
+      "mapsTo": "gdpr-deletion",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-lake/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "data-lake",
+      "componentLabel": "Data lake",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Batch and stream same table",
+      "symptoms": "Streaming updates and nightly batch both write the same table and clash.",
+      "opener": "You want one table for batch and stream inputs. What architecture helps?",
+      "referenceFix": "Lakehouse pattern: ACID table format with streaming upserts plus batch compaction.",
+      "probes": [
+        "What problem does compaction solve?"
+      ],
+      "mapsTo": "lakehouse-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/orchestrator/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "orchestrator",
+      "componentLabel": "Orchestrator",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Manual job chaining",
+      "symptoms": "An operator runs job B only after texting that job A finished.",
+      "opener": "Pipelines depend on each other but run by hand. What system schedules them?",
+      "referenceFix": "A workflow orchestrator with dependencies and schedules.",
+      "probes": [
+        "What happens if job A fails?"
+      ],
+      "mapsTo": "etl-framework",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/orchestrator/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "orchestrator",
+      "componentLabel": "Orchestrator",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Backfill overlaps daily run",
+      "symptoms": "A backfill and the nightly job write the same partition twice.",
+      "opener": "Two runs target the same data window. How does orchestration prevent clashes?",
+      "referenceFix": "Exclusive locks or partition-level scheduling; idempotent writes per partition.",
+      "probes": [
+        "How do you safely rerun yesterday's job?"
+      ],
+      "mapsTo": "etl-framework",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/orchestrator/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "orchestrator",
+      "componentLabel": "Orchestrator",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "SLA missed with silent success",
+      "symptoms": "Jobs show green while downstream tables are empty.",
+      "opener": "Tasks succeed but outputs are wrong or missing. What beyond task status do you check?",
+      "referenceFix": "Data quality checks and SLA monitors on row counts, freshness, and key metrics after each step.",
+      "probes": [
+        "Who gets paged when freshness fails?"
+      ],
+      "mapsTo": "data-alerting",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-quality/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "data-quality",
+      "componentLabel": "Data quality",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Nulls break dashboards",
+      "symptoms": "Charts show blank slices because a required field is often null.",
+      "opener": "Bad values reach consumers. What process catches bad rows early?",
+      "referenceFix": "Data quality tests on nulls, ranges, and uniqueness before publishing datasets.",
+      "probes": [
+        "Should bad rows block the pipeline or quarantine?"
+      ],
+      "mapsTo": "data-quality",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-quality/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "data-quality",
+      "componentLabel": "Data quality",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Sudden row count drop",
+      "symptoms": "Today's table has half the rows of yesterday with no known change.",
+      "opener": "Volume anomalies need detection. What do you monitor?",
+      "referenceFix": "Volume and distribution checks with alerts on statistical deviation.",
+      "probes": [
+        "What is a false positive cost in alerting?"
+      ],
+      "mapsTo": "data-alerting",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-quality/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "data-quality",
+      "componentLabel": "Data quality",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Upstream lies about completeness",
+      "symptoms": "Source claims all events sent but your counts are low.",
+      "opener": "You cannot trust the source counter alone. How do you verify completeness?",
+      "referenceFix": "Cross-system reconciliation and lineage to compare source, ingest, and warehouse counts.",
+      "probes": [
+        "What artifact proves which system dropped data?"
+      ],
+      "mapsTo": "data-quality",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/serving-layer/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "serving-layer",
+      "componentLabel": "Serving layer",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Dashboard queries hammer warehouse",
+      "symptoms": "Every dashboard refresh runs heavy SQL on the warehouse and costs spike.",
+      "opener": "Many readers need the same aggregates. What layer serves them cheaply?",
+      "referenceFix": "Precomputed aggregates or a metrics store / OLAP cube for dashboards.",
+      "probes": [
+        "What do you lose when you preaggregate?"
+      ],
+      "mapsTo": "experimentation-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/serving-layer/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "serving-layer",
+      "componentLabel": "Serving layer",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Different apps, different SQL",
+      "symptoms": "Three apps embed different SQL and show conflicting KPIs.",
+      "opener": "Metric logic is duplicated in apps. Where should it live?",
+      "referenceFix": "A semantic layer or metrics API that defines KPIs once.",
+      "probes": [
+        "Who owns metric definitions?"
+      ],
+      "mapsTo": "metrics-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/data-engineering/serving-layer/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "data-engineering",
+      "componentId": "serving-layer",
+      "componentLabel": "Serving layer",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Near-real-time dashboards",
+      "symptoms": "Leaders want five-minute freshness but warehouse loads are hourly.",
+      "opener": "Warehouse is too slow for the UI. What dual path serves freshness?",
+      "referenceFix": "Stream aggregates into a serving store while warehouse remains source of truth for history.",
+      "probes": [
+        "How do you reconcile stream and batch totals?"
+      ],
+      "mapsTo": "realtime-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/training-data/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "training-data",
+      "componentLabel": "Training data",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Model trained on old behavior",
+      "symptoms": "The model works on last year's data but fails on current user behavior.",
+      "opener": "Training data no longer matches live traffic. What ongoing practice helps?",
+      "referenceFix": "Regular retraining on fresh labeled data from production or recent logs.",
+      "probes": [
+        "What if labels arrive late?"
+      ],
+      "mapsTo": "ad-click-prediction/stale-model-after-trend",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/training-data/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "training-data",
+      "componentLabel": "Training data",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Labels only from winners",
+      "symptoms": "Training uses clicks on shown items but not on items never shown.",
+      "opener": "Logged data reflects past decisions, not all options. What bias is that?",
+      "referenceFix": "Address selection bias with randomized logging, propensity scoring, or offline eval on unbiased slices.",
+      "probes": [
+        "What is logged bandit feedback?"
+      ],
+      "mapsTo": "recommendation-engine",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/training-data/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "training-data",
+      "componentLabel": "Training data",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Private data in training files",
+      "symptoms": "A shared training dump includes raw emails and phone numbers.",
+      "opener": "You must train without leaking PII. What pipeline changes help?",
+      "referenceFix": "Tokenize or drop PII at ingest, access controls, and audit who can export training sets.",
+      "probes": [
+        "When is synthetic data used instead?"
+      ],
+      "mapsTo": "fraud-data-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/feature-store/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "feature-store",
+      "componentLabel": "Feature store",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Train and serve different features",
+      "symptoms": "Offline accuracy is high but online predictions look wrong for the same users.",
+      "opener": "Training and serving use different feature code paths. What system unifies them?",
+      "referenceFix": "A feature store with shared definitions for offline training and online serving.",
+      "probes": [
+        "What is training-serving skew?"
+      ],
+      "mapsTo": "feature-store",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/feature-store/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "feature-store",
+      "componentLabel": "Feature store",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Point-in-time joins wrong",
+      "symptoms": "The model sees future data during training and looks amazing until deployment.",
+      "opener": "Features must match what was knowable at prediction time. What join rule matters?",
+      "referenceFix": "Point-in-time correct joins so each label only uses features available at that timestamp.",
+      "probes": [
+        "What is data leakage in one sentence?"
+      ],
+      "mapsTo": "feature-store",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/feature-store/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "feature-store",
+      "componentLabel": "Feature store",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Fresh features for fraud",
+      "symptoms": "Fraud model needs sub-second features but batch features are hours old.",
+      "opener": "Some features need low latency at request time. What serving path fits?",
+      "referenceFix": "Online feature store with low-latency lookups plus offline store for training parity.",
+      "probes": [
+        "What happens if online store lags behind stream?"
+      ],
+      "mapsTo": "online-fraud-model",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/training-jobs/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "training-jobs",
+      "componentLabel": "Training jobs",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "One big notebook trains everything",
+      "symptoms": "Only one engineer can run training on a laptop and it takes days.",
+      "opener": "Training does not scale on a laptop. What platform runs big jobs?",
+      "referenceFix": "Distributed training jobs on a cluster or managed training service.",
+      "probes": [
+        "What is a training job versus serving?"
+      ],
+      "mapsTo": "training-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/training-jobs/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "training-jobs",
+      "componentLabel": "Training jobs",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Job dies without checkpoint",
+      "symptoms": "A twenty-hour run fails at hour nineteen and restarts from zero.",
+      "opener": "Long jobs fail. What saves progress?",
+      "referenceFix": "Periodic checkpoints to durable storage and resume from last checkpoint.",
+      "probes": [
+        "What do checkpoints store?"
+      ],
+      "mapsTo": "training-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/training-jobs/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "training-jobs",
+      "componentLabel": "Training jobs",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "GPU cluster underutilized",
+      "symptoms": "Many small jobs queue while GPUs sit idle between tiny tasks.",
+      "opener": "Scheduling many experiments on shared GPUs needs what layer?",
+      "referenceFix": "A training scheduler with queues, gang scheduling, and packing jobs by resource fit.",
+      "probes": [
+        "What is a straggler in distributed training?"
+      ],
+      "mapsTo": "training-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/model-registry/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "model-registry",
+      "componentLabel": "Model registry",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Nobody knows which model is live",
+      "symptoms": "Three pickle files named final_v2_fixed are in a shared folder.",
+      "opener": "Models ship without clear versions. What central record helps?",
+      "referenceFix": "A model registry tracking version, metrics, and deployment status.",
+      "probes": [
+        "What metadata should every registered model have?"
+      ],
+      "mapsTo": "model-serving",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/model-registry/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "model-registry",
+      "componentLabel": "Model registry",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Rollback after bad deploy",
+      "symptoms": "A new model hurts revenue and engineers scramble to find the old weights.",
+      "opener": "Bad model in production. How do you return to the last good one quickly?",
+      "referenceFix": "Registry-promoted versions with one-click rollback to previous production artifact.",
+      "probes": [
+        "What test gates before promotion?"
+      ],
+      "mapsTo": "model-serving",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/model-registry/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "model-registry",
+      "componentLabel": "Model registry",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Regulated audit trail",
+      "symptoms": "Auditors ask which data and code produced a decision six months ago.",
+      "opener": "You need lineage from model to data and code. What do you store?",
+      "referenceFix": "Registry links to training data snapshot, code commit, metrics, and approvers.",
+      "probes": [
+        "How long must lineage be retained?"
+      ],
+      "mapsTo": "model-monitoring",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/model-serving/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "model-serving",
+      "componentLabel": "Model serving",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Predictions too slow",
+      "symptoms": "Adding ML inference makes API latency unacceptable.",
+      "opener": "Inference runs inline and blocks users. What serving setup helps latency?",
+      "referenceFix": "Dedicated model servers with batching or hardware acceleration separate from the API thread.",
+      "probes": [
+        "What is dynamic batching?"
+      ],
+      "mapsTo": "model-serving",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/model-serving/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "model-serving",
+      "componentLabel": "Model serving",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Canary new model",
+      "symptoms": "A new model might be better but you fear a full cutover.",
+      "opener": "You want limited traffic on the new model first. What release pattern?",
+      "referenceFix": "Canary or shadow traffic comparing new versus old before full promotion.",
+      "probes": [
+        "What metric triggers rollback?"
+      ],
+      "mapsTo": "model-serving",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/model-serving/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "model-serving",
+      "componentLabel": "Model serving",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Embedding lookup dominates latency",
+      "symptoms": "Neural forward pass is fast but embedding tables add hundreds of milliseconds.",
+      "opener": "Large embeddings do not fit one machine. What architecture helps?",
+      "referenceFix": "Sharded embedding servers or parameter servers with caching of hot embeddings.",
+      "probes": [
+        "What is a hot embedding id problem?"
+      ],
+      "mapsTo": "ad-click-prediction/embedding-hotshard-oom",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/online-features/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "online-features",
+      "componentLabel": "Online features",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Features computed in the request path",
+      "symptoms": "Each API call runs heavy SQL to build features and times out.",
+      "opener": "Features should not be computed from scratch on every request. What do you precompute?",
+      "referenceFix": "Precomputed online features updated by stream or periodic jobs, keyed by entity id.",
+      "probes": [
+        "What is an entity id example?"
+      ],
+      "mapsTo": "feature-store",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/online-features/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "online-features",
+      "componentLabel": "Online features",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Missing features at request time",
+      "symptoms": "Some users have no row in the online store and get default predictions.",
+      "opener": "Online features are missing for new users. What fallback is reasonable?",
+      "referenceFix": "Default feature vector, cold-start popularity features, or real-time counters with short TTL.",
+      "probes": [
+        "What is a cold-start user?"
+      ],
+      "mapsTo": "recommendation-engine",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/online-features/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "online-features",
+      "componentLabel": "Online features",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Feature staleness during incident",
+      "symptoms": "Counters freeze but requests keep flowing; fraud scores stay stale.",
+      "opener": "The online feature pipeline lags during an outage. What degrades safely?",
+      "referenceFix": "Detect staleness, fall back to simpler rules or cached features, and shed load if needed.",
+      "probes": [
+        "When should you block traffic instead of guessing?"
+      ],
+      "mapsTo": "online-fraud-model",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/monitoring/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "monitoring",
+      "componentLabel": "Monitoring",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Accuracy dropped silently",
+      "symptoms": "Business metrics fall before anyone notices model quality changed.",
+      "opener": "Model quality drifts without crashes. What do you watch?",
+      "referenceFix": "Monitor prediction distributions, error rates, and business KPIs tied to the model.",
+      "probes": [
+        "What is data drift in one sentence?"
+      ],
+      "mapsTo": "model-monitoring",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/monitoring/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "monitoring",
+      "componentLabel": "Monitoring",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "No labels for weeks",
+      "symptoms": "Ground truth labels arrive late so daily accuracy charts are empty.",
+      "opener": "Labels lag but you still need health signals. What proxies help?",
+      "referenceFix": "Proxy metrics, delayed backtests, and cohort stability checks until labels arrive.",
+      "probes": [
+        "What is a proxy metric example for click prediction?"
+      ],
+      "mapsTo": "model-monitoring",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/monitoring/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "monitoring",
+      "componentLabel": "Monitoring",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Subset of users hurt",
+      "symptoms": "Overall metrics look fine but one country sees terrible predictions.",
+      "opener": "Aggregate metrics hide slice failures. What monitoring addition helps?",
+      "referenceFix": "Per-slice dashboards and alerts on segments like region, platform, or cohort.",
+      "probes": [
+        "What is fairness versus slice monitoring?"
+      ],
+      "mapsTo": "model-monitoring",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/experimentation/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "experimentation",
+      "componentLabel": "Experimentation",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Ship model without comparison",
+      "symptoms": "A new ranker launches with no idea if it beats the old one.",
+      "opener": "You need evidence before full rollout. What method compares variants?",
+      "referenceFix": "A controlled experiment or A/B test with randomized assignment.",
+      "probes": [
+        "What is the control group?"
+      ],
+      "mapsTo": "feed-ranking",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/experimentation/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "experimentation",
+      "componentLabel": "Experimentation",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Peeking at results early",
+      "symptoms": "The team stops the test when numbers look good on day two.",
+      "opener": "Early stopping can fool you. What practice reduces false wins?",
+      "referenceFix": "Predefine sample size or duration and use proper sequential testing if you must peek.",
+      "probes": [
+        "What is p-hacking in plain terms?"
+      ],
+      "mapsTo": "experimentation-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/machine-learning/experimentation/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "machine-learning",
+      "componentId": "experimentation",
+      "componentLabel": "Experimentation",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Interference between users",
+      "symptoms": "A/B on social features: users in different arms interact and bias results.",
+      "opener": "User-level randomization leaks across groups. What unit do you randomize?",
+      "referenceFix": "Cluster or network-aware randomization, or switchback tests when interference is strong.",
+      "probes": [
+        "What is a switchback experiment?"
+      ],
+      "mapsTo": "people-you-may-know",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/llm-api/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "llm-api",
+      "componentLabel": "LLM API",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Answers feel random",
+      "symptoms": "The same question sometimes gives great answers and sometimes nonsense.",
+      "opener": "Output varies run to run. What simple control reduces randomness?",
+      "referenceFix": "Lower temperature and use a fixed system prompt; pin model version.",
+      "probes": [
+        "When would you want higher temperature?"
+      ],
+      "mapsTo": "llm-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/llm-api/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "llm-api",
+      "componentLabel": "LLM API",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Token costs explode",
+      "symptoms": "Long prompts to the model make the feature unprofitable.",
+      "opener": "Every call sends too much text. What reduces tokens per request?",
+      "referenceFix": "Summarize context, retrieve only relevant chunks, and cap max tokens.",
+      "probes": [
+        "What is context window in one sentence?"
+      ],
+      "mapsTo": "llm-inference-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/llm-api/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "llm-api",
+      "componentLabel": "LLM API",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Provider outage breaks product",
+      "symptoms": "When the LLM vendor is down, the entire assistant is offline.",
+      "opener": "Single vendor dependency. How do you stay available?",
+      "referenceFix": "Fallback model, queue and retry, or degraded mode with canned responses.",
+      "probes": [
+        "What must stay consistent across fallback models?"
+      ],
+      "mapsTo": "llm-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/prompt-router/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "prompt-router",
+      "componentLabel": "Prompt router",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "One prompt for every task",
+      "symptoms": "Summarization and coding share one giant prompt and both suffer.",
+      "opener": "Tasks differ but share one prompt template. What routes work better?",
+      "referenceFix": "Route requests to task-specific prompts or smaller specialist models.",
+      "probes": [
+        "What signal decides the route?"
+      ],
+      "mapsTo": "code-assistant",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/prompt-router/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "prompt-router",
+      "componentLabel": "Prompt router",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Small talk hits expensive model",
+      "symptoms": "Simple greetings call the largest model and inflate cost.",
+      "opener": "Not every message needs the biggest model. What classifies traffic first?",
+      "referenceFix": "A router or intent classifier sending easy queries to cheaper models.",
+      "probes": [
+        "What error if the router misclassifies?"
+      ],
+      "mapsTo": "llm-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/prompt-router/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "prompt-router",
+      "componentLabel": "Prompt router",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Tenant-specific policies",
+      "symptoms": "Enterprise customers need different tools and safety rules per account.",
+      "opener": "One global prompt cannot fit all tenants. Where do per-tenant rules live?",
+      "referenceFix": "Router loads tenant config for prompts, tools, and model allowlists at request time.",
+      "probes": [
+        "How do you test tenant configs safely?"
+      ],
+      "mapsTo": "support-ai-agent",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/retrieval-index/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "retrieval-index",
+      "componentLabel": "Retrieval index",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Model invents facts",
+      "symptoms": "The assistant states policies that do not exist in your docs.",
+      "opener": "The model guesses instead of citing sources. What pattern grounds answers?",
+      "referenceFix": "Retrieval-augmented generation: fetch relevant documents and include them in context.",
+      "probes": [
+        "What is a chunk in RAG?"
+      ],
+      "mapsTo": "rag-search",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/retrieval-index/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "retrieval-index",
+      "componentLabel": "Retrieval index",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Wrong docs retrieved",
+      "symptoms": "Answers cite irrelevant pages that happen to share keywords.",
+      "opener": "Keyword search pulls wrong passages. What improves relevance?",
+      "referenceFix": "Embeddings and semantic search, plus metadata filters.",
+      "probes": [
+        "When are keywords still useful?"
+      ],
+      "mapsTo": "document-ingestion",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/retrieval-index/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "retrieval-index",
+      "componentLabel": "Retrieval index",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Private docs leak across users",
+      "symptoms": "One user sees snippets from another user's upload in the answer.",
+      "opener": "Shared index, per-user permissions. How do you enforce access at query time?",
+      "referenceFix": "Filter retrieval by user or tenant ACL on every query; never trust the model to hide data.",
+      "probes": [
+        "Should you index private docs in a shared vector store?"
+      ],
+      "mapsTo": "ai-answer-engine",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/context-assembler/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "context-assembler",
+      "componentLabel": "Context assembler",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Context exceeds limit",
+      "symptoms": "Requests fail because pasted history is too long for the model.",
+      "opener": "Too much text for one call. What do you trim or summarize first?",
+      "referenceFix": "Summarize older turns and keep only recent messages plus retrieved docs within the token budget.",
+      "probes": [
+        "What should never be dropped from context?"
+      ],
+      "mapsTo": "chatgpt-assistant",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/context-assembler/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "context-assembler",
+      "componentLabel": "Context assembler",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Tools return huge JSON",
+      "symptoms": "An API tool dumps ten thousand rows into the prompt.",
+      "opener": "Tool output can blow the budget. Who shapes what the model sees?",
+      "referenceFix": "Context assembler truncates, summarizes, or schemas tool results before the LLM call.",
+      "probes": [
+        "What is lost when you truncate tool output?"
+      ],
+      "mapsTo": "voice-ai-agent",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/context-assembler/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "context-assembler",
+      "componentLabel": "Context assembler",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Conflicting sources in context",
+      "symptoms": "Retrieved docs disagree and the model blends wrong facts.",
+      "opener": "Multiple chunks contradict. How do you assemble trustworthy context?",
+      "referenceFix": "Rank by recency and authority, dedupe, and instruct the model to cite or abstain when unclear.",
+      "probes": [
+        "When should the model refuse to answer?"
+      ],
+      "mapsTo": "rag-search",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/tool-executor/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "tool-executor",
+      "componentLabel": "Tool executor",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Model only talks, never acts",
+      "symptoms": "Users ask to book meetings but the bot only explains how.",
+      "opener": "The product needs real actions, not just text. What connects the model to APIs?",
+      "referenceFix": "Tool calling: model selects defined tools and your executor runs them safely.",
+      "probes": [
+        "Who validates tool arguments?"
+      ],
+      "mapsTo": "support-ai-agent",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/tool-executor/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "tool-executor",
+      "componentLabel": "Tool executor",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Tool runs with bad args",
+      "symptoms": "The assistant deletes the wrong record when IDs are hallucinated.",
+      "opener": "Tools can mutate production data. What guard runs before execution?",
+      "referenceFix": "Validate schemas, confirm destructive actions, and use human approval for risky tools.",
+      "probes": [
+        "What is idempotency for a create tool?"
+      ],
+      "mapsTo": "voice-ai-agent",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/tool-executor/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "tool-executor",
+      "componentLabel": "Tool executor",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Long tool chains loop",
+      "symptoms": "The agent calls tools in circles until timeout.",
+      "opener": "Multi-step agents need limits. What stops runaway loops?",
+      "referenceFix": "Max steps, budget, duplicate detection, and explicit stop conditions.",
+      "probes": [
+        "When should the agent hand off to a human?"
+      ],
+      "mapsTo": "voice-ai-agent",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/guardrails/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "guardrails",
+      "componentLabel": "Guardrails",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Unsafe user content in prompts",
+      "symptoms": "Users paste instructions that make the bot ignore policies.",
+      "opener": "User text can override system rules. What layer resists that?",
+      "referenceFix": "Input and output guardrails: policy prompts, blocklists, and classifiers on messages.",
+      "probes": [
+        "What is prompt injection in one sentence?"
+      ],
+      "mapsTo": "content-moderation",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/guardrails/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "guardrails",
+      "componentLabel": "Guardrails",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "PII in model output",
+      "symptoms": "The bot sometimes repeats customer emails from context.",
+      "opener": "Responses must not leak sensitive fields. What checks run on output?",
+      "referenceFix": "Output filtering for PII patterns and redaction before showing users.",
+      "probes": [
+        "Should you redact input before the model too?"
+      ],
+      "mapsTo": "gdpr-deletion",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/guardrails/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "guardrails",
+      "componentLabel": "Guardrails",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Jailbreak on edge cases",
+      "symptoms": "Clever multilingual prompts bypass simple keyword filters.",
+      "opener": "Static blocklists fail. What deeper defense helps?",
+      "referenceFix": "Layered defenses: classifiers, constrained tool access, and monitoring with rapid rule updates.",
+      "probes": [
+        "Why is a single perfect filter unrealistic?"
+      ],
+      "mapsTo": "llm-eval-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/eval-harness/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "eval-harness",
+      "componentLabel": "Eval harness",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Ship prompt change blindly",
+      "symptoms": "A new prompt goes live with no comparison to the old one.",
+      "opener": "Prompt edits need measurement before release. What do you run offline?",
+      "referenceFix": "An evaluation set with expected behaviors and automatic scoring or human review.",
+      "probes": [
+        "What is a golden set?"
+      ],
+      "mapsTo": "llm-eval-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/eval-harness/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "eval-harness",
+      "componentLabel": "Eval harness",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Subjective quality hard to score",
+      "symptoms": "Automated checks pass but human readers hate the tone.",
+      "opener": "Numeric scores miss nuance. What eval mix helps?",
+      "referenceFix": "Combine LLM-as-judge with human rubric sampling on each release candidate.",
+      "probes": [
+        "When do you distrust LLM-as-judge?"
+      ],
+      "mapsTo": "llm-eval-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/eval-harness/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "eval-harness",
+      "componentLabel": "Eval harness",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Eval set rots",
+      "symptoms": "The product changed but benchmarks still test old features.",
+      "opener": "Stale evals give false confidence. How do you keep them current?",
+      "referenceFix": "Version eval sets with product, add regressions from production incidents, and review quarterly.",
+      "probes": [
+        "What is online versus offline eval?"
+      ],
+      "mapsTo": "llm-eval-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/user-session-store/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "user-session-store",
+      "componentLabel": "User session store",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Conversation resets every request",
+      "symptoms": "The bot forgets what the user said one message ago.",
+      "opener": "Chat needs memory across turns. Where is history stored?",
+      "referenceFix": "Session store keeping recent messages keyed by user or conversation id.",
+      "probes": [
+        "How long should sessions live?"
+      ],
+      "mapsTo": "chatgpt-assistant",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/user-session-store/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "user-session-store",
+      "componentLabel": "User session store",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Sessions lost on deploy",
+      "symptoms": "Every deploy wipes in-memory chats.",
+      "opener": "Memory lives only on one server. What persistence fixes that?",
+      "referenceFix": "External session store (database or cache) shared by all app instances.",
+      "probes": [
+        "Cache or database for sessions?"
+      ],
+      "mapsTo": "chat-system",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/ai-engineering/user-session-store/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "ai-engineering",
+      "componentId": "user-session-store",
+      "componentLabel": "User session store",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cross-device continue chat",
+      "symptoms": "Users start on phone and cannot continue on desktop.",
+      "opener": "Session must follow the authenticated user. What identifier ties devices?",
+      "referenceFix": "User-authenticated conversation id in durable storage, not just browser cookie on one device.",
+      "probes": [
+        "What privacy rules apply to stored chats?"
+      ],
+      "mapsTo": "chatgpt-assistant",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/compute-runtime/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "compute-runtime",
+      "componentLabel": "Compute runtime",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Manual server ssh deploys",
+      "symptoms": "Engineers ssh to production to copy new binaries.",
+      "opener": "Deploys are manual and error-prone. What platform pattern replaces ssh deploys?",
+      "referenceFix": "Immutable images or containers deployed through an automated pipeline.",
+      "probes": [
+        "Why avoid editing live servers in place?"
+      ],
+      "mapsTo": "deployment-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/compute-runtime/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "compute-runtime",
+      "componentLabel": "Compute runtime",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "No isolation between services",
+      "symptoms": "One service's memory leak takes down neighbors on the same host.",
+      "opener": "Processes share one VM without boundaries. What isolates them?",
+      "referenceFix": "Containers or separate instances with resource limits per service.",
+      "probes": [
+        "What is the difference between VM and container in one sentence?"
+      ],
+      "mapsTo": "service-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/compute-runtime/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "compute-runtime",
+      "componentLabel": "Compute runtime",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Autoscale too slow for spikes",
+      "symptoms": "Traffic doubles in one minute but new instances take ten minutes.",
+      "opener": "Scale-out lags the spike. What besides adding VMs helps?",
+      "referenceFix": "Pre-warmed capacity, faster scale policies, and queue or shed load at the edge during ramp.",
+      "probes": [
+        "What metric should autoscaler use: CPU or request rate?"
+      ],
+      "mapsTo": "metrics-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/deployment-pipeline/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "deployment-pipeline",
+      "componentLabel": "Deployment pipeline",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Prod differs from staging",
+      "symptoms": "Features work in staging but break in production config.",
+      "opener": "Environments drift. What practice keeps them aligned?",
+      "referenceFix": "Infrastructure as code and the same deploy pipeline promoting artifacts across stages.",
+      "probes": [
+        "What should never be hand-edited only in prod?"
+      ],
+      "mapsTo": "deployment-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/deployment-pipeline/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "deployment-pipeline",
+      "componentLabel": "Deployment pipeline",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Rollback takes hours",
+      "symptoms": "A bad release needs manual rebuild of old artifacts.",
+      "opener": "Rollback should be fast. What do you keep from each good release?",
+      "referenceFix": "Versioned immutable artifacts and one-step rollback to previous version.",
+      "probes": [
+        "What is blue-green deployment?"
+      ],
+      "mapsTo": "deployment-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/deployment-pipeline/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "deployment-pipeline",
+      "componentLabel": "Deployment pipeline",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Database migration with code",
+      "symptoms": "New code needs schema change; old code still runs during deploy.",
+      "opener": "Schema and code deploy at different speeds. What order avoids breakage?",
+      "referenceFix": "Expand-contract migrations: backward-compatible schema first, then code switch, then cleanup.",
+      "probes": [
+        "What is a breaking schema change example?"
+      ],
+      "mapsTo": "config-control-plane",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/observability/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "observability",
+      "componentLabel": "Observability",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Blind during outage",
+      "symptoms": "Users report errors but dashboards show green.",
+      "opener": "You cannot see failures. What three signal types do you collect?",
+      "referenceFix": "Metrics, logs, and traces with alerts on user-visible errors and SLOs.",
+      "probes": [
+        "Which signal helps find slow database queries?"
+      ],
+      "mapsTo": "metrics-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/observability/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "observability",
+      "componentLabel": "Observability",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Logs impossible to search",
+      "symptoms": "Millions of unstructured printf lines; finding one request id takes hours.",
+      "opener": "Logs lack structure. What format helps search and correlation?",
+      "referenceFix": "Structured logs with request ids propagated across services.",
+      "probes": [
+        "What is a trace id versus request id?"
+      ],
+      "mapsTo": "log-analytics",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/observability/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "observability",
+      "componentLabel": "Observability",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cardinality blows budget",
+      "symptoms": "A high-cardinality label on metrics crashes the monitoring bill.",
+      "opener": "Too many unique time series. What cardinality control helps?",
+      "referenceFix": "Limit labels, aggregate high-cardinality dimensions, and sample traces.",
+      "probes": [
+        "Why is user id a bad metric label?"
+      ],
+      "mapsTo": "metrics-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/service-discovery/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "service-discovery",
+      "componentLabel": "Service discovery",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Hardcoded IP addresses",
+      "symptoms": "Config files list database IPs that change after every failover.",
+      "opener": "IPs change. What lets clients find current endpoints?",
+      "referenceFix": "Service discovery with logical service names resolved to healthy instances.",
+      "probes": [
+        "Who registers a service when it starts?"
+      ],
+      "mapsTo": "service-discovery",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/service-discovery/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "service-discovery",
+      "componentLabel": "Service discovery",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Stale endpoints after crash",
+      "symptoms": "Clients keep calling a dead instance until config is edited.",
+      "opener": "Dead instances stay in the list. What updates the list?",
+      "referenceFix": "Health checks and short TTL on DNS or registry entries.",
+      "probes": [
+        "What is gossip versus central registry?"
+      ],
+      "mapsTo": "service-discovery",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/service-discovery/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "service-discovery",
+      "componentLabel": "Service discovery",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Split brain in registry",
+      "symptoms": "Two partitions disagree on which database is primary.",
+      "opener": "Network partition and two primaries. What prevents split brain?",
+      "referenceFix": "Quorum-based leader election or fencing so only one writable primary is recognized.",
+      "probes": [
+        "What is fencing in one sentence?"
+      ],
+      "mapsTo": "leader-election",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/secrets/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "secrets",
+      "componentLabel": "Secrets",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "API keys in git",
+      "symptoms": "Database passwords appear in the repository history.",
+      "opener": "Secrets in source control leak. Where should they live?",
+      "referenceFix": "A secrets manager or vault with injection at runtime, not in git.",
+      "probes": [
+        "What do you do after a secret was committed?"
+      ],
+      "mapsTo": "secrets-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/secrets/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "secrets",
+      "componentLabel": "Secrets",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Broad shared passwords",
+      "symptoms": "Every engineer uses the same production database password.",
+      "opener": "Shared creds cannot be revoked per person. What access model helps?",
+      "referenceFix": "Per-service identity, short-lived credentials, and role-based human access.",
+      "probes": [
+        "What is workload identity?"
+      ],
+      "mapsTo": "secrets-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/secrets/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "secrets",
+      "componentLabel": "Secrets",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Rotation without downtime",
+      "symptoms": "Rotating TLS certs breaks connections that cache the old one.",
+      "opener": "Secrets expire and must rotate. What rollout avoids outages?",
+      "referenceFix": "Dual-active credentials during overlap, gradual client refresh, and automated rotation with health checks.",
+      "probes": [
+        "How often should database passwords rotate?"
+      ],
+      "mapsTo": "secrets-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/config-control/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "config-control",
+      "componentLabel": "Config control",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Feature flag via ssh",
+      "symptoms": "Turning a feature on means editing a file on each server.",
+      "opener": "Configuration is scattered and manual. What central system toggles behavior?",
+      "referenceFix": "A configuration or feature flag service read by all instances.",
+      "probes": [
+        "What is the difference between config and secrets?"
+      ],
+      "mapsTo": "config-control-plane",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/config-control/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "config-control",
+      "componentLabel": "Config control",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Bad config takes down all regions",
+      "symptoms": "One typo in a shared config file breaks every region at once.",
+      "opener": "Global push of bad config. How do you limit blast radius?",
+      "referenceFix": "Staged rollout of config, validation before publish, and instant revert.",
+      "probes": [
+        "What is canary for config versus code?"
+      ],
+      "mapsTo": "config-control-plane",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/config-control/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "config-control",
+      "componentLabel": "Config control",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Config unavailable at startup",
+      "symptoms": "New pods crash because the config service is down during an incident.",
+      "opener": "Runtime depends on live config fetch. What fallback is safe?",
+      "referenceFix": "Bundled defaults plus cached last-known-good config with explicit staleness limits.",
+      "probes": [
+        "When is stale config dangerous?"
+      ],
+      "mapsTo": "mobile-release-flags",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/multi-region-routing/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "multi-region-routing",
+      "componentLabel": "Multi-region routing",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Single region outage",
+      "symptoms": "One data center fire and the whole product is offline.",
+      "opener": "One region is a single point of failure. What architecture spreads risk?",
+      "referenceFix": "Multi-region deployment with DNS or traffic manager routing to healthy regions.",
+      "probes": [
+        "What is RTO in one sentence?"
+      ],
+      "mapsTo": "multi-region",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/multi-region-routing/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "multi-region-routing",
+      "componentLabel": "Multi-region routing",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Users far from servers",
+      "symptoms": "European users see high latency because all traffic hits US East.",
+      "opener": "Geography hurts latency. What routes users closer?",
+      "referenceFix": "Geo DNS or anycast to the nearest healthy region.",
+      "probes": [
+        "Does multi-region always mean multi-write databases?"
+      ],
+      "mapsTo": "multi-region",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/multi-region-routing/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "multi-region-routing",
+      "componentLabel": "Multi-region routing",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Failover loses recent writes",
+      "symptoms": "Failover to a secondary region drops the last five minutes of orders.",
+      "opener": "You fail over fast but lose data. What trade-off do you document?",
+      "referenceFix": "Define RPO with async replication or synchronous cross-region writes where the business requires no loss.",
+      "probes": [
+        "What is RPO versus RTO?"
+      ],
+      "mapsTo": "geo-replicated-database",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/identity-access/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "identity-access",
+      "componentLabel": "Identity & access",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "No login on internal tools",
+      "symptoms": "Anyone on the office network can open admin panels.",
+      "opener": "Internal tools lack authentication. What is the minimum fix?",
+      "referenceFix": "Authenticate users and check authorization on every tool and API.",
+      "probes": [
+        "What is authentication versus authorization?"
+      ],
+      "mapsTo": "api-gateway",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/identity-access/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "identity-access",
+      "componentLabel": "Identity & access",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Service-to-service trust",
+      "symptoms": "Any service can call any other with no checks.",
+      "opener": "Microservices need mutual trust boundaries. What proves caller identity?",
+      "referenceFix": "mTLS or signed service tokens with policy on which service may call which.",
+      "probes": [
+        "Why not reuse user cookies between services?"
+      ],
+      "mapsTo": "secrets-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/platform-infrastructure/identity-access/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "platform-infrastructure",
+      "componentId": "identity-access",
+      "componentLabel": "Identity & access",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Tenant data cross-access",
+      "symptoms": "A bug lets one customer id read another tenant's records.",
+      "opener": "Shared app, separate tenants. What prevents cross-tenant reads?",
+      "referenceFix": "Tenant id on every query, row-level security, and tests that assert isolation.",
+      "probes": [
+        "Where should tenant checks live: app or database?"
+      ],
+      "mapsTo": "file-storage",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/single-node-limit/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "single-node-limit",
+      "componentLabel": "Single-node limit",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "One machine maxed out",
+      "symptoms": "CPU, disk, or network on one server hits its limit while demand grows.",
+      "opener": "Vertical scaling is exhausted. What is the fundamental next step?",
+      "referenceFix": "Split work across multiple nodes (scale out) instead of one bigger machine.",
+      "probes": [
+        "What problems appear when you have many nodes?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/single-node-limit/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "single-node-limit",
+      "componentLabel": "Single-node limit",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Shared disk bottleneck",
+      "symptoms": "Many app servers fight over one attached disk.",
+      "opener": "Compute scaled but storage did not. What decouples them?",
+      "referenceFix": "Network-attached or distributed storage so compute nodes do not share one local disk.",
+      "probes": [
+        "What latency trade-off does remote storage add?"
+      ],
+      "mapsTo": "file-storage",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/single-node-limit/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "single-node-limit",
+      "componentLabel": "Single-node limit",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Stateful service hard to scale",
+      "symptoms": "The component keeps local session state so extra instances do not help.",
+      "opener": "State sticks to one process. What two approaches enable scale?",
+      "referenceFix": "Externalize state to a shared store or shard state so each instance owns a slice.",
+      "probes": [
+        "What is sticky session versus shared session store?"
+      ],
+      "mapsTo": "chat-system",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/replication/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "replication",
+      "componentLabel": "Replication",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Data lost when disk dies",
+      "symptoms": "A single copy of data disappears with one hardware failure.",
+      "opener": "One copy is not enough. What basic pattern adds safety?",
+      "referenceFix": "Replicate data to additional nodes or disks.",
+      "probes": [
+        "Does replication always mean faster reads?"
+      ],
+      "mapsTo": "geo-replicated-database",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/replication/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "replication",
+      "componentLabel": "Replication",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Replica lags behind primary",
+      "symptoms": "Reads from a replica show data several seconds old.",
+      "opener": "Replicas trail the primary. What consistency choice are you making?",
+      "referenceFix": "Accept eventual consistency for those reads or route critical reads to the primary.",
+      "probes": [
+        "What is asynchronous replication?"
+      ],
+      "mapsTo": "distributed-cache/async-replica-serves-stale",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/replication/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "replication",
+      "componentLabel": "Replication",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Primary fails during write",
+      "symptoms": "Primary crashes before replicas acknowledge a payment write.",
+      "opener": "Failure during replication. What guarantees do you promise users?",
+      "referenceFix": "Choose sync replication for no-loss paths or accept possible loss with async plus reconciliation.",
+      "probes": [
+        "What is a quorum write?"
+      ],
+      "mapsTo": "payment-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/partitioning/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "partitioning",
+      "componentLabel": "Partitioning",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Table too large for one node",
+      "symptoms": "Indexes no longer fit on one machine.",
+      "opener": "Data exceeds one node. What splits it?",
+      "referenceFix": "Partition or shard data by a key across nodes.",
+      "probes": [
+        "What makes a good shard key?"
+      ],
+      "mapsTo": "distributed-cache/mod-n-remap-storm",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/partitioning/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "partitioning",
+      "componentLabel": "Partitioning",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Skewed shard load",
+      "symptoms": "One shard holds most keys because the key choice was poor.",
+      "opener": "Shards exist but load is uneven. What fixes skew?",
+      "referenceFix": "Salting hot keys, better key design, or split hot partitions.",
+      "probes": [
+        "What is a hot partition?"
+      ],
+      "mapsTo": "distributed-cache/celebrity-key-melts-shard",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/partitioning/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "partitioning",
+      "componentLabel": "Partitioning",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cross-shard query",
+      "symptoms": "Report needs rows from every shard and is too slow.",
+      "opener": "Global queries on sharded data hurt. What architecture avoids scatter-gather?",
+      "referenceFix": "Denormalized aggregates, secondary index service, or warehouse fed by change stream.",
+      "probes": [
+        "When is scatter-gather acceptable?"
+      ],
+      "mapsTo": "news-feed",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/caching-layer/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "caching-layer",
+      "componentLabel": "Caching layer",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Repeat reads overload backend",
+      "symptoms": "The same keys are read thousands of times per second.",
+      "opener": "Repeated reads hit the origin. What intermediate layer helps?",
+      "referenceFix": "A distributed cache in front of the data source.",
+      "probes": [
+        "What is cache hit ratio?"
+      ],
+      "mapsTo": "distributed-cache",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/caching-layer/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "caching-layer",
+      "componentLabel": "Caching layer",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cache invalidation unclear",
+      "symptoms": "Writers update the database but readers keep seeing cached values.",
+      "opener": "Cache and source disagree. How do writers notify readers?",
+      "referenceFix": "Invalidate or update cache on write; use TTL as a safety net.",
+      "probes": [
+        "What is write-through versus cache-aside?"
+      ],
+      "mapsTo": "distributed-cache",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/caching-layer/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "caching-layer",
+      "componentLabel": "Caching layer",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cache cluster membership stale",
+      "symptoms": "Clients route to a dead cache node for a minute after it crashes.",
+      "opener": "Topology changes but clients have old view. What updates membership?",
+      "referenceFix": "Gossip or coordination service with health checks and fast removal of failed nodes.",
+      "probes": [
+        "What happens to keys on a failed cache node?"
+      ],
+      "mapsTo": "distributed-cache/ghost-node-receives-traffic",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/message-bus/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "message-bus",
+      "componentLabel": "Message bus",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Tight coupling between services",
+      "symptoms": "Service A calls B synchronously and fails when B is slow.",
+      "opener": "Direct sync calls amplify failures. What decouples them?",
+      "referenceFix": "An asynchronous message bus between producer and consumer.",
+      "probes": [
+        "What does the producer do after publishing?"
+      ],
+      "mapsTo": "distributed-message-queue",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/message-bus/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "message-bus",
+      "componentLabel": "Message bus",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Consumer cannot keep up",
+      "symptoms": "Queue depth grows for hours during peaks.",
+      "opener": "Producers outpace consumers. What scales processing?",
+      "referenceFix": "More consumer instances with partitioned topics for parallel work.",
+      "probes": [
+        "What is consumer lag?"
+      ],
+      "mapsTo": "notification-service",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/message-bus/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "message-bus",
+      "componentLabel": "Message bus",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Ordering versus scale",
+      "symptoms": "Global order is required but one partition cannot handle volume.",
+      "opener": "You need order only within a key, not globally. How do you partition?",
+      "referenceFix": "Keyed partitioning so order holds per partition while many partitions scale.",
+      "probes": [
+        "When do you need total order?"
+      ],
+      "mapsTo": "distributed-message-queue",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/consensus-coordination/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "consensus-coordination",
+      "componentLabel": "Consensus & coordination",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Two nodes think they are leader",
+      "symptoms": "Both accept writes during a network glitch.",
+      "opener": "Multiple nodes claim authority. What process picks one leader?",
+      "referenceFix": "Leader election or consensus so only one writable leader is valid.",
+      "probes": [
+        "What is split brain?"
+      ],
+      "mapsTo": "leader-election",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/consensus-coordination/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "consensus-coordination",
+      "componentLabel": "Consensus & coordination",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Manual failover",
+      "symptoms": "On-call runs scripts to promote a replica during outages.",
+      "opener": "Failover is slow and human-dependent. What automates it safely?",
+      "referenceFix": "Automated failover with quorum and fencing to prevent dual writers.",
+      "probes": [
+        "What is fencing?"
+      ],
+      "mapsTo": "leader-election",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/consensus-coordination/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "consensus-coordination",
+      "componentLabel": "Consensus & coordination",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Coordination service overload",
+      "symptoms": "Every client watches the same znode and the coordination cluster melts.",
+      "opener": "Central coordination became a bottleneck. What reduces chatter?",
+      "referenceFix": "Local caching with version stamps, batch updates, and avoid hot global keys.",
+      "probes": [
+        "When is etcd or ZooKeeper the wrong tool?"
+      ],
+      "mapsTo": "distributed-lock-service",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/clock-ordering/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "clock-ordering",
+      "componentLabel": "Clock & ordering",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Events out of order",
+      "symptoms": "Messages arrive in a different order than they were sent.",
+      "opener": "Order is not guaranteed on the network. What does the consumer assume?",
+      "referenceFix": "Design for reordering: sequence numbers, idempotent handlers, or per-key ordering.",
+      "probes": [
+        "What is causal order in one sentence?"
+      ],
+      "mapsTo": "chat-system",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/clock-ordering/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "clock-ordering",
+      "componentLabel": "Clock & ordering",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Last-write-wins surprises",
+      "symptoms": "Two editors save; the earlier save overwrites the newer one.",
+      "opener": "Wall-clock timestamps pick winners poorly. What ordering helps?",
+      "referenceFix": "Version vectors, logical clocks, or CRDTs instead of naive timestamps.",
+      "probes": [
+        "Why are unsynchronized clocks risky?"
+      ],
+      "mapsTo": "collaborative-editor",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/clock-ordering/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "clock-ordering",
+      "componentLabel": "Clock & ordering",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Global transaction across services",
+      "symptoms": "Two databases must commit together but one is slow.",
+      "opener": "Two-phase commit is fragile at scale. What pattern avoids global transactions?",
+      "referenceFix": "Sagas with compensating actions and eventual consistency between services.",
+      "probes": [
+        "What is a compensating transaction?"
+      ],
+      "mapsTo": "payment-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/failure-detection/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "failure-detection",
+      "componentLabel": "Failure detection",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Slow node treated as healthy",
+      "symptoms": "A server responds slowly but health checks still pass.",
+      "opener": "Liveness checks miss partial failure. What signal also matters?",
+      "referenceFix": "Latency and error-rate checks, not just TCP reachability.",
+      "probes": [
+        "What is the difference between liveness and readiness?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/failure-detection/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "failure-detection",
+      "componentLabel": "Failure detection",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Flapping alerts",
+      "symptoms": "A node bounces between healthy and unhealthy every few seconds.",
+      "opener": "Aggressive detection causes churn. What stabilizes decisions?",
+      "referenceFix": "Hysteresis, consecutive failure thresholds, and cooldown before marking healthy.",
+      "probes": [
+        "What is gossip failure detection?"
+      ],
+      "mapsTo": "distributed-cache/ghost-node-receives-traffic",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/distributed-systems/failure-detection/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "distributed-systems",
+      "componentId": "failure-detection",
+      "componentLabel": "Failure detection",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Cascading failure",
+      "symptoms": "One slow dependency causes all threads to block and the caller fails too.",
+      "opener": "Failures spread upstream. What stops the cascade?",
+      "referenceFix": "Timeouts, bulkheads, circuit breakers, and load shedding.",
+      "probes": [
+        "What does a circuit breaker open mean?"
+      ],
+      "mapsTo": "rate-limiter",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-app/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "client-app",
+      "componentLabel": "Client app",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Huge bundle slow on mobile",
+      "symptoms": "First load takes ten seconds on phones.",
+      "opener": "Users download too much JavaScript up front. What loading strategy helps?",
+      "referenceFix": "Code splitting and lazy load non-critical routes or features.",
+      "probes": [
+        "What is the critical path for first paint?"
+      ],
+      "mapsTo": "image-feed-client",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-app/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "client-app",
+      "componentLabel": "Client app",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Janky scroll with long lists",
+      "symptoms": "Feed with thousands of items stutters while scrolling.",
+      "opener": "Rendering every row hurts performance. What UI pattern helps?",
+      "referenceFix": "Virtualized lists that render only visible rows.",
+      "probes": [
+        "What is DOM node cost in a long list?"
+      ],
+      "mapsTo": "news-feed",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-app/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "client-app",
+      "componentLabel": "Client app",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Memory grows until crash",
+      "symptoms": "Leaving the app open for an hour on low-RAM devices crashes it.",
+      "opener": "Client memory leaks or unbounded caches. What practices limit growth?",
+      "referenceFix": "Evict off-screen data, unsubscribe listeners, and cap in-memory caches.",
+      "probes": [
+        "How do you profile memory on mobile?"
+      ],
+      "mapsTo": "image-feed-client",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/api-client/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "api-client",
+      "componentLabel": "API client",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Duplicate API calls",
+      "symptoms": "Every component fetch loads the same user profile.",
+      "opener": "Many components repeat the same request. What centralizes fetching?",
+      "referenceFix": "Shared data layer or query cache with one fetch per key.",
+      "probes": [
+        "What is request deduplication?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/api-client/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "api-client",
+      "componentLabel": "API client",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "No retry on flaky network",
+      "symptoms": "A single timeout shows a permanent error until manual refresh.",
+      "opener": "Mobile networks fail often. What client behavior recovers?",
+      "referenceFix": "Retries with backoff for idempotent reads and clear retry UI for users.",
+      "probes": [
+        "When should POST not retry automatically?"
+      ],
+      "mapsTo": "offline-first-sync",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/api-client/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "api-client",
+      "componentLabel": "API client",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Thundering herd on reconnect",
+      "symptoms": "When the app regains network, thousands of clients refetch everything at once.",
+      "opener": "Reconnect storms the API. What client-side smoothing helps?",
+      "referenceFix": "Jittered refresh, incremental sync since last cursor, and prioritize visible screen data.",
+      "probes": [
+        "What is ETag useful for?"
+      ],
+      "mapsTo": "offline-first-sync",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/local-storage/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "local-storage",
+      "componentLabel": "Local storage",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Data gone after refresh",
+      "symptoms": "Draft text disappears when the user closes the tab.",
+      "opener": "In-memory state is lost. Where on the device can you persist drafts?",
+      "referenceFix": "Local storage or IndexedDB for drafts and light client cache.",
+      "probes": [
+        "What should not store secrets in local storage?"
+      ],
+      "mapsTo": "collaborative-editor",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/local-storage/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "local-storage",
+      "componentLabel": "Local storage",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Storage quota exceeded",
+      "symptoms": "Caching images locally eventually throws quota errors.",
+      "opener": "Device storage is limited. How do you manage cached bytes?",
+      "referenceFix": "LRU eviction, size limits, and store only metadata or thumbnails when large.",
+      "probes": [
+        "What is the difference between session and persistent storage?"
+      ],
+      "mapsTo": "file-storage",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/local-storage/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "local-storage",
+      "componentLabel": "Local storage",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Sensitive data on shared device",
+      "symptoms": "Logout leaves readable tokens in browser storage on a family tablet.",
+      "opener": "Shared devices need strict cleanup. What logout behavior is required?",
+      "referenceFix": "Clear tokens and sensitive cache on logout; prefer httpOnly cookies for session where possible.",
+      "probes": [
+        "Why is localStorage risky for tokens?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/cdn-edge/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "cdn-edge",
+      "componentLabel": "CDN / edge",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Assets slow far from origin",
+      "symptoms": "Users in Asia wait on a US-hosted static bundle.",
+      "opener": "Distance to one origin hurts load time. What caches static files nearer users?",
+      "referenceFix": "A CDN that caches static assets at edge locations.",
+      "probes": [
+        "What content should not go on a public CDN?"
+      ],
+      "mapsTo": "video-streaming",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/cdn-edge/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "cdn-edge",
+      "componentLabel": "CDN / edge",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Stale JS after deploy",
+      "symptoms": "Users run old JavaScript until hard refresh.",
+      "opener": "CDN and browsers cache old bundles. What cache busting helps?",
+      "referenceFix": "Fingerprinted filenames or cache headers with short HTML cache and long immutable assets.",
+      "probes": [
+        "What is immutable cache-control?"
+      ],
+      "mapsTo": "mobile-release-flags",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/cdn-edge/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "cdn-edge",
+      "componentLabel": "CDN / edge",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Personalized content at edge",
+      "symptoms": "CDN caches a page with one user's name for everyone.",
+      "opener": "HTML varies per user but CDN assumes static. What split helps?",
+      "referenceFix": "Cache only static shell at edge; personalize via client-side or edge functions with vary headers.",
+      "probes": [
+        "What is edge SSR versus client render?"
+      ],
+      "mapsTo": "micro-frontend-platform",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/realtime-channel/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "realtime-channel",
+      "componentLabel": "Realtime channel",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Polling hammers the server",
+      "symptoms": "The app asks for new messages every second per user.",
+      "opener": "Polling wastes resources. What connection model pushes updates?",
+      "referenceFix": "WebSockets or server-sent events for server-pushed updates.",
+      "probes": [
+        "When is polling still acceptable?"
+      ],
+      "mapsTo": "chat-system",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/realtime-channel/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "realtime-channel",
+      "componentLabel": "Realtime channel",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Reconnect loses messages",
+      "symptoms": "After network blip, the chat misses messages until reload.",
+      "opener": "Live connection drops. How does the client catch up?",
+      "referenceFix": "Resume with last seen sequence id and backfill missed events from the server.",
+      "probes": [
+        "What is a heartbeat for?"
+      ],
+      "mapsTo": "chat-system",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/realtime-channel/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "realtime-channel",
+      "componentLabel": "Realtime channel",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Millions of open sockets",
+      "symptoms": "Connection count limits cap concurrent users on one chat cluster.",
+      "opener": "Too many persistent connections on few nodes. What scales fan-out?",
+      "referenceFix": "Connection sharding, regional gateways, and pub-sub fan-out to connection servers.",
+      "probes": [
+        "What is the difference between gateway and chat service?"
+      ],
+      "mapsTo": "chat-system",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/auth-session/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "auth-session",
+      "componentLabel": "Auth session",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Login on every page",
+      "symptoms": "Users re-enter password when navigating between tabs.",
+      "opener": "Auth should persist across pages. What does the client store after login?",
+      "referenceFix": "A session token or cookie validated on each request until expiry.",
+      "probes": [
+        "Where should refresh tokens live on mobile?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/auth-session/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "auth-session",
+      "componentLabel": "Auth session",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Token theft via XSS",
+      "symptoms": "Stolen JavaScript-readable tokens allow account takeover.",
+      "opener": "XSS can read client tokens. What storage reduces impact?",
+      "referenceFix": "HttpOnly secure cookies for session where possible and strict CSP against XSS.",
+      "probes": [
+        "What is CSP in one sentence?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/auth-session/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "auth-session",
+      "componentLabel": "Auth session",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Long-lived sessions on stolen device",
+      "symptoms": "A stolen phone stays logged in for months.",
+      "opener": "Sessions outlive device loss. What limits exposure?",
+      "referenceFix": "Short access tokens, refresh rotation, remote logout, and biometric re-auth for sensitive actions.",
+      "probes": [
+        "What is refresh token rotation?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/offline-sync/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "offline-sync",
+      "componentLabel": "Offline sync",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Blank screen offline",
+      "symptoms": "Airplane mode shows only an error page.",
+      "opener": "No network should not mean no UI. What do you cache on device?",
+      "referenceFix": "Cache last-known content and critical assets for offline read.",
+      "probes": [
+        "What is a service worker role?"
+      ],
+      "mapsTo": "offline-first-sync",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/offline-sync/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "offline-sync",
+      "componentLabel": "Offline sync",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Edits lost when back online",
+      "symptoms": "User edits offline but sync overwrites with server copy.",
+      "opener": "Offline edits conflict with server state. What merge strategy helps?",
+      "referenceFix": "Queue local changes with timestamps or CRDTs and merge on sync with user resolution if needed.",
+      "probes": [
+        "What is last-write-wins risk offline?"
+      ],
+      "mapsTo": "offline-first-sync",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/offline-sync/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "offline-sync",
+      "componentLabel": "Offline sync",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Two devices edit same doc",
+      "symptoms": "Phone and laptop both offline edit; both sync and text is garbled.",
+      "opener": "Concurrent offline edits on two devices. What convergence model?",
+      "referenceFix": "CRDT or operational transform with document id and sync service merging versions.",
+      "probes": [
+        "When do you force the user to pick a version?"
+      ],
+      "mapsTo": "collaborative-editor",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-performance/easy",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "client-performance",
+      "componentLabel": "Client performance",
+      "difficulty": "easy",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 2,
+      "title": "Layout shifts on load",
+      "symptoms": "Images load late and buttons jump under the user's finger.",
+      "opener": "Content moves after paint. What layout practice stabilizes UI?",
+      "referenceFix": "Reserve space for images and ads with known aspect ratios and skeleton placeholders.",
+      "probes": [
+        "What is CLS?"
+      ],
+      "mapsTo": "image-feed-client",
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-performance/medium",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "client-performance",
+      "componentLabel": "Client performance",
+      "difficulty": "medium",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Main thread blocked",
+      "symptoms": "Taps feel delayed while heavy JSON parsing runs.",
+      "opener": "Big work blocks UI thread. What moves work off the critical path?",
+      "referenceFix": "Web workers or chunked processing and defer non-urgent work.",
+      "probes": [
+        "What is the difference between microtask and worker?"
+      ],
+      "mapsTo": null,
+      "locale": "en"
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-performance/hard",
+      "parentPromptId": "nugget-basics",
+      "track": "frontend-mobile",
+      "componentId": "client-performance",
+      "componentLabel": "Client performance",
+      "difficulty": "hard",
+      "format": "diagram",
+      "onboardingOrder": null,
+      "minutes": 3,
+      "title": "Low-end Android struggle",
+      "symptoms": "Same React app is smooth on flagship phones and unusable on budget devices.",
+      "opener": "One bundle targets all devices. What adaptive strategy helps?",
+      "referenceFix": "Reduce features on low memory devices, lighter bundles, and performance budgets per tier.",
+      "probes": [
+        "What metrics define a performance budget?"
+      ],
+      "mapsTo": "image-feed-client",
+      "locale": "en"
+    }
+  ]
+}

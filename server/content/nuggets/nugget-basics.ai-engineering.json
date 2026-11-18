@@ -1,0 +1,2814 @@
+{
+  "promptId": "nugget-basics",
+  "packVersion": "basics-v1",
+  "nuggets": [
+    {
+      "id": "nugget-basics/ai-engineering/llm-api/easy",
+      "title": "Answers feel random",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The same question sometimes gives great answers and sometimes nonsense.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: llm-api. Lower temperature and use a fixed system prompt; pin model version."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "LLM API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Answers feel random"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Lower temperature and use a fixed system prompt; pin model version.",
+            "opener": "Output varies run to run. What simple control reduces randomness?",
+            "evidence": {
+              "strong": "Lower temperature and use a fixed system prompt; pin model version.",
+              "adequate": "Names a reasonable fix direction related to llm api.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When would you want higher temperature?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Lower temperature and use a fixed system prompt; pin model version."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "llm-api",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/llm-api/medium",
+      "title": "Token costs explode",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Long prompts to the model make the feature unprofitable.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: llm-api. Summarize context, retrieve only relevant chunks, and cap max tokens."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "LLM API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Token costs explode"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Summarize context, retrieve only relevant chunks, and cap max tokens.",
+            "opener": "Every call sends too much text. What reduces tokens per request?",
+            "evidence": {
+              "strong": "Summarize context, retrieve only relevant chunks, and cap max tokens.",
+              "adequate": "Names a reasonable fix direction related to llm api.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is context window in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Summarize context, retrieve only relevant chunks, and cap max tokens."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "llm-api",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/llm-api/hard",
+      "title": "Provider outage breaks product",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "When the LLM vendor is down, the entire assistant is offline.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: llm-api. Fallback model, queue and retry, or degraded mode with canned responses."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "LLM API"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Provider outage breaks product"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Fallback model, queue and retry, or degraded mode with canned responses.",
+            "opener": "Single vendor dependency. How do you stay available?",
+            "evidence": {
+              "strong": "Fallback model, queue and retry, or degraded mode with canned responses.",
+              "adequate": "Names a reasonable fix direction related to llm api.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What must stay consistent across fallback models?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Fallback model, queue and retry, or degraded mode with canned responses."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "llm-api",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/prompt-router/easy",
+      "title": "One prompt for every task",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Summarization and coding share one giant prompt and both suffer.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: prompt-router. Route requests to task-specific prompts or smaller specialist models."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Prompt router"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "One prompt for every task"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Route requests to task-specific prompts or smaller specialist models.",
+            "opener": "Tasks differ but share one prompt template. What routes work better?",
+            "evidence": {
+              "strong": "Route requests to task-specific prompts or smaller specialist models.",
+              "adequate": "Names a reasonable fix direction related to prompt router.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What signal decides the route?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Route requests to task-specific prompts or smaller specialist models."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "prompt-router",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/prompt-router/medium",
+      "title": "Small talk hits expensive model",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Simple greetings call the largest model and inflate cost.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: prompt-router. A router or intent classifier sending easy queries to cheaper models."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Prompt router"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Small talk hits expensive model"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "A router or intent classifier sending easy queries to cheaper models.",
+            "opener": "Not every message needs the biggest model. What classifies traffic first?",
+            "evidence": {
+              "strong": "A router or intent classifier sending easy queries to cheaper models.",
+              "adequate": "Names a reasonable fix direction related to prompt router.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What error if the router misclassifies?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A router or intent classifier sending easy queries to cheaper models."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "prompt-router",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/prompt-router/hard",
+      "title": "Tenant-specific policies",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Enterprise customers need different tools and safety rules per account.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: prompt-router. Router loads tenant config for prompts, tools, and model allowlists at request time."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Prompt router"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Tenant-specific policies"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Router loads tenant config for prompts, tools, and model allowlists at request time.",
+            "opener": "One global prompt cannot fit all tenants. Where do per-tenant rules live?",
+            "evidence": {
+              "strong": "Router loads tenant config for prompts, tools, and model allowlists at request time.",
+              "adequate": "Names a reasonable fix direction related to prompt router.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you test tenant configs safely?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Router loads tenant config for prompts, tools, and model allowlists at request time."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "prompt-router",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/retrieval-index/easy",
+      "title": "Model invents facts",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The assistant states policies that do not exist in your docs.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: retrieval-index. Retrieval-augmented generation: fetch relevant documents and include them in context."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Retrieval index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Model invents facts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Retrieval-augmented generation: fetch relevant documents and include them in context.",
+            "opener": "The model guesses instead of citing sources. What pattern grounds answers?",
+            "evidence": {
+              "strong": "Retrieval-augmented generation: fetch relevant documents and include them in context.",
+              "adequate": "Names a reasonable fix direction related to retrieval index.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a chunk in RAG?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Retrieval-augmented generation: fetch relevant documents and include them in context."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "retrieval-index",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/retrieval-index/medium",
+      "title": "Wrong docs retrieved",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Answers cite irrelevant pages that happen to share keywords.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: retrieval-index. Embeddings and semantic search, plus metadata filters."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Retrieval index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Wrong docs retrieved"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Embeddings and semantic search, plus metadata filters.",
+            "opener": "Keyword search pulls wrong passages. What improves relevance?",
+            "evidence": {
+              "strong": "Embeddings and semantic search, plus metadata filters.",
+              "adequate": "Names a reasonable fix direction related to retrieval index.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When are keywords still useful?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Embeddings and semantic search, plus metadata filters."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "retrieval-index",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/retrieval-index/hard",
+      "title": "Private docs leak across users",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "One user sees snippets from another user's upload in the answer.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: retrieval-index. Filter retrieval by user or tenant ACL on every query; never trust the model to hide data."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Retrieval index"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Private docs leak across users"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Filter retrieval by user or tenant ACL on every query; never trust the model to hide data.",
+            "opener": "Shared index, per-user permissions. How do you enforce access at query time?",
+            "evidence": {
+              "strong": "Filter retrieval by user or tenant ACL on every query; never trust the model to hide data.",
+              "adequate": "Names a reasonable fix direction related to retrieval index.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Should you index private docs in a shared vector store?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Filter retrieval by user or tenant ACL on every query; never trust the model to hide data."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "retrieval-index",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/context-assembler/easy",
+      "title": "Context exceeds limit",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Requests fail because pasted history is too long for the model.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: context-assembler. Summarize older turns and keep only recent messages plus retrieved docs within the token budget."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Context assembler"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Context exceeds limit"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Summarize older turns and keep only recent messages plus retrieved docs within the token budget.",
+            "opener": "Too much text for one call. What do you trim or summarize first?",
+            "evidence": {
+              "strong": "Summarize older turns and keep only recent messages plus retrieved docs within the token budget.",
+              "adequate": "Names a reasonable fix direction related to context assembler.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What should never be dropped from context?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Summarize older turns and keep only recent messages plus retrieved docs within the token budget."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "context-assembler",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/context-assembler/medium",
+      "title": "Tools return huge JSON",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "An API tool dumps ten thousand rows into the prompt.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: context-assembler. Context assembler truncates, summarizes, or schemas tool results before the LLM call."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Context assembler"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Tools return huge JSON"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Context assembler truncates, summarizes, or schemas tool results before the LLM call.",
+            "opener": "Tool output can blow the budget. Who shapes what the model sees?",
+            "evidence": {
+              "strong": "Context assembler truncates, summarizes, or schemas tool results before the LLM call.",
+              "adequate": "Names a reasonable fix direction related to context assembler.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is lost when you truncate tool output?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Context assembler truncates, summarizes, or schemas tool results before the LLM call."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "context-assembler",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/context-assembler/hard",
+      "title": "Conflicting sources in context",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Retrieved docs disagree and the model blends wrong facts.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: context-assembler. Rank by recency and authority, dedupe, and instruct the model to cite or abstain when unclear."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Context assembler"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Conflicting sources in context"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Rank by recency and authority, dedupe, and instruct the model to cite or abstain when unclear.",
+            "opener": "Multiple chunks contradict. How do you assemble trustworthy context?",
+            "evidence": {
+              "strong": "Rank by recency and authority, dedupe, and instruct the model to cite or abstain when unclear.",
+              "adequate": "Names a reasonable fix direction related to context assembler.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When should the model refuse to answer?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Rank by recency and authority, dedupe, and instruct the model to cite or abstain when unclear."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "context-assembler",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/tool-executor/easy",
+      "title": "Model only talks, never acts",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Users ask to book meetings but the bot only explains how.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: tool-executor. Tool calling: model selects defined tools and your executor runs them safely."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Tool executor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Model only talks, never acts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Tool calling: model selects defined tools and your executor runs them safely.",
+            "opener": "The product needs real actions, not just text. What connects the model to APIs?",
+            "evidence": {
+              "strong": "Tool calling: model selects defined tools and your executor runs them safely.",
+              "adequate": "Names a reasonable fix direction related to tool executor.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Who validates tool arguments?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Tool calling: model selects defined tools and your executor runs them safely."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "tool-executor",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/tool-executor/medium",
+      "title": "Tool runs with bad args",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "The assistant deletes the wrong record when IDs are hallucinated.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: tool-executor. Validate schemas, confirm destructive actions, and use human approval for risky tools."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Tool executor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Tool runs with bad args"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Validate schemas, confirm destructive actions, and use human approval for risky tools.",
+            "opener": "Tools can mutate production data. What guard runs before execution?",
+            "evidence": {
+              "strong": "Validate schemas, confirm destructive actions, and use human approval for risky tools.",
+              "adequate": "Names a reasonable fix direction related to tool executor.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is idempotency for a create tool?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Validate schemas, confirm destructive actions, and use human approval for risky tools."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "tool-executor",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/tool-executor/hard",
+      "title": "Long tool chains loop",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "The agent calls tools in circles until timeout.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: tool-executor. Max steps, budget, duplicate detection, and explicit stop conditions."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Tool executor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Long tool chains loop"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Max steps, budget, duplicate detection, and explicit stop conditions.",
+            "opener": "Multi-step agents need limits. What stops runaway loops?",
+            "evidence": {
+              "strong": "Max steps, budget, duplicate detection, and explicit stop conditions.",
+              "adequate": "Names a reasonable fix direction related to tool executor.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When should the agent hand off to a human?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Max steps, budget, duplicate detection, and explicit stop conditions."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "tool-executor",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/guardrails/easy",
+      "title": "Unsafe user content in prompts",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Users paste instructions that make the bot ignore policies.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: guardrails. Input and output guardrails: policy prompts, blocklists, and classifiers on messages."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Guardrails"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Unsafe user content in prompts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Input and output guardrails: policy prompts, blocklists, and classifiers on messages.",
+            "opener": "User text can override system rules. What layer resists that?",
+            "evidence": {
+              "strong": "Input and output guardrails: policy prompts, blocklists, and classifiers on messages.",
+              "adequate": "Names a reasonable fix direction related to guardrails.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is prompt injection in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Input and output guardrails: policy prompts, blocklists, and classifiers on messages."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "guardrails",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/guardrails/medium",
+      "title": "PII in model output",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "The bot sometimes repeats customer emails from context.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: guardrails. Output filtering for PII patterns and redaction before showing users."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Guardrails"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "PII in model output"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Output filtering for PII patterns and redaction before showing users.",
+            "opener": "Responses must not leak sensitive fields. What checks run on output?",
+            "evidence": {
+              "strong": "Output filtering for PII patterns and redaction before showing users.",
+              "adequate": "Names a reasonable fix direction related to guardrails.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Should you redact input before the model too?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Output filtering for PII patterns and redaction before showing users."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "guardrails",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/guardrails/hard",
+      "title": "Jailbreak on edge cases",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Clever multilingual prompts bypass simple keyword filters.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: guardrails. Layered defenses: classifiers, constrained tool access, and monitoring with rapid rule updates."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Guardrails"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Jailbreak on edge cases"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Layered defenses: classifiers, constrained tool access, and monitoring with rapid rule updates.",
+            "opener": "Static blocklists fail. What deeper defense helps?",
+            "evidence": {
+              "strong": "Layered defenses: classifiers, constrained tool access, and monitoring with rapid rule updates.",
+              "adequate": "Names a reasonable fix direction related to guardrails.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why is a single perfect filter unrealistic?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Layered defenses: classifiers, constrained tool access, and monitoring with rapid rule updates."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "guardrails",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/eval-harness/easy",
+      "title": "Ship prompt change blindly",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "A new prompt goes live with no comparison to the old one.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: eval-harness. An evaluation set with expected behaviors and automatic scoring or human review."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Eval harness"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Ship prompt change blindly"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "An evaluation set with expected behaviors and automatic scoring or human review.",
+            "opener": "Prompt edits need measurement before release. What do you run offline?",
+            "evidence": {
+              "strong": "An evaluation set with expected behaviors and automatic scoring or human review.",
+              "adequate": "Names a reasonable fix direction related to eval harness.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a golden set?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "An evaluation set with expected behaviors and automatic scoring or human review."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "eval-harness",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/eval-harness/medium",
+      "title": "Subjective quality hard to score",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Automated checks pass but human readers hate the tone.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: eval-harness. Combine LLM-as-judge with human rubric sampling on each release candidate."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Eval harness"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Subjective quality hard to score"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Combine LLM-as-judge with human rubric sampling on each release candidate.",
+            "opener": "Numeric scores miss nuance. What eval mix helps?",
+            "evidence": {
+              "strong": "Combine LLM-as-judge with human rubric sampling on each release candidate.",
+              "adequate": "Names a reasonable fix direction related to eval harness.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When do you distrust LLM-as-judge?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Combine LLM-as-judge with human rubric sampling on each release candidate."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "eval-harness",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/eval-harness/hard",
+      "title": "Eval set rots",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "The product changed but benchmarks still test old features.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: eval-harness. Version eval sets with product, add regressions from production incidents, and review quarterly."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Eval harness"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Eval set rots"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Version eval sets with product, add regressions from production incidents, and review quarterly.",
+            "opener": "Stale evals give false confidence. How do you keep them current?",
+            "evidence": {
+              "strong": "Version eval sets with product, add regressions from production incidents, and review quarterly.",
+              "adequate": "Names a reasonable fix direction related to eval harness.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is online versus offline eval?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Version eval sets with product, add regressions from production incidents, and review quarterly."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "eval-harness",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/user-session-store/easy",
+      "title": "Conversation resets every request",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The bot forgets what the user said one message ago.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: user-session-store. Session store keeping recent messages keyed by user or conversation id."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "User session store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Conversation resets every request"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Session store keeping recent messages keyed by user or conversation id.",
+            "opener": "Chat needs memory across turns. Where is history stored?",
+            "evidence": {
+              "strong": "Session store keeping recent messages keyed by user or conversation id.",
+              "adequate": "Names a reasonable fix direction related to user session store.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How long should sessions live?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Session store keeping recent messages keyed by user or conversation id."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "ai-engineering",
+        "componentId": "user-session-store",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/user-session-store/medium",
+      "title": "Sessions lost on deploy",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Every deploy wipes in-memory chats.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: user-session-store. External session store (database or cache) shared by all app instances."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "User session store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Sessions lost on deploy"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "External session store (database or cache) shared by all app instances.",
+            "opener": "Memory lives only on one server. What persistence fixes that?",
+            "evidence": {
+              "strong": "External session store (database or cache) shared by all app instances.",
+              "adequate": "Names a reasonable fix direction related to user session store.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Cache or database for sessions?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "External session store (database or cache) shared by all app instances."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "ai-engineering",
+        "componentId": "user-session-store",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/ai-engineering/user-session-store/hard",
+      "title": "Cross-device continue chat",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Users start on phone and cannot continue on desktop.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: user-session-store. User-authenticated conversation id in durable storage, not just browser cookie on one device."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "User session store"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Cross-device continue chat"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "User-authenticated conversation id in durable storage, not just browser cookie on one device.",
+            "opener": "Session must follow the authenticated user. What identifier ties devices?",
+            "evidence": {
+              "strong": "User-authenticated conversation id in durable storage, not just browser cookie on one device.",
+              "adequate": "Names a reasonable fix direction related to user session store.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What privacy rules apply to stored chats?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "User-authenticated conversation id in durable storage, not just browser cookie on one device."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "ai-engineering",
+        "componentId": "user-session-store",
+        "onboardingOrder": null
+      }
+    }
+  ]
+}

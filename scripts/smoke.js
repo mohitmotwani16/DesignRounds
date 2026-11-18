@@ -33,6 +33,8 @@ for (const key of ["DATABASE_URL", "SMTP_HOST", "RESEND_API_KEY", "AI_API_KEY", 
 const { createApp } = await import("../server/app.js");
 const { close, query } = await import("../server/db.js");
 const { prompts } = await import("../src/data/prompts.js");
+const libraryPromptCount = prompts.filter((prompt) => !prompt.nuggetBasicsOnly).length;
+const firstFreeLibraryPrompt = () => prompts.find((prompt) => prompt.access === "free" && !prompt.nuggetBasicsOnly);
 const { aiLimits } = await import("../src/data/plans.js");
 const { recommendedFreeRound } = await import("../src/data/free-rounds.js");
 const { filterFillerWords } = await import("../server/modules/ai/communication.js");
@@ -111,7 +113,7 @@ try {
     const first = await call("GET", "/api/v1/catalog/prompts?limit=12");
     assert.equal(first.status, 200);
     assert.equal(first.body.items.length, 12);
-    assert.equal(first.body.total, prompts.length);
+    assert.equal(first.body.total, libraryPromptCount);
     assert.match(first.headers.get("cache-control"), /s-maxage/);
     const second = await call("GET", `/api/v1/catalog/prompts?limit=12&cursor=${first.body.nextCursor}`);
     assert.notEqual(second.body.items[0].id, first.body.items[0].id, "the next page continues after the first");
@@ -122,7 +124,7 @@ try {
       if (!page.body.nextCursor) break;
       cursor = page.body.nextCursor;
     }
-    assert.equal(seen, prompts.length, "paging visits every prompt exactly once");
+    assert.equal(seen, libraryPromptCount, "paging visits every prompt exactly once");
     const free = await call("GET", "/api/v1/catalog/prompts?access=free&level=Beginner");
     assert.ok(free.body.items.every((item) => item.access === "free" && item.difficulty === "Beginner"));
     assert.equal(free.body.facets.tracks.all, free.body.total);
@@ -154,7 +156,7 @@ try {
 
   await step("Plus round content is locked to Plus", async () => {
     const plusRound = prompts.find((entry) => entry.access === "paid");
-    const freeRound = prompts.find((entry) => entry.access === "free");
+    const freeRound = firstFreeLibraryPrompt();
     assert.equal(plusRound.requirements, undefined, "the public catalog must not carry Plus briefs");
     assert.equal((await call("GET", `/api/v1/rounds/${plusRound.id}`)).status, 401);
     const open = await call("GET", `/api/v1/rounds/${freeRound.id}`);
@@ -326,7 +328,7 @@ try {
   });
 
   await step("voice answers: transcribed, answered, never served back", async () => {
-    const prompt = prompts.find((entry) => entry.access === "free");
+    const prompt = firstFreeLibraryPrompt();
     const round = (await call("POST", "/api/v1/sessions", { promptId: prompt.id })).body.session;
     const webm = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), crypto.getRandomValues(Buffer.alloc(4000))]);
     const audio = (overrides = {}) => ({ requestId: crypto.randomUUID(), mimeType: "audio/webm;codecs=opus", durationMs: 9000, data: webm.toString("base64"), ...overrides });
@@ -444,7 +446,7 @@ try {
 
   let session;
   await step("start, save, and finish a round", async () => {
-    const prompt = prompts.find((entry) => entry.access === "free");
+    const prompt = firstFreeLibraryPrompt();
     const started = await call("POST", "/api/v1/sessions", { promptId: prompt.id });
     assert.equal(started.status, 201);
     session = started.body.session;
@@ -691,7 +693,7 @@ try {
 
   await step("one free interviewer round per email, on a free question", async () => {
     const previousCookie = cookie;
-    const [first, second, third] = prompts.filter((entry) => entry.access === "free");
+    const [first, second, third] = prompts.filter((entry) => entry.access === "free" && !entry.nuggetBasicsOnly);
     await signInAs("trial@example.com");
     const round = (await call("POST", "/api/v1/sessions", { promptId: first.id })).body.session;
     assert.equal(round.interviewerTrial, false);
@@ -832,6 +834,38 @@ try {
     assert.equal((await query("select 1 from human_check_events where email = 'human-log@example.com'")).length, 0);
     assert.equal((await query("select 1 from invitations where email = 'human-log@example.com'")).length, 0);
     cookie = previousCookie;
+  });
+
+  await step("Nugget-basics guest drill and claim on sign-in", async () => {
+    const previous = cookie;
+    cookie = "";
+    const catalog = await call("GET", "/api/v1/nugget-basics/catalog");
+    assert.equal(catalog.status, 200);
+    assert.ok(catalog.body.items.some((item) => item.id === "nugget-basics/onboarding-1"));
+    const started = await call("POST", "/api/v1/nugget-basics/sessions", { nuggetId: "nugget-basics/onboarding-1" });
+    assert.equal(started.status, 201);
+    assert.equal(started.body.session.guest, true);
+    const basicsId = started.body.session.id;
+    const guestCookie = (started.headers.getSetCookie?.() || []).find((value) => value.startsWith("dr_guest="))?.split(";")[0];
+    assert.ok(guestCookie, "dr_guest cookie is set");
+    const interview = await call("GET", `/api/v1/sessions/${basicsId}/interview`, undefined, { Cookie: guestCookie });
+    assert.equal(interview.status, 200);
+
+    const email = "smoke-basics-guest@example.com";
+    const requested = await call("POST", "/api/v1/auth/request-code", { email }, { Cookie: guestCookie });
+    assert.equal(requested.status, 200);
+    const verified = await call(
+      "POST",
+      "/api/v1/auth/verify-code",
+      { email, code: requested.body.devCode },
+      { Cookie: guestCookie },
+    );
+    assert.equal(verified.status, 200);
+    assert.ok(verified.body.guestBasicsClaimed >= 1);
+    const row = (await query("select user_id, guest_token_hash from practice_sessions where id = $1", [basicsId]))[0];
+    assert.ok(row.user_id);
+    assert.equal(row.guest_token_hash, null);
+    cookie = previous;
   });
 
   await step("sign out ends the session", async () => {

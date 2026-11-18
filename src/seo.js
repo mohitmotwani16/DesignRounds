@@ -119,8 +119,9 @@ export function publicPaths() {
     "/",
     "/library",
     "/nuggets",
+    "/nugget-basics",
     ...tracks.map((track) => trackPath(track.id)),
-    ...prompts.map((prompt) => roundPath(prompt.id)),
+    ...prompts.filter((prompt) => !prompt.nuggetBasicsOnly).map((prompt) => roundPath(prompt.id)),
     LEARN_PATH,
     ...TOPICS.map((topic) => topicPath(topic.slug)),
     ...communityArticles().map((article) => topicPath(article.slug)),
@@ -186,6 +187,15 @@ export function routeMeta(path) {
       title: "System Design Incident Drills (2–5 min) | DesignRounds",
       description: "Short incident nuggets: a failing architecture on the canvas, a live AI interviewer, and a quick debrief. Random drills or pick a question.",
       jsonLd: [{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Incident drills", url: absolute(path) }, breadcrumbs([["Home", "/"], ["Nuggets", "/nuggets"]])],
+    };
+  }
+
+  if (path === "/nugget-basics") {
+    return {
+      ...base,
+      title: "Nugget-basics — Learn the incident drill flow | DesignRounds",
+      description: "Free warm-up incident drills: five text-only starters, then easy–hard drills by track. Full AI interviewer; no sign-in required to try.",
+      jsonLd: [{ "@context": "https://schema.org", "@type": "CollectionPage", name: "Nugget-basics", url: absolute(path) }, breadcrumbs([["Home", "/"], ["Nugget-basics", "/nugget-basics"]])],
     };
   }
 

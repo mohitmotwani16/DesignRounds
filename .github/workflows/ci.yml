@@ -31,6 +31,7 @@ jobs:
       - run: npm run test:security
       - run: npm run test:learn-prompt
       - run: npm run test:smoke
+      - run: npm run test:nugget-basics
       - run: npm run test:stream
       - run: npm run test:vertex
       - run: npm run test:conductor

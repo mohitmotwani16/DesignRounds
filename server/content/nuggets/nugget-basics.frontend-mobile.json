@@ -1,0 +1,2814 @@
+{
+  "promptId": "nugget-basics",
+  "packVersion": "basics-v1",
+  "nuggets": [
+    {
+      "id": "nugget-basics/frontend-mobile/client-app/easy",
+      "title": "Huge bundle slow on mobile",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "First load takes ten seconds on phones.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: client-app. Code splitting and lazy load non-critical routes or features."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Client app"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Huge bundle slow on mobile"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Code splitting and lazy load non-critical routes or features.",
+            "opener": "Users download too much JavaScript up front. What loading strategy helps?",
+            "evidence": {
+              "strong": "Code splitting and lazy load non-critical routes or features.",
+              "adequate": "Names a reasonable fix direction related to client app.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the critical path for first paint?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Code splitting and lazy load non-critical routes or features."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "client-app",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-app/medium",
+      "title": "Janky scroll with long lists",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Feed with thousands of items stutters while scrolling.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: client-app. Virtualized lists that render only visible rows."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Client app"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Janky scroll with long lists"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Virtualized lists that render only visible rows.",
+            "opener": "Rendering every row hurts performance. What UI pattern helps?",
+            "evidence": {
+              "strong": "Virtualized lists that render only visible rows.",
+              "adequate": "Names a reasonable fix direction related to client app.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is DOM node cost in a long list?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Virtualized lists that render only visible rows."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "client-app",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-app/hard",
+      "title": "Memory grows until crash",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Leaving the app open for an hour on low-RAM devices crashes it.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: client-app. Evict off-screen data, unsubscribe listeners, and cap in-memory caches."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Client app"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Memory grows until crash"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Evict off-screen data, unsubscribe listeners, and cap in-memory caches.",
+            "opener": "Client memory leaks or unbounded caches. What practices limit growth?",
+            "evidence": {
+              "strong": "Evict off-screen data, unsubscribe listeners, and cap in-memory caches.",
+              "adequate": "Names a reasonable fix direction related to client app.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you profile memory on mobile?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Evict off-screen data, unsubscribe listeners, and cap in-memory caches."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "client-app",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/api-client/easy",
+      "title": "Duplicate API calls",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Every component fetch loads the same user profile.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: api-client. Shared data layer or query cache with one fetch per key."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "API client"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Duplicate API calls"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Shared data layer or query cache with one fetch per key.",
+            "opener": "Many components repeat the same request. What centralizes fetching?",
+            "evidence": {
+              "strong": "Shared data layer or query cache with one fetch per key.",
+              "adequate": "Names a reasonable fix direction related to api client.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is request deduplication?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Shared data layer or query cache with one fetch per key."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "api-client",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/api-client/medium",
+      "title": "No retry on flaky network",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "A single timeout shows a permanent error until manual refresh.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: api-client. Retries with backoff for idempotent reads and clear retry UI for users."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "API client"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "No retry on flaky network"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Retries with backoff for idempotent reads and clear retry UI for users.",
+            "opener": "Mobile networks fail often. What client behavior recovers?",
+            "evidence": {
+              "strong": "Retries with backoff for idempotent reads and clear retry UI for users.",
+              "adequate": "Names a reasonable fix direction related to api client.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When should POST not retry automatically?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Retries with backoff for idempotent reads and clear retry UI for users."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "api-client",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/api-client/hard",
+      "title": "Thundering herd on reconnect",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "When the app regains network, thousands of clients refetch everything at once.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: api-client. Jittered refresh, incremental sync since last cursor, and prioritize visible screen data."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "API client"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Thundering herd on reconnect"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Jittered refresh, incremental sync since last cursor, and prioritize visible screen data.",
+            "opener": "Reconnect storms the API. What client-side smoothing helps?",
+            "evidence": {
+              "strong": "Jittered refresh, incremental sync since last cursor, and prioritize visible screen data.",
+              "adequate": "Names a reasonable fix direction related to api client.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is ETag useful for?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Jittered refresh, incremental sync since last cursor, and prioritize visible screen data."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "api-client",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/local-storage/easy",
+      "title": "Data gone after refresh",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Draft text disappears when the user closes the tab.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: local-storage. Local storage or IndexedDB for drafts and light client cache."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Local storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Data gone after refresh"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Local storage or IndexedDB for drafts and light client cache.",
+            "opener": "In-memory state is lost. Where on the device can you persist drafts?",
+            "evidence": {
+              "strong": "Local storage or IndexedDB for drafts and light client cache.",
+              "adequate": "Names a reasonable fix direction related to local storage.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What should not store secrets in local storage?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Local storage or IndexedDB for drafts and light client cache."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "local-storage",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/local-storage/medium",
+      "title": "Storage quota exceeded",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Caching images locally eventually throws quota errors.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: local-storage. LRU eviction, size limits, and store only metadata or thumbnails when large."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Local storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Storage quota exceeded"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "LRU eviction, size limits, and store only metadata or thumbnails when large.",
+            "opener": "Device storage is limited. How do you manage cached bytes?",
+            "evidence": {
+              "strong": "LRU eviction, size limits, and store only metadata or thumbnails when large.",
+              "adequate": "Names a reasonable fix direction related to local storage.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between session and persistent storage?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "LRU eviction, size limits, and store only metadata or thumbnails when large."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "local-storage",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/local-storage/hard",
+      "title": "Sensitive data on shared device",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Logout leaves readable tokens in browser storage on a family tablet.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: local-storage. Clear tokens and sensitive cache on logout; prefer httpOnly cookies for session where possible."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Local storage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Sensitive data on shared device"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Clear tokens and sensitive cache on logout; prefer httpOnly cookies for session where possible.",
+            "opener": "Shared devices need strict cleanup. What logout behavior is required?",
+            "evidence": {
+              "strong": "Clear tokens and sensitive cache on logout; prefer httpOnly cookies for session where possible.",
+              "adequate": "Names a reasonable fix direction related to local storage.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why is localStorage risky for tokens?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Clear tokens and sensitive cache on logout; prefer httpOnly cookies for session where possible."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "local-storage",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/cdn-edge/easy",
+      "title": "Assets slow far from origin",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Users in Asia wait on a US-hosted static bundle.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: cdn-edge. A CDN that caches static assets at edge locations."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "CDN / edge"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Assets slow far from origin"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "A CDN that caches static assets at edge locations.",
+            "opener": "Distance to one origin hurts load time. What caches static files nearer users?",
+            "evidence": {
+              "strong": "A CDN that caches static assets at edge locations.",
+              "adequate": "Names a reasonable fix direction related to cdn edge.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What content should not go on a public CDN?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A CDN that caches static assets at edge locations."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "cdn-edge",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/cdn-edge/medium",
+      "title": "Stale JS after deploy",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Users run old JavaScript until hard refresh.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: cdn-edge. Fingerprinted filenames or cache headers with short HTML cache and long immutable assets."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "CDN / edge"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stale JS after deploy"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Fingerprinted filenames or cache headers with short HTML cache and long immutable assets.",
+            "opener": "CDN and browsers cache old bundles. What cache busting helps?",
+            "evidence": {
+              "strong": "Fingerprinted filenames or cache headers with short HTML cache and long immutable assets.",
+              "adequate": "Names a reasonable fix direction related to cdn edge.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is immutable cache-control?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Fingerprinted filenames or cache headers with short HTML cache and long immutable assets."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "cdn-edge",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/cdn-edge/hard",
+      "title": "Personalized content at edge",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "CDN caches a page with one user's name for everyone.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: cdn-edge. Cache only static shell at edge; personalize via client-side or edge functions with vary headers."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "CDN / edge"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Personalized content at edge"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Cache only static shell at edge; personalize via client-side or edge functions with vary headers.",
+            "opener": "HTML varies per user but CDN assumes static. What split helps?",
+            "evidence": {
+              "strong": "Cache only static shell at edge; personalize via client-side or edge functions with vary headers.",
+              "adequate": "Names a reasonable fix direction related to cdn edge.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is edge SSR versus client render?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Cache only static shell at edge; personalize via client-side or edge functions with vary headers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "cdn-edge",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/realtime-channel/easy",
+      "title": "Polling hammers the server",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The app asks for new messages every second per user.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: realtime-channel. WebSockets or server-sent events for server-pushed updates."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Realtime channel"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Polling hammers the server"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "WebSockets or server-sent events for server-pushed updates.",
+            "opener": "Polling wastes resources. What connection model pushes updates?",
+            "evidence": {
+              "strong": "WebSockets or server-sent events for server-pushed updates.",
+              "adequate": "Names a reasonable fix direction related to realtime channel.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When is polling still acceptable?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "WebSockets or server-sent events for server-pushed updates."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "realtime-channel",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/realtime-channel/medium",
+      "title": "Reconnect loses messages",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "After network blip, the chat misses messages until reload.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: realtime-channel. Resume with last seen sequence id and backfill missed events from the server."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Realtime channel"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Reconnect loses messages"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Resume with last seen sequence id and backfill missed events from the server.",
+            "opener": "Live connection drops. How does the client catch up?",
+            "evidence": {
+              "strong": "Resume with last seen sequence id and backfill missed events from the server.",
+              "adequate": "Names a reasonable fix direction related to realtime channel.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a heartbeat for?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Resume with last seen sequence id and backfill missed events from the server."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "realtime-channel",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/realtime-channel/hard",
+      "title": "Millions of open sockets",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Connection count limits cap concurrent users on one chat cluster.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: realtime-channel. Connection sharding, regional gateways, and pub-sub fan-out to connection servers."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Realtime channel"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Millions of open sockets"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Connection sharding, regional gateways, and pub-sub fan-out to connection servers.",
+            "opener": "Too many persistent connections on few nodes. What scales fan-out?",
+            "evidence": {
+              "strong": "Connection sharding, regional gateways, and pub-sub fan-out to connection servers.",
+              "adequate": "Names a reasonable fix direction related to realtime channel.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between gateway and chat service?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Connection sharding, regional gateways, and pub-sub fan-out to connection servers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "realtime-channel",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/auth-session/easy",
+      "title": "Login on every page",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Users re-enter password when navigating between tabs.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: auth-session. A session token or cookie validated on each request until expiry."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Auth session"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Login on every page"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "A session token or cookie validated on each request until expiry.",
+            "opener": "Auth should persist across pages. What does the client store after login?",
+            "evidence": {
+              "strong": "A session token or cookie validated on each request until expiry.",
+              "adequate": "Names a reasonable fix direction related to auth session.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Where should refresh tokens live on mobile?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A session token or cookie validated on each request until expiry."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "auth-session",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/auth-session/medium",
+      "title": "Token theft via XSS",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Stolen JavaScript-readable tokens allow account takeover.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: auth-session. HttpOnly secure cookies for session where possible and strict CSP against XSS."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Auth session"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Token theft via XSS"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "HttpOnly secure cookies for session where possible and strict CSP against XSS.",
+            "opener": "XSS can read client tokens. What storage reduces impact?",
+            "evidence": {
+              "strong": "HttpOnly secure cookies for session where possible and strict CSP against XSS.",
+              "adequate": "Names a reasonable fix direction related to auth session.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is CSP in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "HttpOnly secure cookies for session where possible and strict CSP against XSS."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "auth-session",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/auth-session/hard",
+      "title": "Long-lived sessions on stolen device",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "A stolen phone stays logged in for months.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: auth-session. Short access tokens, refresh rotation, remote logout, and biometric re-auth for sensitive actions."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Auth session"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Long-lived sessions on stolen device"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Short access tokens, refresh rotation, remote logout, and biometric re-auth for sensitive actions.",
+            "opener": "Sessions outlive device loss. What limits exposure?",
+            "evidence": {
+              "strong": "Short access tokens, refresh rotation, remote logout, and biometric re-auth for sensitive actions.",
+              "adequate": "Names a reasonable fix direction related to auth session.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is refresh token rotation?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Short access tokens, refresh rotation, remote logout, and biometric re-auth for sensitive actions."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "auth-session",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/offline-sync/easy",
+      "title": "Blank screen offline",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Airplane mode shows only an error page.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: offline-sync. Cache last-known content and critical assets for offline read."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Offline sync"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Blank screen offline"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Cache last-known content and critical assets for offline read.",
+            "opener": "No network should not mean no UI. What do you cache on device?",
+            "evidence": {
+              "strong": "Cache last-known content and critical assets for offline read.",
+              "adequate": "Names a reasonable fix direction related to offline sync.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a service worker role?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Cache last-known content and critical assets for offline read."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "offline-sync",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/offline-sync/medium",
+      "title": "Edits lost when back online",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "User edits offline but sync overwrites with server copy.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: offline-sync. Queue local changes with timestamps or CRDTs and merge on sync with user resolution if needed."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Offline sync"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Edits lost when back online"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Queue local changes with timestamps or CRDTs and merge on sync with user resolution if needed.",
+            "opener": "Offline edits conflict with server state. What merge strategy helps?",
+            "evidence": {
+              "strong": "Queue local changes with timestamps or CRDTs and merge on sync with user resolution if needed.",
+              "adequate": "Names a reasonable fix direction related to offline sync.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is last-write-wins risk offline?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Queue local changes with timestamps or CRDTs and merge on sync with user resolution if needed."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "offline-sync",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/offline-sync/hard",
+      "title": "Two devices edit same doc",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Phone and laptop both offline edit; both sync and text is garbled.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: offline-sync. CRDT or operational transform with document id and sync service merging versions."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Offline sync"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Two devices edit same doc"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "CRDT or operational transform with document id and sync service merging versions.",
+            "opener": "Concurrent offline edits on two devices. What convergence model?",
+            "evidence": {
+              "strong": "CRDT or operational transform with document id and sync service merging versions.",
+              "adequate": "Names a reasonable fix direction related to offline sync.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When do you force the user to pick a version?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "CRDT or operational transform with document id and sync service merging versions."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "offline-sync",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-performance/easy",
+      "title": "Layout shifts on load",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Images load late and buttons jump under the user's finger.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: client-performance. Reserve space for images and ads with known aspect ratios and skeleton placeholders."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Client performance"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Layout shifts on load"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Reserve space for images and ads with known aspect ratios and skeleton placeholders.",
+            "opener": "Content moves after paint. What layout practice stabilizes UI?",
+            "evidence": {
+              "strong": "Reserve space for images and ads with known aspect ratios and skeleton placeholders.",
+              "adequate": "Names a reasonable fix direction related to client performance.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is CLS?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Reserve space for images and ads with known aspect ratios and skeleton placeholders."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "frontend-mobile",
+        "componentId": "client-performance",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-performance/medium",
+      "title": "Main thread blocked",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Taps feel delayed while heavy JSON parsing runs.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: client-performance. Web workers or chunked processing and defer non-urgent work."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Client performance"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Main thread blocked"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Web workers or chunked processing and defer non-urgent work.",
+            "opener": "Big work blocks UI thread. What moves work off the critical path?",
+            "evidence": {
+              "strong": "Web workers or chunked processing and defer non-urgent work.",
+              "adequate": "Names a reasonable fix direction related to client performance.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between microtask and worker?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Web workers or chunked processing and defer non-urgent work."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "frontend-mobile",
+        "componentId": "client-performance",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/frontend-mobile/client-performance/hard",
+      "title": "Low-end Android struggle",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Same React app is smooth on flagship phones and unusable on budget devices.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: client-performance. Reduce features on low memory devices, lighter bundles, and performance budgets per tier."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Client performance"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Low-end Android struggle"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Reduce features on low memory devices, lighter bundles, and performance budgets per tier.",
+            "opener": "One bundle targets all devices. What adaptive strategy helps?",
+            "evidence": {
+              "strong": "Reduce features on low memory devices, lighter bundles, and performance budgets per tier.",
+              "adequate": "Names a reasonable fix direction related to client performance.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What metrics define a performance budget?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Reduce features on low memory devices, lighter bundles, and performance budgets per tier."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "frontend-mobile",
+        "componentId": "client-performance",
+        "onboardingOrder": null
+      }
+    }
+  ]
+}

@@ -136,3 +136,15 @@
   .search-field { flex-basis: 100%; }
   .library-grid { grid-template-columns: 1fr; }
 }
+
+.nugget-basics-onboarding { margin-top: 2rem; }
+.nugget-basics-onboarding-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.nugget-basics-onboarding-list li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 14px 16px; border: 1px solid var(--bd-e6e8ed); border-radius: 8px; background: var(--bg-ffffff); }
+.nugget-basics-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.5rem; }
+.nugget-basics-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--bd-e6e8ed); border-radius: 999px; background: var(--bg-ffffff); cursor: pointer; font-size: 13px; }
+.nugget-basics-tabs button.active { border-color: var(--fg-36425a); font-weight: 600; }
+.nugget-basics-grid { margin-top: 1.25rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.nugget-basics-card { padding: 14px 16px; border: 1px solid var(--bd-e6e8ed); border-radius: 8px; background: var(--bg-ffffff); }
+.nugget-basics-card h3 { margin: 0 0 10px; font-size: 14px; text-transform: capitalize; }
+.nugget-basics-pills { display: flex; gap: 8px; }
+.nugget-basics-pills .pill { flex: 1; text-transform: capitalize; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--bd-e6e8ed); background: var(--bg-f8f9fb); cursor: pointer; }

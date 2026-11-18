@@ -24,10 +24,14 @@ export const planFor = (user) => isPlus(user) ? "plus" : "free";
 export const onTrial = (user, session) => !isPlus(user) && Boolean(session?.interviewer_trial);
 
 export function limitsFor(user, session = null) {
+  if (session?.prompt_id === "nugget-basics") return aiLimits.nugget;
   if (session?.session_kind === "nugget") return aiLimits.nugget;
   if (onTrial(user, session)) return aiLimits.trial;
   return aiLimits[planFor(user)] || aiLimits.free;
 }
 
 export const hasFullFeedback = (user, session = null) => isPlus(user) || onTrial(user, session);
-export const hasInterviewer = (user, session = null) => limitsFor(user, session).interviewTurnsPerRound > 0;
+export const hasInterviewer = (user, session = null) => {
+  if (session?.prompt_id === "nugget-basics") return aiLimits.nugget.interviewTurnsPerRound > 0;
+  return limitsFor(user, session).interviewTurnsPerRound > 0;
+};
