@@ -16,13 +16,15 @@ if (!url && process.env.VERCEL) {
   process.exit(1);
 }
 
+let failed = false;
 try {
   await connect({ url, migrate: false });
   const applied = await migrate();
   console.log(`[migrate] ${driver()}: ${applied.length ? `applied ${applied.join(", ")}` : "already up to date"}`);
 } catch (error) {
   console.error(`[migrate] failed: ${error.message}`);
-  process.exitCode = 1;
+  failed = true;
 } finally {
   await close();
 }
+if (failed) process.exit(1);
