@@ -1,0 +1,2814 @@
+{
+  "promptId": "nugget-basics",
+  "packVersion": "basics-v1",
+  "nuggets": [
+    {
+      "id": "nugget-basics/data-engineering/source-system/easy",
+      "title": "Reports missing yesterday's sales",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The dashboard never shows data from the main store until someone runs a manual export.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: source-system. Automated extraction: API, database replica, or change feed into your data pipeline."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Source system"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Reports missing yesterday's sales"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Automated extraction: API, database replica, or change feed into your data pipeline.",
+            "opener": "Business data lives in a source app but analytics never sees it automatically. What connection is missing?",
+            "evidence": {
+              "strong": "Automated extraction: API, database replica, or change feed into your data pipeline.",
+              "adequate": "Names a reasonable fix direction related to source system.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why avoid heavy queries on the production primary?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Automated extraction: API, database replica, or change feed into your data pipeline."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "source-system",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/source-system/medium",
+      "title": "Source schema changes break jobs",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "A renamed column stops nightly loads with no warning.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: source-system. Schema contracts, versioned events, and alerts on incompatible changes."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Source system"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Source schema changes break jobs"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Schema contracts, versioned events, and alerts on incompatible changes.",
+            "opener": "Upstream changes silently break ingestion. What practice reduces surprises?",
+            "evidence": {
+              "strong": "Schema contracts, versioned events, and alerts on incompatible changes.",
+              "adequate": "Names a reasonable fix direction related to source system.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Who owns the contract when two teams share an event?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Schema contracts, versioned events, and alerts on incompatible changes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "source-system",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/source-system/hard",
+      "title": "Some events never arrive",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Finance totals are lower than the billing system with no clear pattern.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: source-system. Reconciliation counts, idempotent ingestion with sequence ids, and backfill from durable source logs."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Source system"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Some events never arrive"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Reconciliation counts, idempotent ingestion with sequence ids, and backfill from durable source logs.",
+            "opener": "You suspect silent drops from the source. How do you detect and fix gaps?",
+            "evidence": {
+              "strong": "Reconciliation counts, idempotent ingestion with sequence ids, and backfill from durable source logs.",
+              "adequate": "Names a reasonable fix direction related to source system.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How often should reconciliation run?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Reconciliation counts, idempotent ingestion with sequence ids, and backfill from durable source logs."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "source-system",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/ingestion/easy",
+      "title": "Lost clicks during spikes",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Traffic spikes and some click events never show up in analytics.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: ingestion. Buffer events in a durable log or queue before processing."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Ingestion"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Lost clicks during spikes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Buffer events in a durable log or queue before processing.",
+            "opener": "Events disappear between the client and processing. What durable middle step helps?",
+            "evidence": {
+              "strong": "Buffer events in a durable log or queue before processing.",
+              "adequate": "Names a reasonable fix direction related to ingestion.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What if the consumer is slower than producers?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Buffer events in a durable log or queue before processing."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "ingestion",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/ingestion/medium",
+      "title": "Duplicate events inflate metrics",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Retries after timeouts double-count purchases in reports.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: ingestion. Idempotent processing with event ids or dedupe keys."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Ingestion"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Duplicate events inflate metrics"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Idempotent processing with event ids or dedupe keys.",
+            "opener": "The pipeline may see the same event twice. What property should processing have?",
+            "evidence": {
+              "strong": "Idempotent processing with event ids or dedupe keys.",
+              "adequate": "Names a reasonable fix direction related to ingestion.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Where do you store seen ids?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Idempotent processing with event ids or dedupe keys."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "ingestion",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/ingestion/hard",
+      "title": "Late events skew daily totals",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Events arriving hours late change yesterday's revenue after reports were sent.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: ingestion. Process on event time with watermarks; allow recomputation or correction jobs for late data."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Ingestion"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Late events skew daily totals"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Process on event time with watermarks; allow recomputation or correction jobs for late data.",
+            "opener": "Batch jobs close the day but data keeps arriving. What time semantics help?",
+            "evidence": {
+              "strong": "Process on event time with watermarks; allow recomputation or correction jobs for late data.",
+              "adequate": "Names a reasonable fix direction related to ingestion.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When is processing time acceptable instead?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Process on event time with watermarks; allow recomputation or correction jobs for late data."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "ingestion",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/stream-processor/easy",
+      "title": "Batch is too slow for alerts",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Fraud alerts need to fire within seconds but jobs run hourly.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: stream-processor. Stream processing that consumes events continuously and emits results quickly."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Stream processor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Batch is too slow for alerts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Stream processing that consumes events continuously and emits results quickly.",
+            "opener": "Hourly batch cannot meet real-time needs. What processing style fits?",
+            "evidence": {
+              "strong": "Stream processing that consumes events continuously and emits results quickly.",
+              "adequate": "Names a reasonable fix direction related to stream processor.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is one downside of streams versus batch?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Stream processing that consumes events continuously and emits results quickly."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "stream-processor",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/stream-processor/medium",
+      "title": "Windowed counts look wrong",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Five-minute counts jump when the wall clock crosses bucket boundaries.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: stream-processor. Event-time windows with clear start and end; handle out-of-order events with allowed lateness."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Stream processor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Windowed counts look wrong"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Event-time windows with clear start and end; handle out-of-order events with allowed lateness.",
+            "opener": "You need counts per sliding time window. What concept defines the window?",
+            "evidence": {
+              "strong": "Event-time windows with clear start and end; handle out-of-order events with allowed lateness.",
+              "adequate": "Names a reasonable fix direction related to stream processor.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a watermark in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Event-time windows with clear start and end; handle out-of-order events with allowed lateness."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "stream-processor",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/stream-processor/hard",
+      "title": "Stateful job fails mid-window",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "After a crash, duplicate counts appear until someone clears state manually.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: stream-processor. Checkpointed state to durable storage and replay from the log with exactly-once or idempotent sinks."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Stream processor"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stateful job fails mid-window"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Checkpointed state to durable storage and replay from the log with exactly-once or idempotent sinks.",
+            "opener": "Stateful streaming crashed. How do you recover counts correctly?",
+            "evidence": {
+              "strong": "Checkpointed state to durable storage and replay from the log with exactly-once or idempotent sinks.",
+              "adequate": "Names a reasonable fix direction related to stream processor.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between at-least-once and exactly-once delivery?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Checkpointed state to durable storage and replay from the log with exactly-once or idempotent sinks."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "stream-processor",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/warehouse/easy",
+      "title": "Analysts query production",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Ad-hoc SQL on the live database slows checkout for customers.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: warehouse. Load data into a warehouse or replica built for analytical queries."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Analysts query production"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Load data into a warehouse or replica built for analytical queries.",
+            "opener": "Analytics should not hit production OLTP. Where should analysts query?",
+            "evidence": {
+              "strong": "Load data into a warehouse or replica built for analytical queries.",
+              "adequate": "Names a reasonable fix direction related to warehouse.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why is columnar storage common in warehouses?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Load data into a warehouse or replica built for analytical queries."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "warehouse",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/warehouse/medium",
+      "title": "History of customer changes",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Reports need how a customer looked last quarter, not just today.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: warehouse. Slowly changing dimensions (Type 2) with effective dates and current-row flags."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "History of customer changes"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Slowly changing dimensions (Type 2) with effective dates and current-row flags.",
+            "opener": "Dimension rows change but history matters. What modeling pattern helps?",
+            "evidence": {
+              "strong": "Slowly changing dimensions (Type 2) with effective dates and current-row flags.",
+              "adequate": "Names a reasonable fix direction related to warehouse.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a business key versus a surrogate key?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Slowly changing dimensions (Type 2) with effective dates and current-row flags."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "warehouse",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/warehouse/hard",
+      "title": "Two teams, different revenue numbers",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Finance and product dashboards disagree on monthly revenue.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: warehouse. Single curated metric layer in the warehouse with documented grain and ownership."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data warehouse"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Two teams, different revenue numbers"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Single curated metric layer in the warehouse with documented grain and ownership.",
+            "opener": "Same metric, two definitions. What org and technical fix reduces drift?",
+            "evidence": {
+              "strong": "Single curated metric layer in the warehouse with documented grain and ownership.",
+              "adequate": "Names a reasonable fix direction related to warehouse.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is metric grain?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Single curated metric layer in the warehouse with documented grain and ownership."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "warehouse",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-lake/easy",
+      "title": "Raw files with no structure",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Teams dump JSON and CSV files into storage but nobody can find datasets.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: data-lake. A metastore or catalog with dataset names, schema, and ownership."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data lake"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Raw files with no structure"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "A metastore or catalog with dataset names, schema, and ownership.",
+            "opener": "Cheap storage holds raw data. What catalog layer makes it usable?",
+            "evidence": {
+              "strong": "A metastore or catalog with dataset names, schema, and ownership.",
+              "adequate": "Names a reasonable fix direction related to data lake.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between lake and warehouse in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A metastore or catalog with dataset names, schema, and ownership."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "data-lake",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-lake/medium",
+      "title": "PII scattered in raw files",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Auditors find emails in unexpected buckets with open access.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: data-lake. Classification, column masking, and access policies per dataset or zone."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data lake"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "PII scattered in raw files"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Classification, column masking, and access policies per dataset or zone.",
+            "opener": "Raw lake data includes sensitive fields. What controls belong on the lake?",
+            "evidence": {
+              "strong": "Classification, column masking, and access policies per dataset or zone.",
+              "adequate": "Names a reasonable fix direction related to data lake.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When should PII never land in the lake?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Classification, column masking, and access policies per dataset or zone."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "data-lake",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-lake/hard",
+      "title": "Batch and stream same table",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Streaming updates and nightly batch both write the same table and clash.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: data-lake. Lakehouse pattern: ACID table format with streaming upserts plus batch compaction."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data lake"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Batch and stream same table"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Lakehouse pattern: ACID table format with streaming upserts plus batch compaction.",
+            "opener": "You want one table for batch and stream inputs. What architecture helps?",
+            "evidence": {
+              "strong": "Lakehouse pattern: ACID table format with streaming upserts plus batch compaction.",
+              "adequate": "Names a reasonable fix direction related to data lake.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What problem does compaction solve?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Lakehouse pattern: ACID table format with streaming upserts plus batch compaction."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "data-lake",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/orchestrator/easy",
+      "title": "Manual job chaining",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "An operator runs job B only after texting that job A finished.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: orchestrator. A workflow orchestrator with dependencies and schedules."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Orchestrator"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Manual job chaining"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "A workflow orchestrator with dependencies and schedules.",
+            "opener": "Pipelines depend on each other but run by hand. What system schedules them?",
+            "evidence": {
+              "strong": "A workflow orchestrator with dependencies and schedules.",
+              "adequate": "Names a reasonable fix direction related to orchestrator.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What happens if job A fails?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A workflow orchestrator with dependencies and schedules."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "orchestrator",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/orchestrator/medium",
+      "title": "Backfill overlaps daily run",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "A backfill and the nightly job write the same partition twice.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: orchestrator. Exclusive locks or partition-level scheduling; idempotent writes per partition."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Orchestrator"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Backfill overlaps daily run"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Exclusive locks or partition-level scheduling; idempotent writes per partition.",
+            "opener": "Two runs target the same data window. How does orchestration prevent clashes?",
+            "evidence": {
+              "strong": "Exclusive locks or partition-level scheduling; idempotent writes per partition.",
+              "adequate": "Names a reasonable fix direction related to orchestrator.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you safely rerun yesterday's job?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Exclusive locks or partition-level scheduling; idempotent writes per partition."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "orchestrator",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/orchestrator/hard",
+      "title": "SLA missed with silent success",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Jobs show green while downstream tables are empty.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: orchestrator. Data quality checks and SLA monitors on row counts, freshness, and key metrics after each step."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Orchestrator"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "SLA missed with silent success"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Data quality checks and SLA monitors on row counts, freshness, and key metrics after each step.",
+            "opener": "Tasks succeed but outputs are wrong or missing. What beyond task status do you check?",
+            "evidence": {
+              "strong": "Data quality checks and SLA monitors on row counts, freshness, and key metrics after each step.",
+              "adequate": "Names a reasonable fix direction related to orchestrator.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Who gets paged when freshness fails?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Data quality checks and SLA monitors on row counts, freshness, and key metrics after each step."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "orchestrator",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-quality/easy",
+      "title": "Nulls break dashboards",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Charts show blank slices because a required field is often null.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: data-quality. Data quality tests on nulls, ranges, and uniqueness before publishing datasets."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data quality"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Nulls break dashboards"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Data quality tests on nulls, ranges, and uniqueness before publishing datasets.",
+            "opener": "Bad values reach consumers. What process catches bad rows early?",
+            "evidence": {
+              "strong": "Data quality tests on nulls, ranges, and uniqueness before publishing datasets.",
+              "adequate": "Names a reasonable fix direction related to data quality.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Should bad rows block the pipeline or quarantine?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Data quality tests on nulls, ranges, and uniqueness before publishing datasets."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "data-quality",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-quality/medium",
+      "title": "Sudden row count drop",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Today's table has half the rows of yesterday with no known change.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: data-quality. Volume and distribution checks with alerts on statistical deviation."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data quality"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Sudden row count drop"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Volume and distribution checks with alerts on statistical deviation.",
+            "opener": "Volume anomalies need detection. What do you monitor?",
+            "evidence": {
+              "strong": "Volume and distribution checks with alerts on statistical deviation.",
+              "adequate": "Names a reasonable fix direction related to data quality.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a false positive cost in alerting?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Volume and distribution checks with alerts on statistical deviation."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "data-quality",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/data-quality/hard",
+      "title": "Upstream lies about completeness",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Source claims all events sent but your counts are low.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: data-quality. Cross-system reconciliation and lineage to compare source, ingest, and warehouse counts."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Data quality"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Upstream lies about completeness"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Cross-system reconciliation and lineage to compare source, ingest, and warehouse counts.",
+            "opener": "You cannot trust the source counter alone. How do you verify completeness?",
+            "evidence": {
+              "strong": "Cross-system reconciliation and lineage to compare source, ingest, and warehouse counts.",
+              "adequate": "Names a reasonable fix direction related to data quality.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What artifact proves which system dropped data?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Cross-system reconciliation and lineage to compare source, ingest, and warehouse counts."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "data-quality",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/serving-layer/easy",
+      "title": "Dashboard queries hammer warehouse",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Every dashboard refresh runs heavy SQL on the warehouse and costs spike.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: serving-layer. Precomputed aggregates or a metrics store / OLAP cube for dashboards."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Serving layer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Dashboard queries hammer warehouse"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "Precomputed aggregates or a metrics store / OLAP cube for dashboards.",
+            "opener": "Many readers need the same aggregates. What layer serves them cheaply?",
+            "evidence": {
+              "strong": "Precomputed aggregates or a metrics store / OLAP cube for dashboards.",
+              "adequate": "Names a reasonable fix direction related to serving layer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What do you lose when you preaggregate?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Precomputed aggregates or a metrics store / OLAP cube for dashboards."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "data-engineering",
+        "componentId": "serving-layer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/serving-layer/medium",
+      "title": "Different apps, different SQL",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Three apps embed different SQL and show conflicting KPIs.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: serving-layer. A semantic layer or metrics API that defines KPIs once."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Serving layer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Different apps, different SQL"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "A semantic layer or metrics API that defines KPIs once.",
+            "opener": "Metric logic is duplicated in apps. Where should it live?",
+            "evidence": {
+              "strong": "A semantic layer or metrics API that defines KPIs once.",
+              "adequate": "Names a reasonable fix direction related to serving layer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Who owns metric definitions?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A semantic layer or metrics API that defines KPIs once."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "data-engineering",
+        "componentId": "serving-layer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/data-engineering/serving-layer/hard",
+      "title": "Near-real-time dashboards",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Leaders want five-minute freshness but warehouse loads are hourly.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: serving-layer. Stream aggregates into a serving store while warehouse remains source of truth for history."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Serving layer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Near-real-time dashboards"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Stream aggregates into a serving store while warehouse remains source of truth for history.",
+            "opener": "Warehouse is too slow for the UI. What dual path serves freshness?",
+            "evidence": {
+              "strong": "Stream aggregates into a serving store while warehouse remains source of truth for history.",
+              "adequate": "Names a reasonable fix direction related to serving layer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "How do you reconcile stream and batch totals?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Stream aggregates into a serving store while warehouse remains source of truth for history."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "data-engineering",
+        "componentId": "serving-layer",
+        "onboardingOrder": null
+      }
+    }
+  ]
+}

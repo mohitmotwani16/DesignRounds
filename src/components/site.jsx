@@ -84,6 +84,7 @@ export function SiteNav({ onStart }) {
     <>
       <Link className="nav-link-btn" to={LEARN_PATH} onClick={close} aria-current={current(path === LEARN_PATH || path.startsWith(`${LEARN_PATH}/`))}>Learn</Link>
       <Link className="nav-link-btn" to="/library" onClick={close} aria-current={current(path.startsWith("/library") || path.startsWith("/system-design/"))}>Library</Link>
+      <Link className="nav-link-btn" to="/nugget-basics" onClick={close} aria-current={current(path.startsWith("/nugget-basics"))}>Nugget-basics</Link>
       <Link className="nav-link-btn" to="/nuggets" onClick={close} aria-current={current(path.startsWith("/nuggets"))}>Nuggets</Link>
       {signedIn && <Link className="nav-link-btn" to="/profile" onClick={close} aria-current={current(path === "/profile")}>{profileLabel}</Link>}
       {SECTIONS.map((item) => <Link key={item.id} className="nav-link-btn" to={`/#${item.id}`} onClick={close}>{item.label}</Link>)}
@@ -177,6 +178,7 @@ export function SiteFooter() {
             <h2>Product</h2>
             <ul>
               <li><Link to="/library">Practice library</Link></li>
+              <li><Link to="/nugget-basics">Nugget-basics</Link></li>
               <li><Link to="/nuggets">Incident drills</Link></li>
               <li><Link to="/plus">Plus</Link></li>
               {SECTIONS.map((item) => <li key={item.id}><Link to={`/#${item.id}`}>{item.label}</Link></li>)}

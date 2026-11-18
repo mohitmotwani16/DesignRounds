@@ -1,0 +1,411 @@
+{
+  "promptId": "nugget-basics",
+  "packVersion": "basics-v1",
+  "nuggets": [
+    {
+      "id": "nugget-basics/onboarding-1",
+      "title": "Too many users on one server",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "When lots of people use the site at the same time, only one server struggles and the rest stay quiet.",
+        "interviewerSetup": "Nugget-basics warm-up (onboarding). Component: load-balancer. Put a load balancer in front of multiple app servers so requests spread across them."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "nodes": [
+          {
+            "id": "n-scenario",
+            "type": "noteNode",
+            "position": {
+              "x": 40,
+              "y": 40
+            },
+            "width": 320,
+            "height": 120,
+            "data": {
+              "kind": "note",
+              "label": "Scenario",
+              "note": "When lots of people use the site at the same time, only one server struggles and the rest stay quiet."
+            }
+          }
+        ],
+        "edges": []
+      },
+      "incident": {
+        "nodeIds": [
+          "n-scenario"
+        ],
+        "edgeIds": [],
+        "headline": "Too many users on one server"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Put a load balancer in front of multiple app servers so requests spread across them.",
+            "opener": "Traffic keeps hitting one place. What kind of change would spread the load?",
+            "evidence": {
+              "strong": "Put a load balancer in front of multiple app servers so requests spread across them.",
+              "adequate": "Names a reasonable fix direction related to load balancer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What happens if one of those servers stops responding?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Put a load balancer in front of multiple app servers so requests spread across them."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "text-only",
+        "difficulty": "onboarding",
+        "track": "software-engineering",
+        "componentId": "load-balancer",
+        "onboardingOrder": 1
+      }
+    },
+    {
+      "id": "nugget-basics/onboarding-2",
+      "title": "Database overloaded by reads",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Every page view asks the database for the same popular data. The database stays busy even when traffic is normal.",
+        "interviewerSetup": "Nugget-basics warm-up (onboarding). Component: cache. Add a cache in front of the database for frequently read data."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "nodes": [
+          {
+            "id": "n-scenario",
+            "type": "noteNode",
+            "position": {
+              "x": 40,
+              "y": 40
+            },
+            "width": 320,
+            "height": 120,
+            "data": {
+              "kind": "note",
+              "label": "Scenario",
+              "note": "Every page view asks the database for the same popular data. The database stays busy even when traffic is normal."
+            }
+          }
+        ],
+        "edges": []
+      },
+      "incident": {
+        "nodeIds": [
+          "n-scenario"
+        ],
+        "edgeIds": [],
+        "headline": "Database overloaded by reads"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Add a cache in front of the database for frequently read data.",
+            "opener": "Reads hammer the database. What do you add so common reads do not always hit the database?",
+            "evidence": {
+              "strong": "Add a cache in front of the database for frequently read data.",
+              "adequate": "Names a reasonable fix direction related to cache.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When should you not cache a value?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Add a cache in front of the database for frequently read data."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "text-only",
+        "difficulty": "onboarding",
+        "track": "software-engineering",
+        "componentId": "cache",
+        "onboardingOrder": 2
+      }
+    },
+    {
+      "id": "nugget-basics/onboarding-3",
+      "title": "One database cannot grow anymore",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Saving new users and posts gets slower every month. One database holds everything and is running out of room.",
+        "interviewerSetup": "Nugget-basics warm-up (onboarding). Component: database. Shard or partition data across multiple databases using a key such as user id."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "nodes": [
+          {
+            "id": "n-scenario",
+            "type": "noteNode",
+            "position": {
+              "x": 40,
+              "y": 40
+            },
+            "width": 320,
+            "height": 120,
+            "data": {
+              "kind": "note",
+              "label": "Scenario",
+              "note": "Saving new users and posts gets slower every month. One database holds everything and is running out of room."
+            }
+          }
+        ],
+        "edges": []
+      },
+      "incident": {
+        "nodeIds": [
+          "n-scenario"
+        ],
+        "edgeIds": [],
+        "headline": "One database cannot grow anymore"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Shard or partition data across multiple databases using a key such as user id.",
+            "opener": "One database cannot keep all the data. What approach splits the load?",
+            "evidence": {
+              "strong": "Shard or partition data across multiple databases using a key such as user id.",
+              "adequate": "Names a reasonable fix direction related to database.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What kind of data should live on the same shard?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Shard or partition data across multiple databases using a key such as user id."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "text-only",
+        "difficulty": "onboarding",
+        "track": "software-engineering",
+        "componentId": "database",
+        "onboardingOrder": 3
+      }
+    },
+    {
+      "id": "nugget-basics/onboarding-4",
+      "title": "Users see stale information",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "After someone updates their profile, friends still see the old name for several minutes.",
+        "interviewerSetup": "Nugget-basics warm-up (onboarding). Component: cache. Invalidate or update the cache on write, shorten TTL, or read from the source of truth for that user right after they edit."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "nodes": [
+          {
+            "id": "n-scenario",
+            "type": "noteNode",
+            "position": {
+              "x": 40,
+              "y": 40
+            },
+            "width": 320,
+            "height": 120,
+            "data": {
+              "kind": "note",
+              "label": "Scenario",
+              "note": "After someone updates their profile, friends still see the old name for several minutes."
+            }
+          }
+        ],
+        "edges": []
+      },
+      "incident": {
+        "nodeIds": [
+          "n-scenario"
+        ],
+        "edgeIds": [],
+        "headline": "Users see stale information"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Invalidate or update the cache on write, shorten TTL, or read from the source of truth for that user right after they edit.",
+            "opener": "Writes succeed but readers see old data. How do you tighten what readers see after an update?",
+            "evidence": {
+              "strong": "Invalidate or update the cache on write, shorten TTL, or read from the source of truth for that user right after they edit.",
+              "adequate": "Names a reasonable fix direction related to cache.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Can you keep every read as fast as a cache and still never show stale data?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Invalidate or update the cache on write, shorten TTL, or read from the source of truth for that user right after they edit."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "text-only",
+        "difficulty": "onboarding",
+        "track": "software-engineering",
+        "componentId": "cache",
+        "onboardingOrder": 4
+      }
+    },
+    {
+      "id": "nugget-basics/onboarding-5",
+      "title": "One hot item slows everything",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "A single popular product page gets almost all visits. That one part of the system melts while everything else looks fine.",
+        "interviewerSetup": "Nugget-basics warm-up (onboarding). Component: partitioning. Spread hot reads with replication, local caching, or splitting the hot key; avoid sending all traffic to one partition."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "nodes": [
+          {
+            "id": "n-scenario",
+            "type": "noteNode",
+            "position": {
+              "x": 40,
+              "y": 40
+            },
+            "width": 320,
+            "height": 120,
+            "data": {
+              "kind": "note",
+              "label": "Scenario",
+              "note": "A single popular product page gets almost all visits. That one part of the system melts while everything else looks fine."
+            }
+          }
+        ],
+        "edges": []
+      },
+      "incident": {
+        "nodeIds": [
+          "n-scenario"
+        ],
+        "edgeIds": [],
+        "headline": "One hot item slows everything"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Spread hot reads with replication, local caching, or splitting the hot key; avoid sending all traffic to one partition.",
+            "opener": "One hot key or hot shard takes almost all traffic. What do you do?",
+            "evidence": {
+              "strong": "Spread hot reads with replication, local caching, or splitting the hot key; avoid sending all traffic to one partition.",
+              "adequate": "Names a reasonable fix direction related to partitioning.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why does sharding alone not fix one extremely popular item?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Spread hot reads with replication, local caching, or splitting the hot key; avoid sending all traffic to one partition."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "text-only",
+        "difficulty": "onboarding",
+        "track": "distributed-systems",
+        "componentId": "partitioning",
+        "onboardingOrder": 5
+      }
+    }
+  ]
+}

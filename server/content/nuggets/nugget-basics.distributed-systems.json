@@ -1,0 +1,2814 @@
+{
+  "promptId": "nugget-basics",
+  "packVersion": "basics-v1",
+  "nuggets": [
+    {
+      "id": "nugget-basics/distributed-systems/single-node-limit/easy",
+      "title": "One machine maxed out",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "CPU, disk, or network on one server hits its limit while demand grows.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: single-node-limit. Split work across multiple nodes (scale out) instead of one bigger machine."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Single-node limit"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "One machine maxed out"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Split work across multiple nodes (scale out) instead of one bigger machine.",
+            "opener": "Vertical scaling is exhausted. What is the fundamental next step?",
+            "evidence": {
+              "strong": "Split work across multiple nodes (scale out) instead of one bigger machine.",
+              "adequate": "Names a reasonable fix direction related to single node limit.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What problems appear when you have many nodes?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Split work across multiple nodes (scale out) instead of one bigger machine."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "single-node-limit",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/single-node-limit/medium",
+      "title": "Shared disk bottleneck",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Many app servers fight over one attached disk.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: single-node-limit. Network-attached or distributed storage so compute nodes do not share one local disk."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Single-node limit"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Shared disk bottleneck"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Network-attached or distributed storage so compute nodes do not share one local disk.",
+            "opener": "Compute scaled but storage did not. What decouples them?",
+            "evidence": {
+              "strong": "Network-attached or distributed storage so compute nodes do not share one local disk.",
+              "adequate": "Names a reasonable fix direction related to single node limit.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What latency trade-off does remote storage add?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Network-attached or distributed storage so compute nodes do not share one local disk."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "single-node-limit",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/single-node-limit/hard",
+      "title": "Stateful service hard to scale",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "The component keeps local session state so extra instances do not help.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: single-node-limit. Externalize state to a shared store or shard state so each instance owns a slice."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Single-node limit"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Stateful service hard to scale"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Externalize state to a shared store or shard state so each instance owns a slice.",
+            "opener": "State sticks to one process. What two approaches enable scale?",
+            "evidence": {
+              "strong": "Externalize state to a shared store or shard state so each instance owns a slice.",
+              "adequate": "Names a reasonable fix direction related to single node limit.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is sticky session versus shared session store?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Externalize state to a shared store or shard state so each instance owns a slice."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "single-node-limit",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/replication/easy",
+      "title": "Data lost when disk dies",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "A single copy of data disappears with one hardware failure.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: replication. Replicate data to additional nodes or disks."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Replication"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Data lost when disk dies"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Replicate data to additional nodes or disks.",
+            "opener": "One copy is not enough. What basic pattern adds safety?",
+            "evidence": {
+              "strong": "Replicate data to additional nodes or disks.",
+              "adequate": "Names a reasonable fix direction related to replication.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Does replication always mean faster reads?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Replicate data to additional nodes or disks."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "replication",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/replication/medium",
+      "title": "Replica lags behind primary",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Reads from a replica show data several seconds old.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: replication. Accept eventual consistency for those reads or route critical reads to the primary."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Replication"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Replica lags behind primary"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Accept eventual consistency for those reads or route critical reads to the primary.",
+            "opener": "Replicas trail the primary. What consistency choice are you making?",
+            "evidence": {
+              "strong": "Accept eventual consistency for those reads or route critical reads to the primary.",
+              "adequate": "Names a reasonable fix direction related to replication.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is asynchronous replication?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Accept eventual consistency for those reads or route critical reads to the primary."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "replication",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/replication/hard",
+      "title": "Primary fails during write",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Primary crashes before replicas acknowledge a payment write.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: replication. Choose sync replication for no-loss paths or accept possible loss with async plus reconciliation."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Replication"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Primary fails during write"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Choose sync replication for no-loss paths or accept possible loss with async plus reconciliation.",
+            "opener": "Failure during replication. What guarantees do you promise users?",
+            "evidence": {
+              "strong": "Choose sync replication for no-loss paths or accept possible loss with async plus reconciliation.",
+              "adequate": "Names a reasonable fix direction related to replication.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a quorum write?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Choose sync replication for no-loss paths or accept possible loss with async plus reconciliation."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "replication",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/partitioning/easy",
+      "title": "Table too large for one node",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Indexes no longer fit on one machine.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: partitioning. Partition or shard data by a key across nodes."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Partitioning"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Table too large for one node"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Partition or shard data by a key across nodes.",
+            "opener": "Data exceeds one node. What splits it?",
+            "evidence": {
+              "strong": "Partition or shard data by a key across nodes.",
+              "adequate": "Names a reasonable fix direction related to partitioning.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What makes a good shard key?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Partition or shard data by a key across nodes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "partitioning",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/partitioning/medium",
+      "title": "Skewed shard load",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "One shard holds most keys because the key choice was poor.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: partitioning. Salting hot keys, better key design, or split hot partitions."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Partitioning"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Skewed shard load"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Salting hot keys, better key design, or split hot partitions.",
+            "opener": "Shards exist but load is uneven. What fixes skew?",
+            "evidence": {
+              "strong": "Salting hot keys, better key design, or split hot partitions.",
+              "adequate": "Names a reasonable fix direction related to partitioning.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a hot partition?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Salting hot keys, better key design, or split hot partitions."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "partitioning",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/partitioning/hard",
+      "title": "Cross-shard query",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Report needs rows from every shard and is too slow.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: partitioning. Denormalized aggregates, secondary index service, or warehouse fed by change stream."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Partitioning"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Cross-shard query"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Denormalized aggregates, secondary index service, or warehouse fed by change stream.",
+            "opener": "Global queries on sharded data hurt. What architecture avoids scatter-gather?",
+            "evidence": {
+              "strong": "Denormalized aggregates, secondary index service, or warehouse fed by change stream.",
+              "adequate": "Names a reasonable fix direction related to partitioning.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When is scatter-gather acceptable?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Denormalized aggregates, secondary index service, or warehouse fed by change stream."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "partitioning",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/caching-layer/easy",
+      "title": "Repeat reads overload backend",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "The same keys are read thousands of times per second.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: caching-layer. A distributed cache in front of the data source."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Caching layer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Repeat reads overload backend"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "A distributed cache in front of the data source.",
+            "opener": "Repeated reads hit the origin. What intermediate layer helps?",
+            "evidence": {
+              "strong": "A distributed cache in front of the data source.",
+              "adequate": "Names a reasonable fix direction related to caching layer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is cache hit ratio?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "A distributed cache in front of the data source."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "caching-layer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/caching-layer/medium",
+      "title": "Cache invalidation unclear",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Writers update the database but readers keep seeing cached values.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: caching-layer. Invalidate or update cache on write; use TTL as a safety net."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Caching layer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Cache invalidation unclear"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Invalidate or update cache on write; use TTL as a safety net.",
+            "opener": "Cache and source disagree. How do writers notify readers?",
+            "evidence": {
+              "strong": "Invalidate or update cache on write; use TTL as a safety net.",
+              "adequate": "Names a reasonable fix direction related to caching layer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is write-through versus cache-aside?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Invalidate or update cache on write; use TTL as a safety net."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "caching-layer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/caching-layer/hard",
+      "title": "Cache cluster membership stale",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Clients route to a dead cache node for a minute after it crashes.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: caching-layer. Gossip or coordination service with health checks and fast removal of failed nodes."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Caching layer"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Cache cluster membership stale"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Gossip or coordination service with health checks and fast removal of failed nodes.",
+            "opener": "Topology changes but clients have old view. What updates membership?",
+            "evidence": {
+              "strong": "Gossip or coordination service with health checks and fast removal of failed nodes.",
+              "adequate": "Names a reasonable fix direction related to caching layer.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What happens to keys on a failed cache node?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Gossip or coordination service with health checks and fast removal of failed nodes."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "caching-layer",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/message-bus/easy",
+      "title": "Tight coupling between services",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Service A calls B synchronously and fails when B is slow.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: message-bus. An asynchronous message bus between producer and consumer."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Message bus"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Tight coupling between services"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "tradeoffs",
+            "weight": 2,
+            "required": true,
+            "goal": "An asynchronous message bus between producer and consumer.",
+            "opener": "Direct sync calls amplify failures. What decouples them?",
+            "evidence": {
+              "strong": "An asynchronous message bus between producer and consumer.",
+              "adequate": "Names a reasonable fix direction related to message bus.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What does the producer do after publishing?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "An asynchronous message bus between producer and consumer."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "message-bus",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/message-bus/medium",
+      "title": "Consumer cannot keep up",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Queue depth grows for hours during peaks.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: message-bus. More consumer instances with partitioned topics for parallel work."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Message bus"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Consumer cannot keep up"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "More consumer instances with partitioned topics for parallel work.",
+            "opener": "Producers outpace consumers. What scales processing?",
+            "evidence": {
+              "strong": "More consumer instances with partitioned topics for parallel work.",
+              "adequate": "Names a reasonable fix direction related to message bus.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is consumer lag?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "More consumer instances with partitioned topics for parallel work."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "message-bus",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/message-bus/hard",
+      "title": "Ordering versus scale",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Global order is required but one partition cannot handle volume.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: message-bus. Keyed partitioning so order holds per partition while many partitions scale."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Message bus"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Ordering versus scale"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Keyed partitioning so order holds per partition while many partitions scale.",
+            "opener": "You need order only within a key, not globally. How do you partition?",
+            "evidence": {
+              "strong": "Keyed partitioning so order holds per partition while many partitions scale.",
+              "adequate": "Names a reasonable fix direction related to message bus.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When do you need total order?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Keyed partitioning so order holds per partition while many partitions scale."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "message-bus",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/consensus-coordination/easy",
+      "title": "Two nodes think they are leader",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Both accept writes during a network glitch.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: consensus-coordination. Leader election or consensus so only one writable leader is valid."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Consensus & coordination"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Two nodes think they are leader"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Leader election or consensus so only one writable leader is valid.",
+            "opener": "Multiple nodes claim authority. What process picks one leader?",
+            "evidence": {
+              "strong": "Leader election or consensus so only one writable leader is valid.",
+              "adequate": "Names a reasonable fix direction related to consensus coordination.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is split brain?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Leader election or consensus so only one writable leader is valid."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "consensus-coordination",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/consensus-coordination/medium",
+      "title": "Manual failover",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "On-call runs scripts to promote a replica during outages.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: consensus-coordination. Automated failover with quorum and fencing to prevent dual writers."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Consensus & coordination"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Manual failover"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Automated failover with quorum and fencing to prevent dual writers.",
+            "opener": "Failover is slow and human-dependent. What automates it safely?",
+            "evidence": {
+              "strong": "Automated failover with quorum and fencing to prevent dual writers.",
+              "adequate": "Names a reasonable fix direction related to consensus coordination.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is fencing?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Automated failover with quorum and fencing to prevent dual writers."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "consensus-coordination",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/consensus-coordination/hard",
+      "title": "Coordination service overload",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Every client watches the same znode and the coordination cluster melts.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: consensus-coordination. Local caching with version stamps, batch updates, and avoid hot global keys."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Consensus & coordination"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Coordination service overload"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Local caching with version stamps, batch updates, and avoid hot global keys.",
+            "opener": "Central coordination became a bottleneck. What reduces chatter?",
+            "evidence": {
+              "strong": "Local caching with version stamps, batch updates, and avoid hot global keys.",
+              "adequate": "Names a reasonable fix direction related to consensus coordination.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "When is etcd or ZooKeeper the wrong tool?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Local caching with version stamps, batch updates, and avoid hot global keys."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "consensus-coordination",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/clock-ordering/easy",
+      "title": "Events out of order",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "Messages arrive in a different order than they were sent.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: clock-ordering. Design for reordering: sequence numbers, idempotent handlers, or per-key ordering."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Clock & ordering"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Events out of order"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "scalability",
+            "weight": 2,
+            "required": true,
+            "goal": "Design for reordering: sequence numbers, idempotent handlers, or per-key ordering.",
+            "opener": "Order is not guaranteed on the network. What does the consumer assume?",
+            "evidence": {
+              "strong": "Design for reordering: sequence numbers, idempotent handlers, or per-key ordering.",
+              "adequate": "Names a reasonable fix direction related to clock ordering.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is causal order in one sentence?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Design for reordering: sequence numbers, idempotent handlers, or per-key ordering."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "clock-ordering",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/clock-ordering/medium",
+      "title": "Last-write-wins surprises",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Two editors save; the earlier save overwrites the newer one.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: clock-ordering. Version vectors, logical clocks, or CRDTs instead of naive timestamps."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Clock & ordering"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Last-write-wins surprises"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Version vectors, logical clocks, or CRDTs instead of naive timestamps.",
+            "opener": "Wall-clock timestamps pick winners poorly. What ordering helps?",
+            "evidence": {
+              "strong": "Version vectors, logical clocks, or CRDTs instead of naive timestamps.",
+              "adequate": "Names a reasonable fix direction related to clock ordering.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "Why are unsynchronized clocks risky?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Version vectors, logical clocks, or CRDTs instead of naive timestamps."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "clock-ordering",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/clock-ordering/hard",
+      "title": "Global transaction across services",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "Two databases must commit together but one is slow.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: clock-ordering. Sagas with compensating actions and eventual consistency between services."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Clock & ordering"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Global transaction across services"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Sagas with compensating actions and eventual consistency between services.",
+            "opener": "Two-phase commit is fragile at scale. What pattern avoids global transactions?",
+            "evidence": {
+              "strong": "Sagas with compensating actions and eventual consistency between services.",
+              "adequate": "Names a reasonable fix direction related to clock ordering.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is a compensating transaction?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Sagas with compensating actions and eventual consistency between services."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "clock-ordering",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/failure-detection/easy",
+      "title": "Slow node treated as healthy",
+      "minutes": 2,
+      "scenario": {
+        "symptoms": "A server responds slowly but health checks still pass.",
+        "interviewerSetup": "Nugget-basics warm-up (easy). Component: failure-detection. Latency and error-rate checks, not just TCP reachability."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Failure detection"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Slow node treated as healthy"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "reliability",
+            "weight": 2,
+            "required": true,
+            "goal": "Latency and error-rate checks, not just TCP reachability.",
+            "opener": "Liveness checks miss partial failure. What signal also matters?",
+            "evidence": {
+              "strong": "Latency and error-rate checks, not just TCP reachability.",
+              "adequate": "Names a reasonable fix direction related to failure detection.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is the difference between liveness and readiness?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Latency and error-rate checks, not just TCP reachability."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "easy",
+        "track": "distributed-systems",
+        "componentId": "failure-detection",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/failure-detection/medium",
+      "title": "Flapping alerts",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "A node bounces between healthy and unhealthy every few seconds.",
+        "interviewerSetup": "Nugget-basics warm-up (medium). Component: failure-detection. Hysteresis, consecutive failure thresholds, and cooldown before marking healthy."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Failure detection"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Flapping alerts"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "architecture",
+            "weight": 2,
+            "required": true,
+            "goal": "Hysteresis, consecutive failure thresholds, and cooldown before marking healthy.",
+            "opener": "Aggressive detection causes churn. What stabilizes decisions?",
+            "evidence": {
+              "strong": "Hysteresis, consecutive failure thresholds, and cooldown before marking healthy.",
+              "adequate": "Names a reasonable fix direction related to failure detection.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What is gossip failure detection?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Hysteresis, consecutive failure thresholds, and cooldown before marking healthy."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "medium",
+        "track": "distributed-systems",
+        "componentId": "failure-detection",
+        "onboardingOrder": null
+      }
+    },
+    {
+      "id": "nugget-basics/distributed-systems/failure-detection/hard",
+      "title": "Cascading failure",
+      "minutes": 3,
+      "scenario": {
+        "symptoms": "One slow dependency causes all threads to block and the caller fails too.",
+        "interviewerSetup": "Nugget-basics warm-up (hard). Component: failure-detection. Timeouts, bulkheads, circuit breakers, and load shedding."
+      },
+      "diagram": {
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 0.9
+        },
+        "nodes": [
+          {
+            "id": "n-users",
+            "type": "systemNode",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "data": {
+              "kind": "users",
+              "label": "Users"
+            }
+          },
+          {
+            "id": "n-app",
+            "type": "systemNode",
+            "position": {
+              "x": 240,
+              "y": 120
+            },
+            "data": {
+              "kind": "app-server",
+              "label": "App"
+            }
+          },
+          {
+            "id": "n-focus",
+            "type": "systemNode",
+            "position": {
+              "x": 440,
+              "y": 120
+            },
+            "data": {
+              "kind": "database",
+              "label": "Failure detection"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "n-users",
+            "target": "n-app",
+            "label": "Traffic"
+          },
+          {
+            "id": "e2",
+            "source": "n-app",
+            "target": "n-focus",
+            "label": "Issue path"
+          }
+        ]
+      },
+      "incident": {
+        "nodeIds": [
+          "n-focus"
+        ],
+        "edgeIds": [
+          "e2"
+        ],
+        "headline": "Cascading failure"
+      },
+      "miniPack": {
+        "agenda": [
+          {
+            "id": "incident.fix",
+            "stage": "incident",
+            "dimension": "data",
+            "weight": 2,
+            "required": true,
+            "goal": "Timeouts, bulkheads, circuit breakers, and load shedding.",
+            "opener": "Failures spread upstream. What stops the cascade?",
+            "evidence": {
+              "strong": "Timeouts, bulkheads, circuit breakers, and load shedding.",
+              "adequate": "Names a reasonable fix direction related to failure detection.",
+              "weak": "Restates the symptom without a concrete fix or misidentifies the failing part."
+            },
+            "misconceptions": [],
+            "probes": [
+              "What does a circuit breaker open mean?"
+            ],
+            "hints": [
+              "Think about the highlighted path in the diagram.",
+              "What building block usually addresses this symptom?"
+            ],
+            "referenceFix": "Timeouts, bulkheads, circuit breakers, and load shedding."
+          }
+        ],
+        "pacing": {
+          "incident": 0.85,
+          "wrap_up": 0.15
+        }
+      },
+      "status": "published",
+      "source": "hand",
+      "basics": {
+        "format": "diagram",
+        "difficulty": "hard",
+        "track": "distributed-systems",
+        "componentId": "failure-detection",
+        "onboardingOrder": null
+      }
+    }
+  ]
+}

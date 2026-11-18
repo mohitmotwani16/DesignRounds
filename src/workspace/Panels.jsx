@@ -12,7 +12,22 @@ import { Link } from "../router.js";
 
 import { nuggetDebriefBody, nuggetDebriefInTurns } from "./nuggetInterview.js";
 
-function NuggetReviewPanel({ roundFinished, nugget, promptId, drillReview, onReload, onFinishRound }) {
+function NuggetReviewPanel({ roundFinished, nugget, promptId, drillReview, onReload, onFinishRound, guestSession }) {
+  if (drillReview?.debriefOnly) {
+    return (
+      <div className="review-body">
+        <div className="review-card review-intro">
+          <span className="review-kicker"><LockKeyhole size={13} /> SIGNED-IN REVIEW</span>
+          <h3>Debrief is in the chat for now</h3>
+          <p>As a guest you get the <strong>Quick debrief</strong> in the Interviewer tab when the drill ends. Sign in to save this drill and unlock the full response analysis and communication feedback.</p>
+          <div className="modal-actions" style={{ marginTop: "0.75rem" }}>
+            <Link className="button button-dark" to={`/signin?next=${encodeURIComponent(window.location.pathname)}`}>Sign in</Link>
+            <Link className="button button-outline" to="/nugget-basics">More basics drills</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const ready = Boolean(drillReview?.debrief);
   const fallbackReference = drillReview?.referenceFix ?? nuggetDebriefBody([]);
   if (!ready && !fallbackReference) {
@@ -74,12 +89,15 @@ function NuggetReviewPanel({ roundFinished, nugget, promptId, drillReview, onRel
 }
 
 // Right-hand panel: the interviewer conversation and the round's final review.
-export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack, sessionKind = "full", nugget, promptId, onFinishRound }) {
+export function SidePanel({ tab, onTab, onClose, interview, unread, selected, onClearSelected, sessionId, roundFinished, onFocusNode, labelFor, promptTrack, sessionKind = "full", nugget, promptId, onFinishRound, guestSession }) {
   const nuggetDebriefReady = sessionKind === "nugget" && interview.status === "ready" && nuggetDebriefInTurns(interview.turns ?? []);
+  const showReviewTab = nuggetDebriefReady && !interview.drillReview?.debriefOnly;
   const tabs = sessionKind === "nugget"
-    ? (nuggetDebriefReady
+    ? (showReviewTab
       ? [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]]
-      : [["interviewer", "Interviewer", MessageSquare]])
+      : (nuggetDebriefReady && guestSession
+        ? [["interviewer", "Interviewer", MessageSquare], ["review", "Sign in", LockKeyhole]]
+        : [["interviewer", "Interviewer", MessageSquare]]))
     : [["interviewer", "Interviewer", MessageSquare], ["review", "Review", ClipboardCheck]];
   // On free plans the interviewer is a Plus feature (or the one free round), and the tab says so.
   const interviewerLocked = interview.status === "ready" && interview.access !== "full";
@@ -99,7 +117,7 @@ export function SidePanel({ tab, onTab, onClose, interview, unread, selected, on
       </div>
       {tab === "review"
         ? (sessionKind === "nugget"
-          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} drillReview={interview.drillReview} onReload={interview.reload} onFinishRound={onFinishRound} />
+          ? <NuggetReviewPanel roundFinished={roundFinished} nugget={nugget} promptId={promptId} drillReview={interview.drillReview} onReload={interview.reload} onFinishRound={onFinishRound} guestSession={guestSession} />
           : <ReviewPanel sessionId={sessionId} roundFinished={roundFinished} onFocusNode={onFocusNode} labelFor={labelFor} promptTrack={promptTrack} />)
         : <InterviewerPanel sessionKind={sessionKind} interview={interview} roundFinished={roundFinished} selected={selected} onClearSelected={onClearSelected} onFocusNode={onFocusNode} labelFor={labelFor} onShowReview={() => onTab("review")} onFinishRound={onFinishRound} promptId={promptId} />}
     </aside>
@@ -127,7 +145,7 @@ export function NuggetBriefModal({ nugget, parentPrompt, onClose }) {
         <div className="modal-content">
           <h3 className="modal-section-title">What you're seeing</h3>
           <p>{nugget.symptoms}</p>
-          <div className="modal-nudge"><Sparkles size={18} /><p><strong>Your job:</strong> explain what failed on the highlighted parts of the diagram and how you'd fix it. The interviewer stays on this incident only.</p></div>
+          <div className="modal-nudge"><Sparkles size={18} /><p><strong>Your job:</strong> {nugget.format === "text-only" ? "explain what failed and how you'd fix it in plain language." : "explain what failed on the highlighted parts of the diagram and how you'd fix it."} The interviewer stays on this incident only.</p></div>
         </div>
         <footer className="modal-footer">
           <span>Reopen from <strong>Brief</strong> anytime.</span>

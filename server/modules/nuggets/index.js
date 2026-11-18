@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { prompts } from "../../../src/data/prompts.js";
 import { isPlus } from "../plans.js";
 import { canAccessRound, promptById } from "../rounds.js";
+import { NUGGET_BASICS_PARENT } from "../guest.js";
 import { estimateTokens } from "../ucs/index.js";
 import { renderIncidentBrief, renderPack } from "../pks/render.js";
 import { miniPackAsProblemPack, nuggetContentVersion, validateNuggetFile } from "./schema.js";
@@ -23,10 +24,13 @@ function loadAll() {
     const file = validateNuggetFile(raw);
     const published = file.nuggets.filter((nugget) => nugget.status === "published");
     if (!published.length) continue;
-    byParent.set(file.promptId, published.map((nugget) => ({ ...nugget, parentPromptId: file.promptId, version: nuggetContentVersion(nugget) })));
+    const parentList = byParent.get(file.promptId) ?? [];
     for (const nugget of published) {
-      byId.set(nugget.id, { ...nugget, parentPromptId: file.promptId, version: nuggetContentVersion(nugget) });
+      const row = { ...nugget, parentPromptId: file.promptId, version: nuggetContentVersion(nugget) };
+      byId.set(nugget.id, row);
+      if (!parentList.some((entry) => entry.id === nugget.id)) parentList.push(row);
     }
+    byParent.set(file.promptId, parentList);
   }
 }
 
@@ -77,7 +81,7 @@ export function getNuggetRecord(nuggetId) {
 /** Parents with at least one published nugget, optionally filtered for random pool. */
 export function eligibleParents(user, { forRandomPool = false } = {}) {
   loadAll();
-  const parents = [...byParent.keys()].filter((id) => (byParent.get(id)?.length ?? 0) > 0);
+  const parents = [...byParent.keys()].filter((id) => id !== NUGGET_BASICS_PARENT && (byParent.get(id)?.length ?? 0) > 0);
   if (!forRandomPool) return parents.map((id) => promptById.get(id)).filter(Boolean);
   return parents
     .map((id) => promptById.get(id))
@@ -88,13 +92,18 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+export function isBasicsNugget(nugget) {
+  return nugget?.parentPromptId === NUGGET_BASICS_PARENT;
+}
+
 export function pickNugget(user, { nuggetId, parentPromptId, random = false } = {}) {
   loadAll();
   if (nuggetId) {
     const nugget = getNugget(nuggetId);
     if (!nugget) throw new Error("NOT_FOUND");
     const parent = promptById.get(nugget.parentPromptId);
-    if (!parent || !canAccessRound(user, parent)) throw new Error("PLAN_REQUIRED");
+    if (!parent) throw new Error("NOT_FOUND");
+    if (!isBasicsNugget(nugget) && !canAccessRound(user, parent)) throw new Error("PLAN_REQUIRED");
     return nugget;
   }
   if (parentPromptId) {
@@ -120,16 +129,21 @@ export function pickNugget(user, { nuggetId, parentPromptId, random = false } = 
 
 export function publicNuggetSummary(nugget) {
   const parent = promptById.get(nugget.parentPromptId);
+  const basics = nugget.basics;
   return {
     id: nugget.id,
     title: nugget.title,
     minutes: nugget.minutes,
     parentPromptId: nugget.parentPromptId,
     parentTitle: parent?.title ?? nugget.parentPromptId,
-    track: parent?.track ?? null,
+    track: basics?.track ?? parent?.track ?? null,
     access: parent?.access ?? "free",
     icon: parent?.icon ?? null,
     symptomsPreview: nugget.scenario.symptoms.slice(0, 160),
+    basicsFormat: basics?.format ?? "diagram",
+    basicsDifficulty: basics?.difficulty ?? null,
+    basicsComponentId: basics?.componentId ?? null,
+    basicsOnboardingOrder: basics?.onboardingOrder ?? null,
   };
 }
 

@@ -59,6 +59,22 @@ export const tracks = [
 
 export const prompts = [
   {
+    id: "nugget-basics",
+    title: "Nugget-basics",
+    description: "Short warm-up incident drills that teach the Nugget flow before full parent-round nuggets.",
+    track: "software-engineering",
+    access: "free",
+    category: "Warm-up",
+    difficulty: "Beginner",
+    minutes: 2,
+    icon: "incident",
+    color: "violet",
+    nuggetBasicsOnly: true,
+    requirements: ["Read a short symptom.", "Explain what you would change in plain language.", "Use the mini debrief to compare your idea to a reference fix."],
+    considerations: ["Text-only drills for the first five lessons", "Small diagrams after onboarding"],
+    expectedOutcome: "Comfort with incident-style Nugget drills before tackling full library nuggets.",
+  },
+  {
     id: "url-shortener", title: "Design a URL shortener", description: "Build a service that turns long links into short, shareable URLs.",
     track: "software-engineering", access: "free", category: "Storage", difficulty: "Beginner", minutes: 35, icon: "link", color: "violet", popular: true,
     requirements: ["A user submits a long URL and receives a short link.", "Opening a short link redirects to its destination with low latency.", "Link creation and redirect traffic can grow independently."],

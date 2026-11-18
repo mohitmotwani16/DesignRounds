@@ -22,6 +22,7 @@ import { CommunityArticlePage, LearnHubPage, LearnTopicPage } from "./pages/Lear
 import LandingPage from "./pages/Landing.jsx";
 import LibraryPage from "./pages/Library.jsx";
 import NuggetsPage from "./pages/Nuggets.jsx";
+import NuggetBasicsPage from "./pages/NuggetBasics.jsx";
 import OnboardingPage from "./pages/Onboarding.jsx";
 import PlusPage from "./pages/Plus.jsx";
 import ProfilePage from "./pages/Profile.jsx";
@@ -74,7 +75,7 @@ export default function App({ authStatus }) {
 }
 
 // Pages that need an account. They hold the learner's own work and details.
-const isAccountPath = (path) => path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/workspace/") || path.startsWith("/start/")
+const isAccountPath = (path) => path === "/welcome" || path === "/profile" || path === "/start-free" || path.startsWith("/start/")
   || path === "/learn/write" || path.startsWith("/learn/write/") || path === "/admin" || path.startsWith("/admin/") || path.startsWith("/start/nugget");
 
 // Account pages are kept out of analytics recordings (src/analytics.js). The wrapper is
@@ -164,6 +165,7 @@ function Routes() {
     return <StartRound promptId={path.slice("/start/".length)} />;
   }
   if (path.startsWith("/workspace/")) {
+    if (auth.status === "loading") return loadingScreen;
     return (
       <RouteErrorBoundary>
         <Suspense fallback={loadingScreen}>
@@ -190,6 +192,7 @@ function Routes() {
 function Page({ path, onStart, onLockRound }) {
   if (path === "/") return <LandingPage onStart={onStart} />;
   if (path === "/library") return <LibraryPage key="all" onStart={onStart} track="all" />;
+  if (path === "/nugget-basics") return <NuggetBasicsPage />;
   if (path === "/nuggets") return <NuggetsPage onLockRound={onLockRound} />;
   if (path === "/profile") return <ProfilePage onStart={onStart} />;
   if (path === "/about") return <AboutPage />;

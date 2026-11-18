@@ -76,6 +76,7 @@ function writeSessionFlag(key, value) {
 function Workspace({ session, prompt }) {
   const isNugget = session.sessionKind === "nugget";
   const nuggetMeta = session.nugget;
+  const textOnlyBasics = isNugget && nuggetMeta?.format === "text-only";
   const initial = useMemo(() => hydrateDiagram(session.diagram), [session]);
   const defaultViewport = useMemo(() => {
     const view = session.diagram?.viewport;
@@ -696,7 +697,7 @@ function Workspace({ session, prompt }) {
   // ---- Round lifecycle -----------------------------------------------------
   async function exitRound() {
     await flush();
-    navigate("/library");
+    navigate(session.basicsOnly || session.promptId === "nugget-basics" ? "/nugget-basics" : "/library");
   }
 
   async function finishRound() {
@@ -836,7 +837,7 @@ function Workspace({ session, prompt }) {
   }, []);
 
   return (
-    <main className="workspace-shell">
+    <main className={`workspace-shell${textOnlyBasics ? " workspace-shell--text-only" : ""}`}>
       <header className="workspace-header">
         <Brand className="workspace-brand" onClick={exitRound} />
         <div className="workspace-divider" />
@@ -891,10 +892,10 @@ function Workspace({ session, prompt }) {
           </div>
         </aside>
 
-        {paletteOpen && <Palette onAdd={addItem} disabled={readOnly} outline={outline} selectedIds={selectedIds} onFocusNode={focusNode} />}
-        {paletteOpen && <PanelResizer side="left" label="Resize component library" width={paletteWidth} onResize={setPaletteWidth} {...PALETTE_WIDTH} />}
+        {!textOnlyBasics && paletteOpen && <Palette onAdd={addItem} disabled={readOnly} outline={outline} selectedIds={selectedIds} onFocusNode={focusNode} />}
+        {!textOnlyBasics && paletteOpen && <PanelResizer side="left" label="Resize component library" width={paletteWidth} onResize={setPaletteWidth} {...PALETTE_WIDTH} />}
 
-        <section className="canvas-column" aria-label="System design canvas">
+        {!textOnlyBasics && <section className="canvas-column" aria-label="System design canvas">
           <div className="canvas-topbar">
             <div className="canvas-topbar-left"><span className="canvas-breadcrumb">Design</span><ChevronRight size={13} /><span className="canvas-breadcrumb-current">{isNugget && nuggetMeta ? nuggetMeta.title : prompt.title}</span></div>
             <div className="canvas-topbar-actions">
@@ -1003,14 +1004,23 @@ function Workspace({ session, prompt }) {
             <span><MousePointer2 size={13} /> Drag to move around · Shift + drag to select several · Double-click to rename</span>
             <span><Command size={12} /> Press <kbd>?</kbd> for keyboard shortcuts <span aria-hidden="true">·</span> <button type="button" className="canvas-footer-link" onClick={openReportProblem}>Report a problem</button></span>
           </div>
-        </section>
+        </section>}
+
+        {textOnlyBasics && (
+          <section className="canvas-column nugget-basics-text-only-pane" aria-label="Nugget-basics scenario">
+            <div className="nugget-basics-text-only-inner">
+              <p className="kicker">Text-only warm-up</p>
+              <p>Read the symptom in the banner and explain your fix in the <strong>Interviewer</strong> panel. Diagrams start on drill 6.</p>
+            </div>
+          </section>
+        )}
 
         {panelOpen && <PanelResizer side="right" label={`Resize ${panelTab === "review" ? "review" : "interviewer"} panel`} width={panelWidth} onResize={setPanelWidth}
           {...SIDE_PANEL_WIDTH} defaultWidth={panelTab === "review" ? SIDE_PANEL_WIDTH.reviewWidth : SIDE_PANEL_WIDTH.defaultWidth} />}
         {panelOpen && (
           <SidePanel tab={panelTab} onTab={setPanelTab} onClose={togglePanel} interview={interview} unread={unread}
             selected={attached} onClearSelected={() => setDetachedId(selectedComponent?.id ?? null)} sessionId={session.id} roundFinished={readOnly} onFocusNode={focusNode} labelFor={labelFor} promptTrack={prompt.track}
-            sessionKind={session.sessionKind} nugget={nuggetMeta} promptId={session.promptId} onFinishRound={finishRound} />
+            sessionKind={session.sessionKind} nugget={nuggetMeta} promptId={session.promptId} onFinishRound={finishRound} guestSession={session.guest} />
         )}
       </div>
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}

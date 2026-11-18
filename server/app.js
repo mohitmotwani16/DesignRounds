@@ -7,6 +7,8 @@ import express from "express";
 import { connect, query } from "./db.js";
 import { HttpError, sameOriginWrites } from "./http.js";
 import { identityRouter, loadUser, requireCurrentHuman } from "./modules/identity.js";
+import { loadGuest } from "./modules/guest.js";
+import { nuggetBasicsRouter } from "./modules/nugget-basics/routes.js";
 import { practiceRouter } from "./modules/practice.js";
 import { reviewsRouter } from "./modules/reviews.js";
 import { interviewsRouter } from "./modules/interviews.js";
@@ -78,7 +80,9 @@ export async function createApp({ migrate = true, serveFrontend = true } = {}) {
   api.use(sameOriginWrites);
   api.use("/v1", maintenanceRouter);
   api.use(loadUser);
+  api.use(loadGuest);
   api.use(requireCurrentHuman);
+  api.use("/v1", nuggetBasicsRouter);
   api.use("/v1", nuggetsRouter);
   // Before the routers that require sign-in: round content answers visitors too.
   api.use("/v1", roundsRouter);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { HttpError, parse, route } from "../../http.js";
 import { canAccessRound, promptById } from "../rounds.js";
 import { eligibleParents, getNugget, nuggetsForParent, pickNugget, publicNuggetCatalog, publicNuggetSummary } from "./index.js";
+import { NUGGET_BASICS_PARENT } from "../guest.js";
 
 const listQuery = z.object({
   parent: z.string().max(80).optional(),
@@ -34,7 +35,7 @@ nuggetsRouter.get("/nuggets", route(async (req, res) => {
 
 nuggetsRouter.get("/nuggets/parents", route(async (req, res) => {
   const parents = eligibleParents(req.user ?? null, { forRandomPool: false })
-    .filter((prompt) => nuggetsForParent(prompt.id).length > 0)
+    .filter((prompt) => prompt.id !== NUGGET_BASICS_PARENT && nuggetsForParent(prompt.id).length > 0)
     .map((prompt) => ({
       id: prompt.id,
       title: prompt.title,

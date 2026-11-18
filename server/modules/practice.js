@@ -4,6 +4,8 @@ import { query, queryOne } from "../db.js";
 import { HttpError, createLimiter, parse, route } from "../http.js";
 import { deleteInterviewAudioForSession } from "../object-storage.js";
 import { requireUser } from "./identity.js";
+import { NUGGET_BASICS_PARENT } from "./guest.js";
+import { getSessionForActor, sessionOwnerWhere } from "./nugget-basics/sessions.js";
 import { briefFor, canAccessRound, promptById } from "./rounds.js";
 import { getNugget, pickNugget, publicNuggetSummary } from "./nuggets/index.js";
 import { maybeUpgradeScaffoldParent } from "./nuggets/live.js";
@@ -17,7 +19,7 @@ const MAX_EDGES = 800;
 const hourlyRoundLimiter = createLimiter({ name: "round-create-hour", windowMs: 60 * 60_000, max: 30 });
 const dailyRoundLimiter = createLimiter({ name: "round-create-day", windowMs: 24 * 60 * 60_000, max: 120 });
 
-async function assertCanCreateRound(user) {
+export async function assertCanCreateRound(user) {
   if (!(await hourlyRoundLimiter(user.id)) || !(await dailyRoundLimiter(user.id))) {
     throw new HttpError(429, "RATE_LIMITED", "You've started a lot of rounds recently. Try again a little later.");
   }
@@ -120,27 +122,42 @@ function nuggetPayload(nuggetId) {
     symptoms: nugget.scenario.symptoms,
     incident: nugget.incident,
     minutes: nugget.minutes,
+    format: nugget.basics?.format ?? "diagram",
   };
 }
 
 function sessionResponse(row, { brief = null, resumed }) {
-  const base = { ...toSummary(row), diagram: row.diagram, brief, resumed };
+  const base = {
+    ...toSummary(row),
+    diagram: row.diagram,
+    brief,
+    resumed,
+    guest: Boolean(row.guest_token_hash),
+    basicsOnly: row.prompt_id === NUGGET_BASICS_PARENT,
+  };
   if (row.session_kind === "nugget" && row.nugget_id) base.nugget = nuggetPayload(row.nugget_id);
   return base;
 }
 
 export async function ownedSession(req) {
-  const sessionId = parse(uuid, req.params.sessionId);
-  // Ownership is part of the lookup, so another user's id behaves like a missing one.
-  const row = await queryOne("select * from practice_sessions where id = $1 and user_id = $2", [sessionId, req.user.id]);
-  if (!row) throw new HttpError(404, "NOT_FOUND", "Practice round not found.");
+  const row = await getSessionForActor(req);
+  if (!req.user) {
+    if (row.prompt_id !== NUGGET_BASICS_PARENT) throw new HttpError(401, "AUTH_REQUIRED", "Sign in to continue.");
+    return row;
+  }
+  if (row.user_id !== req.user.id) throw new HttpError(404, "NOT_FOUND", "Practice round not found.");
   return row;
 }
 
-export const practiceRouter = express.Router();
-practiceRouter.use(requireUser);
+function requireActor(req, _res, next) {
+  if (req.user || req.guestTokenHash) return next();
+  return next(new HttpError(401, "AUTH_REQUIRED", "Sign in to continue."));
+}
 
-practiceRouter.get("/sessions", route(async (req, res) => {
+export const practiceRouter = express.Router();
+practiceRouter.use(requireActor);
+
+practiceRouter.get("/sessions", requireUser, route(async (req, res) => {
   const rows = await query(
     `select id, prompt_id, status, session_kind, nugget_id, diagram_version, created_at, updated_at, completed_at, interviewer_trial,
             jsonb_array_length(diagram -> 'nodes') as component_count
@@ -164,7 +181,7 @@ function pickError(error) {
 }
 
 // Resumes the learner's in-progress round for a prompt or nugget, or starts a new one.
-practiceRouter.post("/sessions", route(async (req, res) => {
+practiceRouter.post("/sessions", requireUser, route(async (req, res) => {
   const body = parse(createBody, req.body);
 
   if ("promptId" in body) {
@@ -229,13 +246,14 @@ practiceRouter.put("/sessions/:sessionId/diagram", route(async (req, res) => {
   const { version, diagram } = parse(saveBody, req.body);
   if (row.status !== "in_progress") throw new HttpError(409, "ROUND_COMPLETED", "This round is finished. Reopen it to keep editing.");
 
+  const owner = sessionOwnerWhere(row, 2);
   // Optimistic concurrency: a stale tab can't overwrite newer work.
   const saved = await queryOne(
     `update practice_sessions
         set diagram = $1::jsonb, diagram_version = diagram_version + 1, updated_at = now()
-      where id = $2 and user_id = $3 and diagram_version = $4
+      where ${owner.clause} and diagram_version = $${owner.params.length + 2}
       returning diagram_version, updated_at`,
-    [JSON.stringify(diagram), row.id, req.user.id, version]
+    [JSON.stringify(diagram), ...owner.params, version]
   );
   if (!saved) throw new HttpError(409, "VERSION_CONFLICT", "This design was changed in another tab. Reload to get the latest version.");
 
@@ -254,12 +272,17 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
   const { status } = parse(updateBody, req.body);
   if (status === "in_progress" && row.status !== "in_progress") {
     if (row.session_kind === "nugget") {
-      const other = await queryOne(
-        "select id from practice_sessions where user_id = $1 and nugget_id = $2 and status = 'in_progress' and id <> $3",
-        [req.user.id, row.nugget_id, row.id]
-      );
+      const other = row.guest_token_hash
+        ? await queryOne(
+          "select id from practice_sessions where guest_token_hash = $1 and nugget_id = $2 and status = 'in_progress' and session_kind = 'nugget' and id <> $3",
+          [row.guest_token_hash, row.nugget_id, row.id],
+        )
+        : await queryOne(
+          "select id from practice_sessions where user_id = $1 and nugget_id = $2 and status = 'in_progress' and session_kind = 'nugget' and guest_token_hash is null and id <> $3",
+          [row.user_id, row.nugget_id, row.id],
+        );
       if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open session for this nugget.");
-    } else {
+    } else if (req.user) {
       const other = await queryOne(
         "select id from practice_sessions where user_id = $1 and prompt_id = $2 and status = 'in_progress' and session_kind = 'full' and id <> $3",
         [req.user.id, row.prompt_id, row.id]
@@ -267,11 +290,12 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
       if (other) throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this design.");
     }
   }
+  const owner = sessionOwnerWhere(row, 2);
   const updated = await queryOne(
     `update practice_sessions
         set status = $1::text, completed_at = case when $1::text = 'completed' then now() else null end, updated_at = now()
-      where id = $2 and user_id = $3 returning *`,
-    [status, row.id, req.user.id]
+      where ${owner.clause} returning *`,
+  [status, ...owner.params],
   ).catch((error) => {
     // A concurrent reopen of another round for this prompt won the unique index.
     if (error.code === "23505") throw new HttpError(409, "ROUND_ALREADY_OPEN", "You already have an open round for this design.");
@@ -283,6 +307,7 @@ practiceRouter.patch("/sessions/:sessionId", route(async (req, res) => {
 practiceRouter.delete("/sessions/:sessionId", route(async (req, res) => {
   const row = await ownedSession(req);
   await deleteInterviewAudioForSession(row.id);
-  await query("delete from practice_sessions where id = $1 and user_id = $2", [row.id, req.user.id]);
+  const owner = sessionOwnerWhere(row, 1);
+  await query(`delete from practice_sessions where ${owner.clause}`, owner.params);
   res.json({ ok: true });
 }));

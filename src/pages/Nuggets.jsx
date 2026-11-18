@@ -204,6 +204,7 @@ export default function NuggetsPage({ onLockRound }) {
                   {primaryLabel}
                   {!starting && <ArrowRight size={17} className="nudge" />}
                 </button>
+                <Link className="lp-text-link" to="/nugget-basics">New? Try Nugget-basics</Link>
                 <Link className="lp-text-link" to="/library">Browse design rounds</Link>
               </div>
             </div>

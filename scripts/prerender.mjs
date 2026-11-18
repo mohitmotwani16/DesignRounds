@@ -83,7 +83,7 @@ write("404.html", page(ssr.renderNotFound(), ssr.metaHtml(ssr.routeMeta("/this-p
 
 // 4. Sitemap, with each page's last real change: guides carry their own dates, community
 // articles their last edit, and everything else the site's content date.
-const priority = (url) => (url === "/" ? "1.0" : url === "/library" || url.startsWith("/learn") ? "0.9" : url.startsWith("/library/") ? "0.8" : "0.7");
+const priority = (url) => (url === "/" ? "1.0" : url === "/library" || url.startsWith("/learn") || url === "/nugget-basics" || url.startsWith("/nuggets") ? "0.9" : url.startsWith("/library/") ? "0.8" : "0.7");
 const day = (value) => String(value).slice(0, 10);
 const lastmod = (url) => {
   const slug = url.startsWith(`${ssr.LEARN_PATH}/`) ? url.slice(ssr.LEARN_PATH.length + 1) : null;

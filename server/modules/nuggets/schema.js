@@ -6,6 +6,7 @@ import { STAGES as PACK_STAGES } from "../pks/schema.js";
 
 export const NUGGET_SCHEMA_VERSION = 1;
 export const MAX_NUGGETS_PER_PARENT = 5;
+export const MAX_NUGGETS_BASICS_FILE = 30;
 const ID = /^[a-z][a-z0-9_.-]{1,63}$/;
 
 const finite = z.number().finite().min(-1e6).max(1e6);
@@ -112,17 +113,31 @@ export const nuggetSchema = z.object({
   miniPack: miniPackSchema,
   status: z.enum(["draft", "published"]).default("published"),
   source: z.enum(["hand", "generated", "cursor"]).default("hand"),
+  basics: z.object({
+    format: z.enum(["text-only", "diagram"]),
+    difficulty: z.string().max(32),
+    track: z.string().max(64),
+    componentId: z.string().max(64),
+    onboardingOrder: z.number().int().min(1).max(5).nullable().optional(),
+  }).optional(),
 });
 
 export const parentFileSchema = z.object({
   promptId: z.string().min(1).max(80),
   packVersion: z.string().optional(),
   inputsFingerprint: z.string().optional(),
-  nuggets: list(nuggetSchema, { min: 1, max: MAX_NUGGETS_PER_PARENT }),
+  nuggets: list(nuggetSchema, { min: 1, max: MAX_NUGGETS_BASICS_FILE }),
+}).superRefine((file, ctx) => {
+  const max = file.promptId === "nugget-basics" ? MAX_NUGGETS_BASICS_FILE : MAX_NUGGETS_PER_PARENT;
+  if (file.nuggets.length > max) {
+    ctx.addIssue({ code: "custom", message: `at most ${max} nuggets per file for ${file.promptId}` });
+  }
 });
 
 export function validateNuggetFile(raw) {
-  const file = parentFileSchema.parse(raw);
+  const parsed = parentFileSchema.safeParse(raw);
+  if (!parsed.success) throw parsed.error;
+  const file = parsed.data;
   const ids = new Set();
   for (const nugget of file.nuggets) {
     if (!nugget.id.startsWith(`${file.promptId}/`) || nugget.id.length <= file.promptId.length + 1) {
