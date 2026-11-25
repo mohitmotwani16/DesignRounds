@@ -40,18 +40,18 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.137.0",
     "@anthropic-ai/vertex-sdk": "0.22.0",
-    "@aws-sdk/client-s3": "3.1156.0",
+    "@aws-sdk/client-s3": "3.1166.0",
     "@electric-sql/pglite": "0.4.6",
-    "@vercel/functions": "3.10.3",
-    "@xyflow/react": "12.12.0",
+    "@vercel/functions": "3.11.1",
+    "@xyflow/react": "12.12.1",
     "cookie-parser": "1.4.7",
     "express": "4.22.3",
-    "google-auth-library": "11.3.1",
+    "google-auth-library": "11.3.4",
     "lucide-react": "0.577.0",
-    "motion": "^14.10.1",
-    "nodemailer": "10.3.1",
+    "motion": "^14.12.0",
+    "nodemailer": "10.5.0",
     "pg": "8.23.1",
-    "posthog-js": "1.438.21",
+    "posthog-js": "1.447.12",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "simple-icons": "13.21.0",
@@ -60,7 +60,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "4.7.0",
     "concurrently": "9.1.2",
-    "vite": "6.4.5"
+    "vite": "6.4.6"
   },
   "overrides": {
     "zod": "$zod"
